@@ -153,7 +153,11 @@ test('the head has the tabs, the lede, the scope bar and Map | List', () => {
   const [head, lede, tabs, scope] = main.children;
   assert.equal(head.className, 'page-head');
   assert.equal(head.children[0].textContent, 'Library');
-  const seg = head.children.at(-1);
+  // The add button and Map | List sit together, so a narrow head wraps them as one.
+  const actions = head.children.at(-1);
+  assert.equal(actions.className, 'head-actions');
+  assert.deepEqual(actions.children.map((n) => n.className), ['btn add', 'seg']);
+  const seg = actions.children.at(-1);
   assert.deepEqual(seg.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Map', 'true'], ['List', 'false']]);
   assert.equal(lede.textContent, 'Follow the source. Connect only what you need.');
   assert.equal(tabs.className, 'seg sm map-tabs');
@@ -183,7 +187,7 @@ test('List keeps the head and the tabs, and draws no map', () => {
   assert.equal(renderLibrary(main), null);
   const [head, lede, tabs] = main.children;
   assert.equal(head.children[0].textContent, 'Library');
-  assert.equal(head.children.at(-1).children.find((n) => n.textContent === 'List').getAttribute('aria-pressed'), 'true');
+  assert.equal(head.children.at(-1).children.at(-1).children.find((n) => n.textContent === 'List').getAttribute('aria-pressed'), 'true');
   assert.equal(lede.textContent, 'Follow the source. Connect only what you need.');
   assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.textContent), ['Plugins and skills', 'Instructions']);
   assert.equal(map(), null);
@@ -929,7 +933,7 @@ test("a client→skill link's × turns it off in Claude Code or Codex, and remov
       { action: 'skill.remove', targets: [{ item: 'cu-pol' }], params: {} },
     ]);
     // The same rows as Details' "Turn off for all projects…".
-    const { offBodies } = await import('../../src/kitden/web/static/js/library-details.js');
+    const { offBodies } = await import('../../src/kitden/web/static/js/library-rules.js');
     assert.deepEqual(bodies()[0], offBodies(X_SAMPLE.groups[2].items[0])[1]);
     await flush();
     // The row of Details is the same row: the × says so.
@@ -1266,4 +1270,12 @@ test('each tab keeps the pages its groups were turned to', async () => {
   } finally {
     done();
   }
+});
+
+test('an online drag keeps the discovery identity and chooses only the drop client', () => {
+  const item = { kind: 'skill', name: 'frontend-design', skill: 'frontend-design', discovery: 'catalog-id' };
+  assert.deepEqual(addBody(item, 'codex'), {
+    action: 'skill.install', targets: [{ client: 'codex' }],
+    params: { skill: 'frontend-design', discovery: 'catalog-id' },
+  });
 });

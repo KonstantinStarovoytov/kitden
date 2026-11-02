@@ -2,8 +2,11 @@
 
 import asyncio
 import contextlib
+import html
+import importlib
 import json
 import sys
+import webbrowser
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -14,14 +17,14 @@ from typing import Any
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, StreamingResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from kitden import __version__
 from kitden.changes.actions import (
     CLIENT_DISCONNECT,
-    CLIENT_WORDS,
+    GATEWAY_ACCESS,
     GATEWAY_ADD,
     GATEWAY_CONNECT,
     GATEWAY_KEYCHAIN,
@@ -31,6 +34,7 @@ from kitden.changes.actions import (
     GATEWAY_REMOVE,
     GATEWAY_RULE,
     GATEWAY_RULES,
+    GATEWAY_SIGN_IN,
     GATEWAY_STRICT,
     GATEWAY_SWITCH,
     KITDEN_GATEWAY,
@@ -43,6 +47,8 @@ from kitden.changes.actions import (
     SETUP_SERVER_UPDATE,
     SKILL_INSTALL,
     SKILL_RULE,
+    NeedsAccess,
+    access_steps,
     add_server_steps,
     connect_steps,
     disconnect_steps,
@@ -59,6 +65,7 @@ from kitden.changes.actions import (
     remove_plugin_steps,
     remove_steps,
     setup_server_steps,
+    sign_in_steps,
     skill_remove_steps,
     skill_rule_steps,
     skill_steps,
@@ -99,7 +106,8 @@ from kitden.clients.base import (
     SKILL_REMOVE,
 )
 from kitden.command import installed_command
-from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
+from kitden.discovery import Discovery, configured_entry, short_name
+from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient, client_for
 from kitden.gateways import add_gateway, data_dir, load_gateways
 from kitden.local_gateway.project import project_chain, project_chains
 from kitden.local_gateway.settings import CLIENT as KITDEN
@@ -113,6 +121,7 @@ from kitden.local_gateway.settings import (
     settings_unreadable,
 )
 from kitden.local_gateway.views import (
+    access_rows,
     gateway_items,
     held_servers,
     load_proxy,
@@ -124,8 +133,19 @@ from kitden.local_gateway.views import (
     tools_view,
 )
 from kitden.marketplace_link import LinkError, read_marketplace
-from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind, Step
+from kitden.model import (
+    CLIENT_WORDS,
+    CLIENTS,
+    Change,
+    ChangeState,
+    Gateway,
+    GatewayAuth,
+    GatewayEdit,
+    ItemKind,
+    Step,
+)
 from kitden.redact import masked_command, redact_text
+from kitden.sign_in import SIGNED_OUT, SignIn, SignIns
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
 from kitden.views.changes_view import change_entries
@@ -144,7 +164,7 @@ from kitden.views.inventory import (
     keep_last_good,
 )
 from kitden.views.library import KINDS, LIST_SHOWS, LIST_TABS, SHOWS, library, library_list
-from kitden.views.library_map import library_map
+from kitden.views.library_map import cursor_imports, library_map
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.review import change_target, mark_reach, undo_note
@@ -272,17 +292,21 @@ class Built:
 
 
 class _RowRefused(Exception):
-    """A tray request cannot join the change: the words, and the row they come from (None when
-    the engine refuses the whole change)."""
+    """A tray request cannot join the change: the words, the row they come from (None when
+    the engine refuses the whole change), and what access it needs, if that is why."""
 
-    def __init__(self, reason: str, row: str | None) -> None:
+    def __init__(self, reason: str, row: str | None, needs: dict | None = None) -> None:
         super().__init__(reason)
         self.reason = reason
         self.row = row
+        self.needs = needs  # NeedsAccess.answer() when the row waits for access
+
+    def needed(self) -> dict:
+        """`{"needs": …}` for an answer when the row waits for access, else nothing."""
+        return {"needs": self.needs} if self.needs else {}
 
 
 # What the first scan reads, step by step, so the page can say what it still waits for.
-CLIENT_STEPS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SLOW_STEP = "Codex plugins"
 VERSION_STEP = "client versions"
 WARM_STEP = "marketplaces"
@@ -303,21 +327,18 @@ class Progress:
         self._publish()
 
     def done(self, *names: str) -> None:
-        if not any(s["name"] in names and not s["done"] for s in self.steps):
-            return
-        for step in self.steps:
-            if step["name"] in names:
-                step["done"] = True
-        self._publish()
+        self._mark(names, True)
 
     def reopen(self, *names: str) -> None:
         """Steps that wait again, such as Codex plugins once Codex's version is known."""
-        if not any(s["name"] in names and s["done"] for s in self.steps):
-            return
-        for step in self.steps:
-            if step["name"] in names:
-                step["done"] = False
-        self._publish()
+        self._mark(names, False)
+
+    def _mark(self, names: tuple[str, ...], done: bool) -> None:
+        changed = [s for s in self.steps if s["name"] in names and s["done"] != done]
+        for step in changed:
+            step["done"] = done
+        if changed:
+            self._publish()
 
     def mark_ready(self, *names: str) -> None:
         """The page has its data; `names` are steps that ended with it."""
@@ -412,12 +433,12 @@ class State:
     async def _quick_first_scan(self) -> None:
         later = [SLOW_STEP]
         later += ([VERSION_STEP] if self.versions else []) + ([WARM_STEP] if self.warm else [])
-        self.progress.start(list(CLIENT_STEPS.values()), later)
+        self.progress.start(list(CLIENT_WORDS.values()), later)
         loop = asyncio.get_running_loop()
 
         def step(client: str) -> None:
-            if client in CLIENT_STEPS:
-                loop.call_soon_threadsafe(self.progress.done, CLIENT_STEPS[client])
+            if client in CLIENT_WORDS:
+                loop.call_soon_threadsafe(self.progress.done, CLIENT_WORDS[client])
 
         async with self.lock:
             options = self._options(on_step=step)
@@ -425,7 +446,7 @@ class State:
             self.data = inventory_dict(self.inventory)
         self.ready.set()
         # Every client step ends here, also for a client the build did not report.
-        done = list(CLIENT_STEPS.values()) + ([] if self.inventory.partial else [SLOW_STEP])
+        done = list(CLIENT_WORDS.values()) + ([] if self.inventory.partial else [SLOW_STEP])
         self.progress.mark_ready(*done)
         await asyncio.gather(self._read_versions(), self._warm())
 
@@ -514,6 +535,19 @@ def kept_refusal(item) -> str:
     return KEPT_UNREAD.format(where)
 
 
+def _given_headers(params: dict) -> dict | None:
+    """The access headers typed for a move (`params.headers`), as strings, or None."""
+    given = params.get("headers")
+    if given is None:
+        return None
+    if not isinstance(given, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) and v.strip() and "\n" not in v and "\r" not in v
+        for k, v in given.items()
+    ):
+        raise ValueError("Enter a valid access value again.")
+    return {k: v.strip() for k, v in given.items()} or None
+
+
 def refusal_words(error: ValueError) -> str:
     """What the review says when a change cannot be prepared, in the owner's words."""
     if isinstance(error, NothingToChangeError):
@@ -523,6 +557,11 @@ def refusal_words(error: ValueError) -> str:
         return f"{client} has this already. Nothing to change."
     return str(error)
 
+
+# The page the browser shows back from a server's sign-in page.
+# It says only that the browser is back: the code is swapped for tokens after this.
+SIGNED_IN_PAGE = "Back in Kitden. You can close this tab."
+NOT_SIGNED_IN_PAGE = "Sign-in did not finish. You can close this tab and try again in Kitden."
 
 # The API calls that answer before the first scan is done.
 NO_WAIT = ("/api/events", "/api/progress", "/api/about")
@@ -562,6 +601,7 @@ def create_app(
     quick_first: bool = False,
     version_refresh: Callable[[], dict[str, str | None]] | None = None,
     demo: bool = False,
+    open_browser: Callable[[str], Any] = webbrowser.open,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown).
     `version_refresh` reads the clients' versions after the first scan; by default the ones
@@ -569,6 +609,7 @@ def create_app(
 
     With `demo`, `home` is the sample's, and stand-ins keep everything inside it: no client
     command, Keychain, MCP server, version read or network. What would go online is refused.
+    `open_browser` shows a server's sign-in page; tests pass a stand-in.
     """
     events = Broadcaster()
     watcher_ref: list[Watcher] = []
@@ -607,7 +648,7 @@ def create_app(
         skill_catalog(inventory, adapters)
 
     def read_versions() -> dict[str, str | None]:
-        stale = version_cache.stale_clients(home, version_cache.CLIENTS)
+        stale = version_cache.stale_clients(home, CLIENTS)
         return version_cache.refresh_versions(home, stale) if stale else {}
 
     if version_refresh is None and home is not None and not demo:
@@ -621,6 +662,7 @@ def create_app(
         warm=warm if home is not None else None,
         versions=version_refresh,
     )
+    discovery = Discovery(home) if home is not None else None
     engine = None
     if home is not None:
 
@@ -629,10 +671,10 @@ def create_app(
                 watcher_ref[0].expect(Path(path), sha)
 
         def gateway_client(edit: GatewayEdit) -> MetaMcpClient | ObotClient:
-            found = next((g for g in _registered() if g.id == edit.gateway_id), None)
+            found = _gateway(edit.gateway_id)
             if found is None:
                 raise GatewayError("This gateway is no longer registered")
-            return ObotClient(found) if found.kind == "obot" else MetaMcpClient(found)
+            return client_for(found)
 
         engine = Engine(
             ChangeStore(data_dir(home)),
@@ -643,6 +685,75 @@ def create_app(
             keychain_run=keychain_run,
         )
     write_lock = asyncio.Lock()
+    # Browser sign-ins (Part 3b): the tokens wait here, in memory, until Apply.
+    signins = SignIns()
+    redirect_uri = f"http://127.0.0.1:{port}/sign-in/done"
+
+    def _given_sign_in(params: dict) -> SignIn | None:
+        """The sign-in a row names (`params.sign_in`), or None. An id Kitden no longer has is
+        a sign-in that cannot be used: the check says to sign in again."""
+        given = params.get("sign_in")
+        if given is None:
+            return None
+        return signins.get(str(given)) or SignIn(id=str(given), url="", name="", state="failed")
+
+    async def _oauth():
+        """The sign-in flow's module. It loads the MCP SDK, so it is imported in a thread."""
+        return await asyncio.to_thread(importlib.import_module, "kitden.local_gateway.oauth")
+
+    async def _sign_in_record(request: Request) -> SignIn | JSONResponse:
+        if stand_ins:
+            return _error(stand_ins.NOT_IN_DEMO, 422)
+        record = signins.get(str((await _body(request)).get("id", "")))
+        return record if record is not None else _error("Unknown sign-in.", 404)
+
+    async def sign_in_start(request: Request) -> JSONResponse:
+        """Open the server's sign-in page in the browser; answers once it shows."""
+        record = await _sign_in_record(request)
+        if isinstance(record, JSONResponse):
+            return record
+        oauth = await _oauth()
+        try:
+            await oauth.start(record, redirect_uri, open_browser)
+        except oauth.CannotSignIn as error:
+            return JSONResponse({"detail": str(error), "cannot": True}, status_code=422)
+        except ValueError as error:
+            return _error(str(error), 422)
+        return JSONResponse({})
+
+    async def sign_in_wait(request: Request) -> JSONResponse:
+        """When the sign-in ends: done, failed or cancelled, with the reason."""
+        record = await _sign_in_record(request)
+        if isinstance(record, JSONResponse):
+            return record
+        return JSONResponse(await (await _oauth()).wait(record))
+
+    async def sign_in_cancel(request: Request) -> JSONResponse:
+        record = await _sign_in_record(request)
+        if isinstance(record, JSONResponse):
+            return record
+        (await _oauth()).cancel(record)
+        return JSONResponse({})
+
+    async def sign_in_offer(request: Request) -> JSONResponse:
+        """A sign-in id for a held server whose entry names a stored sign-in."""
+        if stand_ins:
+            return _error(stand_ins.NOT_IN_DEMO, 422)
+        name = str((await _body(request)).get("server", ""))
+        held = load_settings(home)["servers"].get(name) if home is not None else None
+        if not isinstance(held, dict) or not held.get("url") or "sign_in" not in held:
+            return _error("Unknown server.", 404)
+        return JSONResponse({"id": signins.offer(str(held["url"]), name)})
+
+    async def sign_in_done(request: Request) -> HTMLResponse:
+        """Where the browser comes back after sign-in. It needs no cookie (the redirect comes
+        from another site); only a flow that waits for its `state` takes the code."""
+        query = dict(request.query_params)
+        took = bool(query.get("state")) and (await _oauth()).finish(signins, query)
+        words = SIGNED_IN_PAGE if took and query.get("code") else NOT_SIGNED_IN_PAGE
+        page = f"<!doctype html><title>Kitden</title><p>{html.escape(words)}</p>"
+        return HTMLResponse(page)  # the middleware adds no-store
+
     # The Kitden gateway's tool lists: a refresh runs in the background, one at a time. A server
     # that did not answer keeps its old list; the sentence that says why waits for Details.
     tool_problems: dict[str, str] = {}
@@ -759,7 +870,7 @@ def create_app(
 
     async def project_view(request: Request) -> JSONResponse:
         wanted = request.path_params["project_id"]
-        found = next((p for p in state.data["projects"] if p["id"] == wanted), None)
+        found = _project_by_id(wanted)
         if found is None:
             return JSONResponse({"detail": "Unknown project."}, status_code=404)
         views = [
@@ -790,7 +901,7 @@ def create_app(
         wanted = request.query_params.get("project") or ""
         if not wanted:
             return None
-        found = next((p for p in state.data["projects"] if p["id"] == wanted), None)
+        found = _project_by_id(wanted)
         if found is None:
             raise _UnknownProject
         return found
@@ -800,13 +911,13 @@ def create_app(
         finds them for a session there (see `project_chain`); empty for all projects."""
         if path is None or home is None:
             return []
-        return project_chain(path, home, [p.path for p in state.inventory.projects])
+        return project_chain(path, home, _known_paths())
 
     def _chains() -> dict[str, list[str]]:
         """Each known project's `_chain`, found in one pass."""
         if home is None:
             return {}
-        return project_chains(home, [p.path for p in state.inventory.projects])
+        return project_chains(home, _known_paths())
 
     def _read_model(make):
         async def endpoint(request: Request) -> JSONResponse:
@@ -826,23 +937,29 @@ def create_app(
         rows = load_map(state.inventory, path, gateway_registered=bool(gateways))
         return JSONResponse({"project": project, **map_dict(state.inventory, rows)})
 
+    def _list_query(params) -> dict:
+        """What both Library lists read from the address: the search, the hidden columns and
+        Needs attention; and whether a gateway is registered."""
+        return {
+            "gateway_registered": bool(_registered()),
+            "q": params.get("q", ""),
+            "hidden": frozenset(c for c in params.get("hidden", "").split(",") if c),
+            "attention": params.get("attention") == "1",
+        }
+
     def _library(request, project, path):
         """One kind tab of the Library: rows, columns, counts and the lines above the table."""
         params = request.query_params
         kind = params.get("kind")
         show = params.get("show")
-        hidden = frozenset(c for c in params.get("hidden", "").split(",") if c)
         answer = library(
             state.inventory,
             adapters,
             path,
-            gateway_registered=bool(_registered()),
             kind=kind if kind in KINDS else "mcp_server",
             show=show if show in SHOWS else "mine",
-            q=params.get("q", ""),
             category=params.get("category", ""),
-            hidden=hidden,
-            attention=params.get("attention") == "1",
+            **_list_query(params),
         )
         return JSONResponse({"project": project, **answer})
 
@@ -855,12 +972,9 @@ def create_app(
             state.inventory,
             adapters,
             path,
-            gateway_registered=bool(_registered()),
             tab=tab if tab in LIST_TABS else "plugin",
             show=show if show in LIST_SHOWS else "mine",
-            q=params.get("q", ""),
-            hidden=frozenset(c for c in params.get("hidden", "").split(",") if c),
-            attention=params.get("attention") == "1",
+            **_list_query(params),
         )
         return JSONResponse({"project": project, **answer})
 
@@ -907,6 +1021,10 @@ def create_app(
         if home is None:
             return None, None
         held = held_servers(load_settings(home), _chain(path), load_tools(home), _chains())
+        # A server whose sign-in ended (the last tool read said so) needs the person.
+        for server in held:
+            if tool_problems.get(server["name"]) == SIGNED_OUT.format(server=server["name"]):
+                server["needs"] = "sign-in"
         problem = UNREADABLE if settings_unreadable(home) else None
         return held, problem
 
@@ -922,8 +1040,6 @@ def create_app(
 
     async def gateway_tools(request: Request) -> JSONResponse:
         """A held server's tools with their states for the project, from the cache and rules."""
-        if home is None:
-            return _error("Changes are not available.", 404)
         try:
             project = _project(request)
         except _UnknownProject:
@@ -938,12 +1054,13 @@ def create_app(
         chains = {ids[k]: chain for k, chain in _chains().items() if k in ids}
         calls = load_calls(home)
         answer = tools_view(settings, load_tools(home), server, _chain(path), calls, chains)
-        return JSONResponse({**answer, "problem": tool_problems.get(server)})
+        # Its secrets by name, only their start and end; it reads the Keychain, in a thread.
+        held = settings["servers"][server]
+        access = await asyncio.to_thread(access_rows, server, held, keychain_run)
+        return JSONResponse({**answer, "problem": tool_problems.get(server), "access": access})
 
     async def gateway_tools_refresh(request: Request) -> JSONResponse:
         """Starts asking each held server for its tools; `gateway_tools` says when it is done."""
-        if home is None:
-            return _error("Changes are not available.", 404)
         refresh_later()
         return JSONResponse({"refreshing": True}, status_code=202)
 
@@ -981,18 +1098,13 @@ def create_app(
 
     async def gateway_servers(request: Request) -> JSONResponse:
         """What the gateway holds, read live; an error never blocks the page (FR-008)."""
-        gateway = next(
-            (g for g in _registered() if g.id == request.path_params["gateway_id"]), None
-        )
+        gateway = _gateway(request.path_params["gateway_id"])
         if gateway is None:
             return _error("Unknown gateway.", 404)
 
         def read() -> list[dict]:
-            if gateway.kind == "obot":
-                held = ObotClient(gateway).held()
-            else:
-                with MetaMcpClient(gateway) as client:
-                    held = client.held()
+            with client_for(gateway) as client:
+                held = client.held()
             return [{"name": s["name"], "type": s["type"], "url": s["url"]} for s in held]
 
         try:
@@ -1004,11 +1116,13 @@ def create_app(
     def _item(item_id: str):
         return next((i for i in state.inventory.items if i.id == item_id), None)
 
+    def _cursor_imports() -> bool:
+        """Cursor and Claude Code are both here, and Cursor loads Claude Code's plugins."""
+        return cursor_imports(adapters, list(_found_clients()))
+
     def _found_cursor():
         """The Cursor adapter when Cursor is on this computer, else None."""
-        clients = state.data["clients"]
-        found = any(c["id"] == "cursor" and c["status"] == "found" for c in clients)
-        return adapters.get("cursor") if found else None
+        return adapters.get("cursor") if "cursor" in _found_clients() else None
 
     async def _read_tools(name: str, server: dict) -> list[dict] | None:
         """The server's tools, asked as the gateway asks; None when it does not answer."""
@@ -1026,10 +1140,62 @@ def create_app(
         wanted = params.get("project")
         if not wanted:
             return None
-        paths = {p["id"]: p["path"] for p in state.data["projects"]}
+        paths = _project_paths()
         if str(wanted) not in paths:
             raise ValueError("Unknown project.")
         return paths[str(wanted)]
+
+    def _clients(targets: list) -> list[str]:
+        """The clients a request targets."""
+        return [str(t.get("client")) for t in targets if isinstance(t, dict)]
+
+    def _items(targets: list) -> list:
+        """The inventory items a request targets; None for one Kitden does not know."""
+        return [_item(str(t.get("item"))) for t in targets if isinstance(t, dict)]
+
+    def _known_servers(targets: list) -> list:
+        items = _items(targets)
+        if not items or any(i is None for i in items):
+            raise ValueError("Choose a known server.")
+        return items
+
+    def _gateway(gateway_id: object) -> Gateway | None:
+        return next((g for g in _registered() if g.id == gateway_id), None)
+
+    def _registered_gateway(params: dict) -> Gateway:
+        gateway = _gateway(params.get("gateway"))
+        if gateway is None:
+            raise ValueError("Register the gateway first.")
+        return gateway
+
+    def _kitden_command(needed: bool = True) -> str | None:
+        """The installed kitden command; refused when it is needed and not installed."""
+        command = (setup_command or installed_command)()
+        if command is None and needed:
+            raise ValueError("Install the tool first: uv tool install <this folder>")
+        return command
+
+    def _online_row(params: dict, kind: str, words: str) -> dict:
+        """The online catalog row a request names, of this kind; never in the demo."""
+        if stand_ins:
+            raise ValueError(stand_ins.NOT_IN_DEMO)
+        row = discovery.get(str(params["discovery"]))
+        if row["kind"] != kind:
+            raise ValueError(words)
+        return row
+
+    def _found_clients() -> set[str]:
+        return {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+
+    def _project_by_id(wanted: str) -> dict | None:
+        return next((p for p in state.data["projects"] if p["id"] == wanted), None)
+
+    def _project_paths() -> dict[str, str]:
+        """The known projects' folders, by id."""
+        return {p["id"]: p["path"] for p in state.data["projects"]}
+
+    def _known_paths() -> list[str]:
+        return [p.path for p in state.inventory.projects]
 
     async def _steps_for(action: str, targets: list, params: dict) -> Built:
         """The steps one request makes, from that action's own builder. Raises ValueError with
@@ -1046,36 +1212,64 @@ def create_app(
         if kept is not None:
             raise ValueError(kept_refusal(kept))
         if action == GATEWAY_CONNECT:
-            gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
-            if gateway is None:
-                raise ValueError("Register the gateway first.")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            gateway = _registered_gateway(params)
+            clients = _clients(targets)
             steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
         elif action == PLUGIN_INSTALL:
-            offer = next(
-                (o for o in catalog(state.inventory, adapters) if o["id"] == params.get("plugin")),
-                None,
-            )
-            if offer is None:
-                raise ValueError("This plugin is not in a marketplace on this computer.")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-            steps = install_steps(adapters, offer, clients, _project_param(params))
+            clients = _clients(targets)
+            if params.get("discovery"):
+                row = _online_row(params, "plugin", "Choose a plugin.")
+                source = await asyncio.to_thread(discovery.plugin, row)
+                for client in clients:
+                    adapter = adapters.get(client)
+                    if adapter is None or client not in ("claude_code", "codex"):
+                        raise ValueError("Choose Claude Code or Codex for a plugin.")
+                    existing = adapter.marketplace_sources().get(source["name"])
+                    if existing is not None and existing != source["source"]:
+                        raise ValueError("A marketplace with this name uses another source.")
+                    if existing is None:
+                        steps += marketplace_steps(adapters, source, [client])
+                    steps.append(
+                        adapter.plugin_install_step(source["plugin"], _project_param(params))
+                    )
+            else:
+                offer = next(
+                    (
+                        o
+                        for o in catalog(state.inventory, adapters)
+                        if o["id"] == params.get("plugin")
+                    ),
+                    None,
+                )
+                if offer is None:
+                    raise ValueError("This plugin is not in a marketplace on this computer.")
+                steps = install_steps(adapters, offer, clients, _project_param(params))
         elif action == SKILL_INSTALL:
-            # A project's own skill ("project/<name>") is read from that project only.
             wanted = str(params.get("skill", ""))
             project = _project_param(params)
-            if wanted.startswith("project/") and project is None:
-                raise ValueError(ONLY_IN_PROJECT)
-            listed = (
-                project_skills(state.inventory, adapters, project)
-                if wanted.startswith("project/")
-                else skill_catalog(state.inventory, adapters)
-            )
-            skill = next((s for s in listed if s["id"] == wanted), None)
-            if skill is None:
-                raise ValueError("This skill is not on this computer.")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            found = _found_clients()
+            if params.get("discovery"):
+                row = _online_row(params, "skill", "Choose a skill.")
+                skill = await asyncio.to_thread(discovery.skill, row, found)
+                skill["installed"] = {
+                    i.client: "Installed"
+                    for i in state.inventory.items
+                    if str(i.kind) == "skill"
+                    and i.name == skill["name"]
+                    and (project is None and str(i.scope) == "user")
+                }
+            else:
+                if wanted.startswith("project/") and project is None:
+                    raise ValueError(ONLY_IN_PROJECT)
+                listed = (
+                    project_skills(state.inventory, adapters, project)
+                    if wanted.startswith("project/")
+                    else skill_catalog(state.inventory, adapters)
+                )
+                skill = next((s for s in listed if s["id"] == wanted), None)
+                if skill is None:
+                    raise ValueError("This skill is not on this computer.")
+            clients = _clients(targets)
             steps = skill_steps(adapters, skill, clients, found, project)
             copied = [skill]
         elif action == PLUGIN_SKILLS:
@@ -1086,7 +1280,7 @@ def create_app(
             skills = skill_catalog(state.inventory, adapters)
             if not any(s["plugin"] == plugin_id for s in skills):
                 raise ValueError("This plugin has no skills on this computer.")
-            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            found = _found_clients()
             steps = plugin_skill_steps(adapters, plugin_id, skills, client, found)
             left_out = plugin_skills_left_out(plugin_id, skills, client)
             copied = [s for s in skills if s["plugin"] == plugin_id]
@@ -1094,40 +1288,31 @@ def create_app(
             if stand_ins:
                 raise ValueError(stand_ins.NOT_IN_DEMO)
             try:
-                found = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
+                market = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
             except LinkError as error:
                 raise ValueError(str(error)) from None
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-            steps = marketplace_steps(adapters, found, clients)
+            clients = _clients(targets)
+            steps = marketplace_steps(adapters, market, clients)
         elif action == GATEWAY_SWITCH:
-            gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
-            if gateway is None:
-                raise ValueError("Register the gateway first.")
+            gateway = _registered_gateway(params)
             mcp = [i for i in state.inventory.items if i.kind is ItemKind.MCP_SERVER]
             steps = switch_steps(adapters, mcp, gateway, str(params.get("name", "")))
         elif action == SETUP_SERVER:
-            command = (setup_command or installed_command)()
-            if command is None:
-                raise ValueError("Install the tool first: uv tool install <this folder>")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            command = _kitden_command()
+            clients = _clients(targets)
             provided = _states_in(state.inventory, "plugin")
             if any(c in provided for c in clients):
                 raise ValueError("The kitden plugin already provides this server there.")
             steps = setup_server_steps(adapters, clients, command)
         elif action == SETUP_SERVER_UPDATE:
-            ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
-            items = [_item(i) for i in ids]
+            items = _items(targets)
             if not items or any(i is None or not is_old_entry(i) for i in items):
                 raise ValueError("Choose an old Kitden entry.")
             added = _states_in(state.inventory, "added", "plugin")
-            command = None
-            if any(i.client not in added for i in items):
-                command = (setup_command or installed_command)()
-                if command is None:
-                    raise ValueError("Install the tool first: uv tool install <this folder>")
+            command = _kitden_command() if any(i.client not in added for i in items) else None
             steps = update_steps(adapters, items, added, command)
         elif action == SETUP_SERVER_ENABLE:
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             entries = setup_server_state(state.inventory)
             entry = next((e for e in entries if [e["client"]] == clients), None)
             # Only the client's own entry, turned off: a plugin's is the plugin's switch.
@@ -1135,18 +1320,13 @@ def create_app(
                 raise ValueError("The kitden entry there is not turned off.")
             steps = enable_steps(adapters, clients[0])
         elif action == CLIENT_DISCONNECT:
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             steps = disconnect_steps(adapters, state.inventory, clients)
         elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
-            ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
-            items = [_item(i) for i in ids]
-            if not items or any(i is None for i in items):
-                raise ValueError("Choose a known server.")
-            known = [p.path for p in state.inventory.projects]
+            items = _known_servers(targets)
+            known = _known_paths()
             added = _states_in(state.inventory, "added", "plugin")
-            command = (setup_command or installed_command)()
-            if command is None and {i.client for i in items} - added:
-                raise ValueError("Install the tool first: uv tool install <this folder>")
+            command = _kitden_command(needed=bool({i.client for i in items} - added))
             # A Codex entry that keeps only some tools on: Kitden needs the whole list.
             wanted = await asyncio.to_thread(tools_to_read, adapters, items, home, known)
             for name, server in wanted.items():
@@ -1167,34 +1347,48 @@ def create_app(
                 added_clients=added,
                 sign_in=sign_in,
                 keychain_run=keychain_run,
+                headers=_given_headers(params),
+                signed_in=_given_sign_in(params),
             )
         elif action == GATEWAY_ADD:
             # It may ask a remote server whether it signs in, so not on the event loop.
+            discovered, fields = None, None
+            if params.get("discovery"):
+                needs_setup = "This server needs configuration before it can be added."
+                row = _online_row(params, "mcp", needs_setup)
+                if not row.get("entry"):
+                    raise ValueError(needs_setup)
+                fields = row.get("setup") or None
+                discovered = (short_name(row["name"]), configured_entry(row, params))
             steps = await asyncio.to_thread(
                 gateway_add_steps,
                 adapters,
                 state.inventory,
                 home,
                 str(params.get("server", "")),
+                discovered=discovered,
                 sign_in=sign_in,
                 keychain_run=keychain_run,
+                fields=fields,
+                # A catalog row's values come in through configured_entry; a marketplace
+                # server's typed token comes here.
+                headers=None if discovered else _given_headers(params),
+                signed_in=_given_sign_in(params),
             )
         elif action == GATEWAY_RULE:
-            projects = {p["id"]: p["path"] for p in state.data["projects"]}
-            steps = rule_steps(home, params, projects)
+            steps = rule_steps(home, params, _project_paths())
         elif action == GATEWAY_RULES:
-            projects = {p["id"]: p["path"] for p in state.data["projects"]}
-            steps = rules_steps(home, params, projects)
+            steps = rules_steps(home, params, _project_paths())
         elif action == GATEWAY_STRICT:
             steps = strict_steps(home, params, load_tools(home))
         elif action == GATEWAY_REMOVE:
             steps = remove_server_steps(home, str(params.get("server", "")))
         elif action == GATEWAY_PUT_BACK:
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             server = str(params.get("server", ""))
             steps = put_back_steps(adapters, home, server, clients, keychain_run)
         elif action == GATEWAY_MOVE_OUT:
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             if len(clients) != 1:
                 raise ValueError("Pick one client to move it into.")
             server = str(params.get("server", ""))
@@ -1205,17 +1399,42 @@ def create_app(
             ]
         elif action == GATEWAY_KEYCHAIN:
             steps = keychain_steps(home, str(params.get("server", "")))
+        elif action == GATEWAY_ACCESS:
+            value = params.get("value")
+            if value is not None and not isinstance(value, str):
+                raise ValueError("Enter a valid access value again.")
+            # It may ask the server whether a new token works, so not on the event loop.
+            steps = await asyncio.to_thread(
+                access_steps,
+                home,
+                str(params.get("server", "")),
+                str(params.get("field", "")),
+                str(params.get("name", "")),
+                value,
+                sign_in=sign_in,
+                keychain_run=keychain_run,
+            )
+        elif action == GATEWAY_SIGN_IN:
+            # It asks the server whether the new token works, so not on the event loop.
+            steps = await asyncio.to_thread(
+                sign_in_steps,
+                home,
+                str(params.get("server", "")),
+                _given_sign_in(params),
+                sign_in=sign_in,
+                keychain_run=keychain_run,
+            )
         elif action == SKILL_RULE:
             steps = skill_rule_steps(adapters, state.inventory, home, targets, params)
         elif action == MCP_ADD:
             item = _item(str(params.get("item", "")))
             if item is None:
                 raise ValueError("Choose a known server.")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             steps = add_server_steps(adapters, item, clients)
         elif action == PROJECT_ALIGN:
             folder = _project_param(params)  # None: All projects, plugins and skills only
-            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            found = _found_clients()
             wanted = params.get("chosen")
             chosen = [str(k) for k in wanted] if isinstance(wanted, list) else None
             steps, align = await asyncio.to_thread(
@@ -1225,25 +1444,17 @@ def create_app(
                 return Built(steps=[], align=align)
             copied = skill_catalog(state.inventory, adapters)
         elif action == GATEWAY_MOVE:
-            gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
-            if gateway is None:
-                raise ValueError("Register the gateway first.")
-            ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
-            items = [_item(i) for i in ids]
-            if not items or any(i is None for i in items):
-                raise ValueError("Choose a known server.")
-            steps = move_steps(adapters, items, gateway)
+            gateway = _registered_gateway(params)
+            steps = move_steps(adapters, _known_servers(targets), gateway)
         elif action == SKILL_REMOVE:
-            ids = [t.get("item") for t in targets if isinstance(t, dict)]
-            items = [_item(str(i)) for i in ids]
+            items = _items(targets)
             if len(items) != 1 or items[0] is None:
                 raise ValueError("Choose one known item.")
             readers = skill_readers(state.inventory, items[0])
             keeps = skill_keepers(state.inventory, items[0], readers)
             steps = skill_remove_steps(adapters, items[0], readers, keeps)
         elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE, PLUGIN_REMOVE):
-            ids = [t.get("item") for t in targets if isinstance(t, dict)]
-            items = [_item(str(i)) for i in ids]
+            items = _items(targets)
             # A direct entry may go from several clients at once; a plugin is one item.
             one = len(items) == 1 or action == REMOVE_DIRECT
             if not items or any(i is None for i in items) or not one:
@@ -1265,8 +1476,7 @@ def create_app(
 
     def _picked(body: dict) -> str | None:
         """The folder of the project picked at the top of the page, if any."""
-        paths = {p["id"]: p["path"] for p in state.data["projects"]}
-        return paths.get(str(body.get("picked") or ""))
+        return _project_paths().get(str(body.get("picked") or ""))
 
     def _review(change: Change, built: Built, picked: str | None) -> dict:
         """The review's words for a previewed change: what each client shows after it and what
@@ -1274,8 +1484,7 @@ def create_app(
         steps go (`change.target`)."""
         # Only an added or removed plugin reaches Cursor through Claude Code.
         plugins = (PLUGIN_INSTALL, PLUGIN_REMOVE, PROJECT_ALIGN)
-        cursor = _found_cursor() if change.action in plugins else None
-        imports = bool(cursor and cursor.imports_claude_plugins())
+        imports = change.action in plugins and _cursor_imports()
         switches = (PLUGIN_REMOVE, PLUGIN_ENABLE, PLUGIN_DISABLE)
         switched = built.items[0] if change.action in switches else None
         mark_reach(change, state.inventory, switched, imports)
@@ -1285,8 +1494,7 @@ def create_app(
         # The review's first sentence: where the steps go (also for the project picked at the
         # top, which may have its own definition of what changes), and what Undo cannot bring
         # back.
-        known = [p.path for p in state.inventory.projects]
-        change.target = change_target(change, known, state.inventory, picked, built.items)
+        change.target = change_target(change, _known_paths(), state.inventory, picked, built.items)
         words = {"after": after, "undo_note": undo_note(change)}
         if built.left_out is not None:
             words["left_out"] = built.left_out
@@ -1294,9 +1502,18 @@ def create_app(
             words["align"] = built.align
         return words
 
+    def _with_changes(handler: Callable) -> Callable:
+        """A route that changes or reads the setup's changes: none without a home folder (the
+        engine is built only with one)."""
+
+        async def endpoint(request: Request) -> JSONResponse:
+            if engine is None:
+                return _error("Changes are not available.", 404)
+            return await handler(request)
+
+        return endpoint
+
     async def preview(request: Request) -> JSONResponse:
-        if engine is None:
-            return _error("Changes are not available.", 404)
         body = await _body(request)
         action = body.get("action")
         targets = body.get("targets") if isinstance(body.get("targets"), list) else []
@@ -1326,6 +1543,25 @@ def create_app(
             return frozenset()
         return frozenset(item.name for item in made.items)
 
+    async def _with_kept_sign_in(request: dict) -> Built:
+        """A request's steps. A server that needs sign-in, when this page already signed in to
+        its address (the row was taken out and came back), uses that sign-in; one that no
+        longer works is dropped, so the row asks for a new one."""
+        params = request["params"]
+        try:
+            return await _steps_for(request["kind"], request["targets"], params)
+        except NeedsAccess as error:
+            kept = signins.kept(error.url) if error.kind == "sign-in" and error.url else None
+            if kept is None or "sign_in" in params or stand_ins:
+                raise
+            try:
+                return await _steps_for(
+                    request["kind"], request["targets"], {**params, "sign_in": kept.id}
+                )
+            except NeedsAccess:
+                kept.state = "failed"
+                raise error from None
+
     async def _batch(
         requests: list[dict], keep: bool = True
     ) -> tuple[Change | None, list[Built], list[list[int]]]:
@@ -1343,7 +1579,12 @@ def create_app(
                     raise _RowRefused(f"{name} waits in preview already.", request["id"])
                 added.add(name)
             try:
-                made = await _steps_for(request["kind"], request["targets"], request["params"])
+                made = await _with_kept_sign_in(request)
+            except NeedsAccess as error:
+                needs = error.answer()
+                if error.kind == "sign-in" and error.url and not stand_ins:
+                    needs["sign_in"] = signins.offer(error.url, error.server)
+                raise _RowRefused(str(error), request["id"], needs) from None
             except ValueError as error:
                 raise _RowRefused(refusal_words(error), request["id"]) from None
             if not made.steps:
@@ -1371,8 +1612,6 @@ def create_app(
         """Whether the last request can join the ones before it in the preview tray: the same
         checks as `batch_preview`, with nothing kept. A refusal is an answer, not an error:
         {"ok": False, "reason", "row"}, `row` being the request that cannot join."""
-        if engine is None:
-            return _error("Changes are not available.", 404)
         try:
             requests = requests_in(await _body(request))
             await _batch(requests, keep=False)
@@ -1380,15 +1619,14 @@ def create_app(
             return _error(str(error), 422)
         except _RowRefused as refused:
             row = refused.row or requests[-1]["id"]
-            return JSONResponse({"ok": False, "reason": refused.reason, "row": row})
+            answer = {"ok": False, "reason": refused.reason, "row": row}
+            return JSONResponse({**answer, **refused.needed()})
         return JSONResponse({"ok": True})
 
     async def batch_preview(request: Request) -> JSONResponse:
         """The preview tray as one change (changes/batch.py): each request's own builder, the
         steps joined in tray order. Apply, Undo and Cancel are the change's own verbs. A
         refusal names the row it comes from (`row`), or none when the engine refuses."""
-        if engine is None:
-            return _error("Changes are not available.", 404)
         body = await _body(request)
         try:
             requests = requests_in(body)
@@ -1397,7 +1635,8 @@ def create_app(
         try:
             change, built, maps = await _batch(requests)
         except _RowRefused as refused:
-            return JSONResponse({"detail": refused.reason, "row": refused.row}, status_code=422)
+            answer = {"detail": refused.reason, "row": refused.row, **refused.needed()}
+            return JSONResponse(answer, status_code=422)
         assert change is not None
         picked = _picked(body)
         rows, answers = [], []
@@ -1414,17 +1653,14 @@ def create_app(
         # The record keeps the rows and the request with secrets hidden, as the log does.
         change.rows = hidden(rows)
         change.request = kept_request(requests)
-        known = [p.path for p in state.inventory.projects]
         items = [i for made in built for i in made.items]
-        change.target = change_target(change, known, state.inventory, picked, items)
+        change.target = change_target(change, _known_paths(), state.inventory, picked, items)
         events.publish("change_state")
         notes = list(dict.fromkeys(a["undo_note"] for a in answers if a["undo_note"]))
         answer = {**change_dict(change), "rows": answers, "undo_note": " ".join(notes) or None}
         return JSONResponse(answer)
 
     async def change_action(request: Request) -> JSONResponse:
-        if engine is None:
-            return _error("Changes are not available.", 404)
         change_id = request.path_params["change_id"]
         verb = request.path_params["verb"]
         if change_id not in engine.changes:
@@ -1458,9 +1694,10 @@ def create_app(
             if verb != "cancel":
                 await state.rescan()
         if verb == "apply" and change.state is ChangeState.VERIFIED:
-            # Servers just moved or added into the Kitden gateway: Details shows their tools
-            # soon. In a tray change, only its move and add rows brought servers in.
-            brings = (GATEWAY_MOVE, GATEWAY_ADD)
+            # Servers just moved or added into the Kitden gateway, or signed in again: Details
+            # shows their tools soon (and a sign-in that ended says so no more). In a tray
+            # change, only those rows brought servers in.
+            brings = (GATEWAY_MOVE, GATEWAY_ADD, GATEWAY_SIGN_IN)
             if change.rows:
                 moves = [part_of(change, r) for r in change.rows if r["kind"] in brings]
             else:
@@ -1475,8 +1712,6 @@ def create_app(
         """One change as it stands now, so the page can check an Apply whose answer was lost.
         `stale`: a previewed change whose files changed since, which Apply would stop; an open
         review asks after each rescan. A file Kitden cannot read now counts as changed."""
-        if engine is None:
-            return _error("Changes are not available.", 404)
         change_id = request.path_params["change_id"]
         if change_id in engine.changes:
             try:
@@ -1500,7 +1735,7 @@ def create_app(
         """Whether Cursor loads Claude Code's plugins and the skills in its folder."""
         cursor = _found_cursor()
         return {
-            "plugin": bool(cursor and cursor.imports_claude_plugins()),
+            "plugin": _cursor_imports(),
             "skill": bool(cursor and cursor.reads_other_clients()),
         }
 
@@ -1517,6 +1752,68 @@ def create_app(
         rows = await asyncio.to_thread(library_offers, state.inventory, adapters)
         return JSONResponse({"offers": rows})
 
+    async def discovery_sources(request: Request) -> JSONResponse:
+        if discovery is None:
+            return _error("Open Kitden on a setup first.", 400)
+        if request.method == "GET":
+            return JSONResponse({"sources": discovery.sources(), "offline": bool(stand_ins)})
+        try:
+            body = await _body(request)
+            sources = discovery.change_source(
+                str(body.get("operation", "add")),
+                str(body.get("source", "")),
+                str(body.get("previous", "")),
+            )
+            return JSONResponse({"sources": sources})
+        except (ValueError, TypeError) as error:
+            return _error(str(error), 400)
+
+    async def discovery_details(request: Request) -> JSONResponse:
+        if discovery is None or stand_ins:
+            return _error("Online sources are unavailable in the offline demo.", 400)
+        try:
+            body = await _body(request)
+            row = await asyncio.to_thread(discovery.details, str(body.get("id", "")))
+            return JSONResponse(row)
+        except (ValueError, OSError, KeyError, TypeError) as error:
+            return _error(
+                str(error)
+                if isinstance(error, ValueError)
+                else "Could not read this item. Search again.",
+                400,
+            )
+
+    async def discovery_search(request: Request) -> JSONResponse:
+        if discovery is None or stand_ins:
+            return _error("Online sources are unavailable in the offline demo.", 400)
+        try:
+            body = await _body(request)
+            kind = str(body.get("kind", "all"))
+            if kind not in ("all", "skill", "plugin", "mcp"):
+                raise ValueError("Choose skills, plugins or MCP servers.")
+            rows = await asyncio.to_thread(
+                discovery.search, str(body.get("source", "")), str(body.get("query", "")), kind
+            )
+            held = set(load_settings(home)["servers"])
+            for row in rows:
+                item_kind = "mcp_server" if row["kind"] == "mcp" else row["kind"]
+                row["held"] = row["kind"] == "mcp" and short_name(row["name"]) in held
+                row["installed"] = sorted(
+                    {
+                        i.client
+                        for i in state.inventory.items
+                        if str(i.kind) == item_kind and i.name == row["name"]
+                    }
+                )
+            clients = [c["id"] for c in state.data["clients"] if c["status"] == "found"]
+            return JSONResponse({"results": rows, "clients": clients})
+        except ValueError as error:
+            return _error(str(error), 400)
+        except (OSError, KeyError, TypeError):
+            return _error(
+                "Could not read this source. Try again; GitHub may have reached its limit.", 400
+            )
+
     async def commands(request: Request) -> JSONResponse:
         """Steps the developer runs themselves (FR-029, FR-035). Never run by the tool."""
         item = _item(request.query_params.get("item", ""))
@@ -1528,7 +1825,7 @@ def create_app(
             return JSONResponse({"commands": [c.__dict__ for c in listed]})
         if home is None or action != "gateway.login" or not item.via_gateway:
             return _error("No command for this item and action.", 404)
-        gateway = next((g for g in _registered() if g.id == item.via_gateway), None)
+        gateway = _gateway(item.via_gateway)
         adapter = adapters.get(item.client)
         if gateway is None or adapter is None or gateway.auth is not GatewayAuth.OAUTH:
             return _error("No login is needed.", 404)
@@ -1566,14 +1863,23 @@ def create_app(
             Route("/api/rescan", rescan, methods=["POST"]),
             Route("/api/gateways", gateways, methods=["GET", "POST"]),
             Route("/api/gateways/{gateway_id}/servers", gateway_servers),
-            Route("/api/gateway/tools", gateway_tools),
-            Route("/api/gateway/tools/refresh", gateway_tools_refresh, methods=["POST"]),
+            Route("/api/gateway/tools", _with_changes(gateway_tools)),
+            Route(
+                "/api/gateway/tools/refresh", _with_changes(gateway_tools_refresh), methods=["POST"]
+            ),
             Route("/api/changes", changes),
-            Route("/api/changes/preview", preview, methods=["POST"]),
-            Route("/api/batch/preview", batch_preview, methods=["POST"]),
-            Route("/api/batch/check", batch_check, methods=["POST"]),
-            Route("/api/changes/{change_id}", change_view),
-            Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
+            Route("/api/changes/preview", _with_changes(preview), methods=["POST"]),
+            Route("/api/batch/preview", _with_changes(batch_preview), methods=["POST"]),
+            Route("/api/batch/check", _with_changes(batch_check), methods=["POST"]),
+            Route("/api/sign-in/offer", sign_in_offer, methods=["POST"]),
+            Route("/api/sign-in/start", sign_in_start, methods=["POST"]),
+            Route("/api/sign-in/wait", sign_in_wait, methods=["POST"]),
+            Route("/api/sign-in/cancel", sign_in_cancel, methods=["POST"]),
+            Route("/sign-in/done", sign_in_done),
+            Route("/api/changes/{change_id}", _with_changes(change_view)),
+            Route(
+                "/api/changes/{change_id}/{verb}", _with_changes(change_action), methods=["POST"]
+            ),
             Route("/api/commands", commands),
             Route("/api/map", _read_model(_map)),
             Route("/api/library", _read_model(_library)),
@@ -1582,6 +1888,9 @@ def create_app(
             Route("/api/instructions-map", _read_model(_instructions_map)),
             Route("/api/market-servers", market_server_list),
             Route("/api/library-offers", library_offer_list),
+            Route("/api/discovery/sources", discovery_sources, methods=["GET", "POST"]),
+            Route("/api/discovery/search", discovery_search, methods=["POST"]),
+            Route("/api/discovery/details", discovery_details, methods=["POST"]),
             Route("/api/explain", _read_model(_explain)),
             Route("/api/overview", _read_model(_overview)),
             Route("/api/gateway-view", _read_model(_gateway_view)),

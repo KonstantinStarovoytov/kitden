@@ -3,6 +3,7 @@
 // that detailsCard draws, so a test reads it without a page), and a show… that opens it beside the
 // page. The forms to add a gateway and to connect clients live here too, with what each registered
 // gateway holds.
+import { replaceAccess, signInAgain } from "./access-form.js";
 import { getJson, postJson, query } from "./api.js";
 import { $, busyWhile, button, el, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { ADD_SERVER, openAdd } from "./gateway-add.js";
@@ -10,11 +11,10 @@ import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { callsText, closePanel, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, showInPreview, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, kitdenHouse, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, kitdenHouse, mark, menuItems, originText, STATE_WORDS, versionsOpen, WRITABLE } from "./parts.js";
 import { arrival, current, data, freshness, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
-import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
+import { addToTray, iconFor, inTray, keyFor, TAKE_OUT, takeOut, tray, trayRow } from "./tray.js";
 
-const WRITABLE = ["claude_code", "codex", "cursor"];
 // The kitden entry is the same one that lets agents read this setup.
 export const SETUP_NOTE = "The kitden entry shows your setup to agents and offers the tools in the Kitden gateway.";
 // What Disconnect takes from a client, as the review's after line says it (views/after.py).
@@ -412,7 +412,7 @@ function serverCounts(servers, outside) {
 // (gateway.js rowsOnMap): not once it is applied.
 function movesOutNow(name) {
   const key = keyFor({ action: "gateway.move_out", params: { server: name } });
-  return tray.phase !== "applied" && tray.rows.some((row) => row.key === key && row.part);
+  return tray.phase !== "applied" && Boolean(trayRow(key)?.part);
 }
 
 // The Kitden gateway, as the mockup's gateway panel (gateway-notes 3.6): the house, where it runs;
@@ -845,9 +845,56 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
   const step = { server: name, tool: null, title: name, target, shared, rules: detail, readIn: picked, warning };
   const some = changedIn(projects, detail.projects, target, (p) => p.server).length ? stepAction(IN_SOME[target], () => projectsStep(step)) : null;
   const actions = clients.length ? [stepAction(MOVE_OUT, () => moveOutStep({ name, detail, readIn: picked, warning }))] : [];
+  // A server whose sign-in ended says so first and leads with signing in again.
+  if (server.needs === "sign-in") {
+    warning = `${name} needs sign-in again.`;
+    actions.unshift(stepAction("Sign in", () => signInAgain(name)));
+  }
   const more = [...heldMore(server, picked, detail, some), ...heldActions(name, clients, server.plain_secrets)];
   const id = `${server.kind === "remote" ? "Remote" : "Local"} · in the Kitden gateway`;
-  return { kind: KIND.server, title: name, id, facts, list: heldList(name, detail, picked, folder), actions, more, warning };
+  // Its secrets come first (Access), then its tools.
+  const shown = [detail.access && detail.access.length ? accessBlock(name, detail.access) : null, heldList(name, detail, picked, folder)].filter(Boolean);
+  const parts = shown.length > 1 ? el("div", "held-parts") : shown[0] || null;
+  if (shown.length > 1) parts.append(...shown);
+  return { kind: KIND.server, title: name, id, facts, list: parts, actions, more, warning };
+}
+
+// A held server's secrets (Access): each by name, with only its start and end ("Bearer
+// sk-a…1234"; the server never sends more), and where it is missing from the Keychain. A
+// sign-in says when its token ends and whether the gateway refreshes it. Its buttons (replace,
+// remove, sign in again, sign out) each go through the tray: preview, Apply, Undo.
+export function accessBlock(server, rows, { now = Date.now() / 1000 } = {}) {
+  const section = el("section", "access");
+  section.append(el("h2", "sw-head", "Access"));
+  for (const row of rows) {
+    const line = el("div", "access-row");
+    const what = el("div", "access-what");
+    let small = row.stored === "missing" ? "Not in the Keychain" : row.masked || "••••";
+    if (row.field === "sign_in" && row.stored !== "missing") small += ` · ${endsWords(row, now)}`;
+    what.append(el("strong", null, row.name), el("small", "muted", small));
+    const acts = el("div", "access-acts");
+    const change = (value) => addToTray({ action: "gateway.access", targets: [], params: { server, field: row.field, name: row.name, value } });
+    if (row.field === "sign_in") {
+      acts.append(button("Sign in again", () => signInAgain(server)), button("Sign out", () => change(null)));
+    } else {
+      acts.append(button("Replace…", () => replaceAccess(server, row)), button("Remove", () => change(null)));
+    }
+    line.append(what, acts);
+    section.append(line);
+  }
+  return section;
+}
+
+// When a sign-in's token ends, in words: "ends in 50 min", "ends in 3 h", or "ended"; and
+// "refreshes by itself" when the gateway can get a new one.
+function endsWords(row, now) {
+  const left = typeof row.ends === "number" ? row.ends - now : null;
+  let words = "no end date";
+  if (left !== null) {
+    const minutes = Math.round(left / 60);
+    words = left <= 0 ? "ended" : minutes < 120 ? `ends in ${minutes} min` : `ends in ${Math.round(minutes / 60)} h`;
+  }
+  return row.refresh ? `${words} · refreshes by itself` : words;
 }
 
 // A held server's actions the mockup has no place for, under More (D18): back to the rule it
@@ -890,14 +937,13 @@ function heldList(name, detail, picked, folder) {
   const off = offNote(detail, where);
   if (off) section.append(off);
   section.append(switchList([{ ...whole, differs: false }, ...tools.map((t) => ({ ...t, description: null }))], { server: name, project: picked || null }));
-  if (!detail.tools.length) section.append(el("p", "muted", NO_TOOLS));
+  // A known problem already says why the list is empty (the warning above); this would repeat it.
+  if (!detail.tools.length && !detail.problem) section.append(el("p", "muted", NO_TOOLS));
   return section;
 }
 
 // Links on the map -------------------------------------------------------------------------------
 
-// What a press on a link the tray draws does, and the panel's button while a link's change waits.
-export const TAKE_OUT = "Take it out of the preview";
 const IN_PREVIEW_SAY = "This link is a change in preview. Nothing is written until you Apply.";
 // Under a link's title: what it is, by what it joins (linkKind).
 const LINK_SUBS = { client: "Route through the gateway", held: "Held by the gateway", tool: "Tool on", direct: "Direct route", change: "Change in preview" };
@@ -1038,7 +1084,7 @@ export function stepHead(crumb, title, back) {
 }
 
 // A step's quiet note at its foot, after an info icon; `words` can change.
-export function stepFoot(words) {
+function stepFoot(words) {
   const foot = el("p", "step-foot");
   foot.append(icon("info", 13), words);
   return foot;
@@ -1092,7 +1138,7 @@ function moveOutNodes(name, clients, linked, back) {
 
 // The client a server moves out to while its row waits in the tray, or null.
 function movingTo(name) {
-  const row = tray.rows.find((r) => r.key === keyFor({ action: "gateway.move_out", params: { server: name } }));
+  const row = trayRow(keyFor({ action: "gateway.move_out", params: { server: name } }));
   return row ? row.body.targets[0].client : null;
 }
 
@@ -1218,7 +1264,7 @@ function followLine(p, rows, ownOf, ticks) {
 // Whether the rule `body` waits in the tray as it is: a row for that project with another state
 // (a "Use the shared rule…") is not this tick.
 function ticked(body) {
-  const row = tray.rows.find((r) => r.key === keyFor(body));
+  const row = trayRow(keyFor(body));
   return Boolean(row) && row.body.params.state === body.params.state;
 }
 

@@ -32,7 +32,7 @@ const queue = (url, ...items) => replies.set(url, [...(replies.get(url) || []), 
 const asked = (url) => calls.filter((call) => call.url === url);
 const urls = () => calls.map((call) => `${call.method} ${call.url}`);
 
-const { PENDING_TITLE, addToTray, applyTray, cancelTray, checkTrayStale, endApplied, iconFor, inTray, keyFor, onTray, partOf, setTrayWords, takeOut, tray, tryAgain } = await import('../../src/kitden/web/static/js/tray.js');
+const { PENDING_TITLE, addToTray, applyTray, cancelTray, checkTrayStale, endApplied, giveAccess, iconFor, inTray, keyFor, onTray, partOf, readyRows, setTrayWords, takeOut, tray, tryAgain, waitingRows } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, setBusy, state } = await import('../../src/kitden/web/static/js/store.js');
 
 const PREVIEW = '/api/batch/preview';
@@ -100,6 +100,18 @@ test('a row asked before the words are set is sent as New change', async () => {
   assert.deepEqual(asked(PREVIEW)[0].body.requests.map((r) => [r.title, r.detail]), [['New change', '']]);
   assert.deepEqual(tray.rows.map((row) => [row.title, row.detail]), [['', '']]);
   setTrayWords(words);
+});
+
+test('keyFor names a changed secret by its server and name, so Replace and Remove replace each other', () => {
+  const access = (value) => ({ action: 'gateway.access', targets: [], params: { server: 'neon', field: 'headers', name: 'Authorization', value } });
+  assert.equal(keyFor(access('Bearer x')), 'access:neon/headers/Authorization');
+  assert.equal(keyFor(access(null)), keyFor(access('Bearer y')));
+});
+
+test('keyFor names a sign-in again by its server', () => {
+  const again = (id) => ({ action: 'gateway.sign_in', targets: [], params: { server: 'neon', sign_in: id } });
+  assert.equal(keyFor(again('s1')), 'signin:neon');
+  assert.equal(keyFor(again('s1')), keyFor(again('s2')));
 });
 
 test('keyFor names a switch by what it switches', () => {
@@ -652,4 +664,247 @@ test('listeners hear every change of state once', async () => {
   queue(PREVIEW, previewed('c2'));
   await addToTray(add('github'));
   assert.equal(seen.length, 3);
+});
+
+// A server that waits for access: the 422 answer names the row and what it needs.
+const FIELD = { field: 'headers', name: 'Authorization', label: 'Access token', prefix: 'Bearer ' };
+const needs = (server, { refused = false, kind = 'token' } = {}) => (sent) => {
+  const row = sent.requests.find((request) => request.params.item === server);
+  const reason = refused ? `${server} did not accept this token.` : `${server} needs a token.`;
+  return { status: 422, json: { detail: reason, row: row.id, needs: { server, kind, fields: [FIELD], reason, refused } } };
+};
+
+test('a needs answer makes the row join as waiting', async () => {
+  await fresh();
+  queue(PREVIEW, needs('neon'));
+  assert.equal(await addToTray(add('neon')), true);
+  assert.equal(tray.phase, 'waiting');
+  assert.equal(tray.change, null);
+  assert.equal(tray.refused, null);
+  const [row] = tray.rows;
+  assert.equal(row.waits.kind, 'token');
+  assert.equal(row.waits.checking, false);
+  assert.deepEqual([row.title, row.detail], ['neon', 'neon needs a token.']);
+  assert.equal(asked(PREVIEW).length, 1);
+  assert.deepEqual(waitingRows(), [row]);
+  assert.deepEqual(readyRows(), []);
+});
+
+test('a waiting row is not sent with the ready rows', async () => {
+  await fresh();
+  queue(PREVIEW, needs('neon'), previewed('c1'));
+  await addToTray(add('neon'));
+  assert.equal(await addToTray(add('github')), true);
+  const last = asked(PREVIEW).at(-1).body.requests;
+  assert.deepEqual(last.map((request) => request.params.item), ['github']);
+  assert.equal(tray.phase, 'ready');
+  assert.equal(tray.change.id, 'c1');
+  assert.equal(tray.rows.length, 2);
+});
+
+test('a row that waits after a ready one: the ready one is asked for again on its own', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), needs('neon'), previewed('c2'));
+  await addToTray(add('github'));
+  assert.equal(await addToTray(add('neon')), true);
+  assert.equal(tray.change.id, 'c2');
+  assert.equal(tray.phase, 'ready');
+  assert.deepEqual(asked(PREVIEW).at(-1).body.requests.map((request) => request.params.item), ['github']);
+});
+
+test('a working token makes the row ready and marks it works', async () => {
+  await fresh();
+  queue(PREVIEW, needs('neon'), previewed('c1'));
+  await addToTray(add('neon'));
+  const key = tray.rows[0].key;
+  const seen = [];
+  const stop = onTray((now) => seen.push(now.rows[0]?.waits?.checking));
+  assert.equal(await giveAccess(key, { headers: { Authorization: 'Bearer good' } }), true);
+  stop();
+  assert.equal(seen[0], true);
+  const sent = asked(PREVIEW).at(-1).body.requests;
+  assert.deepEqual(sent[0].params.headers, { Authorization: 'Bearer good' });
+  const [row] = tray.rows;
+  assert.equal(row.waits, null);
+  assert.equal(row.works, true);
+  assert.equal(tray.phase, 'ready');
+  assert.equal(tray.change.id, 'c1');
+});
+
+test('a refused token keeps the row waiting with the reason, and the rest are asked again', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), needs('neon'), previewed('c2'), needs('neon', { refused: true }), previewed('c3'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  const row = tray.rows.find((each) => each.waits);
+  assert.equal(await giveAccess(row.key, { headers: { Authorization: 'Bearer bad' } }), false);
+  assert.equal(row.waits.refused, true);
+  assert.equal(row.waits.reason, 'neon did not accept this token.');
+  assert.equal(row.waits.checking, false);
+  assert.equal(row.body.params.headers, undefined);
+  assert.equal(tray.change.id, 'c3');
+  assert.equal(tray.phase, 'ready');
+  assert.equal(tray.refused, null);
+});
+
+test('another refusal of a check keeps the row waiting with that reason', async () => {
+  await fresh();
+  queue(PREVIEW, needs('neon'), refusal('Kitden could not reach neon.', null));
+  await addToTray(add('neon'));
+  const [row] = tray.rows;
+  assert.equal(await giveAccess(row.key, { headers: { Authorization: 'Bearer x' } }), false);
+  assert.deepEqual([row.waits.reason, row.waits.refused], ['Kitden could not reach neon.', true]);
+  assert.equal(tray.phase, 'waiting');
+});
+
+test('apply waits while a token is checked', async () => {
+  await fresh();
+  const held = slowPreview('c3');
+  queue(PREVIEW, previewed('c1'), needs('neon'), previewed('c2'), held.reply);
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  const row = tray.rows.find((each) => each.waits);
+  const checking = giveAccess(row.key, { headers: { Authorization: 'Bearer good' } });
+  await applyTray();
+  assert.equal(asked('/api/changes/c2/apply').length, 0);
+  held.release();
+  await checking;
+  assert.equal(tray.change.id, 'c3');
+});
+
+test('a partial apply keeps the waiting rows', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), needs('neon'), previewed('c2'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  queue('/api/changes/c2/apply', verified('c2'));
+  await applyTray();
+  assert.equal(tray.phase, 'applied');
+  endApplied();
+  assert.deepEqual(tray.rows.map((row) => row.title), ['neon']);
+  assert.equal(tray.phase, 'waiting');
+  assert.equal(tray.change, null);
+});
+
+test('a tray with only waiting rows has nothing to apply', async () => {
+  await fresh();
+  queue(PREVIEW, needs('neon'));
+  await addToTray(add('neon'));
+  await applyTray();
+  assert.deepEqual(urls().filter((url) => url.includes('/apply')), []);
+});
+
+test('taking out a waiting row asks nothing', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), needs('neon'), previewed('c2'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  const before = asked(PREVIEW).length;
+  await takeOut(tray.rows.find((row) => row.waits).key);
+  assert.equal(asked(PREVIEW).length, before);
+  assert.equal(tray.rows.length, 1);
+  assert.equal(tray.change.id, 'c2');
+});
+
+test('taking out the ready row leaves the waiting one and cancels the change', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), needs('neon'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  const before = asked(PREVIEW).length;
+  await takeOut(tray.rows.find((row) => !row.waits).key);
+  assert.equal(asked(PREVIEW).length, before);
+  assert.deepEqual(asked('/api/changes/c1/cancel').length, 1);
+  assert.equal(tray.phase, 'waiting');
+});
+
+test('a group drop keeps the servers that need access as waiting rows', async () => {
+  // gateway-drag.js addInTurn adds them one by one and goes on while each joins.
+  await fresh();
+  queue(PREVIEW, previewed('c1'), needs('neon'), previewed('c2'), previewed('c3'));
+  const joined = [];
+  for (const name of ['github', 'neon', 'docs']) joined.push(await addToTray(add(name)));
+  assert.deepEqual(joined, [true, true, true]);
+  assert.deepEqual(tray.rows.map((row) => [row.body.params.item, Boolean(row.waits)]), [['github', false], ['neon', true], ['docs', false]]);
+  assert.deepEqual(asked(PREVIEW).at(-1).body.requests.map((request) => request.params.item), ['github', 'docs']);
+  assert.equal(tray.change.id, 'c3');
+});
+
+// Found by the final review: asks that cross a token check or each other.
+const needsFor = (pick) => (sent) => {
+  const row = pick(sent.requests);
+  const server = row.params.item;
+  const reason = `${server} needs a token.`;
+  return { status: 422, json: { detail: reason, row: row.id, needs: { server, kind: 'token', fields: [FIELD], reason, refused: false } } };
+};
+
+test('taking out a row while its token is checked keeps it out of the change', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), needs('neon'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  const held = slowPreview('c2');
+  queue(PREVIEW, held.reply, previewed('c3'));
+  const waiting = tray.rows.find((row) => row.waits);
+  const checking = giveAccess(waiting.key, { headers: { Authorization: 'Bearer t' } });
+  await takeOut(waiting.key);
+  held.release();
+  await checking;
+  assert.deepEqual(tray.rows.map((row) => row.body.params.item), ['github']);
+  assert.equal(tray.change.rows.length, 1);
+  assert.equal(tray.phase, 'ready');
+});
+
+test('an add that waits after a refused preview asks for the other rows again', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(add('github'));
+  queue(PREVIEW, refusal('Kitden could not reach github.'));
+  await quietly(() => tryAgain());
+  assert.equal(tray.phase, 'failed');
+  queue(PREVIEW, needs('neon'), previewed('c3'));
+  assert.equal(await addToTray(add('neon')), true);
+  assert.equal(tray.phase, 'ready');
+  assert.equal(tray.change.id, 'c3');
+  assert.deepEqual(tray.change.rows.map((row) => row.id), [tray.rows[0].id]);
+});
+
+test('two quick adds that both need a token both wait', async () => {
+  await fresh();
+  const gate = slow();
+  queue(PREVIEW, needsFor((rows) => rows.at(-1)), (sent) => gate.reply().then(() => needsFor((rows) => rows[0])(sent)), needsFor((rows) => rows[0]));
+  const first = addToTray(add('github'));
+  const second = addToTray(add('neon'));
+  gate.release();
+  assert.deepEqual([await first, await second], [true, true]);
+  assert.deepEqual(tray.rows.map((row) => [row.body.params.item, Boolean(row.waits)]), [['github', true], ['neon', true]]);
+  assert.equal(tray.phase, 'waiting');
+  assert.equal(tray.refused, null);
+});
+
+test('a needs answer for another row during a check does not mark the checked row refused', async () => {
+  await fresh();
+  queue(PREVIEW, needs('neon'), needs('linear'));
+  await addToTray(add('neon'));
+  await addToTray(add('linear'));
+  const neon = tray.rows.find((row) => row.body.params.item === 'neon');
+  // The check asks for neon only (linear waits); here the answer is a refusal of neon's token.
+  queue(PREVIEW, needs('neon', { refused: true }));
+  assert.equal(await giveAccess(neon.key, { headers: { Authorization: 'Bearer bad' } }), false);
+  assert.equal(neon.waits.refused, true);
+  const linear = tray.rows.find((row) => row.body.params.item === 'linear');
+  assert.equal(linear.waits.refused, false);
+});
+
+test('a check dropped by another ask says nothing', async () => {
+  await fresh();
+  queue(PREVIEW, needs('neon'));
+  await addToTray(add('neon'));
+  const held = slowPreview('c2');
+  queue(PREVIEW, held.reply, previewed('c3'));
+  const checking = giveAccess(tray.rows[0].key, { headers: { Authorization: 'Bearer t' } });
+  const other = addToTray(add('github'));
+  held.release();
+  assert.equal(await checking, null);
+  await other;
 });

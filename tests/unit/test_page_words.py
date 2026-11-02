@@ -920,7 +920,8 @@ def test_one_mark_slides_between_the_choices_of_a_group():
 def test_gateway_list_is_a_tree_grid_the_keys_move_through():
     # The List is a tree grid: the arrows move, Right opens, Left closes (dom.js gridKey).
     text = script("gateway.js")
-    assert 'setAttribute("role", "treegrid")' in text and "gridKey(" in text
+    assert 'setAttribute("role", "treegrid")' in text and "gridKeys(grid, rows," in text
+    assert "gridKey(rows," in script("dom.js").split("export function gridKeys")[1]
     # "Connect clients" folds smoothly in a registered gateway's Details.
     assert "fold(box)" in gw()
 
@@ -1236,13 +1237,15 @@ def test_every_control_a_render_replaces_names_itself_for_focus():
             '"add:missing"',
             "`hide:${column.id}`",
             '"hidden:show"',
-            "`row:${row.id}`",
         ),
     }.items():
         text = script(name)
         for key in keys:
             assert f"dataset.focus = {key}" in text, (name, key)
-        assert "gridKey(" in text
+        assert "gridKeys(" in text and "treeRow(" in text
+    # A tree grid's row is named by its row key (dom.js treeRow).
+    tree_row = script("dom.js").split("export function treeRow")[1]
+    assert "node.dataset.focus = `row:${row.id}`;" in tree_row
 
 
 def test_client_checkboxes_come_from_one_named_part():
@@ -1307,7 +1310,9 @@ def test_buttons_show_progress_and_the_scan_line_no_longer_blinks():
 def test_while_a_change_is_written_the_tray_offers_nothing_to_stop_it():
     dock = script("dock.js")
     # Cancel and every × are off while the change is written: it cannot stop halfway.
-    assert 'shown.cancel.disabled = t.phase === "applying" || t.phase === "applied";' in dock
+    assert "shown.cancel.disabled = writing(t);" in dock
+    writing = 'writing = (t = tray) => t.phase === "applying" || t.phase === "applied";'
+    assert writing in script("tray.js")
     assert "item.out.disabled = working;" in dock
     # The line says what is written, and Apply takes no press until it ends.
     assert "line: writingLine(t.change.steps)" in dock and "applyWaits: true" in dock
@@ -1488,6 +1493,19 @@ def test_a_held_server_lists_its_tools_with_a_switch_each():
     assert '"gateway_tools"' in script("app.js") and '"kitden:tools"' in script("app.js")
 
 
+def _sign_in_actions(text):
+    """How often "Sign in" is a button: a server whose sign-in ended, or its Access block."""
+    return text.count('stepAction("Sign in"') + text.count('button("Sign in again"')
+
+
+def test_tools_read_in_the_background_show_without_a_refresh():
+    # After an Apply that brings a server in, its tools are read in the background; when that
+    # ends, the page draws again, so they show without pressing Refresh tools.
+    app = script("app.js")
+    [handler] = [line for line in app.splitlines() if '"gateway_tools"' in line]
+    assert "liveRefresh()" in handler
+
+
 def test_a_tool_switch_flips_only_after_the_change_is_verified():
     code = panel()
     # Details are drawn again after Apply all, the switch in its new state; the thumb slides once.
@@ -1569,7 +1587,7 @@ def test_the_add_a_server_panel_says_what_the_mockup_says():
     assert "{ label: ADD_SERVER, run: () => openAdd() }" in details
     assert 'const SEARCH = "Search the marketplaces";' in shared
     assert "input.placeholder = `${SEARCH}…`;" in shared
-    assert 'const FOOT = "Click a server or drag it onto the map to preview it.";' in add
+    assert 'const FOOT = "Click to preview · drag onto the gateway";' in add
     assert 'const NO_MATCH = "No servers match.";' in add
     assert 'const NONE = "No marketplace on this computer offers an MCP server.";' in add
     assert 'const FAILED = "Could not read the marketplaces.";' in shared
@@ -1720,7 +1738,9 @@ def test_tool_and_server_details_use_the_owner_words():
         " on`",
     ):
         assert words in text, words
-    assert "Allowed" not in text and "Blocked" not in text and "Sign in" not in text
+    assert "Allowed" not in text and "Blocked" not in text
+    # "Sign in" is only the action of a server whose sign-in ended (Part 3b), never a state.
+    assert text.count("Sign in") == _sign_in_actions(text)
     # With All projects a card says "in every project" or "in any project", then each known project
     # that decides otherwise ("Except atlas, where it is on."); never "Other projects follow".
     assert "Other projects follow" not in gw() and '"Read only"' not in gw()
@@ -1786,7 +1806,8 @@ def test_the_server_panel_says_the_mockups_words():
         "Tools · ${where || ALL_PROJECTS}",
     ):
         assert words in tools, words
-    assert "Sign in" not in text and "Signed in" not in text
+    assert "Signed in" not in text
+    assert text.count("Sign in") == _sign_in_actions(text)
     # A server off by the shared rule is never "off in all projects": projects may turn it on.
     assert "is off by the shared rule, so none of its tools are offered.${otherwise}`" in tools
     assert 'off in ${where || "all projects"}' not in tools
@@ -1877,7 +1898,7 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
         '"Kitden\'s gateway file"',
         '"In place"',
         '"This link is a change in preview. Nothing is written until you Apply."',
-        '"Take it out of the preview"',
+        "TAKE_OUT",
         "`Disconnect ${",
         "· outside the gateway`",
         '"Set up in"',
@@ -2129,7 +2150,7 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
     ):
         assert words in text, words
     assert '"/api/map"' not in text and "loadMap(" not in text
-    assert 'role", "treegrid"' in script("gateway.js") and "gridKey(" in script("gateway.js")
+    assert 'role", "treegrid"' in script("gateway.js") and "gridKeys(" in script("gateway.js")
 
 
 def test_the_gateway_says_what_it_could_not_read():
@@ -2189,9 +2210,12 @@ def test_the_map_previews_are_tray_rows():
     review = script("review.js")
     assert "setMapReview" not in review and "mapReview" not in review
     text = gw()
+    assert 'export const TAKE_OUT = "Take it out of the preview";' in script("tray.js")
+    # A link's × takes its row out of the tray, or adds it (tray.js toggleInTray).
+    assert "return inTray(key) ? takeOut(key) : addToTray(body, opts);" in script("tray.js")
     for words in (
-        'const TAKE_OUT = "Take it out of the preview";',
-        "addToTray(removal.body, { icon: removalIcon(removal.body) })",
+        "TAKE_OUT",
+        "toggleInTray(removal.body, { icon: removalIcon(removal.body) })",
         '(body.action === "client.disconnect" ? iconFor(body) : "x")',
         "addToTray(body)",
         "takeOut(",
@@ -2294,7 +2318,8 @@ def test_a_server_drags_onto_a_client():
     # gateway-notes 6.2: the tip asks for a client, then says where a drop moves the server; a
     # client that cannot take it says why before the drop, in the tip's plain look.
     drag = script("gateway-drag.js")
-    assert 'export const ON_CLIENT = "Drop on a client";' in script("map-drag.js")
+    assert 'const ON_CLIENT = "Drop on a client";' in script("map-drag.js")
+    assert "aimWords(drag," in drag
     for words in (
         "`Move into ${CLIENT_NAMES[client.client]}`",
         "`${who} already has ${name}.`",
@@ -2327,7 +2352,7 @@ def test_the_tray_bar_sits_in_the_dock_and_says_its_words():
         "changes in preview",
         "Nothing is written until you Apply.",
         "Click one on the map to take it out.",
-        "Take it out of the preview",
+        'iconButton("x", TAKE_OUT, "x",',
         "Show changes",
         "Cancel all",
         "Apply all",
@@ -2458,8 +2483,10 @@ def test_the_list_has_the_mockups_columns_and_quiet_read_and_write_words():
     assert 'el("span", "sr-only", "Action")' in text
     assert 'el("span", "hint", row.tag)' in text and "flag(" not in text
     assert "--tg-cols: minmax(0, 1fr) 130px 150px 100px; max-width: 912px;" in CSS
-    for words in ("Sign in", "Signed in", "Running"):
+    for words in ("Signed in", "Running"):
         assert words not in text, words
+    # "Sign in" is only the action of a server whose sign-in ended (Part 3b), never a state.
+    assert text.count("Sign in") == _sign_in_actions(text)
 
 
 def test_the_view_switch_goes_out_in_120_and_comes_in_in_260():
@@ -2559,7 +2586,8 @@ def test_a_control_that_waits_for_another_change_says_why():
     assert '.dock .btn[aria-disabled="true"] { cursor: progress; }' in CSS
     assert 'div.map .link-x[aria-disabled="true"] { cursor: progress; }' in CSS
     # During the tray's own Apply a link's × says the change is the person's own.
-    assert 'export const OWN_WAITS = "Your change is being written.";' in script("gateway.js")
+    assert 'const OWN_WAITS = "Your change is being written.";' in script("tray.js")
+    assert "linksWait" in script("gateway.js") and "linksWait" in script("library-map.js")
 
 
 def test_a_gateway_kitden_cannot_reach_says_a_short_state_and_no_block_words_run_out():
@@ -2599,7 +2627,9 @@ def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
         '"Point at a link and press × to remove it · click anything for its Details · several '
         'changes wait in preview, then Apply all · drag a server onto a client"'
     ) in gateway
-    assert 'setHint(mode === "map" ? MAP_HINT : "");' in gateway
+    assert 'setHint(mode === "map" ? mapHint() : "");' in gateway
+    # While servers are picked the hint counts them (gateway-pick.js).
+    assert "return pick.ids.size ? PICK_HINT(pick.ids.size) : MAP_HINT;" in gateway
     assert "flex: none" in rule(".hint-line svg")
     # A client whose settings cannot be read says so, as its panel does; so does a plugin entry
     # that is off.
@@ -2731,8 +2761,8 @@ def test_a_plugin_or_skill_drags_onto_a_client():
         "`Already in ${who}`",
         'const WAITS_ALREADY = "Already in preview";',
         "`${who} cannot get ${item.name}`",
-        "const meta = `Preview · ${wait.all ? ALL_PROJECTS : joinWords(wait.names)}`;",
-        'const ALL_PROJECTS = "all projects";',
+        "const meta = `Preview · ${wait.all ? ALL_PROJECTS_LOWER : joinWords(wait.names)}`;",
+        'const ALL_PROJECTS_LOWER = "all projects";',
         'const CLICK_OUT = "Click to take it out.";',
         "takeOut: `${meta}. ${CLICK_OUT}`",
         "pinned: true, parent: marketGroup(model, offer.marketplace)",
@@ -2760,7 +2790,7 @@ def test_the_library_add_panel_says_the_decided_words():
     text = script("library-add.js")
     for words in (
         'export const LIBRARY_ADD_TITLE = "Add a plugin or skill";',
-        'const FOOT = "Click to preview, or drag onto a client.";',
+        'const FOOT = "Click to preview · drag onto a client";',
         'const NO_MATCH = "No plugins or skills match.";',
         'const NONE = "No marketplace on this computer offers a plugin or skill.";',
         'const ADD_MARKETPLACE = "Add a marketplace…";',
@@ -2779,9 +2809,11 @@ def test_the_library_add_panel_says_the_decided_words():
         for w in ("LIBRARY_STATUS.added, off", "LIBRARY_STATUS.every", "line: row.refusal")
     ]
     assert order == sorted(order)
-    # The map's caption carries "+ Add", and a row of the panel drags onto a client.
+    # The page header carries "+ Add plugins", the map ends with an "Add a plugin" card, and a row
+    # of the panel drags onto a client.
     lib_map = script("library-map.js")
-    assert 'caption: "Plugins and skills", add: true,' in lib_map
+    assert 'addHeadButton("+ Add plugins", "add:plugins", pressLibraryAdd)' in script("library.js")
+    assert 'name: "Add a plugin", meta: "From the catalog"' in lib_map
     assert "row: { still: true, begin: beginRow, over: overRow, drop: dropRow }," in lib_map
     assert "liftGhost" in script("gateway-drag.js") and "export function liftGhost(" in script(
         "map-drag.js"
@@ -2815,8 +2847,7 @@ def test_a_library_link_x_removes_or_turns_off():
     assert 'if (client === "cursor") {' in rules
     text = script("library-map.js")
     for words in (
-        'const TAKE_OUT = "Take it out of the preview";',
-        'const OWN_WAITS = "Your change is being written.";',
+        "TAKE_OUT",
         "const LINKS = { canHit: () => true, tip: linkTip, waits: linksWait, onClick: pressLink, "
         "onRemove: removeLink };",
         "inTray(keyFor(change.body)) ? TAKE_OUT : change.tip",
@@ -2857,7 +2888,7 @@ def test_the_instructions_map_words():
         "const TAB_FROM = { x: 150, y: 200 };",
         '`${who} · ${plural(file.count, "rule", "rules")}`',
         '`${who} · ${plural(pulls, "import", "imports")}`',
-        '`${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS}`',
+        '`${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS_LOWER}`',
         'file: ["block-icon", "file-text", 15], import: ["block-icon bare", "scroll-text", 13]',
         "const importsOf = (file) => ((file.by || {}).claude_code ? file.imports || [] : []);",
     ):
@@ -2950,7 +2981,7 @@ def test_the_library_list_words_and_looks():
     ):
         assert words in text, words
     # A row opens the map's Details; the keys are the tree grid's.
-    assert "libraryDetails(id);" in text and "gridKey(rows," in text
+    assert "libraryDetails(id);" in text and "gridKeys(grid, rows," in text
     assert "export function libraryDetails(id, how)" in script("library-map.js")
     # The look: the Gateway List's grid, a sticky 30 px head, a 34 px part row.
     assert ".tg-row.part { min-height: 34px; }" in CSS
@@ -3112,3 +3143,14 @@ def test_how_it_works_dark_svg_uses_no_old_amber():
         svg = (images / name).read_text().lower()
         assert "#e0a347" not in svg, name
         assert f'<circle cx="684" cy="142" r="4" fill="{warn}"/>' in svg, name
+
+
+def test_hints_follow_one_pattern_and_refusals_are_amber():
+    # One hint pattern ("Click to … · drag onto …", no final period) in the add panels and the
+    # catalog; a refusal in a form is amber, as in the dock and under a token field.
+    for name in ("gateway-add.js", "library-add.js"):
+        foot = re.search(r'const FOOT = "([^"]+)";', script(name)).group(1)
+        assert re.fullmatch(r"Click to [a-z]+ · drag onto [a-z ]+", foot), foot
+    assert '"Click to review · drag onto the gateway"' in script("discovery.js")
+    css = (STATIC / "style.css").read_text()
+    assert ".form-message.error { color: var(--lamp-warn); }" in css

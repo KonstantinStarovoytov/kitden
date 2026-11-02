@@ -9,6 +9,10 @@ from enum import StrEnum
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+# The three clients Kitden can write, in the order the pages show them, and their names.
+CLIENTS = ("claude_code", "codex", "cursor")
+CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
+
 
 def _hash(*parts: object) -> str:
     return hashlib.sha256("\x1f".join(str(p) for p in parts).encode()).hexdigest()[:16]
@@ -109,7 +113,6 @@ class Client:
     version: str | None = None
     version_supported: bool = False
     config_roots: tuple[str, ...] = ()
-    write_capabilities: frozenset[str] = frozenset()
     app_url: str | None = None  # `claude://` when the client's Mac app is installed (apps.py)
 
 
@@ -122,7 +125,6 @@ class Source:
     read_status: ReadStatus = ReadStatus.OK
     unknown_reason: UnknownReason | None = None
     link_path: str | None = None
-    content_hash: str | None = None
 
     def __post_init__(self) -> None:
         if (self.read_status is ReadStatus.UNKNOWN) != (self.unknown_reason is not None):
@@ -237,7 +239,7 @@ class GatewayEdit:
     gateway_id: str
     url: str  # the gateway's endpoint address: the step's place on the Changes page
     name: str  # the server's name in the gateway
-    server: dict  # type, url, headers, as MetaMCP takes them
+    server: dict  # type, url, headers, as the gateway takes them
     server_uuid: str | None = None  # known after apply; undo removes it
     masked_diff: str = ""
 

@@ -349,7 +349,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 /* A note on its own line between the clients and Preview. It stays in the page so a screen reader
    hears it change; empty, it is a zero-width item that takes back its gap. */
 .form-message { color: var(--ink-3); font-size: 12px; }
-.form-message.error { color: var(--danger); }
+.form-message.error { color: var(--lamp-warn); }
 
 /* Client marks: one rounded tile that follows the theme; the vendor icon inside keeps its colors.
    The Claude glyph has no tile of its own, so it gets padding; the Codex and Cursor icons fill it
@@ -376,7 +376,6 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .s-on { color: var(--lamp-on); } .s-on .dot::after { transform: scale(1); }
 .s-gw { color: var(--route); } .s-gw .dot { border-radius: 3px; } .s-gw .dot::after { transform: scale(1); }
 .s-off { color: var(--lamp-off); }
-.s-over { color: var(--ink-3); } .s-over .dot { background: linear-gradient(135deg, transparent 44%, currentColor 45% 55%, transparent 56%); }
 .s-unk { color: var(--lamp-warn); } .s-unk .dot { border-style: dashed; }
 /* Needs review: an amber ring with a small dot, apart from Unknown's dashed ring. */
 .s-review { color: var(--lamp-warn); } .s-review .dot::after { transform: scale(0.5); border-radius: 50%; }
@@ -393,9 +392,6 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .flag.info { background: var(--wire-soft); color: var(--ink-3); font-weight: 400; }
 .flag.gone { animation: flag-out 360ms var(--ease-in-out) forwards; }
 @keyframes flag-out { 60% { opacity: 0; transform: scale(0.85); } to { opacity: 0; transform: scale(0.85); max-width: 0; padding: 0; } }
-.badge { font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 4px; border: 1px solid var(--wire); color: var(--ink-2); white-space: nowrap; }
-.badge.win { border-color: var(--ink-3); color: var(--ink); font-weight: 500; }
-.badge.warn { border-color: var(--lamp-warn); color: var(--lamp-warn); }
 /* The switch shows the real state; pressing it adds its change to the tray. The button is 24 px high to press.
    Its track (34 x 20) is drawn by ::before between two clear 2 px bands, and the knob (14 px) sits
    2 px inside the track's line. Off the knob is grey, on it is white on the accent. */
@@ -503,7 +499,10 @@ div.map .block.page .block-label { color: var(--ink-4); }
 /* Library */
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .btn.add { color: var(--route); border-color: color-mix(in srgb, var(--route) 45%, var(--wire)); background: transparent; }
-.btn.add:hover:not(:disabled) { background: var(--route-soft); }
+.btn.add:hover:not(:disabled), .btn.add[aria-expanded="true"] { background: var(--route-soft); }
+/* The page's add button sits beside Map | List, 8 px from it, as tall as it; the two wrap as one. */
+.head-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.head-actions > .btn.add { padding-block: 6px; }
 .s-via { color: var(--lamp-off); }
 .s-done { color: var(--lamp-on); } .s-done .dot::after { transform: scale(1); }
 .btn.toggle[aria-pressed="true"] { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); color: var(--route); font-weight: 600; }
@@ -518,7 +517,6 @@ div.map .block.page .block-label { color: var(--ink-4); }
 
 /* Gateway */
 .kicker { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 500; }
-.section-title { font-size: 15px; margin: 28px 0 0; letter-spacing: -0.01em; }
 .group-note { margin: 0 0 10px; color: var(--ink-3); }
 .conn { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .conn .cell { border: 1px solid var(--wire-soft); border-radius: 6px; padding: 10px 12px; background: var(--canvas); display: grid; gap: 6px; justify-items: start; }
@@ -730,11 +728,27 @@ div.map .block-projects.own { color: var(--route); }
 /* Outside the gateway: on the dim fill, the grip where the gateway can take it, its icon with no tile
    (a move out's preview there too), a grey ring for its lamp and a grey port. */
 div.map .block.outside { background: var(--dim); }
+/* The Add a server card: a place, not a preview, so grey dashed with no fill (as .empty). It turns
+   accent when pointed at, and when a drag lights the gateway. */
+div.map .block.addslot { border: 1px dashed var(--wire-strong); background: transparent; }
+div.map .block.addslot:hover, div.map .block.addslot.lit { border-color: var(--route); }
+div.map .block.addslot .block-icon { color: var(--route); }
+div.map .block.addslot .block-meta { color: var(--ink-3); }
 div.map .block-icon.bare { width: auto; height: auto; border: 0; background: none; }
 div.map .block-grip { flex: none; display: grid; margin-right: -4px; color: var(--lamp-off); }
 div.map .block.more { justify-content: center; border-style: dashed; background: transparent; color: var(--ink-2); }
 div.map .block.more .block-text { flex: none; }
 div.map .block.lit { border-color: var(--route); }
+/* A pick dragged as one (gateway-drag.js group): the picked blocks fade; their ghost rides in a
+   page-wide map, a stack of three cards with its count. */
+div.map.lifting .block.selected { opacity: 0.4; }
+div.map.ghost-host { position: fixed; inset: 0; z-index: 60; margin: 0; padding: 0; overflow: visible; pointer-events: none; }
+div.map .block.ghost { position: fixed; z-index: 1; pointer-events: none; cursor: grabbing; transform-origin: 0 0; box-shadow: 4px 4px 0 -1px var(--panel), 4px 4px 0 0 color-mix(in srgb, var(--wire) 70%, transparent), 8px 8px 0 -1px var(--panel), 8px 8px 0 0 color-mix(in srgb, var(--wire) 40%, transparent), var(--shadow); }
+div.map .block.ghost.over { border-color: var(--route); background: var(--route-soft); }
+div.map .ghost-count { position: absolute; top: -9px; right: -9px; padding: 1px 7px; border-radius: 999px; background: var(--action); color: var(--on-action); font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap; }
+/* The band that picks several servers outside the gateway (gateway-pick.js): a solid edge, since
+   dashed means preview, under the blocks so they stay readable. It follows the pointer with no easing. */
+div.map .map-band { position: absolute; left: 0; top: 0; z-index: 0; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--route) 40%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--route-soft) 70%, transparent); pointer-events: none; }
 /* A block off the lit path dims to 40% with less colour, over the 300 ms its filter transition
    takes. Captions keep their look. A block that is dragged does not dim, and a block with keyboard
    focus does not, so its ring keeps 3:1 (WCAG 1.4.11). These two repeat the dim rule's selector so
@@ -809,6 +823,8 @@ div.map .dragtip.on { background: var(--route-soft); border-color: var(--route);
    keyboard focus its edge is accent and an 18 px × says a press takes it out. */
 div.map .block.preview { border: 1px dashed var(--preview-line); background: var(--preview-fill); }
 div.map .block.preview .block-meta { color: var(--route); }
+/* A preview that waits for access: still a preview (dashed), with the amber lamp and words. */
+div.map .block.preview.needs .block-meta { color: var(--lamp-warn); }
 div.map .block.preview:hover { border-color: var(--route); }
 /* A Library plugin or skill whose add waits in the tray takes the same look ("Preview · Codex"). */
 div.map .block:is(.plugin, .skill)[data-state="preview"] { border: 1px dashed var(--preview-line); background: var(--preview-fill); }
@@ -847,7 +863,7 @@ div.map .block-count.leaving:focus-visible { filter: none; }
 .dock .tx { flex: 1; }
 .dock .bar b { font-size: 13px; font-weight: 600; }
 .dock .bar small { font-size: 11px; color: var(--ink-3); overflow-wrap: anywhere; }
-.dock .bar small.bad { color: var(--route); }
+.dock .bar small.bad { color: var(--lamp-warn); }
 .dock .tx .btn { align-self: flex-start; margin: 2px 0 -4px -9px; }
 .dock .acts { display: flex; gap: 8px; }
 .dock .bar.many .acts { justify-content: flex-end; }
@@ -994,7 +1010,6 @@ div.stack { display: grid; border: 1px solid var(--wire); border-radius: 8px; ov
    on the Gateway and in the Library: a quiet head, then one framed list, the whole server first on
    the dim fill. A row is the name (a tool's in mono) over its quiet line, and its switch; under a
    project with its own rule an accent line ends in the link "Use all projects". */
-.tools-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tool-list { display: grid; gap: 8px; }
 h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); }
 .sw-list { display: flex; flex-direction: column; border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
@@ -1081,11 +1096,12 @@ h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); 
 .res.off .itile { opacity: 0.55; }
 .res.off .tx b { color: var(--ink-3); }
 .res.done .st { color: var(--diff-add); }
+.res .st.warn { color: var(--lamp-warn); }
 /* A row dragged onto the map (add-notes §4): it stays in the list at .4 while a copy of it, the
    ghost, follows the pointer over the page. Over the gateway the ghost takes the drop look (180 ms). */
 .res:not(.off) { user-select: none; }
 .res.dragging { opacity: 0.4; }
-.res.ghost { position: fixed; z-index: 60; margin: 0; overflow: hidden; pointer-events: none; box-shadow: var(--shadow); cursor: grabbing; }
+.res.ghost { position: fixed; z-index: 60; margin: 0; overflow: hidden; pointer-events: none; box-shadow: var(--shadow); cursor: grabbing; transform-origin: 0 0; }
 .res.ghost.over { border-color: var(--route); background: var(--route-soft); }
 .drawer .who h2 { margin: 0; }
 .drawer .skeleton.card { height: 120px; }
@@ -1118,7 +1134,6 @@ pre.diff .del { color: var(--diff-del); background: color-mix(in srgb, var(--dan
 .callout.error { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .callout.stale { margin-bottom: 12px; }
 .checklist { margin: 0; padding-left: 18px; color: var(--ink-2); }
-.checklist .badge { margin-left: 6px; }
 .commands { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .looks-for { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
 .commands pre, pre.command { margin: 4px 0 0; padding: 8px 10px; background: var(--inset); border-radius: 6px; font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -1221,3 +1236,127 @@ html.map-entrance::view-transition-new(page) { animation: none; }
   .table-scroll { overflow-x: auto; }
   .library-list > .tg-head { position: static; }
 }
+
+/* Online source forms reuse the Add panel's fields and result rows. */
+.discovery .form > .field { flex: 1 1 100%; }
+.discovery .form > .field.grow { flex-basis: 170px; }
+.discovery .res { width: 100%; text-align: left; }
+.discovery details { margin: 14px 0; }
+.discovery pre { max-height: 320px; overflow: auto; }
+
+/* Add starts with visible catalog/local modes, then one search and source buttons. */
+.discovery-modes { display: flex; gap: 4px; padding: 4px; margin-bottom: 18px; border: 1px solid var(--wire); border-radius: 8px; background: var(--inset); }
+.discovery-modes .btn { flex: 1; border-color: transparent; background: transparent; color: var(--ink-3); }
+.discovery-modes .btn[aria-pressed="true"] { border-color: var(--wire); background: var(--panel); color: var(--ink); }
+.discovery-search-form { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.discovery-search { display: flex; align-items: center; flex: 1; min-width: 0; gap: 8px; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 6px; background: var(--inset); color: var(--ink-3); }
+.discovery-search:focus-within { border-color: var(--focus); background: var(--panel); }
+.discovery-search input { min-width: 0; width: 100%; height: 34px; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; outline: none; }
+.discovery-search-form .btn { min-height: 36px; }
+.discovery-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.discovery-choices .btn[aria-pressed="true"] { border-color: var(--focus); background: var(--route-soft); color: var(--ink); }
+.discovery-filters { margin-bottom: 18px; }
+.discovery-label { margin: 0 0 8px; color: var(--ink-3); font-size: 12px; }
+.discovery details.discovery-source-add { margin: 14px 0 20px; }
+.discovery-status { margin: 0 0 10px; font-size: 12px; }
+.add-body > .discovery-modes { margin-bottom: 14px; }
+
+/* Catalog and details stay together; narrow windows keep a single reading column. */
+#drawer:has(.discovery-workspace) { width: min(850px, calc(100vw - 48px)); }
+.discovery-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr); gap: 20px; align-items: start; }
+.discovery-results { min-width: 0; max-height: 55vh; overflow: auto; }
+.discovery-inspector { min-width: 0; padding: 20px; border: 1px solid var(--wire); border-radius: 10px; background: var(--inset); }
+.discovery-inspector .body { padding: 0; }
+.discovery-inspector h2 { font-size: 20px; overflow-wrap: anywhere; }
+.discovery-inspector .checks label { min-height: 44px; display: flex; align-items: center; }
+.discovery-source-row { display: flex; align-items: center; gap: 8px; padding-block: 8px; }
+.discovery-source-row > span { flex: 1; overflow-wrap: anywhere; }
+.discovery-source-row input { min-width: 0; flex: 1; }
+.discovery .res { min-height: 56px; }
+.discovery-inspector pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .discovery-workspace { grid-template-columns: minmax(0, 1fr); }
+  .discovery-search-form { flex-wrap: wrap; }
+  .discovery-search { flex-basis: 100%; }
+}
+.discovery:has(.discovery-workspace) { gap: 12px; }
+.discovery:has(.discovery-workspace) > p { margin-block: 0; }
+.discovery:has(.discovery-workspace) .discovery-modes { margin-bottom: 4px; }
+.discovery:has(.discovery-workspace) .discovery-filters { margin-bottom: 0; }
+.discovery:has(.discovery-workspace) .discovery-source-add { margin: 0; }
+.discovery-source-add > summary { display: none; }
+.discovery-source-add[open] { padding: 16px; border: 1px solid var(--wire); border-radius: 8px; }
+.discovery-results .res[aria-pressed="true"] { border-color: var(--focus); background: var(--route-soft); }
+
+/* A narrow catalog leaves the map available for dragging. Details stay compact. */
+#drawer.floating:has(.discovery-workspace) { width: min(580px, calc(100vw - 48px)); top: 110px; bottom: auto; max-height: calc(100vh - 150px); padding: 14px; gap: 10px; }
+.discovery-workspace { grid-template-columns: minmax(0, 1fr) minmax(230px, 1fr); gap: 12px; }
+.discovery-inspector { padding: 14px; }
+.discovery-inspector .body { display: flex; flex-direction: column; gap: 10px; }
+.discovery-inspector .body > p, .discovery-inspector .body > h2, .discovery-inspector .body > details { margin: 0; }
+.discovery-inspector h2 { font-size: 17px; line-height: 1.3; }
+.discovery-inspector .form { gap: 10px; }
+.discovery-inspector .checks { display: flex; flex-direction: column; gap: 0; }
+.discovery-inspector .checks label { min-height: 36px; }
+.discovery .res { min-height: 48px; padding: 9px; }
+.discovery .res .st { font-size: 10px; }
+.catalog-popularity { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.catalog-progress { display: flex; flex-direction: column; gap: 8px; width: 100%; font-size: 12px; }
+@media (max-width: 1100px) { .discovery-workspace { grid-template-columns: minmax(0, 1fr); } .discovery-results { max-height: 30vh; } }
+#drawer:has(.discovery-workspace) { width: min(580px, calc(100vw - 32px)); max-height: calc(100vh - 96px); }
+@media (max-width: 700px) { #drawer:has(.discovery-workspace) { width: calc(100vw - 16px); } }
+#drawer:has(.discovery-workspace) { top: 90px; bottom: auto; height: auto; }
+#drawer:has(.discovery-workspace) > .body { flex: none; }
+.discovery-inspector:has(> .muted:only-child) { display: none; }
+@media (max-width: 1100px) { .discovery-inspector:not(:empty) { scroll-margin-top: 20px; } }
+
+/* Catalog rows size to their text instead of inheriting compact local-offer heights. */
+.discovery-results .res { height: auto; flex: none; min-height: 62px; align-items: flex-start; }
+.discovery-results .res .tx b, .discovery-results .res .tx small { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.4; }
+.discovery-results .res .st { align-self: center; }
+.discovery-search-form { min-width: 0; flex-wrap: wrap; }
+.discovery-search-form .discovery-search { flex: 1 1 220px; }
+.catalog-progress, .catalog-loading { position: relative; isolation: isolate; overflow: hidden; }
+.catalog-progress { min-height: 64px; justify-content: center; padding: 12px; box-sizing: border-box; border-radius: 8px; background: var(--inset); }
+/* A quiet fill in the existing surface; no extra labels or moving highlights. */
+.catalog-progress::before, .catalog-loading::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--wire); opacity: .12; animation: catalog-breathe 1.6s ease-in-out infinite alternate; pointer-events: none; }
+@keyframes catalog-breathe { to { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .catalog-progress::before, .catalog-loading::before { animation: none; } }
+
+/* Shared, reversible disclosure for secondary actions. */
+.detail-actions { display: flex; flex-direction: column; gap: 10px; }
+.detail-actions[hidden] { display: none; }
+.detail-actions details > .stack { margin-top: 8px; }
+.detail-actions summary { cursor: pointer; color: var(--ink-2); font-size: 12px; padding: 6px 0; }
+/* More reads as a quiet toggle, its chevron turned when open; what it shows stays lighter than the primary action. */
+.btn.more::after { content: ""; width: 5px; height: 5px; margin: -3px 2px 0 4px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); transition: transform var(--t-fast) ease; }
+.btn.more[aria-expanded="true"]::after { margin-top: 3px; transform: rotate(-135deg); }
+.detail-actions { gap: 4px; }
+.detail-actions .btn { border-color: transparent; background: transparent; color: var(--ink-2); justify-content: flex-start; }
+.detail-actions .btn:hover:not(:disabled) { background: var(--wire-soft); color: var(--ink); }
+.discovery-hint { font-size: 11px; margin: 0; }
+.res.drags { cursor: grab; touch-action: none; }
+.access-fields details { margin: 0; }
+.access-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1 1 100%; }
+.access-fields .field { min-width: 0; }
+.access-fields p { margin: 0; }
+.access-fields details[open] { display: grid; gap: 8px; }
+/* A held server's Access block: each secret's name and its start and end, its buttons right. */
+.access .access-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; }
+.access .access-what { display: grid; gap: 2px; min-width: 0; }
+.access .access-what small { overflow-wrap: anywhere; }
+.access .access-acts { display: flex; gap: 6px; flex: none; }
+/* Sign in and its Cancel sit side by side while the browser is open. */
+.access-fields.sign-in-row { flex-direction: row; align-items: center; gap: 8px; }
+.access-fields summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
+.access-fields input { width: 100%; box-sizing: border-box; }
+/* The access form (access-form.js): refused is amber words that stay; works is the green lamp
+   and a check drawn in 320 ms. */
+.access-form { display: grid; gap: 10px; }
+.access-form > p { margin: 0; }
+.access-why, .access-works { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.access-why svg { flex: none; color: var(--lamp-warn); }
+.access-works .access-check { color: var(--lamp-on); }
+.access-works .access-check path { stroke-dasharray: 24; }
+.access-names summary { cursor: pointer; color: var(--ink-3); font-size: 12px; }
+.access-names p { margin: 4px 0 0; }

@@ -2,15 +2,16 @@
 // of them; a drop only adds a row to the tray. Today: a server from outside the gateway into it, a
 // server in the Kitden gateway onto a client, a wire from a client that is not connected onto
 // the gateway, and a row of the Add a server panel onto the map.
-import { el, pageWaits, reportError } from "./dom.js";
+import { el, pageWaits, plural, reportError } from "./dom.js";
 import { foundClients } from "./gateway-details.js";
+import { clearPick, pick } from "./gateway-pick.js";
 import { linkKey } from "./map.js";
-import { areaPoint, clientAt, covered, DRAG_START, flyGhost, follow, goHome, heldAt, liftGhost, mapArea, moveGhost, ON_CLIENT, pageBox, pointOf as pointIn, startDrag as runDrag } from "./map-drag.js";
-import { CALM, shake } from "./motion.js";
+import { aimClient, aimWords, areaPoint, covered, DRAG_START, dropOnClient, flyGhost, follow, goHome, heldAt, liftGhost, mapArea, moveGhost, pageBox, pointOf as pointIn, startDrag as runDrag } from "./map-drag.js";
+import { animateTo, CALM } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { CLIENT_NAMES } from "./parts.js";
-import { busy, current, data } from "./store.js";
-import { addToTray, inTray, keyFor, tray } from "./tray.js";
+import { busy, current, data, state } from "./store.js";
+import { addToTray, inTray, keyFor, tray, writing } from "./tray.js";
 
 // A dropped block flies onto its slot.
 const DROP_MS = 200;
@@ -30,7 +31,6 @@ const MISS = { ms: 180, ease: CALM };
 // Outside caption. Its ghost flies onto the slot, or back onto its row.
 const ADD_ZONE = { left: 16, right: 194, top: 20, above: 4 };
 const ONTO_SLOT = { dur: 200, ease: CALM };
-const BACK_HOME = { dur: 180, ease: CALM };
 
 // The map as gateway.js drew it last, as it gives it (placeMoved): its view (map-view.js), the tree,
 // the layout and how to draw the map again in place (`redraw`). A drag on the map (`drag`), the
@@ -45,13 +45,15 @@ const onMap = { view: null, model: null, layout: null, redraw: () => {}, drag: n
 // gateway, and while a dropped row of the Add panel is asked.
 export function movingOn() {
   const { drag, adding } = onMap;
-  if (drag && drag.open) return { drop: { name: drag.name, kind: drag.group } };
+  if (drag && drag.open && drag.kind !== "group") return { drop: { name: drag.name, kind: drag.group } };
   return adding && asked(adding.key) ? { drop: { name: adding.name, kind: adding.kind } } : {};
 }
 
 // The row of a dropped move is still being asked: in the tray without its part yet, while the tray
-// asks. After a refused preview it may have no part while nothing is asked.
-const asked = (key) => tray.phase === "asking" && tray.rows.some((row) => row.key === key && !row.part);
+// asks. After a refused preview it may have no part while nothing is asked; a row that waits for
+// access has none either, but it is answered (it lands as its waiting preview).
+export const rowAsked = (t, key) => t.phase === "asking" && t.rows.some((row) => row.key === key && !row.part && !row.waits);
+const asked = (key) => rowAsked(tray, key);
 // A dropped server or row (`onMap.moving`, `onMap.adding`) whose row the tray still asks.
 const stillAsked = (dropped) => Boolean(dropped && asked(dropped.key));
 
@@ -79,11 +81,21 @@ export function dropBody(row, view) {
 }
 
 // Whether a block whose centre is at `centre` (map point) is over the gateway: by the Servers
-// column and above `line`, the top of the Outside caption when the drag started.
-export function inZone(layout, centre, line) {
+// column and above `line`, the top of the Outside caption when the drag started, or on the
+// gateway's own box (onGatewayBox).
+function inZone(layout, centre, line) {
   const column = layout.columns.find((c) => c.id === "servers");
   if (!column) return false;
-  return centre.x > column.x - ZONE.left && centre.x < column.x + column.w + ZONE.right && centre.y < line - ZONE.above;
+  return (centre.x > column.x - ZONE.left && centre.x < column.x + column.w + ZONE.right && centre.y < line - ZONE.above) || onGatewayBox(layout, centre);
+}
+
+// Whether a map point is on the Kitden gateway's box, widened as for a client's wire
+// (NEAR_GATEWAY). A drop there always counts: an empty gateway has little room above the Outside
+// caption, and its box is where people aim.
+function onGatewayBox(layout, at) {
+  const gateway = onMap.model && kitdenGateway();
+  const place = gateway && layout.blocks.find((b) => b.id === gateway.id);
+  return Boolean(place) && at.x > place.x - NEAR_GATEWAY.side && at.x < place.x + place.w + NEAR_GATEWAY.side && at.y > place.y - NEAR_GATEWAY.up && at.y < place.y + place.h + NEAR_GATEWAY.down;
 }
 
 // The Gateway's drags, by kind, as the engine hears them (map-drag.js: `begin`, `over`, `drop`,
@@ -94,6 +106,7 @@ export const DRAGS = {
   out: { begin: beginOut, over: overOut, drop: dropOut },
   client: { still: true, begin: beginClient, over: overClient, drop: dropClient },
   add: { still: true, begin: beginAdd, over: overAdd, drop: dropAdd },
+  group: { still: true, begin: beginGroup, over: overGroup, drop: dropGroup },
 };
 
 // A pointer goes down on the map. A server outside the gateway with a grip starts a drag into it,
@@ -103,12 +116,20 @@ export const DRAGS = {
 // server's dropped move is asked, while a dropped row of the Add panel is asked, while another
 // project is read, or on anything else, does nothing here. `onStart()` runs when the drag starts,
 // before the map holds the block: the page lets go of its selection there.
-export function pressGrip(event, onStart = () => {}) {
+export function pressGrip(event, onStart = () => {}, onPickGone = () => {}) {
   if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || !onMap.model) return;
   const node = event.target.closest("button.block, button.block-count");
   const block = node && onMap.model.blocks.find((b) => [`block:${b.id}`, `count:${b.id}`].includes(node.dataset.focus));
   if (!block || (onMap.moving && onMap.moving.id !== block.id) || stillAsked(onMap.adding)) return;
-  if (block.grip) startDrag(event, block, "in", onStart);
+  // A press with Shift or Cmd picks or unpicks (gateway.js): it drags nothing and keeps the pick.
+  if (block.grip && (event.shiftKey || event.metaKey)) return;
+  // A press on a picked server drags the whole pick; a grip press on any other clears the pick.
+  if (block.grip && pick.ids.has(block.id) && pick.ids.size > 1) startDrag(event, block, "group", onStart);
+  else if (block.grip) {
+    // The pick goes, and the map draws it gone before the single drag starts.
+    if (clearPick()) onPickGone();
+    startDrag(event, block, "in", onStart);
+  }
   else if (leavesGateway(block)) startDrag(event, block, "out", onStart);
   else if (block.drags && kitdenGateway() && !inTray(keyFor(block.connect))) startDrag(event, block, "client", onStart);
   else if (block.kind === "client" && block.viaPlugin) sayWhy(event, block);
@@ -184,16 +205,31 @@ export function pointOf(drag) {
 }
 
 // A server from outside the gateway: the block, the gateway and its dotted lines light, as a glance
-// does; the Outside caption's top is where the gateway's room ends.
+// does; only the gateway is a target, so the Add a server card stays dim with the rest. The
+// Outside caption's top is where the gateway's room ends.
 function beginIn(drag) {
-  const { model, layout, view } = onMap;
-  const caption = layout.blocks.find((b) => b.id === "group:outside");
-  drag.line = caption ? caption.y : Infinity;
-  drag.group = drag.block.groupKey === "local" ? "local" : "remote";
-  const kitden = model.blocks.find((b) => b.kind === "gateway" && b.gateway.kind === "kitden");
-  drag.gateway = kitden ? kitden.id : null;
+  const { model, view } = onMap;
+  Object.assign(drag, gatewayRoom(), { group: drag.block.groupKey === "local" ? "local" : "remote" });
   const lines = model.links.filter((l) => l.to === drag.id).map(linkKey);
   view.glance(new Set([drag.id, ...(drag.gateway ? [drag.gateway] : []), ...lines]));
+}
+
+// Where a drag into the gateway may drop: the Kitden gateway (`gateway`, its id, or null) and the
+// top of the Outside caption (`line`), where the gateway's room ends.
+function gatewayRoom() {
+  const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
+  const kitden = kitdenGateway();
+  return { line: caption ? caption.y : Infinity, gateway: kitden ? kitden.id : null };
+}
+
+// The gateway lights while a drop there would land (`open`), and goes out when it would not. True
+// when that changed.
+function lightGateway(drag, open) {
+  if (open === drag.open) return false;
+  drag.open = open;
+  if (open) onMap.view.lightTarget(drag.gateway);
+  else onMap.view.unlightTarget();
+  return true;
 }
 
 // Its centre over the gateway (inZone), and not over Details or the dock: the gateway lights and the
@@ -201,11 +237,7 @@ function beginIn(drag) {
 function overIn(drag) {
   const held = heldAt(onMap, drag);
   const open = Boolean(held && drag.gateway && !covered(drag.at) && inZone(onMap.layout, held.centre, drag.line));
-  if (open === drag.open) return;
-  drag.open = open;
-  if (open) onMap.view.lightTarget(drag.gateway);
-  else onMap.view.unlightTarget();
-  onMap.redraw();
+  if (lightGateway(drag, open)) onMap.redraw();
 }
 
 // A drop while the slot is open adds the same move as "Move into the gateway…" to the tray, and the
@@ -268,27 +300,13 @@ function beginOut(drag) {
 // lights, and a wire runs from it to the block and follows it; one that cannot stays as it is and
 // the tip says why. Off a client the light goes and the wire fades.
 function overOut(drag) {
-  const { view } = onMap;
-  const point = covered(drag.at) ? null : pointOf(drag);
-  const client = point ? clientAt(onMap, point) : null;
-  if ((client && client.id) !== (drag.target && drag.target.id)) {
-    drag.target = client;
-    drag.why = client ? whyNot(drag.name, client.client) : null;
-    view.unlightTarget();
-    view.unwire();
-    if (client && !drag.why) {
-      view.lightTarget(client.id);
-      view.wire(client.id, drag.id);
-    }
-  }
+  aimClient(onMap, drag, covered(drag.at) ? null : pointOf(drag), (client) => whyNot(drag.name, client));
   tipOut(drag);
 }
 
 // What a drop does there: nothing yet, the reason a client cannot take it (plain), or the move.
 function tipOut(drag) {
-  const client = drag.target;
-  const words = client ? drag.why || `Move into ${CLIENT_NAMES[client.client]}` : ON_CLIENT;
-  onMap.view.tip(words, { on: Boolean(client && !drag.why) });
+  onMap.view.tip(aimWords(drag, (client) => `Move into ${CLIENT_NAMES[client.client]}`), { on: Boolean(drag.target && !drag.why) });
 }
 
 // A drop on a client that can take the server adds its move out to the tray, the same change as
@@ -297,15 +315,8 @@ function tipOut(drag) {
 // there into the Outside list. A drop on a client that cannot take it shakes the client, and the
 // block goes home. The wire fades on any let go.
 function dropOut(drag, at) {
-  const { view } = onMap;
-  view.unwire();
-  const client = at && drag.target;
+  const client = dropOnClient(onMap.view, drag, at);
   if (!client) return false;
-  if (drag.why) {
-    const node = view.node(client.id);
-    if (node) shake(node);
-    return false;
-  }
   const held = heldAt(onMap, drag);
   const body = { action: "gateway.move_out", targets: [{ client: client.client }], params: { server: drag.name } };
   onMap.moving = { id: drag.id, name: drag.name, key: keyFor(body), at: held && held.at };
@@ -359,30 +370,30 @@ function dropClient(drag, at) {
   return true;
 }
 
-// A row of the Add panel lifts (map-drag.js liftGhost): its ghost follows the pointer on the page.
-// The Outside caption's top is where the gateway's room ends.
+// A row of the Add panel lifts (map-drag.js liftGhost): its ghost follows the pointer on the page,
+// and the gateway lights as a glance does, as for a server dragged in from outside. The Outside
+// caption's top is where the gateway's room ends.
 function beginAdd(drag) {
   const { node, kind } = drag.block;
-  const { ghost, box } = liftGhost(node);
-  const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
-  const kitden = kitdenGateway();
-  Object.assign(drag, { ghost, box, line: caption ? caption.y : Infinity, group: kind === "local" ? "local" : "remote", gateway: kitden ? kitden.id : null });
+  Object.assign(drag, liftGhost(node), gatewayRoom(), { group: kind === "local" ? "local" : "remote" });
+  if (drag.gateway) onMap.view.glance(new Set([drag.gateway]));
 }
 
 // The ghost keeps the spot of the press under the pointer. With the pointer in the zone (inAddZone)
 // and not over Details or the dock, the ghost takes the drop look (`.over`), the Kitden gateway
 // lights and the slot opens in the row's own group, wherever the pointer is; off it, all three go.
 function overAdd(drag) {
-  const { ghost } = drag;
+  if (overRoom(drag)) onMap.redraw();
+}
+
+// A ghost over the gateway's room (inAddZone), and not over Details or the dock, takes the drop
+// look and the gateway lights. True when that changed.
+function overRoom(drag) {
   moveGhost(drag);
   const point = covered(drag.at) ? null : pointOf(drag);
   const open = Boolean(point && drag.gateway && inAddZone(onMap.layout, point, drag.line));
-  ghost.classList.toggle("over", open);
-  if (open === drag.open) return;
-  drag.open = open;
-  if (open) onMap.view.lightTarget(drag.gateway);
-  else onMap.view.unlightTarget();
-  onMap.redraw();
+  drag.ghost.classList.toggle("over", open);
+  return lightGateway(drag, open);
 }
 
 // Whether a map point is where a row of the Add panel opens the slot (ADD_ZONE), with `line` the
@@ -391,7 +402,7 @@ function inAddZone(layout, point, line) {
   const gateway = layout.columns.find((c) => c.id === "gateway");
   const servers = layout.columns.find((c) => c.id === "servers");
   if (!gateway || !servers) return false;
-  return point.x > gateway.x - ADD_ZONE.left && point.x < servers.x + servers.w + ADD_ZONE.right && point.y > -ADD_ZONE.top && point.y < line - ADD_ZONE.above;
+  return (point.x > gateway.x - ADD_ZONE.left && point.x < servers.x + servers.w + ADD_ZONE.right && point.y > -ADD_ZONE.top && point.y < line - ADD_ZONE.above) || onGatewayBox(layout, point);
 }
 
 // A drop while the slot is open adds the same row as a click on the row: the slot stays while it
@@ -407,10 +418,85 @@ function dropAdd(drag, at) {
     if (inTray(key)) {
       const slot = onMap.layout.blocks.find((b) => b.id === `slot:${name}`);
       flyGhost(drag, slot && pageBox(onMap, slot), ONTO_SLOT);
+      // While the row is asked the slot waits with a late spinner, as a parked server does.
+      const waits = onMap.view.node(`slot:${name}`);
+      if (waits && !waits.querySelector(".spinner")) {
+        waits.setAttribute("aria-busy", "true");
+        waits.append(el("span", "spinner late"));
+      }
+      if (drag.block.onDrop) drag.block.onDrop();
       return true;
     }
     onMap.adding = null;
   }
-  flyGhost(drag, null, BACK_HOME);
+  flyGhost(drag, null);
   return false;
+}
+
+// A pick of servers outside the gateway (gateway-pick.js) lifts as one ghost of the pressed block,
+// stacked and with its count; the picked blocks fade (`.lifting` on the map) and stay where they
+// are. Only the gateway lights. No slot opens: each server's preview grows in
+// its own group as its row answers.
+function beginGroup(drag) {
+  const node = onMap.view.node(drag.id);
+  const { ghost, box } = liftGhost(node);
+  // A map block is styled only inside a map, so its ghost rides in a page-wide map of its own; it
+  // keeps its page place (left, top), not its place on the map.
+  ghostHost().append(ghost);
+  Object.assign(ghost.style, { translate: "", scale: "" });
+  ghost.classList.add("stack");
+  const count = el("span", "ghost-count", plural(pick.ids.size, "server", "servers"));
+  ghost.append(count);
+  animateTo(count, [{ opacity: 0 }, { opacity: 1 }], { dur: 120 });
+  Object.assign(drag, { ghost, box, block: { ...drag.block, node }, ids: [...pick.ids] }, gatewayRoom());
+  onMap.view.box.classList.toggle("lifting", true);
+  if (drag.gateway) onMap.view.glance(new Set([drag.gateway]));
+}
+
+// As a panel row: the ghost follows the pointer, and over the gateway's room it takes the drop
+// look and the gateway lights.
+function overGroup(drag) {
+  overRoom(drag);
+}
+
+// A drop on the gateway flies the ghost onto the gateway's box and adds one move per picked
+// server, one after another, so one the tray refuses stays outside and the rest go in; then the
+// pick clears. Any other let go flies the ghost back and keeps the pick.
+function dropGroup(drag, at) {
+  onMap.view.box.classList.remove("lifting");
+  const view = current("gateway");
+  const rows = drag.ids.map((id) => onMap.model.blocks.find((b) => b.id === id)).filter(Boolean).map((b) => b.row);
+  const bodies = view ? rows.map((row) => dropBody(row, view)).filter(Boolean) : [];
+  if (!drag.open || !at || !bodies.length || busy.change || writing()) {
+    flyGhost(drag, null);
+    return false;
+  }
+  const gateway = onMap.layout.blocks.find((b) => b.id === drag.gateway);
+  flyGhost(drag, gateway && pageBox(onMap, gateway), ONTO_SLOT);
+  clearPick();
+  addInTurn(bodies).catch(reportError);
+  return true;
+}
+
+// The page-wide map a pick's ghost rides in, made once.
+let host = null;
+function ghostHost() {
+  if (!host || !host.isConnected) {
+    host = el("div", "map ghost-host");
+    host.setAttribute("aria-hidden", "true");
+    document.body.append(host);
+  }
+  return host;
+}
+
+// Add the moves of a pick one by one. It stops once the tray no longer holds what it added (Cancel,
+// a take-out), the tray cannot take more (Apply), another project is picked, or the page is left.
+async function addInTurn(bodies) {
+  const project = state.project;
+  const added = [];
+  for (const body of bodies) {
+    if (!mapArea(onMap) || state.project !== project || added.some((key) => !inTray(key))) return;
+    if (busy.change || writing()) return;
+    if (await addToTray(body)) added.push(keyFor(body));
+  }
 }

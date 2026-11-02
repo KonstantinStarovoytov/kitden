@@ -8,13 +8,15 @@ import re
 import tomllib
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
-from kitden.changes import json_splice, toml_edit
+from kitden.changes import json_splice
+from kitden.changes.engine import EDITORS
+from kitden.changes.server_entry import is_number, translate_entry
 from kitden.clients.base import (
     PLUGIN_DISABLE,
     PLUGIN_ENABLE,
@@ -27,7 +29,13 @@ from kitden.clients.base import (
 from kitden.clients.claude_code import rule_file
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
 from kitden.gateway_api import gateway_name
-from kitden.local_gateway.keychain import KeychainError, Runner, resolve_entry, run_security
+from kitden.local_gateway.keychain import (
+    SECRET_FIELDS,
+    KeychainError,
+    Runner,
+    resolve_entry,
+    run_security,
+)
 from kitden.local_gateway.settings import (
     START_TIME,
     load_settings,
@@ -37,6 +45,7 @@ from kitden.local_gateway.settings import (
     strict_step,
 )
 from kitden.model import (
+    CLIENT_WORDS,
     GATEWAY_CLIENT,
     Gateway,
     GatewayEdit,
@@ -47,6 +56,8 @@ from kitden.model import (
     Step,
 )
 from kitden.redact import redact
+from kitden.sign_in import GONE, SignIn
+from kitden.sign_in import KEY as SIGN_IN_KEY
 from kitden.views.catalog import known_refusal, market_entry
 from kitden.views.setup_server import is_own_entry
 from kitden.views.words import (
@@ -69,22 +80,57 @@ PLUGIN_INSTALL = "plugin.install"
 MARKETPLACE_ADD = "marketplace.add"
 SKILL_INSTALL = "skill.install"
 PLUGIN_SKILLS = "plugin.skills"
-CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SETUP_SERVER_UPDATE = "setup_server.update"
 # Turns a client's `kitden` entry back on, where its docs name the switch (views/setup_server.py).
 SETUP_SERVER_ENABLE = "setup_server.enable"
 # Takes the `kitden` entry out of a client: the client is then not connected to Kitden.
 CLIENT_DISCONNECT = "client.disconnect"
+KITDEN_GATEWAY = "kitden"  # the gateway inside `kitden mcp`, on this Mac
+GATEWAY_RULE = "gateway.rule"  # one switch of the Kitden gateway: a server or a tool on or off
+GATEWAY_STRICT = "gateway.strict"  # a held server's strict mode on or off: new tools wait
+GATEWAY_RULES = "gateway.rules"  # several tools of one server on or off in one review
+GATEWAY_REMOVE = "gateway.remove"  # a held server and its rules leave the Kitden gateway
+GATEWAY_PUT_BACK = "gateway.put_back"  # a held server's entry written into a client
+GATEWAY_MOVE_OUT = "gateway.move_out"  # a held server put back in one client and removed
+GATEWAY_KEYCHAIN = "gateway.keychain"  # a held server's plain secrets moved to the Keychain
+GATEWAY_ADD = "gateway.add"  # a server a marketplace plugin offers, added to the Kitden gateway
+GATEWAY_SIGN_IN = "gateway.sign_in"  # a held server signed in again: only its Keychain item
+GATEWAY_ACCESS = "gateway.access"  # one secret of a held server replaced or removed, or sign out
+MCP_ADD = "mcp.add"  # a direct server one client has, added to other clients
+PROJECT_ALIGN = "project.align"  # what one client loads in a project, added to the others
+SKILL_RULE = "skill.rule"  # a skill, or a plugin in one project, turned off by a settings rule
+
 NEEDS_COMMAND = "The setup server needs the absolute path of the kitden command"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+LOCAL_HOSTS = {"localhost", "host.docker.internal"}
+# Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
+# Kitden gateway may take up to 20 s to list a server and 300 s for one call.
+CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
+SIGN_IN_SECONDS = 5
+MCP_VERSION = "2025-06-18"  # a protocol version every MCP server knows (checked 2026-10-21)
+# Where a server that signs in through the browser keeps its sign-in metadata (RFC 9728).
+SIGN_IN_METADATA = "/.well-known/oauth-protected-resource"
+# The one field a remote server that needs a plain token gets: the token alone, sent as
+# `Authorization: Bearer`.
+TOKEN_FIELD = {
+    "field": "headers",
+    "name": "Authorization",
+    "label": "Access token",
+    "prefix": "Bearer ",
+}
+SIGN_IN_LATER = "{name} does not let Kitden sign in yet. It may take an API key; see its docs."
+
+
+def _check_entry_name(name: str) -> None:
+    if not ENTRY_NAME.fullmatch(name):
+        raise ValueError("The entry name may use letters, digits, '-' and '_' only")
 
 
 def connect_steps(
     adapters: dict[str, ClientAdapter], clients: list[str], gateway: Gateway, name: str
 ) -> list[Step]:
     """One gateway entry per chosen client, in the user scope (FR-024, FR-033)."""
-    if not ENTRY_NAME.fullmatch(name):
-        raise ValueError("The entry name may use letters, digits, '-' and '_' only")
+    _check_entry_name(name)
     if not clients:
         raise ValueError("Choose at least one client")
     steps = []
@@ -101,8 +147,7 @@ def switch_steps(
 ) -> list[Step]:
     """Move clients from their gateway to another: per client, remove each entry that points to
     another gateway, then add one entry for this one. Both edit one file, in order."""
-    if not ENTRY_NAME.fullmatch(name):
-        raise ValueError("The entry name may use letters, digits, '-' and '_' only")
+    _check_entry_name(name)
     # The Kitden gateway's servers live in its own settings, not in a client entry; they stay.
     old = [i for i in items if i.via_gateway not in (None, gateway.id, KITDEN_GATEWAY)]
     if not old:
@@ -271,39 +316,38 @@ def marketplace_steps(
     return steps
 
 
+def _adapter_for(
+    adapters: dict[str, ClientAdapter], item: Item, action: str, why: str = "removed"
+) -> ClientAdapter:
+    """The item's client, when the item offers `action`; else the words that it cannot be."""
+    adapter = adapters.get(item.client)
+    if adapter is None or action not in item.actions:
+        raise ValueError(f"{item.name} cannot be {why} here")
+    return adapter
+
+
 def remove_steps(adapters: dict[str, ClientAdapter], item: Item) -> list[Step]:
     """Remove one direct MCP entry (FR-026)."""
-    adapter = adapters.get(item.client)
-    if adapter is None or REMOVE_DIRECT not in item.actions:
-        raise ValueError(f"{item.name} cannot be removed here")
-    return [adapter.remove_step(item)]
+    return [_adapter_for(adapters, item, REMOVE_DIRECT).remove_step(item)]
 
 
 def remove_plugin_steps(adapters: dict[str, ClientAdapter], item: Item) -> list[Step]:
     """Remove one installed plugin with its client's own command (spec 3.1)."""
-    adapter = adapters.get(item.client)
-    if adapter is None or PLUGIN_REMOVE not in item.actions:
-        raise ValueError(f"{item.name} cannot be removed here")
-    return [adapter.plugin_remove_step(item)]
+    return [_adapter_for(adapters, item, PLUGIN_REMOVE).plugin_remove_step(item)]
 
 
 def skill_remove_steps(
     adapters: dict[str, ClientAdapter], item: Item, readers: list[str], keeps: list[str]
 ) -> list[Step]:
     """Remove one skill folder from its client; Undo copies it back (spec 3.2)."""
-    adapter = adapters.get(item.client)
-    if adapter is None or SKILL_REMOVE not in item.actions:
-        raise ValueError(f"{item.name} cannot be removed here")
+    adapter = _adapter_for(adapters, item, SKILL_REMOVE)
     return [adapter.skill_remove_step(item, readers, keeps)]
 
 
 def plugin_steps(adapters: dict[str, ClientAdapter], item: Item, enable: bool) -> list[Step]:
     """Turn one plugin on or off (FR-027). Cursor and account plugins have no control."""
-    action = PLUGIN_ENABLE if enable else PLUGIN_DISABLE
-    adapter = adapters.get(item.client)
-    if adapter is None or action not in item.actions:
-        raise ValueError(f"{item.name} cannot be turned {'on' if enable else 'off'} here")
-    return [adapter.plugin_step(item, enable)]
+    action, why = (PLUGIN_ENABLE, "turned on") if enable else (PLUGIN_DISABLE, "turned off")
+    return [_adapter_for(adapters, item, action, why).plugin_step(item, enable)]
 
 
 def setup_server_steps(
@@ -379,20 +423,19 @@ def _raw_entry(step: Step) -> Any:
     """The entry as written in the client file, secrets included. Never shown."""
     edit = step.edit
     assert edit is not None
-    editor = {"json": json_splice, "toml": toml_edit}[edit.fmt]
     try:
         text = Path(edit.path).read_text()
     except OSError:
         return None
     try:
-        value = editor.get_value(text, edit.key)
+        value = EDITORS[edit.fmt].get_value(text, edit.key)
     except json_splice.UnrecognizedFormatError:
         return None
     return value if isinstance(value, dict) else None
 
 
 def _gateway_server(name: str, entry: dict) -> dict:
-    """What MetaMCP needs for one remote server, from a client's entry (research table)."""
+    """What a gateway needs for one remote server, from a client's entry (research table)."""
     url = entry.get("url")
     if not isinstance(url, str) or not url.startswith(("http://", "https://")):
         raise ValueError(f"{name} is not a remote server; a gateway cannot run it")
@@ -406,15 +449,12 @@ def _gateway_server(name: str, entry: dict) -> dict:
     kind = (
         "SSE"
         if str(entry.get("type", "")).lower() == "sse" or url.endswith("/sse")
-        else ("STREAMABLE_HTTP")
+        else "STREAMABLE_HTTP"
     )
     server: dict = {"type": kind, "url": url}
     if headers:
         server["headers"] = headers
     return server
-
-
-LOCAL_HOSTS = {"localhost", "host.docker.internal"}
 
 
 def is_local_address(url: str) -> bool:
@@ -479,22 +519,6 @@ def move_steps(
     return [*gateway_steps.values(), *file_steps]
 
 
-KITDEN_GATEWAY = "kitden"  # the gateway inside `kitden mcp`, on this Mac
-GATEWAY_RULE = "gateway.rule"  # one switch of the Kitden gateway: a server or a tool on or off
-GATEWAY_STRICT = "gateway.strict"  # a held server's strict mode on or off: new tools wait
-GATEWAY_RULES = "gateway.rules"  # several tools of one server on or off in one review
-GATEWAY_REMOVE = "gateway.remove"  # a held server and its rules leave the Kitden gateway
-GATEWAY_PUT_BACK = "gateway.put_back"  # a held server's entry written into a client
-GATEWAY_MOVE_OUT = "gateway.move_out"  # a held server put back in one client and removed
-GATEWAY_KEYCHAIN = "gateway.keychain"  # a held server's plain secrets moved to the Keychain
-GATEWAY_ADD = "gateway.add"  # a server a marketplace plugin offers, added to the Kitden gateway
-# Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
-# Kitden gateway may take up to 20 s to list a server and 300 s for one call.
-CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
-SIGN_IN_SECONDS = 5
-MCP_VERSION = "2025-06-18"  # a protocol version every MCP server knows (checked 2026-10-21)
-
-
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Never follow a redirect, so the headers reach the server's own address only."""
 
@@ -502,17 +526,51 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def needs_sign_in(url: str, headers: dict) -> bool:
-    """True when the server answers an MCP `initialize` with 401 or 403, as a server that
-    signs in with OAuth does (Claude Code reads both that way, checked 2026-10-21). Raises
-    OSError when there is no answer, or only a redirect, which the gateway would not follow.
+class NeedsAccess(ValueError):
+    """A server that needs access before it can join the preview: the kind ("token" or
+    "sign-in"), the fields to ask for, and whether a value given was refused. Its words are
+    the reason the page shows; no value given is ever in them. `url` is the server's address,
+    which the page never gets: it hands out a sign-in id for it instead."""
 
-    One POST to the server's own address, within 5 seconds. No redirect is followed and no
-    proxy is used, so the headers go nowhere else; an error never holds them.
-    """
-    if urlsplit(url).scheme not in ("http", "https"):
-        raise OSError("not a web address")
-    body = {
+    def __init__(
+        self,
+        server: str,
+        kind: str,
+        fields: list[dict],
+        refused: bool = False,
+        url: str | None = None,
+        reason: str | None = None,
+    ):
+        self.server, self.kind, self.fields, self.refused = server, kind, fields, refused
+        self.url = url
+        if reason is not None:
+            words = reason
+        elif refused:
+            words = f"{server} did not accept this token."
+        elif kind == "sign-in":
+            words = f"{server} needs sign-in."
+        else:
+            words = f"{server} needs a token."
+        super().__init__(words)
+
+    def answer(self) -> dict:
+        return {
+            "server": self.server,
+            "kind": self.kind,
+            "fields": self.fields,
+            "reason": str(self),
+            "refused": self.refused,
+        }
+
+
+def _opener() -> urllib.request.OpenerDirector:
+    """No redirect followed and no proxy used, so a request goes to the server's own address."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+
+
+def initialize_body() -> dict:
+    """One MCP `initialize` request, as the access check and the sign-in send it."""
+    return {
         "jsonrpc": "2.0",
         "id": 1,
         "method": "initialize",
@@ -522,27 +580,199 @@ def needs_sign_in(url: str, headers: dict) -> bool:
             "clientInfo": {"name": "kitden", "version": "1"},
         },
     }
+
+
+def _initialize(url: str, headers: dict) -> tuple[int, str]:
+    """The status of one MCP `initialize` POST to `url`, and its WWW-Authenticate header.
+    Raises OSError when there is no answer, or only a redirect, which the gateway would not
+    follow.
+
+    One POST to the server's own address, within 5 seconds. No redirect is followed and no
+    proxy is used, so the headers go nowhere else; an error never holds them. It names itself:
+    Cloudflare answers Python's default user agent with 403 (error 1010, seen 2026-10-31).
+    """
+    if urlsplit(url).scheme not in ("http", "https"):
+        raise OSError("not a web address")
     request = urllib.request.Request(  # noqa: S310 - the scheme is http or https
         url,
-        data=json.dumps(body).encode(),
+        data=json.dumps(initialize_body()).encode(),
         method="POST",
         headers={
+            "User-Agent": "kitden",
             **{str(k): str(v) for k, v in headers.items()},
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
         },
     )
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
     try:
-        with opener.open(request, timeout=SIGN_IN_SECONDS):
-            return False
+        with _opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
+            return answer.status, ""
     except urllib.error.HTTPError as answer:
+        challenge = answer.headers.get("WWW-Authenticate", "") if answer.headers else ""
         answer.close()
         if 300 <= answer.code < 400:
             raise OSError("moved") from None
-        return answer.code in (401, 403)
+        return answer.code, challenge
     except (OSError, ValueError, http.client.HTTPException):
         raise OSError("no answer") from None
+
+
+def needs_sign_in(url: str, headers: dict) -> bool:
+    """True when the server answers an MCP `initialize` with 401 or 403, as a server that
+    needs access does (Claude Code reads both that way, checked 2026-10-21). Raises OSError
+    as `_initialize` does."""
+    return _initialize(url, headers)[0] in (401, 403)
+
+
+def _has_sign_in_metadata(url: str) -> bool:
+    """Whether the server's origin serves sign-in metadata: one GET with no header of the
+    entry, within 5 seconds, that answers a JSON document naming its authorization servers
+    (RFC 9728), so a web page every address answers does not count."""
+    parts = urlsplit(url)
+    found = _get_json(f"{parts.scheme}://{parts.netloc}{SIGN_IN_METADATA}")
+    return bool(found) and isinstance(found.get("authorization_servers"), list)
+
+
+def check_access(
+    name: str,
+    server: dict,
+    sign_in: Callable[[str, dict], str] | None,
+    fields: list[dict],
+    refused: bool,
+    signed_in: SignIn | None = None,
+) -> None:
+    """Ask a remote server once what access it needs, with its headers: NeedsAccess unless it
+    answers as open (`refused`: the headers hold a value typed for it), and the words that it
+    could not be reached when it does not answer. With `signed_in`, the server is asked with
+    that sign-in's token: it must be a finished sign-in for this address."""
+    headers = server.get("headers") or {}
+    if signed_in is not None:
+        if signed_in.state != "done" or signed_in.url != server["url"]:
+            raise NeedsAccess(name, "sign-in", fields, url=server["url"], reason=GONE)
+        headers = {**headers, "Authorization": f"Bearer {signed_in.access_token}"}
+    try:
+        kind = (sign_in or access_needed)(server["url"], headers)
+    except OSError:
+        raise ValueError(f"Kitden could not reach {name}.") from None
+    if kind == "sign-in-later":
+        # Sign-in Kitden cannot do: a token, said so up front (no Sign in to press first).
+        later = None if refused else SIGN_IN_LATER.format(name=name)
+        raise NeedsAccess(name, "token", fields, refused=refused, url=server["url"], reason=later)
+    if kind != "open":
+        reason = f"{name} did not accept this sign-in." if signed_in is not None else None
+        raise NeedsAccess(
+            name, kind, fields, refused=refused or bool(reason), url=server["url"], reason=reason
+        )
+
+
+def signed_in_server(
+    home: Path, name: str, server: dict, old: Any, signed_in: SignIn, run: Runner | None
+) -> Step:
+    """The gateway settings step for a server that signed in: its entry names the Keychain item
+    `<name>/sign-in`, and the step carries the sign-in's JSON for Apply to store."""
+    item = KeychainItem(name, SIGN_IN_KEY, signed_in.secret or "")
+    entry = {**server, "sign_in": item.ref}
+    step = _server_step(home, name, entry, old, run)
+    if step is None:  # the same entry: only the Keychain item changes; the entry stays as held
+        step = _entry_step(home, name, {**old, "sign_in": item.ref})
+    step.keychain = [*step.keychain, item]
+    return step
+
+
+def _held_step(
+    home: Path, name: str, server: dict, old: Any, signed_in: SignIn | None, run: Runner | None
+) -> Step | None:
+    """The gateway settings step for a server, with its sign-in when it signed in; None when the
+    gateway holds the same entry already."""
+    if signed_in is not None:
+        return signed_in_server(home, name, server, old, signed_in, run)
+    return _server_step(home, name, server, old, run)
+
+
+def _with_access(
+    server: dict, headers: dict | None, signed_in: SignIn | None, alone: bool = True
+) -> dict:
+    """The server with the token typed for it in its headers. A token (only `Authorization`)
+    and a sign-in go with one remote server; `alone` is False when the change has more."""
+    remote = alone and "url" in server
+    if headers:
+        if set(headers) != {"Authorization"}:
+            raise ValueError("Only the server's declared access fields can be set.")
+        if not remote:
+            raise ValueError("A token goes with one remote server.")
+        server = {**server, "headers": {**(server.get("headers") or {}), **headers}}
+    if signed_in is not None and not remote:
+        raise ValueError("A sign-in goes with one remote server.")
+    return server
+
+
+def _path_steps(home: Path, settings: dict) -> list[Step]:
+    """The PATH the gateway's local servers use, when the settings have none."""
+    path = os.environ.get("PATH")
+    if path and not settings.get("path"):
+        return [settings_step(home, ("path",), path, "PATH")]
+    return []
+
+
+def access_needed(url: str, headers: dict) -> str:
+    """What a remote server needs: "open" (nothing), "token", "sign-in", or "sign-in-later"
+    (it offers sign-in, but Kitden cannot register as its client, so it takes a token). A 401
+    or 403 means it needs access; sign-in is possible when the 401 names its metadata in
+    WWW-Authenticate (`resource_metadata`: MCP authorization spec 2025-06-18, checked
+    2026-11-01) or its origin serves that metadata. Raises OSError as `_initialize` does."""
+    status, challenge = _initialize(url, headers)
+    if status not in (401, 403):
+        return "open"
+    if "resource_metadata" in challenge or _has_sign_in_metadata(url):
+        return "sign-in-later" if _can_register(url, challenge) is False else "sign-in"
+    return "token"
+
+
+def _get_json(url: str) -> dict | None:
+    """One GET of a JSON document, with no header of the entry, within 5 seconds; None when
+    there is no such document."""
+    if urlsplit(url).scheme not in ("http", "https"):
+        return None
+    request = urllib.request.Request(url, headers={"User-Agent": "kitden"})  # noqa: S310
+    try:
+        with _opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
+            data = json.loads(answer.read(1_000_000))
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _can_register(url: str, challenge: str) -> bool | None:
+    """Whether Kitden can register as the client of a server that offers sign-in: its
+    authorization server lists a `registration_endpoint` (dynamic registration, the one way
+    Kitden can: it has no public address for a client metadata document). None when Kitden
+    could not read the metadata; the sign-in then tries.
+
+    The metadata comes from the server's protected resource metadata (named by the 401, else
+    at its well-known path) and its first authorization server's metadata (RFC 8414, else
+    OpenID Connect discovery), as the MCP authorization spec says (2026-07-28, checked
+    2026-11-02). Zoom, for one, lists none: it takes only apps registered with it."""
+    parts = urlsplit(url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    named = re.search(r'resource_metadata="([^"]+)"', challenge)
+    places = [named.group(1)] if named else []
+    path = parts.path.rstrip("/")
+    places += [f"{origin}{SIGN_IN_METADATA}{path}", f"{origin}{SIGN_IN_METADATA}"]
+    resource = next((m for m in map(_get_json, dict.fromkeys(places)) if m), None)
+    servers = resource.get("authorization_servers") if resource else None
+    if not isinstance(servers, list) or not servers or not isinstance(servers[0], str):
+        return None
+    issuer = urlsplit(servers[0])
+    root, tail = f"{issuer.scheme}://{issuer.netloc}", issuer.path.rstrip("/")
+    for place in (
+        f"{root}/.well-known/oauth-authorization-server{tail}",
+        f"{root}/.well-known/openid-configuration{tail}",
+        f"{root}{tail}/.well-known/openid-configuration",
+    ):
+        metadata = _get_json(place)
+        if metadata:
+            return bool(metadata.get("registration_endpoint"))
+    return None
 
 
 def _codex_layers(name: str, known_projects: list[str], user_file: str) -> bool:
@@ -751,8 +981,10 @@ def local_move_steps(
     command: str | None,
     *,
     added_clients: set[str],
-    sign_in: Callable[[str, dict], bool] | None = None,
+    sign_in: Callable[[str, dict], str] | None = None,
     keychain_run: Runner | None = None,
+    headers: dict | None = None,
+    signed_in: SignIn | None = None,
 ) -> list[Step]:
     """Move direct entries into the Kitden gateway, in one change.
 
@@ -766,8 +998,11 @@ def local_move_steps(
     (a new token, say), and the same entry only leaves the clients. A client's removal step is
     marked (`switches_left`) when that client had tools or the server off, which do not carry.
 
-    `sign_in` asks a remote server whether it signs in, and `keychain_run` reads the Keychain;
-    None is `needs_sign_in` and the real Keychain (the demo passes its stand-ins).
+    `sign_in` asks a remote server what access it needs, and `keychain_run` reads the
+    Keychain; None is `access_needed` and the real Keychain (the demo passes its stand-ins).
+    A remote server that needs access raises NeedsAccess. `headers` is the token typed for
+    it (only `Authorization`, for a single remote server), checked before any step; `signed_in`
+    is a browser sign-in for a single remote server, checked the same way.
     """
     if not items:
         raise ValueError("Choose a server to move.")
@@ -791,30 +1026,23 @@ def local_move_steps(
         waits = [e.get(START_TIME) for i, e in found[name] if i.client == "codex"]
         if isinstance(held.get(name), dict):
             waits.append(held[name].get(START_TIME))
-        waits = [w for w in waits if isinstance(w, int | float) and not isinstance(w, bool)]
+        waits = [w for w in waits if is_number(w)]
         if waits:
             servers[name] = {**server, START_TIME: max(waits)}
     lacking = [c for c in dict.fromkeys(i.client for i in items) if c not in added_clients]
     if lacking and (command is None or not Path(command).is_absolute()):
         raise ValueError(NEEDS_COMMAND)
+    name = next(iter(servers))
+    servers[name] = _with_access(servers[name], headers, signed_in, alone=len(servers) == 1)
     for name, server in servers.items():
-        if "url" not in server:
-            continue
-        try:
-            oauth = (sign_in or needs_sign_in)(server["url"], server.get("headers") or {})
-        except OSError:
-            raise ValueError(f"Kitden could not reach {name}.") from None
-        if oauth:
-            raise ValueError(f"{name} signs in with OAuth; it stays direct for now.")
-
-    steps = [
-        step
-        for n, s in servers.items()
-        if (step := _server_step(home, n, s, held.get(n), keychain_run)) is not None
-    ]
-    path = os.environ.get("PATH")
-    if steps and path and not settings.get("path"):  # with a server entry written
-        steps.append(settings_step(home, ("path",), path, "PATH"))
+        if "url" in server:
+            check_access(name, server, sign_in, [TOKEN_FIELD], bool(headers), signed_in)
+    written = (
+        _held_step(home, n, s, held.get(n), signed_in, keychain_run) for n, s in servers.items()
+    )
+    steps = [step for step in written if step is not None]
+    if steps:  # with a server entry written
+        steps += _path_steps(home, settings)
     denies = _claude_denies(home, known_projects)
     project_offs = _claude_project_offs(home)
     for name in servers:
@@ -843,9 +1071,6 @@ def local_move_steps(
                 step.edit.after = {**step.edit.after, **CODEX_TIMEOUTS}
             steps.append(step)
     return steps + _codex_timeout_steps(adapters)
-
-
-SECRET_FIELDS = ("env", "headers")  # the gateway entry's maps whose values may be secrets
 
 
 def secrets_out(name: str, server: dict) -> tuple[dict, list[KeychainItem]]:
@@ -896,23 +1121,103 @@ def _server_step(
                     for f in SECRET_FIELDS
                 )
             ]
+    return _entry_step(home, name, entry, items)
+
+
+def _entry_step(home: Path, name: str, entry: dict, items: Sequence[KeychainItem] = ()) -> Step:
+    """The gateway settings step that writes one server's entry, with its Keychain items."""
     step = settings_step(home, ("servers", name), entry, name)
-    step.keychain = items
+    step.keychain = list(items)
     return step
+
+
+def _held(home: Path, server: str, remote: bool = False) -> dict:
+    """The entry the Kitden gateway holds for `server`; with `remote`, only one with an address."""
+    held = load_settings(home)["servers"].get(server)
+    if not isinstance(held, dict) or (remote and "url" not in held):
+        raise ValueError("Choose a server in the Kitden gateway.")
+    return held
+
+
+def _resolved(held: dict, run: Runner | None) -> dict:
+    """The held entry with its values read from the Keychain in place of the references."""
+    try:
+        return resolve_entry(held, run=run or run_security)
+    except KeychainError as problem:
+        raise ValueError(str(problem)) from None
+
+
+def sign_in_steps(
+    home: Path,
+    server: str,
+    signed_in: SignIn | None,
+    *,
+    sign_in: Callable[[str, dict], str] | None = None,
+    keychain_run: Runner | None = None,
+) -> list[Step]:
+    """Sign a held server in again: one step with the same entry that carries the new
+    sign-in for Apply to store in its Keychain item. The new token is checked first."""
+    held = _held(home, server, remote=True)
+    if signed_in is None:
+        raise ValueError(f"Sign in to {server} first.")
+    values = _resolved(held, keychain_run)
+    values.pop("sign_in", None)
+    check_access(server, values, sign_in, [TOKEN_FIELD], False, signed_in)
+    return [signed_in_server(home, server, values, held, signed_in, keychain_run)]
+
+
+def access_steps(
+    home: Path,
+    server: str,
+    field: str,
+    name: str,
+    value: str | None,
+    *,
+    sign_in: Callable[[str, dict], str] | None = None,
+    keychain_run: Runner | None = None,
+) -> list[Step]:
+    """Replace one secret of a held server (`value`), or remove it (None): an env or header
+    value, or its sign-in (sign out; a sign-in is changed by signing in again). A new value
+    goes to the Keychain on Apply; a remote server is asked with it first, a local one checks
+    it when it starts. A removed value's Keychain item stays, so Undo brings the server back."""
+    held = _held(home, server)
+    if field == "sign_in":
+        if value is not None:
+            raise ValueError("Sign in again to change a sign-in.")
+        if "sign_in" not in held:
+            raise ValueError(f"{server} is not signed in.")
+        entry = {k: v for k, v in held.items() if k != "sign_in"}
+        return [_entry_step(home, server, entry)]
+    if field not in SECRET_FIELDS:
+        raise ValueError("Choose a value to change.")
+    values = dict(held.get(field) or {}) if isinstance(held.get(field), dict) else {}
+    if value is None:
+        if name not in values:
+            raise ValueError(f"{server} has no {name}.")
+        values.pop(name)
+        entry = {k: v for k, v in held.items() if k != field}
+        if values:
+            entry[field] = values
+        return [_entry_step(home, server, entry)]
+    value = value.strip()
+    if not value or "\n" in value or "\r" in value:
+        raise ValueError("Enter a valid access value again.")
+    if field == "headers" and "url" in held:
+        resolved = _resolved(held, keychain_run)
+        resolved.pop("sign_in", None)
+        given = {**resolved, "headers": {**(resolved.get("headers") or {}), name: value}}
+        check_access(server, given, sign_in, [TOKEN_FIELD], True)
+    item = KeychainItem(server, name, value)
+    return [_entry_step(home, server, {**held, field: {**values, name: item.ref}}, [item])]
 
 
 def keychain_steps(home: Path, server: str) -> list[Step]:
     """Move the plain env and header values of a held server to the Keychain: one step that
     writes the entry with references, carrying the values for Apply to store."""
-    held = load_settings(home)["servers"].get(server)
-    if not isinstance(held, dict):
-        raise ValueError("Choose a server in the Kitden gateway.")
-    entry, items = secrets_out(server, held)
+    entry, items = secrets_out(server, _held(home, server))
     if not items:
         raise ValueError(f"{server} keeps no secret in the settings file.")
-    step = settings_step(home, ("servers", server), entry, server)
-    step.keychain = items
-    return [step]
+    return [_entry_step(home, server, entry, items)]
 
 
 def gateway_add_steps(
@@ -921,39 +1226,42 @@ def gateway_add_steps(
     home: Path,
     server_id: str,
     *,
-    sign_in: Callable[[str, dict], bool] | None = None,
+    discovered: tuple[str, dict] | None = None,
+    sign_in: Callable[[str, dict], str] | None = None,
     keychain_run: Runner | None = None,
+    fields: list[dict] | None = None,
+    headers: dict | None = None,
+    signed_in: SignIn | None = None,
 ) -> list[Step]:
     """Add one server a marketplace plugin offers (`server_id`, its row in market_servers) to
     the Kitden gateway, in one change: its entry in the gateway settings, with its secrets as
     Keychain items, the PATH when the settings have none, and the timeouts an existing Codex
     `kitden` entry lacks. No client gets a `kitden` entry or any other change.
 
-    A server the gateway cannot take is refused first, with the list's reason. A remote one
-    with no headers of its own is asked once whether it signs in, as a move asks; `sign_in`
-    and `keychain_run` are as in local_move_steps.
+    A server the gateway cannot take is refused first, with the list's reason. A remote one is
+    asked once what access it needs, as a move asks; `fields` are the access values its
+    catalog row declares (else the one token field). `headers` is a token typed for a
+    marketplace server (only `Authorization`), as local_move_steps takes it, and so is
+    `signed_in`. `sign_in` and `keychain_run` are as in local_move_steps.
     """
     name = server_id.partition("/")[2]
-    _, entry = market_entry(adapters, server_id)
+    if discovered is None:
+        _, entry = market_entry(adapters, server_id)
+    else:
+        name, entry = discovered
     settings = load_settings(home)
     refusal = known_refusal(name, entry, inventory, set(settings["servers"]))
     if refusal is not None:
         raise ValueError(refusal)
-    server = gateway_entry(entry)
-    if "url" in server and not server.get("headers"):
-        try:
-            oauth = (sign_in or needs_sign_in)(server["url"], {})
-        except OSError:
-            raise ValueError(f"Kitden could not reach {name}.") from None
-        if oauth:
-            raise ValueError(f"{name} signs in with OAuth; Kitden can't add it yet.")
-    step = _server_step(home, name, server, None, keychain_run)
+    server = _with_access(gateway_entry(entry), headers, signed_in)
+    if "url" in server:
+        # A value typed for it was refused: for a marketplace server only a token typed here
+        # (its entry may send a header of its own); a catalog row's headers are all typed.
+        given = bool(headers) if discovered is None else bool(server.get("headers"))
+        check_access(name, server, sign_in, fields or [TOKEN_FIELD], given, signed_in)
+    step = _held_step(home, name, server, None, signed_in, keychain_run)
     assert step is not None  # a new server always has its step
-    steps = [step]
-    path = os.environ.get("PATH")
-    if path and not settings.get("path"):
-        steps.append(settings_step(home, ("path",), path, "PATH"))
-    return steps + _codex_timeout_steps(adapters)
+    return [step, *_path_steps(home, settings), *_codex_timeout_steps(adapters)]
 
 
 def _refuse_if_present(step: Step, client: str, name: str) -> None:
@@ -972,18 +1280,9 @@ def put_back_steps(
     """Write a held server's entry into each chosen client, as a user-scope MCP entry, in that
     client's format. The gateway keeps the server; the review says it then loads twice.
     `keychain_run` reads the Keychain; None is the real one."""
-    from kitden.changes.server_entry import translate_entry  # it reads helpers of this module
-
     if not clients:
         raise ValueError("Choose at least one client")
-    held = load_settings(home)["servers"].get(server)
-    if held is None:
-        raise ValueError("Choose a server in the Kitden gateway.")
-    try:
-        # The client gets the values, not the references.
-        entry = resolve_entry(held, run=keychain_run or run_security)
-    except KeychainError as error:
-        raise ValueError(str(error)) from None
+    entry = _resolved(_held(home, server), keychain_run)  # the values, not the references
     steps = []
     for client in dict.fromkeys(clients):
         value = translate_entry(entry, client)
@@ -996,17 +1295,11 @@ def put_back_steps(
     return steps
 
 
-MCP_ADD = "mcp.add"  # a direct server one client has, added to other clients
-PROJECT_ALIGN = "project.align"  # what one client loads in a project, added to the others
-
-
 def add_server_steps(
     adapters: dict[str, ClientAdapter], item: Item, clients: list[str]
 ) -> list[Step]:
     """Write a direct server one client has into each chosen client, as a user-scope MCP
     entry in that client's format. The first client keeps its own entry."""
-    from kitden.changes.server_entry import translate_entry  # it reads helpers of this module
-
     if item.scope in (Scope.PROJECT, Scope.LOCAL):
         raise ValueError("It is already per project; copy the file into the project instead.")
     if item.name == SETUP_NAME:
@@ -1021,16 +1314,13 @@ def add_server_steps(
     steps = []
     for client in dict.fromkeys(clients):
         adapter = adapters.get(client)
-        if adapter is None or client not in CLIENT_WORDS:
+        if adapter is None:
             raise ValueError(f"{client} cannot take an MCP entry")
         value = translate_entry(entry, client, source=item.client)
         step = adapter.add_server_step(item.name, value)
         _refuse_if_present(step, client, item.name)
         steps.append(step)
     return steps
-
-
-SKILL_RULE = "skill.rule"  # a skill, or a plugin in one project, turned off by a settings rule
 
 
 def skill_rules_in(path: Path) -> bool:

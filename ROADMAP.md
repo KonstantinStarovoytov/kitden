@@ -1,11 +1,66 @@
 # Kitden roadmap
 
-Last updated: 2026-10-29
+Last updated: 2026-11-02
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
+
+### 0.4.0
+
+- **Add button and cards:** "+ Add servers" and "+ Add plugins" sit in the page header, and an
+  "Add a server" / "Add a plugin" card ends the map's groups.
+- **Group drag:** several servers outside the gateway can be picked with a band or Shift-click
+  and dragged onto the gateway together, each becoming its own preview.
+- **Tokens:** a server that needs a token waits in preview, amber, with "Add token". The token
+  is checked against the server before Apply and kept in the Keychain; Apply writes the other
+  changes while it waits. A server that allows no sign-in for Kitden asks for an API key at once.
+- **Browser sign-in:** "Sign in" opens the server's page; Kitden catches the redirect on its own
+  page, checks the sign-in before Apply and keeps the tokens in the Keychain only. The gateway
+  refreshes them; when that fails the server shows "Needs sign-in" with Sign in again.
+- **Access in Details:** a held server's secrets show by name, only their start and end, with
+  Replace and Remove (Sign in again and Sign out for a sign-in).
+- **Guided adding:** catalog rows have drag handles and one hint; declared headers and
+  environment values are asked for before Preview. A catalog server in preview shows on the map
+  in its group. The access check names itself, so servers behind Cloudflare are no longer
+  mistaken for ones that need sign-in. Generic registry names such as `com.neon/mcp` show as the
+  publisher's name. Tools show after Apply without Refresh tools.
+- **Checks:** every push runs the page's tests, a coverage floor, the start-time budget and a
+  dependency audit, besides the Python tests.
+
+- **Catalog separation:** the MCP picker excludes the built-in plugin catalog.
+  Personal GitHub sources still offer MCP servers there. Known unsupported entries
+  show Unavailable and cannot be dragged.
+
+- **Direct skill adding:** a single folder opens automatically, including root skills.
+  Dragging uses the reviewed folder. Details read only SKILL.md; Preview validates all files.
+  Root skills download in one archive request.
+  Loading uses a quiet surface pulse; long descriptions fold behind Read more.
+
+- **Skill selection:** unmatched or duplicate catalog names offer repository folders inline.
+  Each choice pins its source version for preview. Failed reads stop the loading animation.
+
+- **Catalog fixes:** initial skills come from the public all-time leaderboard, ordered by
+  reported installs. Loading animates the blocks themselves. Result rows grow for wrapped
+  names and source labels; search controls wrap in narrow panels.
+
+- **Compact catalog:** a narrower adaptive panel leaves map targets visible. Online items
+  use existing drag previews for clients or the gateway. Search waits for a short typing
+  pause and ranks exact names first; skills show source-reported install counts. Details
+  use an indeterminate progress bar with reduced-motion support. MCP ratings are not invented.
+
+- **Simpler catalog:** + Add loads initial results and opens item details beside the list.
+  Sources beside Search supports custom GitHub source editing, removal and immediate Undo.
+  Client selection stays explicit; all client writes use Preview, Apply, backup and verify.
+
+- **Online sources:** + Add opens Catalogs first, with a visible On this Mac alternative.
+  Sources and kind filters use buttons. Individual plugins are not preset catalogs; searches
+  survive a trip to Details and installation asks for clients explicitly. Search skills.sh, the official
+  MCP Registry and selected GitHub sources. Review source details, then use the existing
+  preview, Apply, verification and Undo for skills, plugins and supported MCP transports.
+  Add public GitHub sources without changing client settings. The offline demo stays offline.
+  See [online sources](docs/discovery.md) for supported formats and current limits.
 
 ### 0.3.0
 
@@ -230,8 +285,32 @@ The parts, in order:
 
 Part 6, the Instructions tab and tool counts, is done.
 
+The add, group drag and sign-in design of 2026-11-01,
+[docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md](docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md),
+in order: the add button (done), selecting several servers and dragging them together (done), a token
+step checked before Apply (done: a server that needs access waits in preview, amber, with one token
+field checked against the server; Apply writes the rest), and browser sign-in (done: Sign in opens
+the server's page, the tokens are checked before Apply, kept in the Keychain and refreshed by the
+gateway).
+
+## Proposals, not built
+
+Design proposals in `design/kitden.pen`; nothing here ships yet.
+
+- **Simpler add flow:** `Simple` frames in Pen Dev keep results and item details together.
+  Library owns skills and plugins; Gateway owns MCP servers. Sources are reached from
+  the catalog, with a single link field, automatic type detection and inline editing.
+  Removing a source keeps installed items and offers Undo. This is a design proposal.
+
+- **Catalog browsing:** Pen Dev screens in `design/kitden.pen` under `Discovery` explore
+  visible skill, plugin and MCP catalogs, item details, source add/edit/remove, preview and
+  recovery states. Show saved results immediately and refresh sources independently.
+  Source removal keeps installed items. These screens are a proposal, not shipped behavior.
+
 ## Next
 
+- Two different servers with the same name: a catalog server is refused when a client already
+  has another server of that name; hold both under distinct names.
 - Copy any command with one click.
 - Move the tests that read the old `/api/library` to `/api/library-list`, then remove the old route.
 - Details and the add panel: the kind in sentence case and a 24 px × in place of the kind in

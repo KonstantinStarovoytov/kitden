@@ -21,7 +21,6 @@ MCP SDK facts this relies on (mcp 2.3.0, checked 2026-10-21):
 """
 
 import hashlib
-import logging
 import os
 import re
 import sys
@@ -59,15 +58,17 @@ from mcp_types import (
     Tool,
 )
 
+from kitden import sign_in
 from kitden.gateways import data_dir
-from kitden.local_gateway.keychain import KeychainError, resolve_entry
+from kitden.local_gateway import oauth
+from kitden.local_gateway.keychain import KeychainError, is_reference, resolve_entry
 from kitden.local_gateway.project import project_chain, session_folder
 from kitden.local_gateway.settings import (
-    PLACEHOLDERS,
     SETTINGS_FILE,
     START_TIME,
     allowed_tools,
     count_call,
+    fill_placeholders,
     is_allowed,
     load_settings,
     load_tools,
@@ -91,10 +92,8 @@ NOT_IN_NAMES = re.compile(r"[^A-Za-z0-9_-]")
 SDK_CODES = {CONNECTION_CLOSED, REQUEST_TIMEOUT}
 HTTP_CODES = SDK_CODES | {PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INTERNAL_ERROR}
 
-# The HTTP library logs each request with its full address, and the MCP client logs some failures
-# with addresses too; an address may hold a token. The gateway prints its own plain line instead.
-for _logger in ("httpx2", "mcp.client"):
-    logging.getLogger(_logger).setLevel(logging.CRITICAL)
+# The HTTP library's and the MCP client's own logs are silenced by `oauth` (imported above): an
+# address or an error they log may hold a token. The gateway prints its own plain line instead.
 
 
 def exposed_names(
@@ -132,6 +131,20 @@ class UpstreamError(Exception):
     """A server could not start or answer. The message is one plain sentence with no secrets."""
 
 
+# A remote server that answered 401 or 403: the library reports only the server's own words.
+REFUSED = "{server} turned down its access: its token is wrong or has ended."
+
+
+def _turned_down(entry: dict) -> bool:
+    """Whether a remote server that would not start answers 401 or 403 (needs_sign_in)."""
+    from kitden.changes.actions import needs_sign_in
+
+    try:
+        return needs_sign_in(str(entry["url"]), entry.get("headers") or {})
+    except OSError:
+        return False
+
+
 def _say(text: str) -> None:
     """One plain line on stderr, which the client keeps in its log."""
     print(text, file=sys.stderr, flush=True)
@@ -146,12 +159,6 @@ def _error(text: str) -> CallToolResult:
     return _answer(text)
 
 
-def _fill(arg: str, folder: str) -> str:
-    for placeholder in PLACEHOLDERS:
-        arg = arg.replace(placeholder, folder)
-    return arg
-
-
 class Upstreams:
     """The servers in the gateway, for one gateway process or one listing on the page.
 
@@ -163,11 +170,12 @@ class Upstreams:
     UpstreamError inside the block.
     """
 
-    def __init__(self, home: Path, settings: dict, folder: str | None = None) -> None:
+    def __init__(self, home: Path, settings: dict) -> None:
         self.home = home
         self.settings = settings
-        self.folder = folder
+        self.folder: str | None = None
         self._clients: dict[str, Client] = {}
+        self._auths: dict[str, oauth.StoredSignIn] = {}  # the stored sign-in of each running one
         self._locks: dict[str, anyio.Lock] = {}
         self._group: TaskGroup | None = None
 
@@ -237,10 +245,17 @@ class Upstreams:
         except MCPError as refused:
             if refused.code not in (HTTP_CODES if self._remote(server) else SDK_CODES):
                 return _answer(refused.message)  # the server's own answer
-            return _error(f"The call to {server} failed.")
+            return _error(self._failed(server))
         except Exception:
             # The text of an error may hold the server's address; say it plainly instead.
-            return _error(f"The call to {server} failed.")
+            return _error(self._failed(server))
+
+    def _failed(self, server: str) -> str:
+        """Why a call failed: a sign-in that ended while the server ran, or plainly."""
+        auth = self._auths.get(server)
+        if auth is not None and auth.signed_out:
+            return sign_in.SIGNED_OUT.format(server=server)
+        return f"The call to {server} failed."
 
     def _start_time(self, server: str) -> float:
         """Seconds for the server to start and list its tools: the gateway's own, or the longer
@@ -272,43 +287,71 @@ class Upstreams:
         """Open the server's connection and hold it until the `async with` block ends.
 
         It runs in the group's own task: a connection must close in the task that opened it.
+        A server whose browser sign-in ended says so; when another gateway process refreshed
+        it meanwhile (the item changed), it starts once more with the new tokens.
         """
         try:
             # Secrets in env and headers are Keychain references until the server starts.
             entry = await anyio.to_thread.run_sync(resolve_entry, self.settings["servers"][server])
         except KeychainError as problem:
             raise UpstreamError(str(problem)) from None
-        ready = False
-        try:
-            async with AsyncExitStack() as stack:
-                target = await self._target(entry, stack)
-                # The initialize handshake, which every server answers. Mode "auto" first asks
-                # `server/discover`; a server that leaves it unanswered costs 10 s.
-                client = await stack.enter_async_context(Client(target, mode="legacy"))
-                self._clients[server] = client
-                task_status.started(client)
-                ready = True
-                await anyio.sleep_forever()
-        except Exception:
-            if not ready:
-                raise
-            _say(f"{server} stopped.")
-        finally:
-            self._clients.pop(server, None)
+        for attempt in (1, 2):
+            auth = None
+            if entry.get("url") and is_reference(entry.get("sign_in")):
+                auth = oauth.StoredSignIn(server, str(entry["url"]), entry["sign_in"])
+            ready = False
+            try:
+                async with AsyncExitStack() as stack:
+                    target = await self._target(entry, stack, auth)
+                    # The initialize handshake, which every server answers. Mode "auto" first
+                    # asks `server/discover`; a server that leaves it unanswered costs 10 s.
+                    client = await stack.enter_async_context(Client(target, mode="legacy"))
+                    self._clients[server] = client
+                    if auth is not None:
+                        self._auths[server] = auth
+                    task_status.started(client)
+                    ready = True
+                    await anyio.sleep_forever()
+            except Exception:
+                if not ready:
+                    if auth is not None and auth.signed_out:
+                        if attempt == 1 and await self._refreshed_elsewhere(auth):
+                            continue
+                        raise UpstreamError(sign_in.SIGNED_OUT.format(server=server)) from None
+                    if entry.get("url") and await anyio.to_thread.run_sync(_turned_down, entry):
+                        raise UpstreamError(REFUSED.format(server=server)) from None
+                    raise
+                _say(f"{server} stopped.")
+            finally:
+                self._clients.pop(server, None)
+                self._auths.pop(server, None)
+            return
 
-    async def _target(self, entry: dict, stack: AsyncExitStack) -> Any:
-        """How to reach a server: streamable HTTP for a `url`, else its command over stdio."""
+    @staticmethod
+    async def _refreshed_elsewhere(auth: oauth.StoredSignIn) -> bool:
+        """Whether the sign-in's Keychain item changed since this process read it."""
+        try:
+            now = await auth.storage.read()
+        except KeychainError:
+            return False
+        return now is not None and now != auth.storage.raw
+
+    async def _target(self, entry: dict, stack: AsyncExitStack, auth: Any = None) -> Any:
+        """How to reach a server: streamable HTTP for a `url` (with `auth`, its stored
+        sign-in), else its command over stdio."""
         if entry.get("url"):
-            headers = {str(k): str(v) for k, v in (entry.get("headers") or {}).items()}
+            # It names itself: Cloudflare turns down Python's default agent (seen 2026-10-31).
+            headers = {"User-Agent": "kitden"}
+            headers.update({str(k): str(v) for k, v in (entry.get("headers") or {}).items()})
             timeout = httpx2.Timeout(START_TIMEOUT, read=CALL_TIMEOUT)
             http = await stack.enter_async_context(
-                httpx2.AsyncClient(headers=headers, timeout=timeout)
+                httpx2.AsyncClient(headers=headers, timeout=timeout, auth=auth)
             )
             return streamable_http_client(str(entry["url"]), http_client=http)
         folder = self.folder or str(self.home)
         return StdioServerParameters(
             command=entry["command"],
-            args=[_fill(str(arg), folder) for arg in entry.get("args") or []],
+            args=[fill_placeholders(str(arg), folder) for arg in entry.get("args") or []],
             env=self._env(entry),
             cwd=folder,
         )
@@ -406,7 +449,7 @@ class _Gateway:
         except MCPError:
             raise
         except Exception as exc:  # as MCPServer answers for its own tools
-            return CallToolResult(content=[TextContent(type="text", text=str(exc))], is_error=True)
+            return _answer(str(exc))
 
     async def _count(self, server: str, tool: str) -> None:
         """Count a call that went to the server. A count that cannot be written is only said."""

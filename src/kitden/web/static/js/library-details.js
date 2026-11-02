@@ -6,16 +6,16 @@
 // adds a row to the tray; nothing is written before Apply. Paths stay under Technical details.
 import { getJson, query } from "./api.js";
 import { $, button, el, icon, joinWords, plural } from "./dom.js";
+import { IN_PREVIEW, previewLook } from "./details.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { initLibraryAdd } from "./library-add.js";
 import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
 import { copyBodies, offBodies, onBodies, removeBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, review, stepTo, swapContent, technical } from "./panel.js";
-import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
+import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
-import { inTray, keyFor, tray } from "./tray.js";
+import { inTray, keyFor, trayRow } from "./tray.js";
 
-const IN_PREVIEW = "In preview";
 const OFF_ALL = "Turn off for all projects…";
 const OFF_SOME = "Turn off in some projects…";
 const OFF_HERE = "Turn off in this project…";
@@ -37,7 +37,7 @@ const SOME_WHY = "This turns it off in Claude Code. Codex and Cursor have no swi
 const PROJECT_LINES = { own: "Has its own skill settings", new: "No Claude Code settings yet" };
 // A project whose rule file sits where Kitden does not write (`skill_rules.outside`: the folder,
 // the engine's own test): no rule there, and one quiet line says why.
-export const outsideWords = (folder) => `Claude Code keeps this project's local settings in ${folder}, where Kitden does not write.`;
+const outsideWords = (folder) => `Claude Code keeps this project's local settings in ${folder}, where Kitden does not write.`;
 // Why a tray cannot take both a skill rule for all projects and one for a project in Claude Code.
 const ALL_FIRST = "Apply the rule for all projects first";
 const SOME_FIRST = "Apply the project rules in preview first; then Claude Code can turn it off for all projects.";
@@ -65,10 +65,7 @@ const COPY = "Copy";
 const COPIED = "Copied";
 const NOT_COPIED = "Could not copy";
 
-// The same rows a link's × adds (library-rules.js).
-export { offBodies, skillOffBodies, skillRuleWaits };
-
-const inOrder = (clients) => [...clients].sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+const inOrder = (clients) => [...clients].sort(byClientOrder);
 const names = (clients) => inOrder(clients).map((client) => CLIENT_NAMES[client] || client);
 const clientsBy = (item, look) => Object.entries(item.by || {}).filter(([, state]) => state === look).map(([client]) => client);
 const verb = (clients, one, more) => (clients.length > 1 ? more : one);
@@ -80,7 +77,7 @@ export function context(answer, project = state.project, folder = folderName(pro
 }
 
 // "3 skills · 1 command", from what Kitden read inside a plugin; null when it read nothing.
-export function insideWords(inside) {
+function insideWords(inside) {
   if (!inside) return null;
   const parts = INSIDE_WORDS.filter(([key]) => (inside[key] || []).length).map(([key, one, more]) => plural(inside[key].length, one, more));
   return parts.length ? parts.join(" · ") : "Nothing";
@@ -88,7 +85,7 @@ export function insideWords(inside) {
 
 // Where an item loads, in one or more sentences, from Kitden's own facts: "Claude Code and Codex
 // load it in every project. Cursor gets it through Claude Code." `noun` is "it" or "this skill".
-export function loadsSay(item, { folder = "", noun = "it" } = {}) {
+function loadsSay(item, { folder = "", noun = "it" } = {}) {
   const through = item.through || {};
   const own = clientsBy(item, "on").filter((client) => !through[client]);
   const lines = [];
@@ -204,10 +201,7 @@ function rowsButton(label, bodies, look = "btn") {
   });
   followTray(node, keyFor(list()[0] || {}), () => {
     node.hidden = !list().length;
-    const now = waiting();
-    words.textContent = now ? IN_PREVIEW : label;
-    if (now) node.setAttribute("aria-disabled", "true");
-    else node.removeAttribute("aria-disabled");
+    previewLook(node, words, label, waiting());
   });
   return node;
 }
@@ -215,7 +209,8 @@ function rowsButton(label, bodies, look = "btn") {
 // The tray holds this very row: its key, and the same `off` (a skill rule's on and off share a key).
 function queued(body) {
   const off = (body.params || {}).off;
-  return tray.rows.some((row) => row.key === keyFor(body) && (row.body.params || {}).off === off);
+  const row = trayRow(keyFor(body));
+  return Boolean(row) && (row.body.params || {}).off === off;
 }
 
 // Words in a quiet line that show while `when()` holds, after every change of the tray.
@@ -240,9 +235,9 @@ const removeActions = (item) => removeBodies(item).map(({ client, body }) => ({ 
 // They act only on a client's own entry for all projects. Where the picked project's own settings
 // decide (`can.project`), one quiet line says so instead: its local settings (`can.local`), its
 // shared, committed settings (`can.shared`), or its own copy.
-export const fromProject = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s own settings.`;
-export const fromLocal = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s local settings.`;
-export const fromShared = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s shared settings.`;
+const fromProject = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s own settings.`;
+const fromLocal = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s local settings.`;
+const fromShared = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s shared settings.`;
 function projectLine(item, c) {
   const can = item.can || {};
   // In a project whose rule file Kitden does not write, the outside line says it for Claude Code.
@@ -415,7 +410,7 @@ export function importCard(block, c) {
 }
 
 // A link on the Instructions tab: a client reads a file, or a file brings in another.
-export function readsCard({ from, to }) {
+function readsCard({ from, to }) {
   const title = [from.name, el("span", "arrow", " → "), to.name];
   const facts = [{ label: "From", value: from.name }, { label: "To", value: to.name }];
   if (from.kind === "client") return { kind: "Connection", title, id: "Read by the client", facts, why: `${from.name} reads ${to.name}. ${READS_FILE}` };
@@ -462,8 +457,8 @@ export function marketplaceCard(group, { commandsStep = () => {} } = {}) {
 
 // The client entries whose commands "Commands…" reads (/api/commands takes an item id): a
 // plugin's own entry in each client, a marketplace's in each client, in client order.
-export const pluginEntries = (item) => inOrder(Object.keys(item.items || {})).map((client) => ({ client, item: item.items[client][0] }));
-export const marketplaceEntries = (group) => inOrder(Object.keys(group.entries || {})).map((client) => ({ client, item: group.entries[client] }));
+const pluginEntries = (item) => inOrder(Object.keys(item.items || {})).map((client) => ({ client, item: item.items[client][0] }));
+const marketplaceEntries = (group) => inOrder(Object.keys(group.entries || {})).map((client) => ({ client, item: group.entries[client] }));
 const commandsAction = (entries, run) => (entries.length ? [{ label: COMMANDS, run }] : []);
 
 // One command: its label, the command in mono with a Copy button, or a note in its place.
@@ -480,7 +475,7 @@ function commandRow(command) {
 }
 
 // Copy a command to the clipboard; the button says whether it worked.
-export function copyText(text, node) {
+function copyText(text, node) {
   const said = (words) => { node.textContent = words; };
   const clipboard = globalThis.navigator && navigator.clipboard;
   if (!clipboard) return Promise.resolve(said(NOT_COPIED));
@@ -488,7 +483,7 @@ export function copyText(text, node) {
 }
 
 // The step: one section per client entry, its commands read from /api/commands, and Done back.
-export function commandsNodes(crumb, entries, back) {
+function commandsNodes(crumb, entries, back) {
   const body = el("div", "body");
   body.append(el("p", "why", RUN_YOURSELF));
   for (const { client, item } of entries) {
@@ -530,7 +525,7 @@ function cardOf(thing, c, id) {
 
 // Open the Details of what the map selected, beside the page, drawn from the map as it is now (also
 // after Apply all). Gone from the map since: they close. `step` ("back") slides them in from a step.
-export function showLibrary(id, { step = null } = {}) {
+function showLibrary(id, { step = null } = {}) {
   const thing = libraryThing(id);
   if (!thing) {
     closePanel({ focus: false });

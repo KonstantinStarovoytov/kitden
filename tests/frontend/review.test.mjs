@@ -79,7 +79,8 @@ globalThis.fetch = (url, init = {}) => {
 const queue = (url, ...items) => replies.set(url, [...(replies.get(url) || []), ...items]);
 const posted = () => calls.filter((call) => call.method === 'POST').map((call) => call.url);
 
-const { PLACE_IN_TITLE, addScope, changeWords, review, reviewLede, showRowReview, targetWords } = await import('../../src/kitden/web/static/js/review.js');
+const { addScope, changeWords, review, reviewLede, showRowReview } = await import('../../src/kitden/web/static/js/review.js');
+const { PLACE_IN_TITLE, targetWords } = await import('../../src/kitden/web/static/js/parts.js');
 const { closePanel, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
@@ -141,6 +142,19 @@ const target = (scope, project = null, others = false) => ({ scope, project, oth
 const remove = { action: 'mcp.remove_direct', steps: [{ client: 'codex', name: 'neon' }] };
 const add = { action: 'skill.install', steps: [{ client: 'codex', name: 'tidy', reaches: ['codex'] }] };
 const NOTE = 'Undo installs it again; its saved options are not brought back.';
+
+test('a changed secret of a held server says what changes', () => {
+  const change = { action: 'gateway.access', steps: [{ client: 'kitden', name: 'neon' }], target: { scope: 'all', project: null, others_unchanged: false } };
+  const words = (field, name, value) => changeWords(change, { params: { server: 'neon', field, name, value } });
+  assert.deepEqual(words('headers', 'Authorization', 'Bearer x'), { title: 'Replace Authorization of neon', done: 'Replaced Authorization of neon' });
+  assert.deepEqual(words('headers', 'Authorization', null), { title: 'Remove Authorization from neon', done: 'Removed Authorization from neon' });
+  assert.deepEqual(words('sign_in', 'Sign-in', null), { title: 'Sign out of neon', done: 'Signed out of neon' });
+});
+
+test('signing a held server in again says so', () => {
+  const change = { action: 'gateway.sign_in', steps: [{ client: 'kitden', name: 'neon' }], target: target('all') };
+  assert.deepEqual(changeWords(change, { params: { server: 'neon' } }), { title: 'Sign in to neon again', done: 'Signed in to neon again' });
+});
 
 test('the title names the scope the steps target', () => {
   assert.deepEqual(changeWords({ ...remove, target: target('project', '/Users/me/work/website', true) }), { title: 'Remove neon from Codex in website', done: 'Removed neon from Codex in website' });

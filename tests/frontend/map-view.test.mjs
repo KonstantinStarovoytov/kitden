@@ -273,22 +273,12 @@ test("a group's caption draws its icon before its words, 13 px; a caption with n
   assert.equal(v.node('g1').children[0].dataset.icon, 'info');
 });
 
-test('"+ Add" beside a column caption tells the page its column and the button itself', async () => {
+test('a column caption holds only its words', async () => {
   reduce(true);
-  const columns = TREE.columns.map((c) => (c.id === 'b' ? { ...c, add: true } : c));
-  const pressed = [];
-  const v = view({ onAdd: (column, node) => pressed.push([column, node]) });
-  const tree = { ...TREE, columns };
+  const v = view();
+  const tree = TREE;
   await v.draw(tree, layoutTree(tree, { open: new Set(), narrow: false }), {});
-  const [, add] = v.node('column:b').children;
-  assert.deepEqual([add.textContent, add.dataset.focus, v.node('column:a').children.length], ['+ Add', 'add:b', 1]);
-  // It opens a panel, so it says it is closed before the first open. It is a plain small button
-  // with its edge and fill, as the mockup's.
-  assert.equal(add.getAttribute('aria-expanded'), 'false');
-  assert.equal(add.className, 'btn small');
-  for (const fn of add.listeners.click) fn({});
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(pressed, [['b', add]]);
+  assert.deepEqual(v.node('column:b').children.map((n) => n.tagName), ['SPAN']);
 });
 
 test('a held block stays where it is put across draws, and glides home in 220 ms OUT3', async () => {
@@ -354,7 +344,7 @@ test('the dragged block keeps its press scale while the pointer is down', async 
   v.hold('s2', { x: 400, y: 300 }, { glide: true, ms: 200 });
   assert.ok(!v.node('s2').classList.contains('pressed') && v.node('s2').classList.contains('dragging'));
   v.hold('s2', { x: 500, y: 300 }, { pressed: true });
-  v.homeIn('s2', 220);
+  v.homeIn('s2');
   assert.ok(!v.node('s2').classList.contains('pressed'));
 });
 
@@ -374,7 +364,7 @@ test('under reduced motion the drop and the way home land at once', async () => 
   v.hold('s2', { x: 500, y: 300 }, { pressed: true });
   v.hold('s2', { x: 400, y: 200 }, { glide: true, ms: 200 });
   assert.deepEqual([pos(v.node('s2')), frames.length], [{ x: 400, y: 200, s: 1 }, 0]);
-  v.homeIn('s2', 220);
+  v.homeIn('s2');
   const home = place(lay(), 's2');
   assert.deepEqual([pos(v.node('s2')), frames.length], [{ x: home.x, y: home.y, s: 1 }, 0]);
   assert.ok(!v.node('s2').classList.contains('dragging'));
@@ -2011,4 +2001,12 @@ test('with no frames the clock still steps a motion to its end, and its promise 
   assert.deepEqual(pos(v.node('s2')), { x: home.x, y: home.y, s: 1 });
   await Promise.resolve();
   assert.ok(done);
+});
+
+test('chosen blocks take the selected look, several at once', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { chosen: new Set(['s1', 's2']) });
+  assert.ok(v.node('s1').classList.contains('selected'));
+  assert.ok(v.node('s2').classList.contains('selected'));
+  assert.ok(!v.node('c1').classList.contains('selected'));
 });

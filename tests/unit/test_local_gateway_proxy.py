@@ -9,6 +9,7 @@ import json
 import subprocess
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -24,7 +25,7 @@ import kitden.clients.version_cache as version_cache
 from kitden import mcp_server
 from kitden.gateways import data_dir
 from kitden.local_gateway import keychain, proxy
-from kitden.local_gateway.proxy import Upstreams, exposed_names
+from kitden.local_gateway.proxy import UpstreamError, Upstreams, exposed_names
 from kitden.local_gateway.settings import (
     CALLS_FILE,
     SETTINGS_FILE,
@@ -37,6 +38,7 @@ from kitden.mcp_server import create_server
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
+from tests.unit.fake_oauth import FakeOAuth
 
 ECHO = Path(__file__).parents[1] / "fixtures/fake_mcp/echo_server.py"
 KITDEN = "/opt/kitden/bin/kitden"
@@ -550,14 +552,17 @@ def test_a_prefixed_name_never_replaces_another_tool():
 class FailingServer(ThreadingHTTPServer):
     """An MCP address that answers every request with an error, and notes what it got."""
 
-    def __init__(self):
+    def __init__(self, status=500):
         self.headers_seen = []
+        self.agents = []
         server = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 server.headers_seen.append(self.headers.get("Authorization"))
-                self.send_response(500)
+                server.agents.append(self.headers.get("User-Agent"))
+                self.send_response(status)
+                self.send_header("Content-Length", "0")
                 self.end_headers()
 
             do_GET = do_DELETE = do_POST
@@ -614,6 +619,26 @@ async def test_secrets_stay_out_of_errors_and_logs(home, tmp_path):
     ):
         assert f"{line}\n" in printed
     assert "SENTINEL" not in printed + json.dumps([text(a) for a in answers])
+
+
+async def test_a_remote_that_turns_down_its_token_says_so(home, tmp_path):
+    remote = FailingServer(401)
+    url = f"http://127.0.0.1:{remote.server_port}/mcp"
+    headers = {"Authorization": "Bearer SENTINEL_SECRET_REFUSED"}
+    write_settings(home, {"remote": {"url": url, "headers": headers}})
+    save_tools(home, "remote", [tool("remote_tool")])
+    try:
+        with (tmp_path / "stderr.txt").open("w") as errlog:
+            async with gateway(home, errlog=errlog) as client:
+                answer = await client.call_tool("remote_tool", {})
+    finally:
+        remote.shutdown()
+    assert (answer.is_error, text(answer)) == (
+        True,
+        "remote turned down its access: its token is wrong or has ended.",
+    )
+    # The gateway names itself, as the access check does.
+    assert set(remote.agents) == {"kitden"}
 
 
 async def test_unreadable_projects_give_the_global_set(home, capsys):
@@ -790,3 +815,134 @@ async def test_kitden_mcp_in_a_test_never_reaches_the_real_keychain(home, env):
         await client.list_tools()
         answer = await client.call_tool("echo", {"text": "hello"})
     assert (answer.is_error, text(answer)) == (True, "Kitden could not reach the Keychain.")
+
+
+# Stored browser sign-ins (Part 3b) ---------------------------------------------------------
+
+
+def stored_sign_in(items, fake, expires_at=None, refresh=True):
+    """Put a sign-in for `fake` in the fake Keychain, as Apply would, and return its access
+    token."""
+    tokens = fake.new_tokens(refresh=refresh)
+    value = {
+        "tokens": tokens,
+        "expires_at": expires_at,
+        "client": {
+            "client_id": "client-1",
+            "redirect_uris": ["http://127.0.0.1:47800/sign-in/done"],
+            "token_endpoint_auth_method": "none",
+        },
+    }
+    data = json.loads(items.read_text()) if items.exists() else {}
+    data["kitden signer/sign-in"] = json.dumps(value)
+    items.write_text(json.dumps(data))
+    return tokens
+
+
+def signer_settings(fake):
+    return {"servers": {"signer": {"url": fake.url, "sign_in": {"keychain": "signer/sign-in"}}}}
+
+
+@pytest.fixture
+def fake_sign_in():
+    server = FakeOAuth()
+    yield server
+    server.stop()
+
+
+async def test_stored_sign_in_lists_tools(home, fake_keychain, fake_sign_in):
+    stored_sign_in(fake_keychain, fake_sign_in, expires_at=time.time() + 3600)
+    async with Upstreams(home, signer_settings(fake_sign_in)) as upstreams:
+        tools = await upstreams.list_tools("signer")
+    assert [t["name"] for t in tools] == ["echo"]
+
+
+async def test_expired_token_refreshes_and_saves(home, fake_keychain, fake_sign_in):
+    old = stored_sign_in(fake_keychain, fake_sign_in, expires_at=time.time() - 10)
+    fake_sign_in.issued.discard(old["access_token"])
+    async with Upstreams(home, signer_settings(fake_sign_in)) as upstreams:
+        tools = await upstreams.list_tools("signer")
+    assert [t["name"] for t in tools] == ["echo"]
+    assert fake_sign_in.refreshes == 1
+    saved = json.loads(json.loads(fake_keychain.read_text())["kitden signer/sign-in"])
+    assert saved["tokens"]["access_token"] != old["access_token"]
+    assert saved["tokens"]["access_token"] in fake_sign_in.issued
+    assert saved["tokens"]["refresh_token"] == old["refresh_token"]
+
+
+async def test_refused_refresh_signs_out(home, fake_keychain):
+    fake = FakeOAuth(refuse_refresh=True)
+    try:
+        old = stored_sign_in(fake_keychain, fake, expires_at=time.time() - 10)
+        fake.issued.discard(old["access_token"])
+        async with Upstreams(home, signer_settings(fake)) as upstreams:
+            with pytest.raises(UpstreamError) as refused:
+                await upstreams.list_tools("signer")
+        assert str(refused.value) == "signer needs sign-in again."
+    finally:
+        fake.stop()
+
+
+async def test_no_refresh_token_signs_out_on_401(home, fake_keychain):
+    fake = FakeOAuth(no_refresh_token=True, expires_in=None)
+    try:
+        old = stored_sign_in(fake_keychain, fake, refresh=False)
+        fake.issued.discard(old["access_token"])
+        async with Upstreams(home, signer_settings(fake)) as upstreams:
+            with pytest.raises(UpstreamError) as refused:
+                await upstreams.list_tools("signer")
+        assert str(refused.value) == "signer needs sign-in again."
+    finally:
+        fake.stop()
+
+
+async def test_token_refreshed_elsewhere_is_picked_up(home, fake_keychain, monkeypatch):
+    """Another gateway process refreshed (and so ended) the token this one loaded."""
+    from kitden.local_gateway import oauth
+
+    fake = FakeOAuth(rotate_refresh=True)
+    try:
+        stale = stored_sign_in(fake_keychain, fake, expires_at=time.time() - 10)
+        fake.issued.discard(stale["access_token"])
+        loads = []
+        real = oauth.KeychainStorage.get_tokens
+
+        async def first_load_then_elsewhere(self):
+            tokens = await real(self)
+            if not loads:
+                # The other process: it refreshes, and its new tokens replace the item.
+                fake.refresh_tokens.discard(stale["refresh_token"])
+                stored_sign_in(fake_keychain, fake, expires_at=time.time() + 3600)
+            loads.append(1)
+            return tokens
+
+        monkeypatch.setattr(oauth.KeychainStorage, "get_tokens", first_load_then_elsewhere)
+        async with Upstreams(home, signer_settings(fake)) as upstreams:
+            tools = await upstreams.list_tools("signer")
+        assert [t["name"] for t in tools] == ["echo"]
+        assert len(loads) == 2
+    finally:
+        fake.stop()
+
+
+async def test_expiry_restored_on_load(fake_keychain, fake_sign_in):
+    from kitden.local_gateway.oauth import StoredSignIn
+
+    when = time.time() + 1234
+    stored_sign_in(fake_keychain, fake_sign_in, expires_at=when)
+    auth = StoredSignIn("signer", fake_sign_in.url, {"keychain": "signer/sign-in"})
+    await auth._initialize()
+    assert auth.context.token_expiry_time == when
+    assert auth.context.current_tokens.access_token in fake_sign_in.issued
+
+
+async def test_a_sign_in_that_ends_mid_session_says_so_on_the_call(
+    home, fake_keychain, fake_sign_in
+):
+    stored_sign_in(fake_keychain, fake_sign_in, expires_at=time.time() + 3600, refresh=False)
+    async with Upstreams(home, signer_settings(fake_sign_in)) as upstreams:
+        await upstreams.list_tools("signer")
+        fake_sign_in.issued.clear()  # the server ends the token while the gateway runs
+        answer = await upstreams.call("signer", "echo", {})
+    assert answer.is_error
+    assert text(answer) == "signer needs sign-in again."

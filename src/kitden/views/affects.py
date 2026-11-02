@@ -6,9 +6,10 @@ plugins (the After chips' Cursor line). A reader that keeps another copy of its 
 as the review leaves it out (`skill_keepers`, `cursor_keeps`).
 """
 
-from kitden.model import Item, ItemKind, Scope
+from kitden.model import CLIENT_WORDS, Item, ItemKind, Scope
 from kitden.views.after import cursor_keeps
-from kitden.views.skills import CLIENT_WORDS, CLIENTS, skill_keepers, skill_readers
+from kitden.views.effective import client_order
+from kitden.views.skills import skill_keepers, skill_readers
 from kitden.views.words import LOADS_PLUGINS, READS_FOLDER
 
 
@@ -43,9 +44,8 @@ def affects(inventory, item: Item) -> dict:
             reached |= importers
             notes.append(LOADS_PLUGINS)
     in_project = item.project and item.scope in (Scope.PROJECT, Scope.LOCAL)
-    order = {c: i for i, c in enumerate(CLIENTS)}
     return {
-        "clients": sorted(reached, key=lambda c: order.get(c, len(CLIENTS))),
+        "clients": sorted(reached, key=client_order),
         "scope": "project" if in_project else "all",
         "note": "; ".join(notes) or None,
     }

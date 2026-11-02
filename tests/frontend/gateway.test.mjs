@@ -10,15 +10,15 @@ globalThis.window = {
   addEventListener: (type, fn) => { (windowHeard[type] ||= []).push(fn); },
   removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
 };
-const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, heldServer, letGoCloses, linkRemoval, linkTip, linksWait, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, letGoCloses, linkRemoval, linkTip, listRows, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, pressRow, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
-const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { heldServer, offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, litFor, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, setBusy, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
-const { addToTray, applyTray, cancelTray, endApplied, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, applyTray, cancelTray, endApplied, keyFor, linksWait, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
 // A stand-in server for the tray: each address answers from its own queue (a reply, or a function
 // of the request body that gives one); an address with nothing queued answers 200 with no body.
@@ -226,6 +226,13 @@ test('a held server says how many tools are on, or where it is on', () => {
   assert.equal(block(gatewayTree(unknown, OPTS), 'held:kitden:n8n').meta, 'Local');
 });
 
+test('a held server whose sign-in ended is amber and says Needs sign-in', () => {
+  const ended = { name: 'neon', kind: 'remote', state: 'on', tools: 2, on_count: 2, on_in: 0, tool_list: [], needs: 'sign-in' };
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [ended] }] };
+  const shown = block(gatewayTree(view, OPTS), 'held:kitden:neon');
+  assert.deepEqual([shown.lamp, shown.meta, shown.stateInMeta], ['warn', 'Needs sign-in', true]);
+});
+
 test('tags say where a rule comes from', () => {
   const servers = [
     { ...MEDIUM_VIEW.gateways[0].servers[0], origin: 'project', differs: true, on_elsewhere: 0, tool_list: [tool('write_file', 'off', 'writes', { origin: 'project' })] },
@@ -381,8 +388,8 @@ test('a first run shows the gateway as a slot to set up and no grips', () => {
 
 test('the map columns, and the Kitden gateway says its clients and servers', () => {
   assert.deepEqual(GATEWAY_COLUMNS.map((c) => c.caption), ['Clients', 'Gateway', 'Servers', 'Tools']);
-  // "+ Add" beside the Servers caption opens the Add a server panel (gateway-add.js).
-  assert.deepEqual(GATEWAY_COLUMNS.filter((c) => c.add).map((c) => c.id), ['servers']);
+  // No caption holds a button: "+ Add servers" is in the page header.
+  assert.deepEqual(GATEWAY_COLUMNS.filter((c) => c.add).map((c) => c.id), []);
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);
   assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
   // Not read: no count of clients it does not know.
@@ -851,7 +858,7 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
     const layout = layoutTree(tree, { open: new Set(), narrow: false });
     const held = [];
     const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
-    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id, ms) => held.push(['homeIn', id, ms]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id) => held.push(['homeIn', id]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
     placeMoved({ view, model: tree, layout });
     // The drop is asked; a second add drops that ask, and both it and the ask for the rest are
     // refused. The move stays in the tray with no part, and nothing is asked any more.
@@ -877,7 +884,7 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
     // The block the drop parked on the slot goes home.
     held.length = 0;
     placeMoved({ view, model: now, layout: layoutTree(now, { open: new Set(), narrow: false }) });
-    assert.deepEqual(held, [['homeIn', 'outside:move:github', 220]]);
+    assert.deepEqual(held, [['homeIn', 'outside:move:github']]);
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null });
@@ -1250,7 +1257,7 @@ test('a drop adds a move to the tray', async (t) => {
     const layout = layoutTree(tree, { open: new Set(), narrow: false });
     const held = [];
     const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
-    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id, ms) => held.push(['homeIn', id, ms]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id) => held.push(['homeIn', id]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
     placeMoved({ view, model: tree, layout });
     const home = layout.blocks.find((b) => b.id === 'outside:move:github');
     const files = layout.blocks.find((b) => b.id === 'held:kitden:files');
@@ -1360,7 +1367,12 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
     removeEventListener: (type, fn) => { heard[type] = (heard[type] || []).filter((f) => f !== fn); },
     documentElement: { classList: { add() {}, remove() {} } },
     querySelector: (selector) => (covers[selector] ? { getBoundingClientRect: () => covers[selector] } : null),
-    createElement: (tag) => ({ tag }),
+    // An element can hold others (a pick's ghost rides in one, gateway-drag.js).
+    createElement: (tag) => {
+      const made = { tag, kids: [], setAttribute() {}, isConnected: true };
+      made.append = (...nodes) => { for (const n of nodes) { made.kids.push(n); n.parentNode = made; } };
+      return made;
+    },
     body: { append: (n) => { n.parentNode = 'body'; } },
     hidden: false,
   };
@@ -1368,7 +1380,7 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
   const view = {
     node: () => node,
     hold: (at, point, how = {}) => asked.push(['hold', at, point, how]),
-    homeIn: (at, ms) => asked.push(['homeIn', at, ms]),
+    homeIn: (at) => asked.push(['homeIn', at]),
     lightTarget: (at) => asked.push(['light', at]),
     unlightTarget: () => asked.push(['unlight']),
     glance: (set) => asked.push(['glance', set ? [...set] : null]),
@@ -1383,7 +1395,7 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
   globalThis.document.documentElement.classList = { add: (name) => grabbing.add(name), remove: (name) => grabbing.delete(name) };
   const map = { asked, captured, heard, view, grabbing, node, tree: null, layout: null };
   const redraw = () => {
-    map.tree = gatewayTree(shown, { ...opts, rows: rowsOnMap(tray), ...movingOn() });
+    map.tree = gatewayTree(shown, { ...opts, rows: rowsOnMap(tray), ...movingOn(), addCard: true });
     map.layout = layoutTree(map.tree, { open: new Set(), narrow: false });
     placeMoved({ view, model: map.tree, layout: map.layout, redraw });
   };
@@ -1464,7 +1476,7 @@ test('a drop over Details, over the dock, on nothing or home leaves the tray as 
       map.up(dropX, dropY);
       await flush();
       assert.deepEqual([tray.rows, posted()], [[], []], name);
-      assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github', 220], name);
+      assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github'], name);
       // Over Details or the dock the gateway never lights and no slot opens.
       assert.ok(!map.asked.some(([what]) => what === 'light'), name);
       assert.deepEqual(movingOn(), {}, name);
@@ -1476,7 +1488,7 @@ test('a drop over Details, over the dock, on nothing or home leaves the tray as 
     const escape = { key: 'Escape', preventDefault() {}, stopImmediatePropagation() { this.stopped = true; } };
     for (const fn of map.heard.keydown) fn(escape);
     assert.ok(escape.stopped);
-    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github', 220]]);
+    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github']]);
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null });
@@ -1494,7 +1506,7 @@ test('Escape, then release, selects nothing', async (t) => {
     map.move(...map.onto('held:kitden:tracker'));
     const escape = { key: 'Escape', preventDefault() {}, stopImmediatePropagation() {} };
     for (const fn of map.heard.keydown) fn(escape);
-    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github', 220]]);
+    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github']]);
     // The button is let go later: the click of that release, which the captured block hears, is
     // swallowed then.
     t.mock.timers.tick(10);
@@ -1522,7 +1534,7 @@ test('a blur of the window ends a drag: nothing stays held and the tray is as it
     for (const fn of [...(windowHeard.blur || [])]) fn({ type: 'blur' });
     assert.equal(map.grabbing.size, 0);
     assert.ok(map.asked.some(([what]) => what === 'unlight'));
-    assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github', 220]);
+    assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github']);
     assert.deepEqual([movingOn(), tray.rows.length, windowHeard.blur.length], [{}, 0, 0]);
     // The pointer that moves on moves nothing.
     const before = map.asked.length;
@@ -1686,10 +1698,17 @@ test("in the zone the gateway lights and the slot opens in the row's group", asy
     // From 16 px left of the Gateway column to 194 px right of the Servers column (the mockup's
     // 180 to 760), and from 20 px over the map's top.
     const [gateway, servers] = ['gateway', 'servers'].map((id) => map.layout.columns.find((c) => c.id === id));
-    const y = map.at('gateway:kitden').y;
+    // Above the gateway's box, where only the zone counts.
+    const box = map.at('gateway:kitden');
+    const y = box.y - 17;
     for (const [x, open] of [[gateway.x - 16, false], [gateway.x - 15, true], [servers.x + servers.w + 193, true], [servers.x + servers.w + 194, false]]) {
       map.move(x, y);
       assert.equal(Boolean(movingOn().drop), open, `x ${x}`);
+    }
+    // The gateway's own box, widened 24 px each side, takes a drop wherever it is.
+    for (const [x, open] of [[box.x - 23, true], [box.x - 25, false]]) {
+      map.move(x, box.y + box.h / 2);
+      assert.equal(Boolean(movingOn().drop), open, `box x ${x}`);
     }
     for (const [top, open] of [[-20, false], [-19, true]]) {
       map.move(servers.x, top);
@@ -1729,10 +1748,10 @@ test('a drop in the zone adds one row and the block stands in the slot', async (
     map.up(...middle(map, 'gateway:kitden'));
     // One row, the same as a click on the row.
     assert.deepEqual(tray.rows.map((r) => [r.key, r.body]), [['add:db-tools@demo/db-query', row.body]]);
-    // The ghost flies from where it is onto the slot and takes its size, 200 ms CALM.
+    // The ghost flies from where it is onto the slot, shrinks to its width and fades, 200 ms CALM.
     const [flight] = ghost.motions;
-    const from = { transform: ghost.style.transform, width: '300px', height: '52px' };
-    assert.deepEqual(flight.keyframes, [from, { transform: `translate(${slot.x - 1000}px, ${slot.y - 200}px)`, width: `${slot.w}px`, height: `${slot.h}px` }]);
+    const from = { transform: ghost.style.transform, opacity: 1 };
+    assert.deepEqual(flight.keyframes, [from, { transform: `translate(${slot.x - 1000}px, ${slot.y - 200}px) scale(${slot.w / 300})`, opacity: 0 }]);
     assert.deepEqual([flight.options.duration, flight.options.easing, flight.options.fill], [200, CALM, 'forwards']);
     // While the row is asked, the slot stays where the ghost landed; the gateway lets go.
     map.redraw();
@@ -1794,7 +1813,7 @@ test('a drop over the panel, over the dock or on nothing leaves the tray and the
       assert.deepEqual(map.tree, before, name);
       // The ghost flies back onto its row, 180 ms CALM, and goes; the row is at full strength.
       const [flight] = ghost.motions;
-      assert.deepEqual(flight.keyframes.at(-1), { transform: 'none', width: '300px', height: '52px' }, name);
+      assert.deepEqual(flight.keyframes.at(-1), { transform: 'none', opacity: 1 }, name);
       assert.deepEqual([flight.options.duration, flight.options.easing], [180, CALM], name);
       assert.deepEqual([ghost.parentNode, row.node.names.has('dragging')], [null, false], name);
     }
@@ -2009,7 +2028,8 @@ test("the gateway lights and the slot opens over the block's own group", async (
     const map = dragMap();
     map.press();
     map.move(map.home.x + 16, map.home.y + 10);
-    // It lights the block, the gateway and its dotted line, as a glance does.
+    // It lights the block, the gateway and its dotted line, as a glance does. Only the gateway is
+    // a target: the Add a server card stays dim, as everything else.
     assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['outside:move:github', 'gateway:kitden', 'client:claude_code>outside:move:github']]);
     assert.deepEqual(movingOn(), {}, 'no slot while the block is in its own group');
     // Its centre over the gateway's groups, in the Local group's place too: the slot opens in its
@@ -2132,7 +2152,7 @@ test('a held server shows the client tip and a wire that follows it', async (t) 
     // A drop on nothing glides home and leaves the tray as it was.
     map.up(codex.x + codex.w + 41, codex.y + 10);
     await flush();
-    assert.deepEqual(map.asked.at(-1), ['homeIn', 'held:kitden:files', 220]);
+    assert.deepEqual(map.asked.at(-1), ['homeIn', 'held:kitden:files']);
     assert.deepEqual([tray.rows, posted()], [[], []]);
   } finally {
     delete globalThis.document;
@@ -2231,7 +2251,7 @@ test('a client that has the name refuses before the drop, with the reason, and s
       // On release the block goes home, the tray is as it was, and Cursor shakes once.
       map.up(cursor.x + 20, cursor.y + 20);
       await flush();
-      assert.deepEqual(map.asked.at(-1), ['homeIn', id, 220], why);
+      assert.deepEqual(map.asked.at(-1), ['homeIn', id], why);
       assert.deepEqual([tray.rows, posted()], [[], []], why);
       assert.deepEqual(shook, [[['translateX(0)', 'translateX(-7px)', 'translateX(6px)', 'translateX(-3px)', 'translateX(0)'], 380, 'ease-out']], why);
     };
@@ -2791,4 +2811,319 @@ test('an outside block has a grey-ring lamp and a grip only where the gateway ca
   // A move in the tray: its block is the preview look, with a left port and the words of a press.
   const moving = block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB)] }), 'preview:github');
   assert.deepEqual([moving.lamp, moving.ports, moving.icon, moving.takeOut], ['preview', { left: true }, 'globe', 'In preview. Click to take it out.']);
+});
+
+// The map ends the gateway's groups with a quiet card that opens the add panel (Part 1 of the
+// 2026-11-01 design). It is a place, not a preview: no lamp, no ports, no links.
+test('the map ends the gateway groups with an "Add a server" card, before the Outside group', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, addCard: true });
+  const card = block(tree, 'addslot:servers');
+  assert.deepEqual([card.kind, card.column, card.name, card.meta, card.icon, card.lamp], ['addslot', 'servers', 'Add a server', 'From the catalog', 'plus', undefined]);
+  const ids = tree.blocks.filter((b) => b.column === 'servers').map((b) => b.id);
+  assert.ok(ids.indexOf('addslot:servers') > ids.indexOf('held:kitden:files'));
+  assert.ok(ids.indexOf('addslot:servers') < ids.indexOf('group:outside'));
+  assert.ok(!tree.links.some((l) => l.to === card.id || l.from === card.id));
+  // The List has no card.
+  assert.equal(block(gatewayTree(MEDIUM_VIEW, OPTS), 'addslot:servers'), undefined);
+});
+
+test('no "Add a server" card before the gateway is set up or while it cannot be read', () => {
+  const first = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), held: new Map(), addCard: true });
+  assert.equal(first.blocks.some((b) => b.kind === 'addslot'), false);
+  const broken = { ...MEDIUM_VIEW, gateways: MEDIUM_VIEW.gateways.map((g) => (g.kind === 'kitden' ? { ...g, problem: 'bad file' } : g)) };
+  assert.equal(gatewayTree(broken, { ...OPTS, addCard: true }).blocks.some((b) => b.kind === 'addslot'), false);
+});
+
+test('the Add a server card ends the Kitden gateway, before another gateway and its servers', () => {
+  const meta = { id: 'gw-2', kind: 'metamcp', url: 'http://127.0.0.1:12008/metamcp/local/mcp', movable: true, managed: true };
+  const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, meta], used: ['kitden', 'gw-2'],
+    connections: { ...MEDIUM_VIEW.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
+  const held = new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP', url: 'http://h/x' }] }]]);
+  const ids = gatewayTree(view, { ...OPTS, held, addCard: true }).blocks.map((b) => b.id);
+  assert.ok(ids.indexOf('addslot:servers') > ids.indexOf('held:kitden:files'));
+  assert.ok(ids.indexOf('addslot:servers') < ids.indexOf('gateway:gw-2'));
+  assert.ok(ids.indexOf('addslot:servers') < ids.indexOf('held:gw-2:x'));
+});
+
+test('the search never matches the "Add a server" card', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, addCard: true });
+  assert.equal(findIn(tree, 'add').matches.has('addslot:servers'), false);
+});
+
+test('the Add a server card is a grey dashed place, never the preview look; it turns accent when pointed at or lit', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
+  const rule = (selector) => (css.match(new RegExp(`${selector.replace(/[.()]/g, '\\$&')}[^{]*\\{([^}]*)\\}`)) || [])[1] || '';
+  assert.match(rule('div.map .block.addslot '), /border: 1px dashed var\(--wire-strong\)/);
+  assert.match(rule('div.map .block.addslot '), /background: transparent/);
+  assert.doesNotMatch(css.match(/div\.map \.block\.addslot[^{]*\{[^}]*\}/g).join(' '), /--preview-(line|fill)/);
+  assert.match(rule('div.map .block.addslot.lit'), /border-color: var\(--route\)/);
+});
+
+// Picking several outside servers (gateway-pick.js, Part 2 of the 2026-11-01 design).
+const { bandHits, clearPick, keepPickable, pick, pickable, PICK_HINT, togglePick } = await import('../../src/kitden/web/static/js/gateway-pick.js');
+
+test('the band picks only outside servers with a grip, whatever way it is drawn', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const layout = layoutTree(tree, { open: new Set(), narrow: false });
+  const outside = layout.blocks.filter((b) => b.id.startsWith('outside:'));
+  assert.ok(outside.length >= 2);
+  const [top, bottom] = [outside[0], outside.at(-1)];
+  const all = bandHits(tree, layout, { x: 0, y: top.y }, { x: 2000, y: bottom.y + bottom.h });
+  assert.deepEqual(all, tree.blocks.filter((b) => pickable(b)).map((b) => b.id));
+  assert.ok(all.length >= 2);
+  assert.deepEqual(bandHits(tree, layout, { x: 2000, y: bottom.y + bottom.h }, { x: 0, y: top.y }), all);
+  assert.deepEqual(bandHits(tree, layout, { x: 0, y: 0 }, { x: 10, y: 10 }), []);
+});
+
+test('a toggle picks and unpicks; a held server or a client cannot be picked', () => {
+  clearPick();
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const id = tree.blocks.find((b) => pickable(b)).id;
+  assert.equal(togglePick(tree, id), true);
+  assert.deepEqual([...pick.ids], [id]);
+  assert.equal(togglePick(tree, id), true);
+  assert.deepEqual([...pick.ids], []);
+  assert.equal(togglePick(tree, 'held:kitden:files'), false);
+  assert.equal(togglePick(tree, 'client:codex'), false);
+  assert.deepEqual([...pick.ids], []);
+});
+
+test('a pick drops servers that are no longer outside, and clearing says whether it held any', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const id = tree.blocks.find((b) => pickable(b)).id;
+  pick.ids = new Set([id, 'outside:move:gone', 'held:kitden:files']);
+  keepPickable(tree);
+  assert.deepEqual([...pick.ids], [id]);
+  assert.equal(clearPick(), true);
+  assert.equal(clearPick(), false);
+});
+
+test('the hint counts what is picked', () => {
+  assert.equal(PICK_HINT(3), '3 servers picked · drag one onto the gateway · Esc clears');
+  assert.equal(PICK_HINT(1), '1 server picked · drag one onto the gateway · Esc clears');
+});
+
+// A pick dragged onto the gateway (gateway-drag.js `group`). The map's block node can lift a ghost,
+// and the map box records its classes.
+function groupMap(ids = ['outside:move:github', 'outside:move:docs']) {
+  const map = dragMap();
+  const boxNames = new Set();
+  map.view.box.classList = { toggle: (name, on = !boxNames.has(name)) => { if (on) boxNames.add(name); else boxNames.delete(name); return on; }, remove: (name) => boxNames.delete(name) };
+  map.boxNames = boxNames;
+  map.node.ghosts = [];
+  map.node.names = new Set();
+  map.node.classList = { add: (n) => map.node.names.add(n), remove: (n) => map.node.names.delete(n), contains: (n) => map.node.names.has(n) };
+  map.node.getBoundingClientRect = () => ({ left: map.home.x, top: map.home.y, width: map.home.w, height: map.home.h });
+  map.node.cloneNode = () => {
+    const ghost = fakeNode({ classes: ['block'] });
+    ghost.kids = [];
+    ghost.append = (n) => ghost.kids.push(n);
+    map.node.ghosts.push(ghost);
+    return ghost;
+  };
+  pick.ids = new Set(ids);
+  return map;
+}
+const rowOf = (map, id) => block(map.tree, id).row;
+
+test('pressing a picked server drags the whole pick: one ghost with a count, and only the gateway lights', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = groupMap();
+    map.press();
+    map.move(map.home.x + 16, map.home.y + 10);
+    const [ghost] = map.node.ghosts;
+    assert.ok(ghost && ghost.names.has('stack'));
+    assert.deepEqual(ghost.kids.map((k) => [k.className, k.textContent]), [['ghost-count', '2 servers']]);
+    assert.ok(map.boxNames.has('lifting'));
+    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['gateway:kitden']]);
+    // No slot opens for a pick.
+    map.move(...middle(map, 'gateway:kitden'));
+    assert.deepEqual(movingOn(), {});
+    assert.deepEqual(map.asked.filter(([what]) => what === 'light'), [['light', 'gateway:kitden']]);
+    map.up(map.home.x + 10, map.home.y + 10);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('a drop on the gateway adds one gateway.move per picked server, in pick order, and clears the pick', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    queue(PREVIEW, batch('c1'), batch('c2'));
+    const map = groupMap();
+    const bodies = ['outside:move:github', 'outside:move:docs'].map((id) => dropBody(rowOf(map, id), MEDIUM_VIEW));
+    map.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    const [ghost] = map.node.ghosts;
+    map.up(...middle(map, 'gateway:kitden'));
+    await flush();
+    await flush();
+    assert.deepEqual(tray.rows.map((r) => r.body), bodies);
+    assert.equal(pick.ids.size, 0);
+    assert.ok(!map.boxNames.has('lifting'));
+    // The ghost flew onto the gateway's box and faded.
+    assert.equal(ghost.motions[0].keyframes[1].opacity, 0);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('a miss or Escape flies the ghost back and keeps the pick', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = groupMap();
+    map.press();
+    map.move(map.home.x + 16, map.home.y + 10);
+    const [ghost] = map.node.ghosts;
+    map.up(map.home.x + 16, map.home.y + 10);
+    assert.deepEqual(ghost.motions[0].keyframes[1], { transform: 'none', opacity: 1 });
+    assert.deepEqual(tray.rows, []);
+    assert.equal(pick.ids.size, 2);
+    assert.ok(!map.boxNames.has('lifting'));
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('a server the tray refuses stays outside; the others go in', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    queue(PREVIEW, batch('c1'), { status: 422, json: { detail: 'docs needs sign-in.' } }, batch('c3'));
+    const map = groupMap();
+    map.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    map.up(...middle(map, 'gateway:kitden'));
+    for (let i = 0; i < 6; i += 1) await flush();
+    assert.deepEqual(tray.rows.map((r) => r.body), [dropBody(rowOf(map, 'outside:move:github'), MEDIUM_VIEW)]);
+    assert.equal(tray.refused && tray.refused.reason, 'docs needs sign-in.');
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('with one server picked, or a press on an unpicked server, the single drag runs and the pick clears', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const one = groupMap(['outside:move:github']);
+    one.press();
+    one.move(one.home.x + 16, one.home.y + 10);
+    assert.equal(one.node.ghosts.length, 0);
+    one.up(one.home.x + 16, one.home.y + 10);
+    const other = groupMap(['outside:move:docs', 'outside:local:docs']);
+    other.press();
+    other.move(other.home.x + 16, other.home.y + 10);
+    assert.equal(other.node.ghosts.length, 0);
+    assert.equal(pick.ids.size, 0);
+    other.up(other.home.x + 16, other.home.y + 10);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('a Shift or Cmd press on an unpicked server keeps the pick and starts no drag', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = groupMap(['outside:move:docs']);
+    for (const mods of [{ shiftKey: true }, { metaKey: true }]) {
+      pressGrip({ button: 0, pointerId: 7, target: { closest: () => map.node }, clientX: map.home.x + 10, clientY: map.home.y + 10, ...mods });
+      map.move(map.home.x + 40, map.home.y + 30);
+      assert.deepEqual([...pick.ids], ['outside:move:docs']);
+      assert.ok(!map.asked.some(([what]) => what === 'hold'));
+      map.up(map.home.x + 40, map.home.y + 30);
+    }
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('a Cancel while the pick is still being added stops the rest', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    let second;
+    queue(PREVIEW, batch('c1'), (sent) => new Promise((resolve) => { second = () => resolve(batch('c2')(sent)); }), batch('c3'), batch('c4'));
+    const map = groupMap(['outside:move:github', 'outside:move:docs', 'outside:local:docs']);
+    map.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    map.up(...middle(map, 'gateway:kitden'));
+    for (let i = 0; i < 4; i += 1) await flush();
+    await cancelTray();
+    second();
+    for (let i = 0; i < 6; i += 1) await flush();
+    assert.deepEqual(tray.rows, []);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+// A move that waits for access (tray.js `waits`): drawn where its preview goes, amber, and a
+// press opens the access panel instead of taking it out.
+const WAITS = { server: 'github', kind: 'token', fields: [], reason: 'github needs a token.', refused: false, checking: false };
+const waitingRow = (row, waits = WAITS) => ({ ...moveRow(row, null), waits });
+
+test('a waiting move draws an amber Needs token block where its preview goes', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [waitingRow(GITHUB)] });
+  const shown = block(tree, 'preview:github');
+  assert.deepEqual([shown.parent, shown.kind, shown.lamp, shown.meta, shown.needs, shown.takeOut, shown.state], ['group:kitden:remote', 'preview', 'warn', 'Needs token', true, null, 'needs']);
+  assert.equal(shown.title, 'Needs a token. Click to add it.');
+  const sign = block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [waitingRow(GITHUB, { ...WAITS, kind: 'sign-in' })] }), 'preview:github');
+  assert.deepEqual([sign.meta, sign.title], ['Needs sign-in', 'Needs sign-in. Click to add a token instead.']);
+});
+
+test('a move whose token works shows the green lamp and says so', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [{ ...moveRow(GITHUB), works: true }] });
+  const shown = block(tree, 'preview:github');
+  assert.deepEqual([shown.lamp, shown.meta], ['on', 'Token works']);
+});
+
+test('the map draws rows that wait in any phase but applied', () => {
+  const rows = [waitingRow(GITHUB)];
+  assert.deepEqual(rowsOnMap({ phase: 'waiting', rows }), rows);
+  assert.deepEqual(rowsOnMap({ phase: 'ready', rows }), rows);
+  assert.deepEqual(rowsOnMap({ phase: 'applied', rows }), []);
+});
+
+test('a row that waits for access is not one the tray still asks, so its block lands', async () => {
+  const { rowAsked } = await import('../../src/kitden/web/static/js/gateway-drag.js');
+  const t = (rows, phase = 'asking') => ({ phase, rows });
+  assert.equal(rowAsked(t([{ key: 'k', part: null, waits: null }]), 'k'), true);
+  assert.equal(rowAsked(t([{ key: 'k', part: null, waits: { server: 'neon' } }]), 'k'), false);
+  assert.equal(rowAsked(t([{ key: 'k', part: { id: 'p' }, waits: null }]), 'k'), false);
+  assert.equal(rowAsked(t([{ key: 'k', part: null, waits: null }], 'ready'), 'k'), false);
 });

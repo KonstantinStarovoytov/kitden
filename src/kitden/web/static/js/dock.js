@@ -9,7 +9,8 @@ import { baseNames, stepParts, stepText } from "./parts.js";
 import { afterParts, changeWords, detailsAgain, nothingChanged, reloadAll, showEffect, showRowReview, undoChange } from "./review.js";
 import { busy, go, onBusy, state } from "./store.js";
 import { hideToast, makeRoom, onToastGone, say, toast } from "./toast.js";
-import { applyTray, cancelTray, endApplied, onTray, setTrayWords, takeOut, tray, tryAgain } from "./tray.js";
+import { openAccess } from "./access-form.js";
+import { applyTray, cancelTray, endApplied, onTray, setTrayWords, TAKE_OUT, takeOut, tray, trayRow, tryAgain, writing } from "./tray.js";
 
 // Every client the steps write, as the bar says it while Apply runs. Not the one being written:
 // the engine's count names no step, and it does not write them in the preview's order.
@@ -72,6 +73,7 @@ export function barWords(t, { onMap = false } = {}) {
     apply: many ? "Apply all" : "Apply",
     ...base,
   };
+  waitWords(t, words);
   if (t.phase === "asking") words.applyWaits = true;
   else if (t.phase === "ready" && t.stale) Object.assign(words, { line: STALE, apply: "Preview again", retry: true });
   else if (t.phase === "applying") Object.assign(words, { line: writingLine(t.change.steps), apply: stepText("Applying", t.done, t.total), applyWaits: true });
@@ -80,6 +82,22 @@ export function barWords(t, { onMap = false } = {}) {
   // A refused add: the tray stands as it was, and the reason takes the line.
   if (t.refused && t.phase !== "failed") words.line = reason;
   return words;
+}
+
+// With rows that wait for access (tray.js `waits`), Apply counts the rows it writes and the line
+// says who waits; a tray where every row waits has nothing to apply yet.
+function waitWords(t, words) {
+  const waiting = t.rows.filter((row) => row.waits);
+  if (!waiting.length) return;
+  const ready = t.rows.length - waiting.length;
+  const [first] = waiting;
+  const what = first.waits.kind === "sign-in" ? "sign-in" : "a token";
+  words.line = waiting.length > 1 ? `${waiting.length} wait for access.` : `${first.waits.server} waits for ${what}. It stays in preview.`;
+  words.apply = ready > 1 ? `Apply ${ready}` : "Apply";
+  if (ready) return;
+  words.head = waiting.length > 1 ? `${waiting.length} servers need access` : `${first.waits.server} needs access`;
+  words.applyWaits = true;
+  if (waiting.length === 1) words.cancel = "Cancel";
 }
 
 // The toast after a verified Apply: `done` is { change, rows }, kept before the tray emptied. One
@@ -136,7 +154,7 @@ function iconButton(name, label, className, key, run) {
 
 // The kinds of bar: "one" change, "many" (a list), or a "refusal" that has no rows to show. The
 // head of a list counts ("3 changes in preview") except while it tells how an Apply or a preview ended.
-const counting = (view) => view.kind === "many" && view.t.phase !== "failed";
+const counting = (view) => view.kind === "many" && view.t.phase !== "failed" && view.t.phase !== "waiting";
 // What the bar is built of; when it changes the bar is built again, else its parts are updated.
 const sigOf = (view) => [view.kind, counting(view), view.words.apply !== null, view.words.changes].join("|");
 
@@ -206,24 +224,46 @@ function makeRow(row) {
   const words = el("span", "tt");
   words.append(title, detail);
   const show = iconButton("file-text", "", "ib", `tray:show:${row.key}`, () => {
-    const found = tray.rows.find((candidate) => candidate.key === row.key);
+    const found = trayRow(row.key);
     if (found && found.part) showRowReview(found);
   });
   const mark = el("span", "ts");
-  const out = iconButton("x", "Take it out of the preview", "x", `tray:x:${row.key}`, () => takeOut(row.key));
+  const out = iconButton("x", TAKE_OUT, "x", `tray:x:${row.key}`, () => takeOut(row.key));
   li.append(lead, words, show, mark, out);
   return { li, title, detail, show, mark, out, status: "" };
 }
 
 // A row spins while its step is written, and shows a green check once the whole change checked out.
+// One that waits for access has the amber lamp.
 function setRowStatus(item, status) {
   if (item.status === status) return;
   item.status = status;
-  item.mark.replaceChildren(...(status === "busy" ? [icon("rotate-cw", 12, "ic spin")] : status === "done" ? [icon("check", 12, "ic ok")] : []));
+  const marks = { busy: () => icon("rotate-cw", 12, "ic spin"), done: () => icon("check", 12, "ic ok"), waits: () => el("span", "lamp warn") };
+  item.mark.replaceChildren(...(marks[status] ? [marks[status]()] : []));
+}
+
+// A row that waits for access offers Add token, or Sign in for a server that signs in through
+// the browser (in place of its review, which it does not have yet); it fades in over 200 ms.
+// Once its access works it goes.
+function setAddToken(item, row) {
+  item.show.hidden = Boolean(row.waits);
+  if (row.waits && !item.add) {
+    const words = row.waits.kind === "sign-in" && row.waits.sign_in ? "Sign in" : "Add token";
+    item.add = button(words, () => {
+      const found = trayRow(row.key);
+      if (found && found.waits) openAccess(found);
+    }, "btn small add-token");
+    item.add.dataset.focus = `tray:access:${row.key}`;
+    item.show.before(item.add);
+    animateTo(item.add, [{ opacity: 0 }, { opacity: 1 }], { dur: 200 });
+  } else if (!row.waits && item.add) {
+    item.add.remove();
+    item.add = null;
+  }
 }
 
 function patchRows(view, known, animate) {
-  const working = view.t.phase === "applying" || view.t.phase === "applied";
+  const working = writing(view.t);
   for (const row of view.rows) {
     let item = shown.rows.get(row.key);
     if (!item) {
@@ -235,14 +275,15 @@ function patchRows(view, known, animate) {
       }
     }
     set(item.title, row.title);
-    set(item.detail, row.detail);
+    set(item.detail, row.waits ? (row.waits.kind === "sign-in" ? "Needs sign-in" : "Needs token") : row.detail);
     const label = `Show changes: ${row.title}`;
     if (item.show.getAttribute("aria-label") !== label) {
       item.show.setAttribute("aria-label", label);
       item.show.title = label;
     }
     item.out.disabled = working;
-    setRowStatus(item, row.status);
+    setRowStatus(item, row.waits ? "waits" : row.status);
+    setAddToken(item, row);
   }
 }
 
@@ -318,7 +359,7 @@ function patch(view, { known = new Set(), animate = true } = {}) {
   else set(shown.head, words.head);
   set(shown.cancel, words.cancel);
   // Cancel, and every ×, wait while the change is written: it cannot stop halfway.
-  shown.cancel.disabled = t.phase === "applying" || t.phase === "applied";
+  shown.cancel.disabled = writing(t);
   if (shown.apply) patchApply(view);
   if (kind === "many") patchRows(view, known, animate);
 }
@@ -461,8 +502,9 @@ export function drawTray(t = tray, { toastStays = false } = {}) {
 }
 
 function drawBar(t) {
-  const rows = t.rows.filter((row) => row.part);
-  const kind = rows.length > 1 ? "many" : rows.length ? "one" : t.refused ? "refusal" : null;
+  const rows = t.rows.filter((row) => row.part || row.waits);
+  // A row that waits shows in the list, where its Add token is.
+  const kind = rows.length > 1 || rows.some((row) => row.waits) ? "many" : rows.length ? "one" : t.refused ? "refusal" : null;
   if (!kind) {
     clearTimeout(sliding);
     sliding = null;
@@ -535,14 +577,15 @@ async function land() {
   } catch (error) {
     reportError(error);
   }
-  const kept = { change: tray.change, rows: [...tray.rows] };
+  // The toast names what was written; a row that waits for access stays in the tray.
+  const kept = { change: tray.change, rows: tray.rows.filter((row) => !row.waits) };
   endApplied();
   later(() => appliedToast(kept), D(kept.rows.length * 60));
 }
 
 // What a screen reader was last told of the tray: its rows with words (key -> title), its phase,
 // and the refusal.
-let told = { rows: new Map(), phase: "idle", refused: null };
+let told = { rows: new Map(), phase: "idle", refused: null, waits: new Set() };
 
 // How the tray changed, in words for a screen reader, or "": each row that joined ("…: in the
 // preview.", and the count from two on), the rows taken out, and why an add was refused when the
@@ -557,10 +600,14 @@ function trayNews(t, had) {
   if (gone.length && told.phase !== "applied") news.push(gone.length > 1 ? `${gone.length} changes taken out of the preview.` : `${gone[0]}: taken out of the preview.`);
   for (const row of joined) news.push(`${row.title}: in the preview.`);
   if (joined.length && rows.length > 1) news.push(`${rows.length}${IN_PREVIEW}.`);
+  // A server that joins as one that waits for access (it has no part, so it is not counted).
+  for (const row of t.rows.filter((each) => each.waits && !told.waits.has(each.key))) {
+    news.push(`${row.waits.server} waits for ${row.waits.kind === "sign-in" ? "sign-in" : "a token"}. It stays in preview.`);
+  }
   if (t.refused && t.refused !== told.refused && !had) {
     news.push(`${t.phase === "failed" ? "Could not prepare the preview" : "Could not prepare this change"}. ${baseNames(t.refused.reason)}`);
   }
-  told = { rows: new Map(rows.map((row) => [row.key, row.title])), phase: t.phase, refused: t.refused };
+  told = { rows: new Map(rows.map((row) => [row.key, row.title])), phase: t.phase, refused: t.refused, waits: new Set(t.rows.filter((row) => row.waits).map((row) => row.key)) };
   return news.join(" ");
 }
 

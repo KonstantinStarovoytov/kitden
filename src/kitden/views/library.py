@@ -12,20 +12,19 @@ from pathlib import Path
 from typing import NamedTuple
 
 from kitden.changes.actions import (
-    CLIENT_WORDS,
     KITDEN_GATEWAY,
     MCP_ADD,
     PLUGIN_INSTALL,
     PLUGIN_SKILLS,
     SKILL_INSTALL,
 )
-from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, is_direct_entry, is_home
-from kitden.model import ClientStatus, Item, ItemKind, Scope, _hash
+from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, found_columns, is_direct_entry, is_home
+from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
-from kitden.views.gateway_view import group_of
+from kitden.views.findings import group_of
 from kitden.views.instructions_map import instructions_map
-from kitden.views.library_map import OTHER, library_map
-from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
+from kitden.views.library_map import OTHER, cursor_imports, library_map
+from kitden.views.load_map import MARKS, Row, load_map
 from kitden.views.match import Copies, catalog_keys, plugin_copies, plugin_keys, source_keys
 from kitden.views.skills import project_skills, skill_catalog
 from kitden.views.words import (
@@ -222,12 +221,6 @@ def _map_rows(
     return out
 
 
-def _instruction_rows(map_rows: list[Row], found: list[str]) -> Built:
-    """Instruction files, commands and agents: the load map rows, with the state words of every
-    tab. Details says when each client reads a file. Kitden adds none, so a dash has no reason."""
-    return _map_rows(map_rows, "instructions", found)
-
-
 def _server_add(found: list[str], items: list[Item]) -> Add:
     """A direct user-scope server one client loads: the other clients Kitden writes can add
     it. The source is the first such entry in column order. A row a gateway serves has none."""
@@ -249,7 +242,7 @@ def _server_add(found: list[str], items: list[Item]) -> Add:
         return None
 
     def add(row: Row, client: str) -> dict | None:
-        if client not in CLIENT_WORDS or any(row.cells[c].state == "gw" for c in found):
+        if any(row.cells[c].state == "gw" for c in found):
             return None
         item = source(row)
         return _add(MCP_ADD, "+ Add", item=item) if item else None
@@ -300,8 +293,8 @@ def _server_why(map_rows: list[Row], found: list[str], items: list[Item]) -> Why
                 return SHARE_IN_GATEWAY
         elif any(row.cells[c].state == "gw" for c in found):
             if held(row):
-                return f"Set up the Kitden gateway in {NAMES[client]} on the Gateway page."
-            return f"Connect {NAMES[client]} to the gateway on the Gateway page."
+                return f"Set up the Kitden gateway in {CLIENT_WORDS[client]} on the Gateway page."
+            return f"Connect {CLIENT_WORDS[client]} to the gateway on the Gateway page."
         return NO_PROJECT_SERVER if only_here(row) else None
 
     return why
@@ -319,7 +312,7 @@ def _marketplace_why(offers: list[dict]) -> Why:
 
     def why(row: Row, client: str) -> str | None:
         if (client, row.name) in brings:
-            return f"{NAMES[client]} gets it the first time you add one of its plugins."
+            return f"{CLIENT_WORDS[client]} gets it the first time you add one of its plugins."
         return None
 
     return why
@@ -341,7 +334,7 @@ def _plugin_cell(
     """What a client without the plugin here can do: add it, get it through Claude Code, or
     take the skills that work alone. Otherwise, why not. A route comes only with an offer.
     `twin` is the other marketplace the client has a plugin of this name from."""
-    who = NAMES[client]
+    who = CLIENT_WORDS[client]
     # The client has it in a project this view does not show; adding it again would fail.
     if offer and client in offer["installed"]:
         return _cell(reason=f"{who} has it in another project.")
@@ -499,7 +492,7 @@ def _skill_cell(
         return _cell(add=_plugin_add(client, "+ Add the plugin", skill["plugin"], marketplace))
     if client == "cursor" and cursor_imports and "claude_code" in plugin_routes:
         return _cell("via", word=STATE_WORDS["via"], reason=SKILL_VIA_CLAUDE_CODE)
-    return _cell(reason=f"{NAMES[client]} can't install the plugin this skill needs.")
+    return _cell(reason=f"{CLIENT_WORDS[client]} can't install the plugin this skill needs.")
 
 
 def _not_this_skill(
@@ -606,7 +599,7 @@ def _unread_cells(rows: list[dict], by_key: dict[str, Row], columns: list[str], 
             row["cells"][client] = (
                 _map_cell(known, client)
                 if known
-                else _cell("unk", reason=CLIENT_UNREAD.format(NAMES[client]))
+                else _cell("unk", reason=CLIENT_UNREAD.format(CLIENT_WORDS[client]))
             )
         row["cells"] = {c: row["cells"][c] for c in columns}
 
@@ -778,8 +771,8 @@ def _notes(rows: list[dict], visible: list[str]) -> list[str]:
         if r["cells"][c]["add"] and r["cells"][c]["add"]["marketplace"]
     }
     return [
-        f"{NAMES[c]} gets the {m} marketplace the first time you add one of its plugins."
-        for c, m in sorted(pairs, key=lambda p: (COLUMNS.index(p[0]), p[1]))
+        f"{CLIENT_WORDS[c]} gets the {m} marketplace the first time you add one of its plugins."
+        for c, m in sorted(pairs, key=lambda p: (CLIENTS.index(p[0]), p[1]))
     ]
 
 
@@ -801,14 +794,13 @@ def _tables(
     """The rows of every kind tab, before any finish: `hidden` columns leave out a row only they
     have, and hiding every found client hides none."""
     status = {c.id: c.status for c in inventory.clients}
-    found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
-    columns = [c for c in COLUMNS if c in found or status.get(c) is ClientStatus.UNREADABLE]
+    found = found_columns(inventory)
+    columns = [c for c in CLIENTS if c in found or status.get(c) is ClientStatus.UNREADABLE]
     if hidden.issuperset(found):
         hidden = frozenset()
     visible = [c for c in found if c not in hidden]
     homes = list({a.home for a in adapters.values()})
-    cursor = adapters.get("cursor") if "cursor" in found else None
-    cursor_imports = bool(cursor and cursor.imports_claude_plugins())
+    imports = cursor_imports(adapters, found)
 
     map_rows = load_map(inventory, project, gateway_registered=gateway_registered)
     offers = catalog(inventory, adapters)
@@ -822,14 +814,14 @@ def _tables(
             _server_add(found, inventory.items),
         ),
         "plugin": _plugin_rows(
-            map_rows, offers, skills, found, cursor_imports, in_project=project is not None
+            map_rows, offers, skills, found, imports, in_project=project is not None
         ),
         "skill": _skill_rows(
             map_rows,
             offers,
             skills,
             found,
-            cursor_imports,
+            imports,
             {i.id: i for i in inventory.items},
             plugin_copies(inventory),
             _no_skill_place(adapters, project),
@@ -839,7 +831,9 @@ def _tables(
         # Kitden adds no hooks, so a hook's dash has no reason.
         "hook": _map_rows(map_rows, "hook", found),
         "marketplace": _map_rows(map_rows, "marketplace", found, _marketplace_why(offers)),
-        "instructions": _instruction_rows(map_rows, found),
+        # Instruction files, commands and agents: Details says when each client reads a file.
+        # Kitden adds none, so a dash has no reason.
+        "instructions": _map_rows(map_rows, "instructions", found),
     }
     by_key = {r.key: r for r in map_rows}
     # A shown client Kitden could not read makes a row visible only with items kept from its
@@ -875,7 +869,7 @@ def _columns(t: _Tables) -> list[dict]:
     return [
         {
             "id": c,
-            "name": NAMES[c],
+            "name": CLIENT_WORDS[c],
             "mark": MARKS[c],
             "hidden": c in t.hidden,
             "note": None if c in t.found else STATE_WORDS["unread"],
@@ -985,7 +979,7 @@ def _by_cells(item: dict, columns: list[str], found: list[str]) -> dict[str, dic
     for client in columns:
         state = BY_STATES.get(item["by"].get(client), "none")
         if client not in found and state == "none":
-            out[client] = _cell("unk", reason=CLIENT_UNREAD.format(NAMES[client]))
+            out[client] = _cell("unk", reason=CLIENT_UNREAD.format(CLIENT_WORDS[client]))
         else:
             out[client] = _cell(state, word=STATE_WORDS["via"] if state == "via" else None)
     return out
@@ -1113,7 +1107,7 @@ def _file_cell(file: dict, client: str, found: list[str]) -> dict:
     if file["by"].get(client):
         return _cell("on", word=READS_IT)
     if client not in found:
-        return _cell("unk", reason=CLIENT_UNREAD.format(NAMES[client]))
+        return _cell("unk", reason=CLIENT_UNREAD.format(CLIENT_WORDS[client]))
     return _cell()
 
 

@@ -3,11 +3,13 @@
 // All · Remote · Local pill. A click on a row, or a drag of it onto the map (gateway-drag.js), only
 // adds its change to the tray (tray.js); nothing is written before the tray's Apply. The panel
 // shows no path, address or command.
-import { matchRows, openAddPanel, shownList } from "./add-panel.js";
+import { addModes, installBody, onlineKind, openDiscovery } from "./discovery.js";
+import { matchRows, openAddPanel, readAgain } from "./add-panel.js";
 import { getJson } from "./api.js";
+import { closePanel } from "./panel.js";
 import { KIND, SERVER_ICONS } from "./gateway-details.js";
 import { pressRow } from "./gateway-drag.js";
-import { addToTray, inTray, keyFor, onTray, takeOut } from "./tray.js";
+import { inTray, keyFor, onTray, toggleInTray } from "./tray.js";
 
 // The search and the pill are the shared panel's (add-panel.js).
 export { matchRows };
@@ -15,13 +17,13 @@ export { matchRows };
 export const ADD_TITLE = "Add a server";
 // Its door in the Kitden gateway's Details, under More.
 export const ADD_SERVER = "Add a server…";
-const FOOT = "Click a server or drag it onto the map to preview it.";
+const FOOT = "Click to preview · drag onto the gateway";
 const NO_MATCH = "No servers match.";
 const NONE = "No marketplace on this computer offers an MCP server.";
 export const STATUS = { added: "Added", held: "In the gateway", preview: "In preview" };
 const KIND_WORDS = { remote: "Remote", local: "Local" };
 const PILL = [["all", "All"], ["remote", "Remote"], ["local", "Local"]];
-// The data-focus key of "+ Add" beside the map's Servers caption (map-view.js).
+// The data-focus key of "+ Add servers" in the page header (map-page.js addHeadButton).
 const ADD_KEY = "add:servers";
 
 // The rows an Apply added since the page loaded, by row id, while the gateway still holds them: a
@@ -34,7 +36,7 @@ onTray((t) => {
 });
 // The kind of each row read so far, by row id: the map puts a row of the tray in its group by it.
 const kinds = new Map();
-export const addKind = (id) => kinds.get(id) || null;
+export const addKind = (id) => kinds.get(id) || onlineKind(id);
 // The name of the server a row adds: its id is "<plugin>@<marketplace>/<name>".
 export const addName = (id) => id.slice(id.indexOf("/") + 1);
 // Whether an Apply since the page loaded added a server of this name, and the gateway holds it.
@@ -69,8 +71,8 @@ async function readServers() {
   }
 }
 
-// Both doors ("+ Add" and Details' More) let go of what the map has selected before the panel
-// opens; the page says how (onOpenAdd).
+// Every door ("+ Add servers", the Add a server card and Details' More) lets go of what the map
+// has selected before the panel opens; the page says how (onOpenAdd).
 let letGo = () => {};
 export const onOpenAdd = (fn) => {
   letGo = fn;
@@ -97,16 +99,26 @@ const GATEWAY = {
   icon: (row) => SERVER_ICONS[row.kind] || SERVER_ICONS.local,
   key: (row) => keyFor(addBody(row)),
   waits: (row) => inTray(keyFor(addBody(row))),
-  press: (row) => {
-    const key = keyFor(addBody(row));
-    return inTray(key) ? takeOut(key) : addToTray(addBody(row));
-  },
+  press: (row) => toggleInTray(addBody(row)),
+  before: () => [addModes("local", () => openAdd(), () => openLocalAdd())],
   drag: (event, row, node) => pressRow(event, { name: addName(row.id), kind: row.kind, body: addBody(row), node }),
 };
 
 // Open the panel beside the map (add-panel.js openAddPanel). `from` is the button that gets focus
-// back when it closes, the map's "+ Add" unless said.
+// back when it closes, "+ Add servers" unless said.
 export function openAdd(options = {}) {
+  letGo();
+  if (options.from) options.from.focus({ preventScroll: true });
+  // The catalog panel covers the map's servers: once a server is in preview it closes, so its
+  // block can be seen growing out of the gateway.
+  const added = (body) => { if (inTray(keyFor(body))) closePanel(); };
+  return openDiscovery("mcp", { local: () => openLocalAdd(options), added, drag: (event, row, clients, node) => {
+    const body = installBody(row, []);
+    pressRow(event, { name: addName(body.params.server), kind: addKind(body.params.server), body, node, onDrop: () => added(body) });
+  } });
+}
+
+export function openLocalAdd(options = {}) {
   return openAddPanel(GATEWAY, options);
 }
 
@@ -114,7 +126,6 @@ export function openAdd(options = {}) {
 // rows of an Apply say Added now, and an open panel reads the marketplaces again, so each row says
 // what is held now. The panel stays open and focus stays where it is.
 let seen = null;
-let reads = 0;
 export async function pageRead(view) {
   if (view === seen) return;
   seen = view;
@@ -123,12 +134,5 @@ export async function pageRead(view) {
   for (const id of added) if (!held.has(addName(id))) added.delete(id);
   for (const id of applied) added.add(id);
   applied = [];
-  const list = shownList(GATEWAY);
-  if (!list) return;
-  list.paint();
-  const turn = ++reads;
-  const rows = await readServers();
-  if (!rows || turn !== reads || !list.node.isConnected) return;
-  learn(rows);
-  list.update(rows);
+  await readAgain(GATEWAY);
 }

@@ -191,6 +191,26 @@ def test_obot_unreachable():
         ObotClient(gateway, OBOT_ENV).held()
 
 
+def test_obot_error_body_is_never_read(monkeypatch):
+    """Obot's error bodies may echo the request, and a read that fails must not escape as a
+    raw error: Kitden never reads them."""
+    import io
+    import urllib.error
+    import urllib.request
+
+    class Broken(io.BytesIO):
+        def read(self, *args):
+            raise TimeoutError("read timed out")
+
+    def refuse(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 500, "boom", {}, Broken())
+
+    monkeypatch.setattr(urllib.request, "urlopen", refuse)
+    gateway = Gateway(url="http://127.0.0.1:9/mcp-connect/v1", key_env_var="OBOT_KEY")
+    with pytest.raises(GatewayError, match="Obot answered 500"):
+        ObotClient(gateway, {"OBOT_KEY": "k"}).held()
+
+
 def test_obot_needs_a_key_variable_and_an_obot_address(obot):
     with pytest.raises(GatewayError, match="key variable"):
         ObotClient(Gateway(url=obot.mcp_url), OBOT_ENV)

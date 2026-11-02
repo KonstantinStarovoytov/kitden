@@ -114,6 +114,8 @@ let offers = null;
 globalThis.fetch = async (url, init = {}) => {
   const body = init.body ? JSON.parse(init.body) : null;
   sent.push({ url, body });
+  if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [{ id: 'skills.sh', name: 'skills.sh', kind: 'skills' }, { id: 'anthropics/claude-plugins-official', name: 'Claude plugins', kind: 'github' }] }) };
+  if (url === '/api/discovery/search') return { ok: true, json: async () => ({ results: [], clients: [] }) };
   if (url === '/api/library-offers') {
     if (!offers) return { ok: false, status: 500, json: async () => ({}) };
     return { ok: true, status: 200, json: async () => ({ offers }) };
@@ -127,7 +129,7 @@ globalThis.fetch = async (url, init = {}) => {
   return { ok: true, status: 200, json: async () => ({}) };
 };
 
-const { allBody, libraryRowWords, openLibraryAdd } = await import('../../src/kitden/web/static/js/library-add.js');
+const { allBody, libraryRowWords, openLocalLibraryAdd: openLibraryAdd } = await import('../../src/kitden/web/static/js/library-add.js');
 const { initLibraryDetails } = await import('../../src/kitden/web/static/js/library-details.js');
 const { libraryTree, withWaiting } = await import('../../src/kitden/web/static/js/library-map.js');
 const { renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
@@ -201,12 +203,16 @@ function showMap(sample = MAP) {
   return map();
 }
 
-// The map drawn, then "+ Add" beside its Plugins and skills caption pressed, and the offers read.
+// The map drawn, then "+ Add plugins" in the page header pressed, and the offers read.
 async function open(sample = MAP, rows = OFFERS) {
   offers = rows;
   const box = showMap(sample);
-  const add = node(box, 'add:plugins');
+  const add = node(main.children[0], 'add:plugins');
   await press(add);
+  await wait(10);
+  assert.equal(panelState.current.type, 'discovery', '+ Add opens catalogs first');
+  assert.equal(find((n) => n.tagName === 'SELECT').length, 0, 'catalog choices use buttons');
+  await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac')[0]);
   await wait(10);
   return { box, add };
 }
@@ -233,8 +239,8 @@ test('+ Add opens Add a plugin or skill; the pill filters Plugins and Skills', a
     assert.equal(document.activeElement, search());
     assert.deepEqual([search().placeholder, search().getAttribute('aria-label')], ['Search the marketplaces…', 'Search the marketplaces']);
     assert.deepEqual(pill().map((b) => [b.textContent, b.getAttribute('aria-pressed')]), [['All', 'true'], ['Plugins', 'false'], ['Skills', 'false']]);
-    assert.deepEqual(text(foot), 'Click to preview, or drag onto a client.');
-    assert.deepEqual([add.className, add.getAttribute('aria-expanded')], ['btn small primary', 'true']);
+    assert.deepEqual(text(foot), 'Click to preview · drag onto a client');
+    assert.deepEqual([add.className, add.getAttribute('aria-expanded')], ['btn add', 'true']);
     // One group per marketplace, in name order, each with the store icon.
     assert.deepEqual(captions().map(text), ['demo-market', 'team-market']);
     assert.ok(captions().every((c) => c.children[0].dataset.icon === 'store'));
@@ -576,5 +582,87 @@ test('the panels show no path, address or command, and use no inline style or ma
     const code = readFileSync(new URL(`../../src/kitden/web/static/js/${name}`, import.meta.url), 'utf8');
     assert.doesNotMatch(code, /innerHTML|cssText|style\s*=|\.style\./, name);
     for (const field of ['url', 'command', 'args', 'path']) assert.doesNotMatch(code, new RegExp(`row\\.${field}\\b`), name);
+  }
+});
+
+test('catalog folder choices stay inline and a failed read stops progress', async () => {
+  const original = globalThis.fetch;
+  const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+  const calls = [];
+  let success = false;
+  let dragged;
+  globalThis.fetch = async (url, init = {}) => {
+    const request = init.body ? JSON.parse(init.body) : {};
+    if (url === '/api/discovery/search') return { ok: true, json: async () => ({ clients: ['codex'], results: [{ id: 'ambiguous', name: 'tidy', kind: 'skill', repo: 'acme/skills', installed: [] }] }) };
+    if (url === '/api/discovery/details') {
+      calls.push(request.id);
+      return request.id === 'ambiguous'
+        ? { ok: true, json: async () => ({ choices: [{ id: 'exact', name: 'tidy', kind: 'skill', path: 'one/tidy' }] }) }
+        : success
+          ? { ok: true, json: async () => ({ id: 'exact', name: 'tidy', kind: 'skill', path: 'one/tidy', refusal: 'Read only fixture.' }) }
+          : { ok: false, status: 400, json: async () => ({ detail: 'Source unavailable.' }) };
+    }
+    return original(url, init);
+  };
+  try {
+    await openDiscovery("mcp", { drag: (_event, row) => { dragged = { ...row }; } });
+    await flush();
+    const result = find((n) => n.classList.contains('res') && text(n).includes('tidy'))[0];
+    assert.ok(result);
+    await press(result);
+    await flush();
+    assert.ok(find((n) => n.tagName === 'H2' && text(n) === 'Choose a skill').length);
+    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'tidy')[0]);
+    await flush();
+    assert.deepEqual(calls, ['ambiguous', 'exact']);
+    assert.ok(find((n) => n.getAttribute('role') === 'alert' && text(n) === 'Source unavailable.').length);
+    assert.equal(find((n) => n.getAttribute('role') === 'progressbar').length, 0);
+    assert.equal(find((n) => n.classList.contains('catalog-loading') || n.classList.contains('catalog-progress')).length, 0);
+    success = true;
+    await press(result);
+    await flush();
+    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'tidy')[0]);
+    await flush();
+    for (const listener of result.listeners.pointerdown) listener({});
+    assert.equal(dragged.id, 'exact', 'drag uses the folder selected in details');
+    assert.equal(dragged.path, 'one/tidy');
+
+  } finally {
+    globalThis.fetch = original;
+    await done();
+  }
+});
+
+test('MCP sources exclude the built-in plugin catalog but keep personal GitHub sources', async () => {
+  const { sourceFitsPage } = await import('../../src/kitden/web/static/js/discovery.js');
+  const plugins = { id: 'anthropics/claude-plugins-official', kind: 'github' };
+  assert.equal(sourceFitsPage(plugins, 'mcp'), false);
+  assert.equal(sourceFitsPage(plugins, 'all'), true);
+  assert.equal(sourceFitsPage({ id: 'mcp-registry', kind: 'mcp' }, 'mcp'), true);
+  assert.equal(sourceFitsPage({ id: 'skills.sh', kind: 'skills' }, 'mcp'), false);
+  assert.equal(sourceFitsPage({ id: 'owner/servers', kind: 'github' }, 'mcp'), true);
+});
+
+test('the map ends Plugins and skills with an Add a plugin card that opens the catalog', async () => {
+  offers = OFFERS;
+  const box = showMap();
+  const card = node(box, 'block:addslot:plugins');
+  assert.ok(card, 'the card is on the map');
+  assert.deepEqual([card.className.split(' ').slice(0, 2).join(' '), text(card).includes('Add a plugin'), text(card).includes('From the catalog')], ['block addslot', true, true]);
+  // Its "+" tile, as the Gateway's card has.
+  assert.ok(walk(card).some((n) => n.className === 'block-icon'), 'the card has its + tile');
+  // No caption holds a button any more.
+  assert.equal(walk(box).some((n) => n.dataset.focus === 'add:plugins'), false);
+  try {
+    await press(card);
+    await wait(10);
+    assert.equal(panelState.current.type, 'discovery');
+    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac')[0]);
+    await wait(10);
+    // Closed, focus goes back to the card that opened it.
+    closePanel({ instant: true });
+    assert.equal(document.activeElement, card);
+  } finally {
+    await done();
   }
 });

@@ -3,17 +3,18 @@
 // (/api/library-offers) and an All · Plugins · Skills pill. A click adds a row for all projects to
 // every client that can take it and lacks it; a second click takes it out. A drag onto a client
 // adds it there only (library-map.js). Nothing is written before the tray's Apply.
-import { openAddPanel, shownList } from "./add-panel.js";
+import { addModes, openDiscovery } from "./discovery.js";
+import { openAddPanel, readAgain } from "./add-panel.js";
 import { getJson } from "./api.js";
 import { button, plural, reportError } from "./dom.js";
 import { addsOf, learnOffers, letGoLibraryMap, onLibraryAdd, pressRow } from "./library-map.js";
 import { marketplaceForm } from "./offer.js";
-import { CLIENT_ORDER } from "./parts.js";
+import { byClientOrder, INSTALLERS } from "./parts.js";
 import { busy, onBusy } from "./store.js";
 import { addToTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
 export const LIBRARY_ADD_TITLE = "Add a plugin or skill";
-const FOOT = "Click to preview, or drag onto a client.";
+const FOOT = "Click to preview · drag onto a client";
 const NO_MATCH = "No plugins or skills match.";
 const NONE = "No marketplace on this computer offers a plugin or skill.";
 const ADD_MARKETPLACE = "Add a marketplace…";
@@ -21,18 +22,18 @@ export const LIBRARY_STATUS = { added: "Added", every: "In every client", previe
 const PILL = [["all", "All"], ["plugin", "Plugins"], ["skill", "Skills"]];
 const KIND_ICONS = { plugin: "puzzle", skill: "sparkles" };
 const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };
-// The data-focus key of "+ Add" beside the map's Plugins and skills caption (map-view.js).
+// The data-focus key of "+ Add plugins" in the page header (map-page.js addHeadButton).
 const ADD_KEY = "add:plugins";
 
 // The clients a row adds to: those that can take it and lack it, in column order.
-export function lacking(row) {
+function lacking(row) {
   const has = new Set(row.installed || []);
-  return Object.keys(row.routes || {}).filter((client) => !has.has(client)).sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+  return Object.keys(row.routes || {}).filter((client) => !has.has(client)).sort(byClientOrder);
 }
 
 // A row as the map's blocks have their item, for its drag and for the adds in the tray: the
 // clients that have it are on, and the ones it lacks can take it.
-export function itemOf(row) {
+function itemOf(row) {
   const by = Object.fromEntries((row.installed || []).map((client) => [client, "on"]));
   return { kind: row.kind, name: row.name, [row.kind]: row.id, by, can: { add: lacking(row) } };
 }
@@ -108,31 +109,29 @@ const LIBRARY = {
     return keys.length ? takeOut(keys) : addToTray(allBody(row));
   },
   drag: (event, row, node) => pressRow(event, { item: itemOf(row), node }),
+  before: () => [addModes("local", () => openLibraryAdd(), () => openLocalLibraryAdd())],
   after: () => [button(ADD_MARKETPLACE, () => marketplaceForm({ back: ({ queued }) => queued && openLibraryAdd() }), "btn ghost small add-more")],
 };
 
-// Open the panel beside the map. `from` is the button that gets focus back when it closes, the
-// map's "+ Add" unless said.
+// Open the panel beside the map. `from` is the button that gets focus back when it closes,
+// "+ Add plugins" unless said.
 export function openLibraryAdd(options = {}) {
+  letGoLibraryMap();
+  if (options.from) options.from.focus({ preventScroll: true });
+  return openDiscovery("all", { local: () => openLocalLibraryAdd(options), drag: (event, row, clients, node) => {
+    const can = clients.filter((c) => row.kind !== "plugin" || INSTALLERS.includes(c));
+    const item = { kind: row.kind, name: row.name, [row.kind]: row.name, discovery: row.id, by: {}, can: { add: can } };
+    pressRow(event, { item, node });
+  } });
+}
+
+export function openLocalLibraryAdd(options = {}) {
   return openAddPanel(LIBRARY, options);
 }
 
-// An open panel reads the marketplaces again and each row says what it is now.
-let reads = 0;
-async function readAgain() {
-  const list = shownList(LIBRARY);
-  if (!list) return;
-  list.paint();
-  const turn = ++reads;
-  const rows = await readOffers();
-  if (!rows || turn !== reads || !list.node.isConnected) return;
-  learn(rows);
-  list.update(rows);
-}
-
-// "+ Add" beside the map's caption opens the panel. An Apply's adds say Added once the page has
-// read the result (the tray empties after it), and an open panel reads again after every Apply
-// or Undo.
+// "+ Add plugins" in the page header, or the Add a plugin card, opens the panel. An Apply's adds
+// say Added once the page has read the result (the tray empties after it), and an open panel
+// reads the marketplaces again after every Apply or Undo.
 export function initLibraryAdd() {
   onLibraryAdd((node) => openLibraryAdd({ from: node }));
   onTray((t) => {
@@ -143,7 +142,7 @@ export function initLibraryAdd() {
     if (!applied.length) return;
     for (const body of applied) added.set(body.params.plugin || body.params.skill, body.targets.map((target) => target.client));
     applied = [];
-    readAgain().catch(reportError);
+    readAgain(LIBRARY).catch(reportError);
   });
-  onBusy(() => busy.change || readAgain().catch(reportError));
+  onBusy(() => busy.change || readAgain(LIBRARY).catch(reportError));
 }

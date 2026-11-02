@@ -212,7 +212,7 @@ def _never(url, headers):
 
 def test_add_steps_write_only_the_gateway_settings(home):
     asked = []
-    steps = _steps(home, TEST_STATUS, lambda url, headers: asked.append((url, headers)) or False)
+    steps = _steps(home, TEST_STATUS, lambda url, headers: asked.append((url, headers)) or "open")
     # One sign-in check, without headers: the entry has none.
     assert asked == [("https://status.example.test/mcp", {})]
     # The demo's settings have a PATH and Codex's kitden entry has its timeouts.
@@ -230,8 +230,12 @@ def test_add_steps_put_secrets_in_the_keychain_and_map_streamable_http(home):
         "headers": {"Authorization": "Bearer DEMO_SECRET_X"},
     }
     _offer(home, "odd", entry)
-    # A remote server with headers of its own gets no sign-in check.
-    [step] = _steps(home, f"extra@{MARKET}/odd", _never)
+    # Supplied credentials are checked before the server enters preview.
+    checked = []
+    [step] = _steps(
+        home, f"extra@{MARKET}/odd", lambda url, headers: checked.append(headers) or "open"
+    )
+    assert checked == [{"Authorization": "Bearer DEMO_SECRET_X"}]
     reference = {"keychain": "odd/Authorization"}
     assert step.edit.after == {
         "url": "https://x.example.test/mcp",
@@ -366,9 +370,9 @@ def test_a_wrong_shape_or_a_folder_is_a_422_at_preview(home, entry, why):
     _refused(home, f"extra@{MARKET}/odd", why.format("odd"))
 
 
-def test_an_oauth_server_is_refused_at_preview_and_nothing_is_written(home, monkeypatch):
-    monkeypatch.setattr(kitden.demo, "no_sign_in", lambda url, headers: True)
-    _refused(home, TEST_STATUS, "test-status signs in with OAuth; Kitden can't add it yet.")
+def test_a_server_that_needs_a_token_waits_at_preview_and_nothing_is_written(home, monkeypatch):
+    monkeypatch.setattr(kitden.demo, "no_sign_in", lambda url, headers: "token")
+    _refused(home, TEST_STATUS, "test-status needs a token.")
 
 
 def test_an_unreachable_server_is_refused(home, monkeypatch):
@@ -380,7 +384,43 @@ def test_an_unreachable_server_is_refused(home, monkeypatch):
 
 
 def test_an_add_with_no_client_on_the_gateway_says_so(home):
-    [step] = _steps(home, TEST_STATUS, lambda url, headers: False)
+    [step] = _steps(home, TEST_STATUS, lambda url, headers: "open")
     nobody = SimpleNamespace(clients=[], items=[])
     words = after_words(Change(action="gateway.add", steps=[step]), nobody, home=home)
     assert words == [{"note": "No client uses the Kitden gateway yet."}]
+
+
+def test_a_token_typed_for_a_marketplace_server_is_checked_and_kept_out_of_the_answer(
+    home, monkeypatch
+):
+    def answers(url, headers):
+        return "open" if headers.get("Authorization") == "Bearer SENTINEL_SECRET_MK" else "token"
+
+    monkeypatch.setattr(kitden.demo, "no_sign_in", answers)
+    body = {
+        "action": "gateway.add",
+        "targets": [],
+        "params": {
+            "server": TEST_STATUS,
+            "headers": {"Authorization": "Bearer SENTINEL_SECRET_MK"},
+        },
+    }
+    with _page(home) as page:
+        good = page.post("/api/changes/preview", json=body, headers=POST)
+        assert good.status_code == 200, good.text
+        assert "SENTINEL_SECRET_MK" not in good.text
+        body["params"]["headers"] = {"Authorization": "Bearer SENTINEL_SECRET_BAD"}
+        bad = page.post("/api/changes/preview", json=body, headers=POST)
+        assert bad.status_code == 422
+        assert bad.json() == {"detail": "test-status did not accept this token."}
+
+
+def test_a_server_with_its_own_header_that_needs_a_token_is_not_called_refused(home, monkeypatch):
+    """Its entry sends a header of its own, but no token was typed: it needs one, nothing more."""
+    monkeypatch.setattr(kitden.demo, "no_sign_in", lambda url, headers: "token")
+    _offer(
+        home,
+        "moded",
+        {"type": "http", "url": "https://moded.example/mcp", "headers": {"X-Mode": "fast"}},
+    )
+    _refused(home, f"extra@{MARKET}/moded", "moded needs a token.")

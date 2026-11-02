@@ -53,7 +53,7 @@ function puff(width) {
 }
 
 // The frames of one puff, on one linear clock, so the path reads as a drift and not a bounce.
-export function puffFrames() {
+function puffFrames() {
   return PATH.map(([x, y], k) => {
     const t = AT[k];
     return {
@@ -66,7 +66,7 @@ export function puffFrames() {
 }
 
 // The frames of the door's light at `strength`: each step has its own curve, so the hold holds.
-export function lightFrames(strength) {
+function lightFrames(strength) {
   return [
     { opacity: 0, easing: GROW },
     { opacity: strength, offset: LIGHT_IN / TOTAL, easing: "linear" },

@@ -5,11 +5,12 @@ import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
 import { drawTray, initDock } from "./dock.js";
-import { drawChip, renderGateway } from "./gateway.js";
+import { renderGateway } from "./gateway.js";
 import { startGlow } from "./glow.js";
 import { initLibraryDetails } from "./library-details.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
 import { startLogo } from "./logo.js";
+import { drawChip } from "./map-page.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, holdPanel, initPanel, isPanelOpen } from "./panel.js";
 import { callout, demoTag, GONE_PROJECT, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
@@ -293,8 +294,8 @@ function listen() {
     document.dispatchEvent(new CustomEvent("kitden:progress", { detail }));
   });
   // A refresh of the Kitden gateway's tool lists ended, also after a failure: an open tool
-  // list reads them again.
-  events.addEventListener("gateway_tools", () => document.dispatchEvent(new CustomEvent("kitden:tools")));
+  // list reads them again, and the page draws again, so a server just applied shows its tools.
+  events.addEventListener("gateway_tools", () => { document.dispatchEvent(new CustomEvent("kitden:tools")); liveRefresh(); });
   // The clients' versions were read in the background, also after a failure: the Clients card
   // reads them again.
   events.addEventListener("versions", () => document.dispatchEvent(new CustomEvent("kitden:versions")));

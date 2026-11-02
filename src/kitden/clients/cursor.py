@@ -23,17 +23,20 @@ from kitden.clients.base import (
     bearer_header,
     expand,
     file_source,
+    file_step,
+    hook_items,
     instruction_items,
     is_direct_entry,
     is_home,
     is_own_skill,
-    mcp_item,
+    mcp_items,
     project,
     skill_items,
+    visible_folders,
 )
+from kitden.local_gateway.settings import as_dict
 from kitden.model import (
     Enabled,
-    FileEdit,
     Gateway,
     GatewayAuth,
     Item,
@@ -68,8 +71,12 @@ REACTIVE_KEY = (
 INSTALLED_PREFIX = "cursor.plugins.installedIds."
 
 
-def _dict(value: Any) -> dict:
-    return value if isinstance(value, dict) else {}
+def _switches(flags: dict) -> tuple[bool, bool]:
+    """Include Third-Party Plugins, and with it the import of Claude Code plugins (both on by
+    default)."""
+    third_party = flags.get("thirdPartyExtensibilityEnabled", True) is not False
+    imports = flags.get("importPluginsFromClaudeOnBoot", True) is not False
+    return third_party, third_party and imports
 
 
 def _workspaces(key: str) -> list[str | None]:
@@ -96,14 +103,13 @@ class CursorAdapter(ClientAdapter):
         """Include Third-Party Plugins is on (the default): Cursor also reads ~/.claude/skills
         and ~/.codex/skills, so a skill there reaches Cursor too."""
         _, flags = self._state(Reader(CLIENT))
-        return flags.get("thirdPartyExtensibilityEnabled", True) is not False
+        return _switches(flags)[0]
 
     def imports_claude_plugins(self) -> bool:
         """Include Third-Party Plugins and the import of Claude Code plugins are both on (the
         defaults): Cursor loads the plugins Claude Code has, as the scan reads them."""
         _, flags = self._state(Reader(CLIENT))
-        third_party = flags.get("thirdPartyExtensibilityEnabled", True) is not False
-        return third_party and flags.get("importPluginsFromClaudeOnBoot", True) is not False
+        return _switches(flags)[1]
 
     def gateway_step(self, gateway: Gateway, name: str) -> Step:
         value: dict[str, Any] = {"url": gateway.url}
@@ -118,77 +124,34 @@ class CursorAdapter(ClientAdapter):
     def setup_server_step(self, command: str, args: list[str]) -> Step:
         return self._add_entry(SETUP_NAME, {"command": command, "args": args})
 
-    def add_server_step(self, name: str, entry: dict) -> Step:
-        return self._add_entry(name, entry)
-
     def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
-        edit = FileEdit(
-            path=str(self.home / ".cursor/mcp.json"),
-            fmt="json",
-            key=("mcpServers", name),
-            after=value,
-        )
-        return Step(
-            client=CLIENT,
-            scope=Scope.USER,
-            name=name,
-            edit=edit,
-            restart_note=RESTART,
-            login_note=login,
+        path = self.home / ".cursor/mcp.json"
+        return file_step(
+            CLIENT, path, "json", ("mcpServers", name), value, Scope.USER, RESTART, login
         )
 
     def remove_step(self, item: Item) -> Step:
         if REMOVE_DIRECT not in self.item_actions(item):
             raise ValueError(f"{item.name} cannot be removed here")
-        edit = FileEdit(
-            path=str(item.source.path),
-            fmt="json",
-            key=("mcpServers", item.name),
-            after=ABSENT,
-        )
-        return Step(
-            client=CLIENT,
-            scope=item.scope,
-            name=item.name,
-            edit=edit,
-            restart_note=RESTART,
-            shared_file=item.scope is Scope.PROJECT,
-        )
+        key = ("mcpServers", item.name)
+        return file_step(CLIENT, item.source.path, "json", key, ABSENT, item.scope, RESTART)
 
     def scan(self) -> Scan:
         read = Reader(CLIENT)
         scan = Scan()
         installed, flags = self._state(read)
-        third_party = flags.get("thirdPartyExtensibilityEnabled", True) is not False
-        import_claude_plugins = flags.get("importPluginsFromClaudeOnBoot", True) is not False
+        third_party, import_claude_plugins = _switches(flags)
 
         workspaces = sorted({p for key in installed for p in _workspaces(key) if p})
         scan.projects = [project(path, CLIENT) for path in workspaces]
 
         user_mcp = self.home / ".cursor/mcp.json"
-        for name, entry in _dict(_dict(read.json(user_mcp)).get("mcpServers")).items():
-            scan.items.append(
-                mcp_item(
-                    CLIENT,
-                    name,
-                    entry,
-                    file_source(user_mcp, CLIENT, f"mcpServers.{name}"),
-                    Scope.USER,
-                )
-            )
+        servers = as_dict(read.json(user_mcp)).get("mcpServers")
+        scan.items += mcp_items(CLIENT, servers, user_mcp, Scope.USER)
         for path in workspaces:
             mcp_path = Path(path) / ".cursor/mcp.json"
-            for name, entry in _dict(_dict(read.json(mcp_path)).get("mcpServers")).items():
-                scan.items.append(
-                    mcp_item(
-                        CLIENT,
-                        name,
-                        entry,
-                        file_source(mcp_path, CLIENT, f"mcpServers.{name}"),
-                        Scope.PROJECT,
-                        project=path,
-                    )
-                )
+            servers = as_dict(read.json(mcp_path)).get("mcpServers")
+            scan.items += mcp_items(CLIENT, servers, mcp_path, Scope.PROJECT, project=path)
 
         scan.items += self._skills(self.home, Scope.USER, None, third_party)
         for path in workspaces:
@@ -196,7 +159,7 @@ class CursorAdapter(ClientAdapter):
 
         scan.items += self._instructions(workspaces)
         scan.items += self._plugins(installed)
-        if third_party and import_claude_plugins:
+        if import_claude_plugins:
             scan.items += self._claude_plugins(read)
 
         marketplaces = self.home / ".cursor/plugins/marketplaces"
@@ -236,7 +199,7 @@ class CursorAdapter(ClientAdapter):
             except (TypeError, ValueError):
                 continue
             if key == REACTIVE_KEY:
-                flags = _dict(data)
+                flags = as_dict(data)
             else:
                 installed[key] = data if isinstance(data, list) else []
         return installed, flags
@@ -260,10 +223,10 @@ class CursorAdapter(ClientAdapter):
         found: dict[tuple[str, str | None], str] = {}
         for key in sorted(installed, key=lambda k: len(places[k])):  # single folders first
             for entry in installed[key]:
-                plugin_id = _dict(entry).get("id")
+                plugin_id = as_dict(entry).get("id")
                 if not isinstance(plugin_id, str):
                     continue
-                if "project" in (_dict(entry).get("sources") or []):
+                if "project" in (as_dict(entry).get("sources") or []):
                     folders = [p for p in places[key] if p]
                     if len(folders) > 1:
                         if any((plugin_id, p) in found for p in folders):
@@ -326,12 +289,12 @@ class CursorAdapter(ClientAdapter):
                 continue
             for value in values:
                 try:
-                    descriptors = _dict(json.loads(value)).get("descriptors")
+                    descriptors = as_dict(json.loads(value)).get("descriptors")
                 except (TypeError, ValueError):
                     continue
                 for descriptor in descriptors if isinstance(descriptors, list) else []:
-                    plugin_id = _dict(descriptor).get("pluginId")
-                    path = _dict(descriptor).get("filePath")
+                    plugin_id = as_dict(descriptor).get("pluginId")
+                    path = as_dict(descriptor).get("filePath")
                     if plugin_id is None or not isinstance(path, str):
                         continue
                     try:
@@ -376,15 +339,10 @@ class CursorAdapter(ClientAdapter):
         commit-hash folder and a plugin may keep several (checked on a real Cursor install,
         2026-10-20). Hidden folders are skipped.
         """
-
-        def folders(parent: Path) -> list[Path]:
-            found = parent.iterdir() if parent.is_dir() else []
-            return sorted(p for p in found if p.is_dir() and not p.name.startswith("."))
-
         out: dict[str, Path] = {}
-        for marketplace in folders(self.home / ".cursor/plugins/cache"):
-            for plugin in folders(marketplace):
-                versions = folders(plugin)
+        for marketplace in visible_folders(self.home / ".cursor/plugins/cache"):
+            for plugin in visible_folders(marketplace):
+                versions = visible_folders(plugin)
                 if versions:
                     newest = max(versions, key=lambda v: v.stat().st_mtime)
                     out[f"{plugin.name}@{marketplace.name}"] = newest
@@ -432,8 +390,10 @@ class CursorAdapter(ClientAdapter):
     def _claude_plugins(self, read: Reader) -> list[Item]:
         """Claude Code plugins that Cursor imports (on by default)."""
         installed_path = self.home / ".claude/plugins/installed_plugins.json"
-        installed = _dict(_dict(read.json(installed_path)).get("plugins"))
-        enabled = _dict(_dict(read.json(self.home / ".claude/settings.json")).get("enabledPlugins"))
+        installed = as_dict(as_dict(read.json(installed_path)).get("plugins"))
+        enabled = as_dict(
+            as_dict(read.json(self.home / ".claude/settings.json")).get("enabledPlugins")
+        )
         items = []
         for plugin_id in installed:
             on = enabled.get(plugin_id, True) is not False
@@ -456,7 +416,7 @@ class CursorAdapter(ClientAdapter):
     def _hooks(self, read: Reader, third_party: bool) -> list[Item]:
         items = []
         hooks_path = self.home / ".cursor/hooks.json"
-        for event in _dict(_dict(read.json(hooks_path)).get("hooks")):
+        for event in as_dict(as_dict(read.json(hooks_path)).get("hooks")):
             items.append(
                 Item(
                     client=CLIENT,
@@ -468,22 +428,12 @@ class CursorAdapter(ClientAdapter):
             )
         if third_party:
             claude_path = self.home / ".claude/settings.json"
-            for event, groups in _dict(_dict(read.json(claude_path)).get("hooks")).items():
-                for group in groups if isinstance(groups, list) else []:
-                    matcher = _dict(group).get("matcher") or "*"
-                    source = file_source(
-                        claude_path,
-                        "claude_code",
-                        f"hooks.{event}",
-                        kind=SourceKind.OTHER_CLIENT_FOLDER,
-                    )
-                    items.append(
-                        Item(
-                            client=CLIENT,
-                            kind=ItemKind.HOOK,
-                            name=f"{event}: {matcher}",
-                            source=source,
-                            scope=Scope.USER,
-                        )
-                    )
+            items += hook_items(
+                CLIENT,
+                as_dict(read.json(claude_path)),
+                claude_path,
+                Scope.USER,
+                owner="claude_code",
+                kind=SourceKind.OTHER_CLIENT_FOLDER,
+            )
         return items

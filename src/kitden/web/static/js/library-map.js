@@ -5,17 +5,17 @@
 // plugin or a skill drags onto a client (map-drag.js), which only adds a row to the tray. Its
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
-import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, WAITS } from "./dom.js";
+import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
 import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, shownFound, turnPage, turnWords } from "./map.js";
-import { clientAt, covered, flyGhost, follow, liftGhost, mapArea, moveGhost, ON_CLIENT, pointOf, startDrag } from "./map-drag.js";
+import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
 import { drawChip, glidePill } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
 import { mapView } from "./map-view.js";
-import { afterOldPage, CALM, rise, riseHead, shake } from "./motion.js";
+import { afterOldPage, rise, riseHead } from "./motion.js";
 import { banner, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
 import { busy, current, currentError, projectPath, render, retry, setState, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
-import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
+import { addToTray, inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray } from "./tray.js";
 
 export const LEDE = "Follow the source. Connect only what you need.";
 const MAP_HINT = "Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details";
@@ -24,11 +24,13 @@ const MAP_HINT = "Point at a link and press × to remove it · drag a plugin ont
 // holds, and the Inside caption, grow out of the plugin as it opens (map-view.js `grows`).
 export const LIBRARY_COLUMNS = [
   { id: "clients", caption: "Clients", w: 150, h: 54, top: 140, rowGap: 18 },
-  { id: "plugins", caption: "Plugins and skills", add: true, w: 180, h: 60, colGap: 100, top: 37, rowGap: 4 },
+  { id: "plugins", caption: "Plugins and skills", w: 180, h: 60, colGap: 100, top: 37, rowGap: 4 },
   { id: "inside", caption: "Inside", w: 200, h: 34, colGap: 70, top: 26, rowGap: 8, grows: true },
 ];
 const ROW_H = 34; // a skill or hook row in the Plugins and skills column
 const GROUP_BEFORE = 15; // the space before a group caption, after the group above it
+// The card at the end of Plugins and skills that opens the add panel: a place, so no lamp or links.
+const ADD_CARD = { id: "addslot:plugins", column: "plugins", kind: "addslot", name: "Add a plugin", meta: "From the catalog", icon: "plus", before: GROUP_BEFORE };
 const INSIDE_PAGE = 8; // an open plugin's Inside column shows this many a page
 // Its caption names the plugin cut to this many letters, so "<plugin> · 17–20 of 20" ends inside
 // the map.
@@ -60,8 +62,8 @@ export const INSTRUCTION_COLUMNS = [
 ];
 const FILE_GROUPS = { all: "layers", project: "folder", commands: "square-terminal" };
 // The words for a block of "Commands and agents" (`file.kind`), and with none here at all.
-export const FILE_KINDS = { command: "command", agent: "agent" };
-export const NO_FILES = "No instruction files here.";
+const FILE_KINDS = { command: "command", agent: "agent" };
+const NO_FILES = "No instruction files here.";
 // The Instructions tab's group ids carry this, so they never share an id with a group of Plugins
 // and skills (`group:project`).
 export const filesGroup = (key) => `group:files:${key}`;
@@ -77,10 +79,8 @@ const WAITS_ALREADY = "Already in preview";
 // it adds for all projects when it adds to several clients at once ("+ Add"); a meta too long for
 // the card ends in "…", so its title says it whole.
 const CLICK_OUT = "Click to take it out.";
-const ALL_PROJECTS = "all projects";
-// What the × of a link that the tray draws says, and the × while a change is written.
-const TAKE_OUT = "Take it out of the preview";
-const OWN_WAITS = "Your change is being written.";
+// parts.js ALL_PROJECTS in lower case, as these lines say it after a "·".
+const ALL_PROJECTS_LOWER = "all projects";
 
 // How many blocks the Plugins and skills column holds: plugins, skills and hooks.
 const itemCount = (answer) => answer.groups.reduce((n, group) => n + group.items.length, 0);
@@ -179,6 +179,7 @@ export function libraryTree(answer) {
 // previewFor).
 export function addBody(item, client) {
   const params = item.kind === "skill" ? { skill: item.skill } : { plugin: item.plugin };
+  if (item.discovery) params.discovery = item.discovery;
   return { action: INSTALLS[item.kind], targets: [{ client }], params };
 }
 
@@ -233,7 +234,7 @@ function waitOn(block, adds, project, clients, model) {
 
 // How a block whose add waits looks: "Preview · Codex", or "Preview · all projects".
 function waitLook(wait) {
-  const meta = `Preview · ${wait.all ? ALL_PROJECTS : joinWords(wait.names)}`;
+  const meta = `Preview · ${wait.all ? ALL_PROJECTS_LOWER : joinWords(wait.names)}`;
   return { meta, lamp: "preview", state: "preview", stateInMeta: true, takeOut: `${meta}. ${CLICK_OUT}`, rows: wait.rows };
 }
 
@@ -334,14 +335,14 @@ function fileMeta(file, group) {
   if (FILE_KINDS[file.kind]) return `${who} · ${FILE_KINDS[file.kind]}`;
   if (typeof file.count === "number") return `${who} · ${plural(file.count, "rule", "rules")}`;
   if (pulls) return `${who} · ${plural(pulls, "import", "imports")}`;
-  return `${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS}`;
+  return `${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS_LOWER}`;
 }
 
 // A link whose removal or turning off waits in the tray is drawn leaving, and names its row: a press
 // on it, or its ×, takes the row out. A plugin's removal from a client takes the faint lines through
 // that client with it (Cursor through Claude Code): they draw leaving too, with no × and no row of
 // their own. `answer` is the /api/library-map answer the model is from.
-export function withLeaving(model, rows, answer) {
+function withLeaving(model, rows, answer) {
   const byId = new Map(model.blocks.map((b) => [b.id, b]));
   const removed = new Set(); // "<client>>block id" of a waiting plugin removal
   for (const link of model.links.filter((l) => l.kind === "on")) {
@@ -362,7 +363,7 @@ export function withLeaving(model, rows, answer) {
 
 // What a block shows before its name: a client's tile, a plugin's puzzle tile, a file's tile, an
 // import's bare icon.
-const TILES = { plugin: ["block-icon", "puzzle", 15], file: ["block-icon", "file-text", 15], import: ["block-icon bare", "scroll-text", 13] };
+const TILES = { plugin: ["block-icon", "puzzle", 15], addslot: ["block-icon", "plus", 15], file: ["block-icon", "file-text", 15], import: ["block-icon bare", "scroll-text", 13] };
 function tile(block) {
   if (block.kind === "client") return mark(block.client);
   if (!TILES[block.kind]) return null;
@@ -380,10 +381,13 @@ function tile(block) {
 // block held off its place, and how to draw again.
 const onMap = { view: null, tabs: null, tab: "plugins", answer: null, model: null, open: new Set(), selected: null, pages: new Map(), tabPages: {}, found: null, searched: "", project: null, unfolds: false, folded: false, layout: null, drag: null, home: null, redraw: () => drawMap() };
 
-// "+ Add" beside the Plugins and skills caption: `fn(button)` opens the add panel (library-add.js).
+// "+ Add plugins" in the page header: `fn(button)` opens the add panel (library-add.js).
 let addHook = null;
 export function onLibraryAdd(fn) {
   addHook = fn;
+}
+export function pressLibraryAdd(node) {
+  if (addHook) addHook(node);
 }
 
 // Details of a selection (library-details.js): `fn(id)` on a select (a block's id or a link's key),
@@ -515,7 +519,8 @@ function keepWhatShows(answer) {
 // The tab's tree, with what waits in the tray on Plugins and skills. Instructions has none.
 function treeOf(answer, rows) {
   if (onMap.tab === "instructions") return instructionsTree(answer);
-  return withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows, answer);
+  const tree = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows, answer);
+  return { ...tree, blocks: [...tree.blocks, { ...ADD_CARD }] };
 }
 
 // The blocks of a tree whose add waits in the tray.
@@ -579,7 +584,6 @@ function newMap() {
     onOpen: openPlugin,
     onFold: foldPlugin,
     onSelect: pressBlock,
-    onAdd: (column, node) => addHook && addHook(node),
     onEmpty: () => onMap.selected && letGo(),
     // While nothing is selected, pointing at a client lights what it loads.
     onHover: (id) => view.glance(id && id.startsWith("client:") ? litFrom(onMap.model, id) : null),
@@ -623,11 +627,6 @@ function linkTip(link) {
   return inTray(keyFor(change.body)) ? TAKE_OUT : change.tip;
 }
 
-// The × waits while a change is written, and says why.
-function linksWait() {
-  return tray.phase === "applying" || tray.phase === "applied" ? OWN_WAITS : busy.change && WAITS;
-}
-
 // The × of a link, or Delete on it: a row it draws, or its own change already in the tray, is taken
 // out; any other change is added to the tray.
 function removeLink(link) {
@@ -636,7 +635,7 @@ function removeLink(link) {
   const change = row ? null : changeOf(link);
   let done = null;
   if (row) done = takeOut(row);
-  else if (change) done = inTray(keyFor(change.body)) ? takeOut(keyFor(change.body)) : addToTray(change.body);
+  else if (change) done = toggleInTray(change.body);
   if (done) done.catch(reportError);
 }
 
@@ -675,7 +674,7 @@ function watchDrawer() {
 function drawMap({ motion = "move", lightLater = false, swap = false } = {}) {
   const { view, model, selected } = onMap;
   if (!view) return Promise.resolve();
-  const layout = layoutTree(model, { open: onMap.open, pages: onMap.pages, narrow: false });
+  const layout = layoutNow();
   if (swap) layout.swap = TAB_FROM;
   onMap.layout = layout;
   const lit = litOf(model, selected);
@@ -697,6 +696,15 @@ function litOf(model, selected) {
   return lit;
 }
 
+// The map's layout as it is now: the plugin that is open and the pages turned, always wide.
+const layoutNow = () => layoutTree(onMap.model, { open: onMap.open, pages: onMap.pages, narrow: false });
+
+// Draw the map again; a selection the new layout hides is let go (which draws it).
+function drawOrLetGo() {
+  if (onMap.selected && !layoutNow().blocks.some((at) => at.id === onMap.selected)) letGo();
+  else drawMap();
+}
+
 // A press on a plugin card (map-view calls it before pressBlock): the selected open plugin folds;
 // any other opens in place of the one open.
 function openPlugin(id) {
@@ -711,14 +719,17 @@ function openPlugin(id) {
 // A selection the change hides is let go.
 function foldPlugin(id) {
   onMap.open = onMap.open.has(id) ? new Set() : new Set([id]);
-  const layout = layoutTree(onMap.model, { open: onMap.open, pages: onMap.pages, narrow: false });
-  if (onMap.selected && !layout.blocks.some((at) => at.id === onMap.selected)) letGo();
-  else drawMap();
+  drawOrLetGo();
 }
 
 // A press on a block. "N more" turns its group's page. A press that folded a plugin, or a second
 // press on the selected block, lets go. Any other block is selected: its path lights.
 function pressBlock(id) {
+  // The Add a plugin card opens the add panel; focus comes back to the card.
+  if (id === ADD_CARD.id) {
+    pressLibraryAdd(withFocusKey($("#main"), `block:${id}`));
+    return;
+  }
   if (id.startsWith("more:")) {
     turnOnMap(id);
     return;
@@ -747,9 +758,7 @@ function pressBlock(id) {
 function turnOnMap(id) {
   onMap.pages = turnPage(onMap.model, onMap.pages, id);
   say(turnWords(onMap.model, onMap.pages, id));
-  const layout = layoutTree(onMap.model, { open: onMap.open, pages: onMap.pages, narrow: false });
-  if (onMap.selected && !layout.blocks.some((at) => at.id === onMap.selected)) letGo();
-  else drawMap();
+  drawOrLetGo();
 }
 
 function letGo() {
@@ -806,26 +815,13 @@ function beginItem(drag) {
 // lights, and a dashed wire runs from it to the block; one that cannot stays as it is and the tip
 // says why. Off a client the light goes and the wire fades.
 function overItem(drag) {
-  const { view } = onMap;
-  const point = covered(drag.at) ? null : pointOf(onMap, drag);
-  const client = point ? clientAt(onMap, point) : null;
-  if ((client && client.id) !== (drag.target && drag.target.id)) {
-    drag.target = client;
-    drag.why = client ? whyNot(drag.block.item, client.client) : null;
-    view.unlightTarget();
-    view.unwire();
-    if (client && !drag.why) {
-      view.lightTarget(client.id);
-      view.wire(client.id, drag.id);
-    }
-  }
+  aimClient(onMap, drag, covered(drag.at) ? null : pointOf(onMap, drag), (client) => whyNot(drag.block.item, client));
   tipItem(drag);
 }
 
+const addTo = (client) => `Add to ${CLIENT_NAMES[client.client]}`;
 function tipItem(drag) {
-  const client = drag.target;
-  const words = client ? drag.why || `Add to ${CLIENT_NAMES[client.client]}` : ON_CLIENT;
-  onMap.view.tip(words, { on: Boolean(client && !drag.why) });
+  onMap.view.tip(aimWords(drag, addTo), { on: Boolean(drag.target && !drag.why) });
 }
 
 // Why `client` cannot take the item, first match wins; null when it can (the server may still
@@ -845,18 +841,10 @@ function whyNot(item, client) {
 // only); a drop on one that cannot shakes it. The block always comes home, so the drop is never
 // taken.
 function dropItem(drag, at) {
-  const { view } = onMap;
-  view.unwire();
-  const client = at && drag.target;
-  if (client && drag.why) {
-    const node = view.node(client.id);
-    if (node) shake(node);
-  } else if (client) addToTray(addBody(drag.block.item, client.client)).catch(reportError);
+  const client = dropOnClient(onMap.view, drag, at);
+  if (client) addToTray(addBody(drag.block.item, client.client)).catch(reportError);
   return false;
 }
-
-// A row of the add panel goes back onto its row after any let go.
-const BACK_HOME = { dur: 180, ease: CALM };
 
 // A press on a free row of the add panel (library-add.js gives its `item`, as the map's blocks
 // have it, and its `node`) starts a drag onto a client, while the map shows. The same waits as a
@@ -879,13 +867,7 @@ function overRow(drag) {
   const { view } = onMap;
   moveGhost(drag);
   const point = covered(drag.at) ? null : pointOf(onMap, drag);
-  const client = point ? clientAt(onMap, point) : null;
-  if ((client && client.id) !== (drag.target && drag.target.id)) {
-    drag.target = client;
-    drag.why = client ? whyNot(drag.block.item, client.client) : null;
-    view.unlightTarget();
-    if (client && !drag.why) view.lightTarget(client.id);
-  }
+  const client = aimClient(onMap, drag, point, (id) => whyNot(drag.block.item, id), { wire: false });
   const on = Boolean(client && !drag.why);
   drag.ghost.classList.toggle("over", on);
   if (on) view.wire(client.id, point);
@@ -894,20 +876,13 @@ function overRow(drag) {
     view.untip();
     return;
   }
-  const words = client ? drag.why || `Add to ${CLIENT_NAMES[client.client]}` : ON_CLIENT;
-  view.tip(words, { on, at: point });
+  view.tip(aimWords(drag, addTo), { on, at: point });
 }
 
 // A drop on a client that can take the item adds it there for all projects (one row, that client
 // only); one on a client that cannot shakes it. The ghost always flies back onto its row.
 function dropRow(drag, at) {
-  const { view } = onMap;
-  view.unwire();
-  const client = at && drag.target;
-  if (client && drag.why) {
-    const node = view.node(client.id);
-    if (node) shake(node);
-  } else if (client) addToTray(addBody(drag.block.item, client.client)).catch(reportError);
-  flyGhost(drag, null, BACK_HOME);
+  dropItem(drag, at);
+  flyGhost(drag, null);
   return false;
 }

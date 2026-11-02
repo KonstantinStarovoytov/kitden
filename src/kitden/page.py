@@ -14,7 +14,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from kitden.gateways import data_dir
+from kitden.gateways import data_dir, private_data_dir
 
 HOST = "127.0.0.1"
 LOCK = "page.lock"
@@ -26,20 +26,13 @@ WAIT_SECONDS = 20.0
 IDLE_SECONDS = 600.0  # a background page stops after 10 minutes without an open tab
 
 
-def _folder(home: Path) -> Path:
-    folder = data_dir(home)
-    folder.mkdir(parents=True, exist_ok=True)
-    folder.chmod(0o700)
-    return folder
-
-
 class PageLock:
     def __init__(self, home: Path) -> None:
         self.home = Path(home)
         self.fd: int | None = None
 
     def acquire(self) -> bool:
-        fd = os.open(_folder(self.home) / LOCK, os.O_RDWR | os.O_CREAT, 0o600)
+        fd = os.open(private_data_dir(self.home) / LOCK, os.O_RDWR | os.O_CREAT, 0o600)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -71,7 +64,7 @@ def write_record(home: Path, port: int, token: str, background: bool) -> None:
         "background": background,
         "started": datetime.now(UTC).isoformat(timespec="seconds"),
     }
-    path = _folder(home) / RECORD
+    path = private_data_dir(home) / RECORD
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
         os.fchmod(fd, 0o600)
@@ -89,14 +82,6 @@ def read_record(home: Path) -> dict | None:
 
 def remove_record(home: Path) -> None:
     (data_dir(home) / RECORD).unlink(missing_ok=True)
-
-
-def running_page(home: Path) -> dict | None:
-    """The record of the page that runs now. A record left by a page that ended is removed."""
-    if page_running(home):
-        return read_record(home)
-    remove_record(home)
-    return None
 
 
 def wait_for_record(home: Path, seconds: float = WAIT_SECONDS) -> dict | None:
@@ -138,7 +123,7 @@ def start_background(home: Path, home_arg: str | None) -> None:
     `-P` and the data folder as working folder keep the caller's folder off the import path:
     a project's own `secrets.py` must never run inside the page.
     """
-    folder = _folder(home)
+    folder = private_data_dir(home)
     command = [sys.executable, "-P", "-m", "kitden", "serve", "--background", "--no-browser"]
     if home_arg:
         command += ["--home", str(Path(home).absolute())]

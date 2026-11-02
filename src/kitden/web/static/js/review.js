@@ -6,13 +6,11 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
-import { allPutBack, baseNames, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
+import { allPutBack, baseNames, byClientOrder, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, data, gatewayShows, reload, render, setBusy, state } from "./store.js";
 import { projectLabel } from "./tools.js";
-import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone } from "./tray.js";
+import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone, writing } from "./tray.js";
 
-// changeOutcome lives in tray.js; panel.js still exports it from here.
-export { changeOutcome };
 
 const DONE_WORDS = {
   "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed", "plugin.remove": "Removed",
@@ -24,6 +22,7 @@ const DONE_WORDS = {
   "skill.install": "Added", "plugin.skills": "Added",
   "gateway.remove": "Removed", "gateway.put_back": "Put", "gateway.move_out": "Moved", "mcp.add": "Added",
   "gateway.keychain": "Moved", "gateway.add": "Added", "skill.rule": "Turned off",
+  "gateway.sign_in": "Signed in",
 };
 
 // Actions whose words say "from" a client.
@@ -34,8 +33,6 @@ const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 // already, setup_server.update changes an entry where it is, setup_server.register says "to
 // Kitden" and gateway.move_out names the client it goes into.
 export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "gateway.connect", "gateway.put_back", "gateway.add"];
-// Where the steps go, as the title ends (parts.js, so the Changes page says it too).
-export { PLACE_IN_TITLE, targetWords };
 // No promise of Undo for every change: the server names the known limit (`undo_note`).
 const LEDE = "Nothing is written until you press Apply. A backup is kept.";
 // The twin of views/words.py UNCHANGED; said only when the server guarantees it.
@@ -64,7 +61,15 @@ export function reviewLede(change, picked) {
 // The review title names the exact entry; the toast uses the short name ("superpowers").
 // `previewBody` is what the review asked for; Add skills names its plugin and a tool rule its
 // tool and project from it.
+// A held server's secret replaced or removed, or a sign-out (gateway.access).
+function accessText({ server, field, name, value }) {
+  if (field === "sign_in") return { title: `Sign out of ${server}`, done: `Signed out of ${server}` };
+  if (value === null || value === undefined) return { title: `Remove ${name} from ${server}`, done: `Removed ${name} from ${server}` };
+  return { title: `Replace ${name} of ${server}`, done: `Replaced ${name} of ${server}` };
+}
+
 export function changeWords(change, previewBody) {
+  if (change.action === "gateway.access") return accessText((previewBody && previewBody.params) || {});
   if (change.action === "gateway.rule") {
     const params = (previewBody && previewBody.params) || {};
     return ruleText(params, params.project ? projectLabel(params.project) : null);
@@ -85,7 +90,7 @@ export function changeWords(change, previewBody) {
   const short = joinWords([...new Set(listed.map((name) => name.split("@")[0]))]);
   // A copied skill folder reaches every client that reads that folder, not only its owner.
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
-  reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+  reached.sort(byClientOrder);
   const clients = joinWords(reached.map(clientName));
   const plugin = ((previewBody && previewBody.params && previewBody.params.plugin) || "the plugin").split("@")[0];
   const server = (previewBody && previewBody.params && previewBody.params.server) || (change.steps[0] && change.steps[0].name);
@@ -115,6 +120,7 @@ export function changeWords(change, previewBody) {
     "gateway.put_back": `Put ${server} back in ${clients}`,
     "gateway.move_out": `Move ${server} out of the gateway into ${clients}`,
     "gateway.keychain": `Move the secrets of ${server} to the Keychain`,
+    "gateway.sign_in": `Sign in to ${server} again`,
     "gateway.add": `Add ${added} to the Kitden gateway`,
     "skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`,
   }[change.action] || change.action;
@@ -147,6 +153,8 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${server} into ${clients}`;
   } else if (change.action === "gateway.keychain") {
     what = `${verb} the secrets of ${server} to the Keychain`;
+  } else if (change.action === "gateway.sign_in") {
+    what = `${verb} to ${server} again`;
   } else if (change.action === "gateway.add") {
     what = `${verb} ${added} to the Kitden gateway`;
   } else if (change.action === "skill.rule") {
@@ -463,7 +471,6 @@ function followRow(row, part) {
 // hands focus on to the bar). While the tray is written it is off and does nothing, as the bar's ×:
 // a change cannot stop halfway. It follows the tray while it is on the page.
 function takeOutButton(row) {
-  const writing = () => tray.phase === "applying" || tray.phase === "applied";
   const node = button("Take it out", () => {
     if (writing()) return null;
     const taken = takeOut(row.key);
@@ -510,7 +517,7 @@ export function showEffect() {
 // The Library morphs its cells, the Gateway map lands its rows (gateway.js landRows), the
 // Overview's card leaves or comes back and a Changes row draws its Undo (changes.js): each is the
 // one motion of the change, so none cross-fades the page too. Other places cross-fade.
-export function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
+function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
   return view === "library" || view === "overview" || view === "changes" || (view === "gateway" && mode === "map");
 }
 

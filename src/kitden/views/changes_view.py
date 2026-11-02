@@ -15,7 +15,7 @@ from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.views import rule_of
 from kitden.model import Change, ItemKind
 from kitden.redact import masked_command, redact_text
-from kitden.views.load_map import COLUMNS
+from kitden.views.effective import client_order
 
 # Steps whose client is not one the person uses: a registered gateway and Kitden's own settings.
 NOT_CLIENTS = {"gateway", KITDEN}
@@ -24,10 +24,6 @@ HAPPENED = {"verified", "undone", "undo_blocked"}
 # A Library action; any other item opens on the Gateway.
 LIBRARY_ACTIONS = ("plugin.", "skill.", "marketplace.")
 TITLE_STEP = ("client", "name", "scope", "reaches", "keeps")
-
-
-def _order(client: str) -> int:
-    return COLUMNS.index(client) if client in COLUMNS else len(COLUMNS)
 
 
 def _made(change_id: str) -> str | None:
@@ -60,7 +56,7 @@ def _target(target: dict | None) -> dict | None:
 
 def _clients(steps: list[dict]) -> list[str]:
     found = {c for s in steps for c in (s.get("reaches") or [s.get("client")])}
-    return sorted((c for c in found if c and c not in NOT_CLIENTS), key=_order)
+    return sorted((c for c in found if c and c not in NOT_CLIENTS), key=client_order)
 
 
 def _backup(state: str, error: str | None) -> str:
@@ -83,7 +79,7 @@ def _takes_effect(state: str, steps: list[dict]) -> list[dict]:
         for s in steps
         if s.get("restart_note") or s.get("login_note")
     }
-    found = sorted(notes, key=lambda found: _order(found[0]))
+    found = sorted(notes, key=lambda found: client_order(found[0]))
     return [{"client": client, "note": note, "login": login} for client, note, login in found]
 
 

@@ -3,13 +3,12 @@
 from pathlib import Path
 
 from kitden.changes.actions import KITDEN_GATEWAY, set_up_differently
-from kitden.clients.base import REMOVE_DIRECT
+from kitden.clients.base import REMOVE_DIRECT, found_clients
 from kitden.clients.entries import IN_PROJECT_FILES
-from kitden.model import Enabled, Gateway, Item, ItemKind, Scope
-from kitden.views.effective import DESKTOP, effective_view
+from kitden.model import CLIENTS, Enabled, Gateway, Item, ItemKind, Scope
+from kitden.views.effective import DESKTOP, column_of, effective_view, overrides
 from kitden.views.explain import summary_line
-from kitden.views.findings import bypass_kind
-from kitden.views.load_map import COLUMNS
+from kitden.views.findings import group_of
 from kitden.views.setup_server import is_own_entry
 from kitden.views.words import KEPT_UNREAD
 
@@ -44,10 +43,10 @@ def loaded_mcp(inventory, project: str | None) -> tuple[list[Item], set[str]]:
 
     Kitden's own read-only server is left out: it is not a tool server to route anywhere.
     """
-    found = {c.id for c in inventory.clients if str(c.status) == "found"}
+    found = found_clients(inventory)
     items: list[Item] = []
-    overrides: set[str] = set()
-    for client in [*COLUMNS, DESKTOP]:
+    replacing: set[str] = set()
+    for client in [*CLIENTS, DESKTOP]:
         if client in found:
             view = effective_view(inventory, client, project)
             items += [
@@ -55,19 +54,8 @@ def loaded_mcp(inventory, project: str | None) -> tuple[list[Item], set[str]]:
                 for i in view.items
                 if i.client == client and i.kind is ItemKind.MCP_SERVER and not is_own_entry(i)
             ]
-            overrides |= {
-                w.id for w, lo, _ in view.shadowed if w.project is not None and lo.project is None
-            }
-    return items, overrides
-
-
-def group_of(item: Item) -> str:
-    kind = bypass_kind(item)
-    if "plugin" in kind:
-        return "plugin"
-    if "local server" in kind:
-        return "local"
-    return "move"
+            replacing |= overrides(view)
+    return items, replacing
 
 
 def stays(item: Item, group: str) -> str | None:
@@ -103,7 +91,7 @@ def gateway_view(
     set up differently are a reason it refuses."""
     ids = ([KITDEN_GATEWAY] if kitden is not None else []) + [g.id for g in gateways]
     # Per gateway and client: the servers that load in this scope and go through that gateway.
-    connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in COLUMNS} for g in ids}
+    connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in CLIENTS} for g in ids}
     # One row per server name, with the clients that have it and the entries that can go.
     groups: dict[str, dict[str, dict]] = {"move": {}, "local": {}, "plugin": {}}
     movable = {
@@ -111,13 +99,12 @@ def gateway_view(
         "local": kitden is not None,
         "plugin": False,
     }
-    loaded, overrides = loaded_mcp(inventory, project)
+    loaded, replacing = loaded_mcp(inventory, project)
     # The first entry of each row a move takes, which the others must equal.
     firsts: dict[tuple[str, str], Item] = {}
     for item in loaded:
         if item.via_gateway:
-            column = "claude_code" if item.client == DESKTOP else item.client
-            names = connections.get(item.via_gateway, {}).get(column)
+            names = connections.get(item.via_gateway, {}).get(column_of(item.client))
             if names is not None and item.name not in names:
                 names.append(item.name)
             continue
@@ -138,21 +125,20 @@ def gateway_view(
         )
         if item.client not in row["clients"]:
             row["clients"].append(item.client)
-        row["override"] = row["override"] or item.id in overrides
+        row["override"] = row["override"] or item.id in replacing
         row["unknown"] = row["unknown"] and item.enabled is not Enabled.ON
         row["stays"] = row["stays"] or stays(item, group)
         if REMOVE_DIRECT in item.actions:
             row["items"].append(item.id)
-            column = "claude_code" if item.client == DESKTOP else item.client
-            row["client_items"].setdefault(column, []).append(item.id)
+            row["client_items"].setdefault(column_of(item.client), []).append(item.id)
             first = firsts.setdefault((group, item.name), item)
             if item.entry_key != first.entry_key:
                 why = set_up_differently(item.name, first.client, item.client)
                 row["stays"] = row["stays"] or why
     for rows in groups.values():
         for row in rows.values():
-            loads = {"claude_code" if c == DESKTOP else c for c in row["clients"]}
-            row["columns"] = [c for c in COLUMNS if c in loads]
+            loads = {column_of(c) for c in row["clients"]}
+            row["columns"] = [c for c in CLIENTS if c in loads]
     return {
         "gateways": (
             [{**KITDEN, "servers": kitden, **({"problem": problem} if problem else {})}]

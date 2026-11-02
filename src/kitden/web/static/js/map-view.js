@@ -60,9 +60,10 @@ function quiet(node) {
 }
 
 // A lamp's look by the block's `lamp` (style.css): grey is off, green on, a dashed accent ring in
-// preview, a grey ring works outside the gateway, a dashed amber ring is not known. It pops when it
+// preview, a grey ring works outside the gateway, a dashed amber ring is not known, and amber
+// needs you (a server that waits for access). It pops when it
 // turns on or off, not when it goes into a preview or comes back from one.
-const LAMP_LOOKS = { on: "on", off: "", preview: "pv", out: "out", unk: "unk" };
+const LAMP_LOOKS = { on: "on", off: "", preview: "pv", out: "out", unk: "unk", warn: "warn" };
 const lampClass = (base, lamp) => [base, LAMP_LOOKS[lamp]].filter(Boolean).join(" ");
 const SOLID = ["on", "off"];
 const MOVES = ["move", "project", "undo"]; // the draws that move what changed
@@ -266,15 +267,6 @@ function boxOf({ x, y, w, h, s }) {
   return s === 1 ? { x, y, w, h } : { x: x + (w * (1 - s)) / 2, y: y + (h * (1 - s)) / 2, w: w * s, h: h * s };
 }
 
-// "+ Add" beside a column's caption, a plain small button. It opens a panel, so it says so from
-// the start.
-function addButton(column, onAdd) {
-  const add = button("+ Add", () => onAdd && onAdd(column, add), "btn small");
-  add.dataset.focus = `add:${column}`;
-  add.setAttribute("aria-expanded", "false");
-  return add;
-}
-
 // Runs `run` once on the next frame, or after `wait` ms when no frame comes (a browser may hold
 // frames back), so a draw always lands. Whichever comes first clears the other.
 export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}) {
@@ -292,8 +284,9 @@ export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}
 // One map. `view.box` (div.map) goes where the page wants it and keeps every node when it is taken
 // out and put back; `view.area` holds the links' SVG, the blocks in reading order, then the hits of
 // the links and the ×.
-// - draw(model, layout, { selected, lit, found, open, motion }): show `layout` (map.js layoutTree)
-//   of `model`. `motion` "move" moves what changed; "project" does too, for another project: a
+// - draw(model, layout, { selected, chosen, lit, found, open, motion }): show `layout` (map.js
+//   layoutTree) of `model`. `chosen` (ids) take the selected look too, several at once.
+//   `motion` "move" moves what changed; "project" does too, for another project: a
 //   tool's link it turns on draws in over 240 ms and every tool's tag pops; "undo" does too, for
 //   what an Undo put back: a link that comes back draws in over 480 ms; "enter" lets every block
 //   rise into its place;
@@ -303,7 +296,7 @@ export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}
 // - hold(id, point, { glide, ms, pressed, onto }): the block shows at that map point until homeIn,
 //   at once or gliding there in `ms` (OUT3); `pressed` keeps the press scale on it (style.css);
 //   `onto` (a block's id) hides that block at once while this one takes its spot.
-//   homeIn(id, ms): it glides back to its place, 220 ms OUT3.
+//   homeIn(id): it glides back to its place, 220 ms OUT3.
 // - lightTarget(id) / unlightTarget(): one block at a time takes the drop look (`.drop`).
 // - tip(text, { on, at }): the drag tip (`.dragtip`), 6 px right of and 28 px over the held
 //   block's top left, or 12 px right of and 30 px over `at` (the pointer, a map point); plain or
@@ -326,7 +319,7 @@ export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}
 // (`onSelect(id)`). The count of a block that folds is a button of its own, after the block in Tab
 // order and over its right edge (a button cannot sit inside a button): a press on it calls
 // `onFold(id)`, which opens or folds the block and draws again, and nothing else: no select, no
-// Details. It stays while the block is open, to fold it again. "+ Add" beside a column's caption calls `onAdd(column, button)`. `tile(block)` gives
+// Details. It stays while the block is open, to fold it again. `tile(block)` gives
 // what a block shows before its name. An entrance starts `enterDelay` ms late (the Gateway waits for
 // the old page to leave: motion.js afterOldPage).
 // `links` are the page's hooks for the links it acts on: `canHit(link)`, `tip(link)` (what its
@@ -342,7 +335,7 @@ export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}
 // only while the last draw selected nothing. `onEmpty()` hears a click on the map that is on no
 // block, button or link; `onHover(id | null)` the block under the pointer when it changes (null:
 // the pointer left the map), never while a block is held.
-export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHover, links: pointer = NO_LINKS, enterDelay = 0 } = {}) {
+export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, links: pointer = NO_LINKS, enterDelay = 0 } = {}) {
   const box = el("div", "map");
   const area = el("div", "map-area");
   const svg = document.createElementNS(SVG, "svg");
@@ -512,7 +505,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
 
   // A block's node as this draw shows it: its look, words, size and what a screen reader hears. The
   // layout's words win (a group that pages names which ones show).
-  function fill(item, place, source, { selected, lit, found, open, motion }) {
+  function fill(item, place, source, { selected, chosen, lit, found, open, motion }) {
     const block = place.name !== undefined && source !== place ? { ...source, name: place.name } : source;
     const { node } = item;
     const name = String(block.name || "");
@@ -520,14 +513,10 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     item.lit = lit.has(place.id);
     if (place.kind === "column") {
       item.look = "map-caption";
-      const words = JSON.stringify([block.caption, Boolean(block.add)]);
+      const words = JSON.stringify([block.caption]);
       if (words !== item.words) {
         item.words = words;
-        const parts = block.caption ? [el("span", null, block.caption)] : [];
-        if (block.add) {
-          parts.push(addButton(block.id, onAdd));
-        }
-        node.replaceChildren(...parts);
+        node.replaceChildren(...(block.caption ? [el("span", null, block.caption)] : []));
       }
     } else if (item.div) {
       item.look = matched ? "caption found" : "caption";
@@ -539,7 +528,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
       const group = place.kind === "group";
       const folding = folds.has(place.id);
       // A block whose removal waits in the tray looks leaving too, and stays a Tab stop.
-      item.look = [group ? "caption" : `block ${place.kind}`, !group && folding && typeof block.count === "number" && "counted", block.leaving && "leaving", block.drags && "drags", place.id === selected && "selected", matched && "found"].filter(Boolean).join(" ");
+      item.look = [group ? "caption" : `block ${place.kind}`, !group && folding && typeof block.count === "number" && "counted", block.leaving && "leaving", block.drags && "drags", block.needs && "needs", (place.id === selected || chosen.has(place.id)) && "selected", matched && "found"].filter(Boolean).join(" ");
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
@@ -1097,7 +1086,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     if (focused && focused !== document.activeElement && hits.contains(focused)) focused.focus({ preventScroll: true });
   }
 
-  function draw(model, layout, { selected = null, lit = new Set(), found = null, open = new Set(), motion = "move" } = {}) {
+  function draw(model, layout, { selected = null, chosen = new Set(), lit = new Set(), found = null, open = new Set(), motion = "move" } = {}) {
     performance.mark("kitden:map-start");
     const enters = motion === "enter" && canMove();
     const moves = enters || (MOVES.includes(motion) && last !== null && canMove());
@@ -1132,7 +1121,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
         blocks.set(place.id, item);
       } else if (item.div !== isWords(place)) swap(item, place);
       item.leaving = false;
-      fill(item, place, block, { selected, lit: shown, found, open, motion });
+      fill(item, place, block, { selected, chosen, lit: shown, found, open, motion });
       const end = { x: place.x, y: place.y, s: 1, o: 1 };
       if (item.held) continue;
       if (!moves) {
@@ -1260,13 +1249,13 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     return run(!canMove());
   }
 
-  // A held block glides from where it is to its place in `ms`, and loses `.dragging` when it lands.
-  function homeIn(id, ms = HOME_MS) {
+  // A held block glides from where it is to its place, and loses `.dragging` when it lands.
+  function homeIn(id) {
     const item = blocks.get(id);
     if (!item || item.leaving) return Promise.resolve();
     Object.assign(item, { held: false, pressed: false });
     cover(item, null);
-    go(item, { ...item.home, s: 1, o: 1 }, { dur: D(ms), ease: OUT3, start: performance.now() });
+    go(item, { ...item.home, s: 1, o: 1 }, { dur: D(HOME_MS), ease: OUT3, start: performance.now() });
     item.back = Boolean(item.move);
     paint(item);
     return run(!canMove());

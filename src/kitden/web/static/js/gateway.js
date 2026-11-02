@@ -1,27 +1,22 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
-import { $, button, byKeys, el, gridKey, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
+import { $, button, byKeys, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, pageWaits, plural, reportError, treeRow, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
-import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
+import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
+import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
-import { drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
+import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
-import { arrival, busy, current, currentError, data, gatewayShows, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote, WRITABLE } from "./parts.js";
+import { arrival, busy, current, currentError, data, gatewayShows, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
-import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
+import { openAccess } from "./access-form.js";
+import { inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray, trayRow, undone, writing } from "./tray.js";
 
-// Overview sets a client up with the same note. A server the Kitden gateway holds, and its
-// links, are found where its Details are drawn. The find chip is drawn as every map page draws it.
-export { heldServer, SETUP_NOTE } from "./gateway-details.js";
-export { drawChip };
-export { litFor } from "./map.js";
-
-const WRITABLE = ["claude_code", "codex", "cursor"];
 // The group of servers outside the gateway: the List's words, and the map's, which asks for a drag.
 const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
 const OUTSIDE_MAP = "Outside the gateway · drag one in";
@@ -34,6 +29,9 @@ const OUTSIDE_BLOCK_H = 50;
 // The groups of servers outside the gateway in /api/gateway-view, in the order the page lists them.
 // A server's icon on the map is the one its panel shows (SERVER_ICONS, OUTSIDE_ICONS).
 const OUTSIDE_GROUPS = ["move", "local", "plugin"];
+// The card at the end of the gateway's groups that opens the add panel: a place, so no lamp,
+// ports or links.
+const ADD_CARD = { id: "addslot:servers", column: "servers", kind: "addslot", name: "Add a server", meta: "From the catalog", icon: "plus", h: OUTSIDE_BLOCK_H };
 // What a block in preview says under the pointer: a press takes its row out of the tray (D12).
 const IN_PREVIEW = "In preview. Click to take it out.";
 // A server the Add panel adds grows out of the gateway in this long, and shrinks back into it; the
@@ -129,9 +127,9 @@ export function renderGateway(main, { again = false } = {}) {
   const mode = viewMode(state, serverCount(view));
   gatewayShows.mode = mode;
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
-  head.append(seg);
+  head.append(headActions(addHeadButton("+ Add servers", "add:servers", (node) => openAdd({ from: node })), seg));
   const model = treeFor(view, mode);
-  setHint(mode === "map" ? MAP_HINT : "");
+  setHint(mode === "map" ? mapHint() : "");
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
   // It changes nothing in a client and moves no Details.
   const found = state.q.trim() ? findIn(model, state.q) : null;
@@ -165,7 +163,7 @@ function switchInPlace(again, scope) {
 // on the map (`mode`) the tray's rows and a drag. The List shows what is set up, so its search
 // finds only that.
 function treeFor(view, mode = "map") {
-  const onMapOnly = mode === "map" ? { rows: rowsOnMap(tray).map(withKind), ...movingOn() } : {};
+  const onMapOnly = mode === "map" ? { rows: rowsOnMap(tray).map(withKind), ...movingOn(), addCard: true } : {};
   return growBack(gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, ...onMapOnly }));
 }
 
@@ -189,7 +187,19 @@ function growBack(model) {
 // a refused preview it has none, and nothing is asked for it.
 export function rowsOnMap(t) {
   if (t.phase === "applied") return [];
-  return t.phase === "asking" ? t.rows : t.rows.filter((row) => row.part);
+  return t.phase === "asking" ? t.rows : t.rows.filter((row) => row.part || row.waits);
+}
+
+// How a preview block looks when its server waits for access (tray.js `waits`): the amber lamp,
+// what it needs, and a press that opens the access panel (pressBlock); once a token works, the
+// green lamp says so. Else nothing changes.
+function accessLook(row) {
+  if (row.waits) {
+    const signIn = row.waits.kind === "sign-in";
+    const title = signIn ? "Needs sign-in. Click to add a token instead." : "Needs a token. Click to add it.";
+    return { needs: true, lamp: "warn", meta: signIn ? "Needs sign-in" : "Needs token", state: "needs", takeOut: null, title };
+  }
+  return row.works ? { lamp: "on", meta: "Token works" } : {};
 }
 
 function noGateway() {
@@ -218,7 +228,7 @@ function riseUnder(kind, node, again) {
 export const GATEWAY_COLUMNS = [
   { id: "clients", caption: "Clients", w: 150, h: 54, top: 124, rowGap: 18, narrowW: 140 },
   { id: "gateway", caption: "Gateway", w: 150, h: 124, colGap: 46, top: 124, rowGap: 18, narrowW: 56, narrowH: 56 },
-  { id: "servers", caption: "Servers", add: true, w: 170, h: 60, colGap: 50, top: 58, rowGap: 10, narrowW: 220, narrowH: 54 },
+  { id: "servers", caption: "Servers", w: 170, h: 60, colGap: 50, top: 58, rowGap: 10, narrowW: 220, narrowH: 54 },
   { id: "tools", caption: "Tools", w: 200, h: 34, colGap: 70, narrowW: 190, narrowH: 30 },
 ];
 
@@ -271,7 +281,7 @@ function heldTag(server, on) {
 // line drawn leaving. Each block and link a row draws names it (`row`, its key); rows are drawn
 // once they have their part. While a server is dragged (`drop`, `{ name, kind }`, kind "remote"
 // or "local") the slot opens in that group too.
-export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "", rows = [], drop = null } = {}) {
+export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "", rows = [], drop = null, addCard = false } = {}) {
   const { linked, off, known, setup: offers } = kitdenClients(setup);
   const kitden = view.gateways.find((g) => g.kind === "kitden");
   const first = known && !linked.length && !off.length && Boolean(kitden) && !kitden.problem && !(kitden.servers || []).length;
@@ -331,6 +341,9 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const unread = kitden.problem ? "Could not read its settings." : null;
     addGateway(kitden, { reaches: known ? linked : null, servers: kitden.servers || [], kindOf: (s) => s.kind, server, unread, ends: adds, away: out });
     leaveParts(blocks, links, kitden, rows, picked);
+    // The map ends the Kitden gateway's groups with a card that opens the add panel, before any
+    // other gateway: once there is a gateway to add to.
+    if (addCard && !kitden.problem) blocks.push({ ...ADD_CARD });
   }
   if (kitden) connectParts(links, kitden, waits);
   for (const other of usedFirst(view, view.gateways.filter((g) => g.kind !== "kitden"))) {
@@ -529,7 +542,7 @@ function movesIn(view, kitden, rows, drop) {
         if (!each.items.length || !each.items.every((item) => items.has(item))) continue;
         const backTo = `outside:${group}:${each.name}`;
         const look = { icon: SERVER_ICONS[group === "local" ? "local" : "remote"], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW };
-        add(group, each.name, row.part ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", ...look, row: row.key, backTo, from: backTo } : slot(each.name));
+        add(group, each.name, row.part || row.waits ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", ...look, row: row.key, backTo, from: backTo, ...accessLook(row) } : slot(each.name));
       }
     }
   }
@@ -543,10 +556,10 @@ function movesIn(view, kitden, rows, drop) {
 // side and shrinks back into it (ADD_GROW_MS), and focus on it goes to the gateway when it goes.
 // After a drop it takes the place of the drop's slot instead (`from`), where that one shows.
 function addPreview(kitden, row) {
-  if (!kitden || !row.part || !KINDS.some(([kind]) => kind === row.kind)) return null;
+  if (!kitden || !(row.part || row.waits) || !KINDS.some(([kind]) => kind === row.kind)) return null;
   const name = addName(row.body.params.server);
   const gateway = `gateway:${kitden.id}`;
-  const block = { id: `preview:${name}`, column: "servers", kind: "preview", name, meta: "Preview", stateInMeta: true, state: "preview", icon: SERVER_ICONS[row.kind], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW, row: row.key, backTo: gateway, growsFrom: gateway, growMs: ADD_GROW_MS, from: `slot:${name}` };
+  const block = { id: `preview:${name}`, column: "servers", kind: "preview", name, meta: "Preview", stateInMeta: true, state: "preview", icon: SERVER_ICONS[row.kind], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW, row: row.key, backTo: gateway, growsFrom: gateway, growMs: ADD_GROW_MS, from: `slot:${name}`, ...accessLook(row) };
   return { kind: row.kind, block };
 }
 
@@ -622,6 +635,8 @@ function kitdenServer(block, word, picked, waiting) {
   if (pending) block.projects = pendingProjects(pending);
   block.count = server.tools;
   block.lamp = (list.length ? server.on_count > 0 : block.state === "on") ? "on" : "off";
+  // Its sign-in ended and could not be refreshed: it needs the person (amber), not a count.
+  if (server.needs === "sign-in") Object.assign(block, { lamp: "warn", meta: "Needs sign-in", stateInMeta: true });
   block.ports = { left: true, right: typeof block.count === "number" };
   // Back from a move out taken out of the tray, it starts where its preview was.
   block.from = `preview-out:${server.name}`;
@@ -820,6 +835,8 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   if (onMap.project !== state.project) {
     onMap.project = state.project;
     projectChanged = true;
+    // A pick is of servers in one project's map: another project starts with none.
+    clearPick();
   }
   if (!onMap.view) {
     onMap.view = newMap();
@@ -856,11 +873,15 @@ function bringPages(model, { fresh = false, projectChanged = false } = {}) {
 }
 
 // Let go of a selection the map has but does not show now, before the draw that follows (so it
-// draws nothing again itself): its Details close, as letGoOnMap's do.
+// draws nothing again itself).
 function letGoHidden(model) {
   const { selected } = onMap;
   const known = selected && (model.blocks.some((b) => b.id === selected) || model.links.some((l) => linkKey(l) === selected));
-  if (!known || shownOnMap(model, selected)) return;
+  if (known && !shownOnMap(model, selected)) dropSelection();
+}
+
+// The map selects nothing, and Details close (letGoCloses) or the address forgets the selection.
+function dropSelection() {
   onMap.selected = null;
   if (isPanelOpen() && letGoCloses(panelState.current)) closePanel({ focus: false });
   else setState({ selected: null });
@@ -922,16 +943,6 @@ function rowsOfLink(model, link) {
   return shown && shown.row ? shown.rows || [shown.row] : [];
 }
 
-// The tray's change is being written or has just been: as in the bar, nothing can be added to it
-// or taken out of it now.
-const writing = () => tray.phase === "applying" || tray.phase === "applied";
-
-// While a change is written (the tray's, or an Undo) every link keeps its hit, and so its focus,
-// and its × waits (map-view.js): it says why and removes nothing. Its words: the tray's own Apply
-// is "your change", an Undo or another change is "another change". False while nothing is written.
-export const OWN_WAITS = "Your change is being written.";
-export const linksWait = () => (writing() ? OWN_WAITS : busy.change && WAITS);
-
 // What the × of a link does, in words: a link the tray draws, or whose removal waits in the tray,
 // is taken out of it, and the map acts on the others as linkRemoval says. "" where it does not act
 // on the link: the link then has no ×.
@@ -950,8 +961,7 @@ export function removeLink(model, link, picked) {
   if (drawn.length) return takeOutHere(model, drawn);
   const removal = linkRemoval(model, link, picked);
   if (!removal) return null;
-  const key = keyFor(removal.body);
-  return inTray(key) ? takeOut(key) : addToTray(removal.body, { icon: removalIcon(removal.body) });
+  return toggleInTray(removal.body, { icon: removalIcon(removal.body) });
 }
 
 // A press on a link: a second press on the link picked, while its panel is open, lets go of it,
@@ -1028,22 +1038,52 @@ function newMap() {
     tile,
     onOpen: openBlock,
     onFold: foldBlock,
-    onSelect: (id) => pressBlock(onMap.model, id),
-    onAdd: pressAdd,
-    onEmpty: letGoIfSelected,
+    onSelect: (id) => {
+      const toggles = withModifier;
+      withModifier = false;
+      if (toggles) togglePickHere(id);
+      else {
+        // A plain click on another block lets go of the pick, as it opens that block's Details.
+        if (clearPick()) pickChanged();
+        pressBlock(onMap.model, id);
+      }
+    },
+    // An empty click clears the pick, but not one with Shift or Cmd held (a pick being built).
+    onEmpty: () => {
+      letGoIfSelected();
+      if (!withModifier && clearPick()) pickChanged();
+      withModifier = false;
+    },
     onHover: (id) => view.glance(glanceFor(onMap.model, id)),
     links: LINK_HOOKS,
     enterDelay: afterOldPage(),
   });
   holdKeys(view.box);
   // Escape clears the selection first; open Details then close too (panel.js).
+  // The pick's Escape is heard on the page, wherever focus is (the map box takes none).
+  document.removeEventListener("keydown", escapePick);
+  document.addEventListener("keydown", escapePick);
   view.box.addEventListener("keydown", (event) => {
+    // A key on the map is no Shift-click.
+    withModifier = false;
     if (event.key !== "Escape" || !onMap.selected) return;
     onMap.selected = null;
     if (!isPanelOpen()) setState({ selected: null });
     drawAgain();
   });
-  view.box.addEventListener("pointerdown", (event) => pressGrip(event, letGoIfSelected));
+  view.box.addEventListener("pointerdown", (event) => {
+    withModifier = Boolean(event.shiftKey || event.metaKey);
+    pressGrip(event, letGoIfSelected, pickChanged);
+    // A press on empty map space may draw a band, but not while a change is written or the page
+    // waits; once it does, the selection lets go.
+    const onSomething = event.target && event.target.closest && event.target.closest("button, .hit");
+    if (!onSomething && !withModifier && !busy.change && !pageWaits()) {
+      pressBand(event, { map: onMap, onPick: () => {
+        letGoIfSelected();
+        pickChanged();
+      } });
+    }
+  });
   view.box.addEventListener("scroll", () => {
     if (!view.box.scrollLeft && !floatingNow()) view.box.classList.remove("beside");
   }, { passive: true });
@@ -1166,7 +1206,9 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped, switched, undo });
   const { view, selected } = onMap;
   const later = lightsLater({ unfolds: lightLater, lit });
-  const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: onMap.found, open, motion });
+  keepPickable(model);
+  setHint(mapHint());
+  const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, chosen: pick.ids, lit: later ? new Set() : lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js); a drag draws the
   // map again in place as its slot opens or closes.
   placeMoved({ view, model, layout, redraw: drawRows });
@@ -1190,9 +1232,7 @@ export function letGoCloses(current) {
 // Let go of the selection: the map shows none and Details close (letGoCloses). Focus stays where
 // it is.
 function letGoOnMap() {
-  onMap.selected = null;
-  if (isPanelOpen() && letGoCloses(panelState.current)) closePanel({ focus: false });
-  else setState({ selected: null });
+  dropSelection();
   drawAgain();
 }
 
@@ -1201,17 +1241,42 @@ function letGoIfSelected() {
   if (onMap.selected) letGoOnMap();
 }
 
-// "+ Add" beside the Servers caption opens the Add a server panel (gateway-add.js). Both its doors,
-// this and Details' More, let go of what is selected first.
-onOpenAdd(letGoIfSelected);
-function pressAdd(column, node) {
-  return openAdd({ from: node });
+// Picking several servers outside the gateway (gateway-pick.js): a press with Shift or Cmd held
+// makes the click that follows pick or unpick its block instead of selecting it.
+let withModifier = false;
+function togglePickHere(id) {
+  if (togglePick(onMap.model, id)) {
+    letGoIfSelected();
+    pickChanged();
+  } else pressBlock(onMap.model, id);
 }
+
+// Escape on the Gateway map's page clears the pick.
+function escapePick(event) {
+  if (event.key !== "Escape" || state.view !== "gateway" || !onMap.view || !onMap.view.box.isConnected) return;
+  if (clearPick()) pickChanged();
+}
+
+// The pick changed: the map draws it, and the hint counts it.
+function pickChanged() {
+  setHint(mapHint());
+  drawAgain();
+}
+
+// The map's hint: the pick's count while something is picked.
+function mapHint() {
+  return pick.ids.size ? PICK_HINT(pick.ids.size) : MAP_HINT;
+}
+
+// The Add a server panel (gateway-add.js) lets go of what is selected first, from both its doors:
+// "+ Add servers" in the page header and Details' More.
+onOpenAdd(letGoIfSelected);
 
 // A press on a block (a held server opened or folded first, by onOpen). "N more" turns its group's
 // page (turnOnMap). A second press on the selected block lets go. The first run's slot adds the
 // change that sets every client up; the slot of a drag does nothing. A preview block takes its row
-// out of the tray (D12). Any other block is selected.
+// out of the tray (D12), unless it waits for access: then it opens the access panel. Any other
+// block is selected.
 export function pressBlock(model, id) {
   if (id.startsWith("more:")) {
     turnOnMap(model, id);
@@ -1219,12 +1284,21 @@ export function pressBlock(model, id) {
   }
   const block = model.blocks.find((b) => b.id === id);
   if (!block) return;
+  // The Add a server card opens the add panel; focus comes back to the card.
+  if (block.kind === "addslot") {
+    openAdd({ from: withFocusKey($("#main"), `block:${id}`) }).catch(reportError);
+    return;
+  }
   if (afterPress({ selected: onMap.selected, id, opened: foldable(model).has(id) && onMap.open.has(id) }) === "letGo") {
     letGoOnMap();
     return;
   }
   if (block.kind === "slot" && block.setup) review(block.setup, { note: SETUP_NOTE }).catch(reportError);
-  else if (block.kind === "preview") takeOutHere(model, block.row).catch(reportError);
+  else if (block.kind === "preview" && block.needs) {
+    // A server that waits for access opens its token field; the dock row's × takes it out.
+    const row = trayRow(block.row);
+    if (row && row.waits) openAccess(row);
+  } else if (block.kind === "preview") takeOutHere(model, block.row).catch(reportError);
   else if (block.kind !== "slot" || block.gateway) selectOnMap(block);
 }
 
@@ -1453,16 +1527,7 @@ function gatewayList(main, view, model, found, { enter = false } = {}) {
   // One row takes the Tab key; the arrows move between rows, Right and Left fold, Enter opens.
   // Keys on a row's own button stay that button's.
   holdKeys(grid);
-  grid.addEventListener("keydown", (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey || !event.target.dataset.row) return;
-    const next = gridKey(rows, rows.findIndex((r) => r.id === event.target.dataset.row), event.key);
-    if (!next) return;
-    event.preventDefault();
-    const row = rows[next.at];
-    if (next.toggle) toggleRow(row);
-    else if (next.details) press.open(row);
-    else focusRow(grid, row.id);
-  });
+  gridKeys(grid, rows, { toggle: toggleRow, details: press.open, focus: (id) => focusRow(grid, id) });
   main.append(grid);
   onList.box = grid;
   if (enter) rise([grid], { delay: afterOldPage() });
@@ -1483,32 +1548,15 @@ function selectedRow(rows, byId) {
   return (own || matches[0] || {}).id || null;
 }
 
-function cell(className, text) {
-  const node = el("div", className, text);
-  node.setAttribute("role", "gridcell");
-  return node;
-}
+const cell = (className, text) => gridCell("gridcell", className, text);
 
 // One row: a fold mark where it folds, what it is (a client's tile, a gateway's mark, the dot of a
 // server or tool, filled when on), its name, tags and quiet words; then the clients that use it,
 // its tools, and › or "Move in…". A click opens its Details, or folds it on the fold mark; a
 // group row folds.
 function listRow(row, block, { current, selected, view, press }) {
-  const node = el("div", row.group ? "tg-row group" : `tg-row ${row.kind}`);
+  const { node, name } = treeRow(row.group ? "tg-row group" : `tg-row ${row.kind}`, row, { current, selected });
   if (row.found) node.classList.add("found");
-  node.setAttribute("role", "row");
-  node.setAttribute("aria-level", String(row.depth + 1));
-  if (row.expanded !== undefined) node.setAttribute("aria-expanded", String(row.expanded));
-  node.setAttribute("aria-selected", String(selected));
-  node.tabIndex = current ? 0 : -1;
-  node.dataset.row = row.id;
-  node.dataset.focus = `row:${row.id}`;
-  const name = cell("tg-name");
-  name.style.setProperty("--depth", String(row.depth));
-  const caret = el("span", row.expanded === undefined ? "caret none" : "caret", "▸");
-  caret.setAttribute("aria-hidden", "true");
-  name.append(caret);
-  if (row.icon) name.append(icon(row.icon, 13));
   if (row.kind === "client") name.append(mark(block.client));
   else if (GATEWAY_KINDS.includes(row.kind)) name.append(mark(block.gateway.kind === "kitden" ? "kitden" : "gateway"));
   else if (row.kind === "held" || row.kind === "tool") {
@@ -1554,12 +1602,7 @@ function listRow(row, block, { current, selected, view, press }) {
 // Move the Tab key, and focus, to another row (and to its own button).
 function focusRow(grid, id) {
   onList.current = id;
-  for (const node of grid.querySelectorAll("[data-row]")) {
-    const on = node.dataset.row === id;
-    node.tabIndex = on ? 0 : -1;
-    for (const control of node.querySelectorAll("button")) control.tabIndex = on ? 0 : -1;
-    if (on) node.focus();
-  }
+  focusTreeRow(grid.querySelectorAll("[data-row]"), id, (node) => node.querySelectorAll("button"));
 }
 
 // Fold or unfold a row: a server shows its tools; a group or a gateway hides its rows.

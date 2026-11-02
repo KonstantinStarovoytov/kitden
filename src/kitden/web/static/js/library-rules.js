@@ -30,7 +30,7 @@ export function onBodies(item) {
 
 // Remove a plugin's file entry or a skill's own folder from one client (`can.remove`): the same row
 // as the × of its link, so the two are one tray row. Null where the client has none.
-export function removeBody(item, client) {
+function removeBody(item, client) {
   const target = ((item.items || {})[client] || [])[0];
   if (!target || !((item.can && item.can.remove) || []).includes(client)) return null;
   return { action: item.kind === "plugin" ? "plugin.remove" : "skill.remove", targets: [{ item: target }], params: {} };

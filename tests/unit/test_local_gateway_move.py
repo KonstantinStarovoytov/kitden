@@ -15,7 +15,14 @@ import pytest
 from starlette.testclient import TestClient
 
 from kitden.changes import json_splice
-from kitden.changes.actions import KITDEN_GATEWAY, local_move_steps, needs_sign_in
+from kitden.changes.actions import (
+    KITDEN_GATEWAY,
+    TOKEN_FIELD,
+    NeedsAccess,
+    access_needed,
+    local_move_steps,
+    needs_sign_in,
+)
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.engine import Engine
@@ -69,7 +76,9 @@ class FakeClaude:
 class FakeRemote(ThreadingHTTPServer):
     """An MCP address that answers every request with `status` and keeps what it got."""
 
-    def __init__(self, status, location=None):
+    def __init__(self, status, location=None, token=None):
+        """With `token`, it answers 200 to `Authorization: Bearer <token>` and `status` to
+        anything else."""
         self.got = []
         got = self.got
 
@@ -78,10 +87,12 @@ class FakeRemote(ThreadingHTTPServer):
                 length = int(self.headers.get("Content-Length") or 0)
                 body = self.rfile.read(length) if length else b""
                 got.append({"method": self.command, "headers": dict(self.headers), "body": body})
-                self.send_response(status)
+                given = self.headers.get("Authorization")
+                answer = 200 if token and given == f"Bearer {token}" else status
+                self.send_response(answer)
                 if location:
                     self.send_header("Location", location)
-                if status == 401:
+                if answer == 401:
                     self.send_header("WWW-Authenticate", 'Bearer resource_metadata="x"')
                 self.send_header("Content-Length", "0")
                 self.end_headers()
@@ -142,7 +153,7 @@ def write_json(path, data):
     path.write_text(json.dumps(data, indent=2))
 
 
-def move(home, *wanted, command=KITDEN):
+def move(home, *wanted, command=KITDEN, headers=None):
     """local_move_steps for the (client, name) or (client, name, scope) entries, as the page
     calls it."""
     inventory = build_inventory(home)
@@ -157,7 +168,9 @@ def move(home, *wanted, command=KITDEN):
     states = setup_server_state(inventory)
     added = {s["client"] for s in states if s["state"] in ("added", "plugin")}
     known = [p.path for p in inventory.projects]
-    return local_move_steps(adapters, items, home, known, command, added_clients=added)
+    return local_move_steps(
+        adapters, items, home, known, command, added_clients=added, headers=headers
+    )
 
 
 def apply(home, steps):
@@ -366,17 +379,45 @@ def test_two_different_entries_with_one_name_are_refused(home):
     )
 
 
-def test_an_oauth_server_is_refused_after_a_401(home):
+def waits(home, wanted, **options):
+    """The move waits for access: NeedsAccess, and nothing written."""
+    before = {p: p.read_bytes() for p in home.rglob("*") if p.is_file()}
+    with pytest.raises(NeedsAccess) as error:
+        move(home, wanted, **options)
+    assert {p: p.read_bytes() for p in home.rglob("*") if p.is_file()} == before
+    return error.value
+
+
+def test_access_needed_tells_sign_in_token_and_open(home):
+    signs, plain, open_ = FakeRemote(401), FakeRemote(403), FakeRemote(200)
+    try:
+        assert access_needed(signs.url, {}) == "sign-in"
+        assert access_needed(plain.url, {}) == "token"  # 403 and no sign-in metadata
+        assert access_needed(open_.url, {}) == "open"
+        # The metadata ask carries no header of the move.
+        access_needed(plain.url, {"Authorization": "Bearer SENTINEL_SECRET_META"})
+        gets = [g for g in plain.got if g["method"] == "GET"]
+        assert gets and all("Authorization" not in g["headers"] for g in gets)
+    finally:
+        stop(signs, plain, open_)
+
+
+def test_a_server_that_needs_access_waits_after_a_401(home):
     oauth, forbidden, plain = FakeRemote(401), FakeRemote(403), FakeRemote(200)
     try:
         add_claude(home, "linear", {"type": "http", "url": oauth.url})
-        words = "linear signs in with OAuth; it stays direct for now."
-        refused(home, ("claude_code", "linear"), words)
-        assert len(oauth.got) == 1
+        waiting = waits(home, ("claude_code", "linear"))
+        assert waiting.answer() == {
+            "server": "linear",
+            "kind": "sign-in",
+            "fields": [TOKEN_FIELD],
+            "reason": "linear needs sign-in.",
+            "refused": False,
+        }
         assert json.loads(oauth.got[0]["body"])["method"] == "initialize"
         add_claude(home, "closed", {"type": "http", "url": forbidden.url})
-        words = "closed signs in with OAuth; it stays direct for now."
-        refused(home, ("claude_code", "closed"), words)
+        waiting = waits(home, ("claude_code", "closed"))
+        assert (waiting.kind, str(waiting)) == ("token", "closed needs a token.")
 
         # An explicit type wins over the address: this one is streamable HTTP.
         add_claude(home, "streamed", {"type": "http", "url": plain.url[:-4] + "/sse"})
@@ -417,6 +458,7 @@ def test_the_sign_in_check_sends_the_headers_to_the_servers_own_address_only(hom
             needs_sign_in(moved.url, secret)
         assert len(moved.got) == 1
         assert moved.got[0]["headers"]["Authorization"] == "Bearer SENTINEL_SECRET_PROBE"
+        assert moved.got[0]["headers"]["User-Agent"] == "kitden"
         assert elsewhere.got == [] and proxy.got == []  # no redirect followed, no proxy used
         add_claude(home, "moved", {"type": "http", "url": moved.url})
         refused(home, ("claude_code", "moved"), "Kitden could not reach moved.")
@@ -432,6 +474,119 @@ def test_the_sign_in_check_sends_the_headers_to_the_servers_own_address_only(hom
         move(home, ("claude_code", "far"))
     assert str(error.value) == "Kitden could not reach far."
     assert error.value.__cause__ is None
+
+
+def test_a_refused_token_on_a_move_says_so(home):
+    remote = FakeRemote(401, token="SENTINEL_SECRET_RIGHT")
+    try:
+        add_claude(home, "neon", {"type": "http", "url": remote.url})
+        given = {"Authorization": "Bearer SENTINEL_SECRET_WRONG"}
+        waiting = waits(home, ("claude_code", "neon"), headers=given)
+        assert waiting.refused and str(waiting) == "neon did not accept this token."
+        assert "SENTINEL" not in json.dumps(waiting.answer())
+    finally:
+        stop(remote)
+
+
+def test_a_move_takes_only_an_authorization_header(home):
+    remote = FakeRemote(200)
+    try:
+        add_claude(home, "neon", {"type": "http", "url": remote.url})
+        with pytest.raises(
+            ValueError, match="^Only the server's declared access fields can be set.$"
+        ):
+            move(home, ("claude_code", "neon"), headers={"X-Key": "SENTINEL_SECRET_X"})
+    finally:
+        stop(remote)
+
+
+def test_a_working_token_goes_to_the_keychain_not_the_settings(home, fake_keychain):
+    remote = FakeRemote(401, token="SENTINEL_SECRET_RIGHT")
+    try:
+        add_claude(home, "neon", {"type": "http", "url": remote.url})
+        given = {"Authorization": "Bearer SENTINEL_SECRET_RIGHT"}
+        steps = move(home, ("claude_code", "neon"), headers=given)
+        held = {"Authorization": {"keychain": "neon/Authorization"}}
+        assert steps[0].edit.after == {"url": remote.url, "headers": held}
+        assert [i.value for i in steps[0].keychain] == ["Bearer SENTINEL_SECRET_RIGHT"]
+        engine, change = apply(home, steps)
+        assert keychain_items(fake_keychain) == {
+            "kitden neon/Authorization": "Bearer SENTINEL_SECRET_RIGHT"
+        }
+        engine.undo(change.id)
+        assert keychain_items(fake_keychain) == {}
+    finally:
+        stop(remote)
+
+
+def batch_move(page, home, name, params=None):
+    [item] = [
+        i.id for i in build_inventory(home).items if str(i.kind) == "mcp_server" and i.name == name
+    ]
+    request = {
+        "id": "r1",
+        "kind": "gateway.move",
+        "title": "Move it",
+        "targets": [{"item": item}],
+        "params": {"gateway": "kitden", **(params or {})},
+    }
+    return page.post("/api/batch/preview", json={"requests": [request]}, headers=POST)
+
+
+def test_batch_preview_answers_needs_for_the_row(home):
+    remote = FakeRemote(401)
+    try:
+        add_claude(home, "keyed", {"type": "http", "url": remote.url})
+        with page_for(home) as page:
+            answer = batch_move(page, home, "keyed")
+        assert answer.status_code == 422
+        body = answer.json()
+        assert body["row"] == "r1" and body["needs"]["kind"] == "sign-in"
+        assert body["detail"] == body["needs"]["reason"] == "keyed needs sign-in."
+        assert body["needs"]["sign_in"]
+    finally:
+        stop(remote)
+
+
+def test_needs_answer_holds_no_secret(home):
+    remote = FakeRemote(401, token="SENTINEL_SECRET_RIGHT")
+    try:
+        add_claude(home, "keyed", {"type": "http", "url": remote.url})
+        given = {"headers": {"Authorization": "Bearer SENTINEL_SECRET_WRONG"}}
+        with page_for(home) as page:
+            answer = batch_move(page, home, "keyed", given)
+            assert answer.status_code == 422
+            assert answer.json()["needs"]["refused"] is True
+            assert "SENTINEL" not in answer.text
+            checked = page.post(
+                "/api/batch/check",
+                json={
+                    "requests": [
+                        {
+                            "id": "r1",
+                            "kind": "gateway.move",
+                            "title": "Move it",
+                            "targets": [
+                                {"item": i.id}
+                                for i in build_inventory(home).items
+                                if str(i.kind) == "mcp_server"
+                                and (i.client, i.name) == ("claude_code", "keyed")
+                            ],
+                            "params": {"gateway": "kitden", **given},
+                        }
+                    ]
+                },
+                headers=POST,
+            ).json()
+            assert checked["ok"] is False and checked["needs"]["refused"] is True
+            assert "SENTINEL" not in json.dumps(checked)
+            ok = batch_move(
+                page, home, "keyed", {"headers": {"Authorization": "Bearer SENTINEL_SECRET_RIGHT"}}
+            )
+            assert ok.status_code == 200, ok.text
+            assert "SENTINEL" not in ok.text
+    finally:
+        stop(remote)
 
 
 def test_codex_and_claude_rules_carry_over(home):
@@ -1163,3 +1318,31 @@ def test_a_stale_apply_forgets_the_values(home):
     engine.apply(change.id)
     assert str(change.state) == "stale"
     assert [i.value for s in change.steps for i in s.keychain] == [""]
+
+
+def test_a_web_page_at_the_metadata_path_is_not_sign_in():
+    """A server that answers every address with its web page (200, HTML) does not sign in."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.send_response(401)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def do_GET(self):
+            page = b"<!doctype html><title>Home</title>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        assert access_needed(f"http://127.0.0.1:{server.server_port}/mcp", {}) == "token"
+    finally:
+        stop(server)

@@ -13,6 +13,8 @@ from urllib.request import Request, urlopen
 
 FILES = {"claude": ".claude-plugin/marketplace.json", "codex": ".agents/plugins/marketplace.json"}
 REPO = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}")
+# A marketplace's name.
+MARKET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 LIMIT = 2_000_000  # a marketplace file is a list of entries; anything larger is not one
 
 
@@ -20,7 +22,7 @@ class LinkError(ValueError):
     """The link is not one Kitden reads, or holds no marketplace."""
 
 
-def _repo(link: str) -> str | None:
+def repo_of(link: str) -> str | None:
     """'owner/repo' for a GitHub repository link, else None."""
     link = link.strip()
     if link.startswith("https://github.com/"):
@@ -34,7 +36,7 @@ def _repo(link: str) -> str | None:
 def _summary(name_source: str, found: dict[str, dict]) -> dict:
     first = next(iter(found.values()))
     name = first.get("name")
-    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name):
+    if not isinstance(name, str) or not MARKET_NAME.fullmatch(name):
         raise LinkError("The marketplace file has no usable name")
     plugins = first.get("plugins")
     return {
@@ -78,7 +80,7 @@ def read_marketplace(link: str) -> dict:
         if not found:
             raise LinkError("This folder has no marketplace file")
         return _summary(str(folder), found)
-    repo = _repo(link)
+    repo = repo_of(link)
     if repo is None:
         raise LinkError("Use a folder on this computer or a GitHub repository (owner/repo)")
     found = {}

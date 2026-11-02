@@ -2,6 +2,7 @@
 // Apply all and Undo all write everything or nothing. This module holds the state and talks to
 // the server; the dock draws it.
 import { getJson, postJson } from "./api.js";
+import { WAITS } from "./dom.js";
 import { CLIENT_ORDER } from "./parts.js";
 import { busy, setBusy, state } from "./store.js";
 
@@ -14,7 +15,7 @@ const ENDED = {
 export const LOST = "Could not confirm the result. Check Changes before trying again.";
 
 // The change as the server holds it now, or null when it cannot be read.
-export async function readChange(id) {
+async function readChange(id) {
   try {
     return await getJson(`/api/changes/${encodeURIComponent(id)}`);
   } catch {
@@ -48,12 +49,27 @@ export async function changeOutcome(id, verb, body) {
 }
 
 // The one tray of the page. `phase`: "idle" (no rows), "asking" (a preview is on its way),
-// "ready", "applying", "applied" (verified; the page takes the result in, then calls
-// endApplied) or "failed". A row: { id, key, body, note, icon, picked, title, detail, project,
-// part, status }; `status` is "", "busy" or "done". `refused`: { reason } or null. `failure`:
+// "ready", "waiting" (every row waits for access, so there is no change), "applying",
+// "applied" (verified; the page takes the result in, then calls endApplied) or "failed". A
+// row: { id, key, body, note, icon, picked, title, detail, project, part, status, waits,
+// works }; `status` is "", "busy" or "done". `waits` is null, or what a server needs before
+// it can join the change: { server, kind, fields, reason, refused, checking } (a row that
+// waits is left out of the change, so Apply writes the others). `works`: its token was
+// checked and taken. `refused`: { reason } or null. `failure`:
 // { state, error } of an Apply that was not verified, `state` null when its end is not known.
 // `stale`: the files changed since the preview.
 export const tray = { rows: [], change: null, phase: "idle", refused: null, failure: null, done: 0, total: 0, stale: false };
+
+// The tray's change is being written or has just been: nothing can be added to it or taken out
+// of it now.
+export const writing = (t = tray) => t.phase === "applying" || t.phase === "applied";
+
+// What the × of a row or link in preview says, and a link's × while the tray's own change is
+// written. While any change is written (the tray's, or an Undo) a link's × waits and says why
+// (map-view.js); false while nothing is written.
+export const TAKE_OUT = "Take it out of the preview";
+const OWN_WAITS = "Your change is being written.";
+export const linksWait = () => (writing() ? OWN_WAITS : busy.change && WAITS);
 
 // The title a row is sent with until its first answer gives it words.
 export const PENDING_TITLE = "New change";
@@ -100,6 +116,8 @@ export function keyFor(body) {
   if (action === "gateway.move_out") return `moveout:${params.server}`;
   if (action === "project.align") return `align:${params.project || ""}`;
   if (action === "gateway.add") return `add:${params.server}`;
+  if (action === "gateway.sign_in") return `signin:${params.server}`;
+  if (action === "gateway.access") return `access:${params.server}/${params.field}/${params.name}`;
   const one = targets[0] || {};
   if (action === "skill.rule") return `skill:${one.client}:${one.item}@${params.project || ""}`;
   return JSON.stringify(sorted({ action, targets: inClientOrder(action, targets), params }));
@@ -116,7 +134,7 @@ function inClientOrder(action, targets) {
 
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove", "gateway.remove"];
 const SWITCHES = ["gateway.rule", "gateway.rules", "gateway.strict", "plugin.enable", "plugin.disable", "setup_server.enable", "skill.rule"];
-const MOVES = ["gateway.move", "gateway.put_back", "gateway.keychain"];
+const MOVES = ["gateway.move", "gateway.put_back", "gateway.keychain", "gateway.sign_in", "gateway.access"];
 const PLUGS = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "client.disconnect"];
 const ADDS = ["mcp.add", "plugin.install", "plugin.skills", "skill.install", "marketplace.add", "gateway.add"];
 
@@ -132,8 +150,18 @@ export function iconFor(body) {
   return ADDS.includes(action) ? "plus" : "file-text";
 }
 
-export function inTray(key) {
-  return tray.rows.some((row) => row.key === key);
+// The rows the change covers, and the ones that wait for access.
+export function readyRows(t = tray) { return t.rows.filter((row) => !row.waits); }
+export function waitingRows(t = tray) { return t.rows.filter((row) => row.waits); }
+
+// The row with this key, if it is in the tray. Keys are unique there.
+export const trayRow = (key) => tray.rows.find((row) => row.key === key);
+export const inTray = (key) => Boolean(trayRow(key));
+
+// The row of `body` leaves the tray if it is there, else joins it (addToTray's `opts`).
+export function toggleInTray(body, opts) {
+  const key = keyFor(body);
+  return inTray(key) ? takeOut(key) : addToTray(body, opts);
 }
 
 // One row of the combined change as a change of its own kind: only its steps, and the words the
@@ -157,7 +185,8 @@ function requestFor(row) {
   return { id: row.id, kind: body.action, title: row.title || PENDING_TITLE, detail: row.detail || "", targets: body.targets || [], params: body.params || {}, picked: row.picked };
 }
 
-// The rows as one change, from the server: { change } or { reason } (a refusal, or no answer).
+// The rows as one change, from the server: { change } or { reason } (a refusal, or no answer);
+// a row that waits for access adds { row, needs }.
 async function previewRows(rows) {
   let result;
   try {
@@ -169,17 +198,20 @@ async function previewRows(rows) {
   const data = result.data;
   if (result.ok && data && data.id && Array.isArray(data.rows)) return { change: data };
   const detail = data && typeof data.detail === "string" ? data.detail : "";
-  return { reason: detail || `Could not prepare this change (${result.status}).` };
+  const reason = detail || `Could not prepare this change (${result.status}).`;
+  if (data && data.needs && data.row) return { reason, row: data.row, needs: data.needs };
+  return { reason };
 }
 
-// Ask for a preview of the tray's rows. An answer to an older ask is dropped and its change
-// cancelled on the server: { dropped: true }. Else { change } or { reason }.
-async function ask() {
+// Ask for a preview of `rows` (the ones that do not wait, by default). An answer to an older
+// ask is dropped and its change cancelled on the server: { dropped: true }. Else as
+// previewRows answers.
+async function ask(rows = readyRows()) {
   const mine = ++asks;
   tray.phase = "asking";
   tray.refused = null;
   notify();
-  const answer = await previewRows(tray.rows);
+  const answer = await previewRows(rows);
   if (mine === asks) return answer;
   if (answer.change) cancelOnServer(answer.change);
   return { dropped: true };
@@ -209,12 +241,41 @@ function refuseRows(reason) {
   notify();
 }
 
+// A tray whose rows all wait has no change: "waiting", or "idle" with no rows.
+function noChange() {
+  cancelOnServer(tray.change);
+  asks += 1;
+  Object.assign(tray, { change: null, phase: tray.rows.length ? "waiting" : "idle", refused: null, failure: null, done: 0, total: 0, stale: false });
+  notify();
+}
+
+// A row starts to wait for what `needs` says; its words are the server's name and the reason.
+function startWaiting(row, needs) {
+  Object.assign(row, { waits: { ...needs, checking: false }, works: false, title: needs.server, detail: needs.reason, part: null, status: "" });
+}
+
+// Ask for `rows` as one change. A row the answer says needs access starts to wait, and the rest
+// are asked for again, until a change, a refusal, or no row left ({ none: true }).
+async function askAll(rows) {
+  let left = rows;
+  for (;;) {
+    const answer = await ask(left);
+    const found = answer.needs && left.find((row) => row.id === answer.row);
+    if (!found) return answer;
+    startWaiting(found, answer.needs);
+    left = left.filter((row) => row !== found);
+    if (!left.length) return { none: true };
+  }
+}
+
 // Ask again for the rows as they are, after a take-out, Try again, or a refused add that
 // dropped an ask for the others.
 async function repreview(refused = null) {
-  const answer = await ask();
+  if (!readyRows().length) return noChange();
+  const answer = await askAll(readyRows());
   if (answer.dropped) return;
-  if (answer.change) accept(answer.change, refused);
+  if (answer.none) noChange();
+  else if (answer.change) accept(answer.change, refused);
   else refuseRows(answer.reason);
 }
 
@@ -229,16 +290,26 @@ function empty() {
 // cannot join now: a change is being written, or has just been applied. `picked` is the project
 // it is asked in: the one picked now, or the old row's when a row's own review asks again.
 export async function addToTray(body, { key = keyFor(body), note = null, icon = iconFor(body), picked = state.project || null } = {}) {
-  if (tray.phase === "applying" || tray.phase === "applied" || busy.change) return false;
+  if (writing() || busy.change) return false;
   const before = tray.rows;
   const was = tray.phase;
   const old = before.find((row) => row.key === key) || { title: "", detail: "", project: null, part: null };
-  const row = { id: `r${++rowCount}`, key, body, note, icon, picked, title: old.title, detail: old.detail, project: old.project, part: old.part, status: "" };
+  const row = { id: `r${++rowCount}`, key, body, note, icon, picked, title: old.title, detail: old.detail, project: old.project, part: old.part, status: "", waits: null, works: false };
   tray.rows = [...before.filter((other) => other.key !== key), row];
-  const answer = await ask();
+  // A row that needs access joins as waiting; the others are then asked for again.
+  const answer = await askAll(readyRows());
   if (answer.dropped) return tray.rows.includes(row);
+  if (answer.none) {
+    noChange();
+    return true;
+  }
   if (answer.change) {
     accept(answer.change);
+    return true;
+  }
+  if (row.waits) {
+    // It waits, and the rows asked with it were refused: they stay, with the reason.
+    refuseRows(answer.reason);
     return true;
   }
   tray.rows = before;
@@ -255,13 +326,55 @@ export async function addToTray(body, { key = keyFor(body), note = null, icon = 
 // A row leaves (`keys`: its key, or the keys of several); the rest are previewed again, in one
 // ask. The last one leaving cancels the change.
 export async function takeOut(keys) {
-  if (tray.phase === "applying" || tray.phase === "applied") return;
+  if (writing()) return;
   const gone = [].concat(keys);
   const rows = tray.rows.filter((row) => !gone.includes(row.key));
   if (rows.length === tray.rows.length) return;
   if (!rows.length) return cancelTray();
+  // Rows that wait are in no change: taking only those out asks nothing, unless an ask is out
+  // (a token check holds the row): then the rest are asked for again, and that answer dropped.
+  const changed = tray.rows.some((row) => gone.includes(row.key) && !row.waits);
   tray.rows = rows;
-  await repreview();
+  if (changed || tray.phase === "asking") return repreview();
+  notify();
+}
+
+// A token (or other values, `{ headers?, env? }`) for a row that waits: the change is asked
+// again with that row in it, which is the check. True when it joined; false when refused (the
+// row waits as before, with the reason, and the others are asked for again); null when another
+// ask dropped the check, which then said nothing.
+export async function giveAccess(key, values) {
+  const row = trayRow(key);
+  if (!row || !row.waits || row.waits.checking || writing() || busy.change) return false;
+  const { body } = row;
+  row.body = { ...body, params: { ...(body.params || {}), ...values } };
+  // While it is checked the row still waits (its `checking` shows); a needs answer for it gives
+  // it new `waits`.
+  const checked = { ...row.waits, checking: true };
+  row.waits = checked;
+  const answer = await askAll(tray.rows.filter((each) => !each.waits || each === row));
+  const again = row.waits !== checked;
+  if (answer.dropped) {
+    if (!again) Object.assign(row, { body, waits: { ...checked, checking: false } });
+    return null;
+  }
+  if (answer.change && !again) {
+    row.waits = null;
+    row.works = true;
+    accept(answer.change);
+    return true;
+  }
+  row.body = body;
+  if (!again) {
+    // Refused for another reason: said by the row when it names this row (or no row).
+    const own = !answer.row || answer.row === row.id;
+    const reason = own ? answer.reason : checked.reason;
+    Object.assign(row, { waits: { ...checked, reason, refused: own, checking: false }, detail: reason });
+  }
+  if (answer.change) accept(answer.change);
+  else if (answer.none) noChange();
+  else await repreview();
+  return false;
 }
 
 // Cancel all (also Close, after a refusal): the rows go and the server forgets the preview. A
@@ -285,10 +398,11 @@ export async function tryAgain() {
 // Apply all: the first row spins at once, and each finished step names the row it belongs to.
 // Only `verified` ends it well; the page then takes the result in and calls endApplied.
 export async function applyTray() {
-  if (tray.phase !== "ready" || busy.change) return;
+  if (tray.phase !== "ready" || busy.change || !readyRows().length) return;
   const { change } = tray;
+  const ready = readyRows();
   for (const row of tray.rows) row.status = "";
-  tray.rows[0].status = "busy";
+  ready[0].status = "busy";
   Object.assign(tray, { phase: "applying", refused: null, failure: null, done: 0, total: 0 });
   setBusy(true);
   notify();
@@ -303,10 +417,10 @@ export async function applyTray() {
   document.addEventListener("kitden:progress", onProgress);
   try {
     // The titles shown now, which came after the preview was asked: Changes keeps these.
-    const titles = tray.rows.map((row) => row.title || PENDING_TITLE);
+    const titles = ready.map((row) => row.title || PENDING_TITLE);
     const { after } = await changeOutcome(change.id, "apply", { titles });
     if (after && after.state === "verified") {
-      for (const row of tray.rows) row.status = "done";
+      for (const row of ready) row.status = "done";
       Object.assign(tray, { change: after, phase: "applied" });
     } else {
       // Kept as the server has it, so Try again knows whether it must cancel the preview.
@@ -321,9 +435,13 @@ export async function applyTray() {
   }
 }
 
-// The page took the applied result in (it read everything again): the tray is empty.
+// The page took the applied result in (it read everything again): the tray keeps only the
+// rows that wait for access, for a later Apply.
 export function endApplied() {
-  empty();
+  const left = waitingRows();
+  if (!left.length) return empty();
+  Object.assign(tray, { rows: left, change: null, phase: "waiting", refused: null, failure: null, done: 0, total: 0, stale: false });
+  notify();
 }
 
 // The change an Undo has just put back (its id), until the Gateway map draws what Kitden read

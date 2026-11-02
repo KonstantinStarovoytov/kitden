@@ -90,6 +90,7 @@ let servers = null;
 globalThis.fetch = async (url, init = {}) => {
   const body = init.body ? JSON.parse(init.body) : null;
   sent.push({ url, body });
+  if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [], offline: true }) };
   if (url === '/api/market-servers') {
     if (!servers) return { ok: false, status: 500, json: async () => ({}) };
     return { ok: true, status: 200, json: async () => ({ servers }) };
@@ -102,7 +103,8 @@ globalThis.fetch = async (url, init = {}) => {
   return { ok: true, status: 200, json: async () => ({}) };
 };
 
-const { ADD_SERVER, addRowWords, matchRows, openAdd } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const { ADD_SERVER, addKind, addRowWords, matchRows, openLocalAdd: openAdd } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const { installBody } = await import('../../src/kitden/web/static/js/discovery.js');
 const { gatewayCard } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { closePanel, initPanel, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
@@ -138,7 +140,7 @@ const pointer = (type, x, y) => { for (const fn of [...(docHeard[type] || [])]) 
 // "+ Add" beside the map's Servers caption, as map-view.js draws it.
 function addButton() {
   const node = element('BUTTON');
-  node.className = 'btn small';
+  node.className = 'btn add';
   node.dataset.focus = 'add:servers';
   pages['#main'].replaceChildren(node);
   return node;
@@ -188,8 +190,8 @@ test('+ Add opens the panel, focus goes to the search, and + Add looks pressed',
     assert.deepEqual([search().placeholder, search().getAttribute('aria-label')], ['Search the marketplaces…', 'Search the marketplaces']);
     assert.deepEqual(pill().map((b) => [b.textContent, b.getAttribute('aria-pressed')]), [['All', 'true'], ['Remote', 'false'], ['Local', 'false']]);
     assert.equal(body.className, 'body add-body');
-    assert.deepEqual([foot.className, text(foot)], ['step-foot', 'Click a server or drag it onto the map to preview it.']);
-    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn small primary', 'true']);
+    assert.deepEqual([foot.className, text(foot)], ['step-foot', 'Click to preview · drag onto the gateway']);
+    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn add', 'true']);
     // Only the list was read: nothing is written, and the tray is empty.
     assert.deepEqual(sent.map((s) => s.url).filter((u) => u !== '/api/market-servers'), []);
     assert.deepEqual(tray.rows, []);
@@ -206,18 +208,18 @@ test('Close and Escape close it, focus goes back to + Add, and + Add looks plain
     await press(drawer.children[0].children[0].children[1]);
     assert.equal(isPanelOpen(), false);
     assert.equal(document.activeElement, from);
-    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn small', 'false']);
+    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn add', 'false']);
     from = await open();
     pressKey('Escape');
     assert.equal(isPanelOpen(), false);
     assert.equal(document.activeElement, from);
-    assert.equal(from.className, 'btn small');
+    assert.equal(from.className, 'btn add');
     // Another selection takes the panel's place: + Add lets go too.
     from = await open();
     panelState.current = { type: 'held', name: 'files' };
     openPanel([element('HEADER')]);
     assert.equal(isPanelOpen(), true);
-    assert.equal(from.className, 'btn small');
+    assert.equal(from.className, 'btn add');
     // So does a selection made while the list is still being read.
     from = addButton();
     servers = SERVERS;
@@ -226,7 +228,7 @@ test('Close and Escape close it, focus goes back to + Add, and + Add looks plain
     openPanel([element('HEADER')]);
     await opening;
     await wait(200);
-    assert.equal(from.className, 'btn small');
+    assert.equal(from.className, 'btn add');
     assert.equal(search(), undefined);
   } finally {
     await done();
@@ -297,11 +299,11 @@ test('a list with no server says so, and a failed read offers Try again', async 
     await openAdd({ from: addButton() });
     await wait(200);
     const body = drawer.children[1];
-    assert.deepEqual(body.children.map((n) => n.textContent), ['Could not read the marketplaces.', 'Try again']);
-    assert.equal(body.children[1].className, 'btn ghost small');
-    assert.equal(document.activeElement, body.children[1]);
+    assert.deepEqual(body.children.slice(1).map((n) => n.textContent), ['Could not read the marketplaces.', 'Try again']);
+    assert.equal(body.children[2].className, 'btn ghost small');
+    assert.equal(document.activeElement, body.children[2]);
     servers = SERVERS;
-    await press(body.children[1]);
+    await press(body.children[2]);
     await wait(200);
     assert.equal(rows().length, 4);
   } finally {
@@ -402,7 +404,7 @@ test('+ Add while the panel is open keeps it as it is and gives focus to the sea
     assert.deepEqual(pill().map((b) => b.getAttribute('aria-pressed')), ['false', 'false', 'true']);
     assert.deepEqual(shown().map((r) => rowWords(r)[0]), ['db-query']);
     assert.equal(document.activeElement, search());
-    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn small primary', 'true']);
+    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn add', 'true']);
   } finally {
     await done();
   }
@@ -467,14 +469,18 @@ test("the Kitden gateway's More list opens the same panel", async () => {
   assert.equal(ADD_SERVER, 'Add a server…');
   try {
     await more.run();
+    await wait(10);
+    assert.equal(panelState.current.type, 'discovery');
+    const local = walk(drawer).find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac');
+    fire(local, 'click');
     await wait(200);
     assert.equal(rows().length, 4);
     assert.equal(document.activeElement, search());
     // Focus goes back to the map's + Add, which looks pressed meanwhile.
-    assert.equal(from.className, 'btn small primary');
+    assert.equal(from.className, 'btn add');
     pressKey('Escape');
     assert.equal(document.activeElement, from);
-    assert.equal(from.className, 'btn small');
+    assert.equal(from.className, 'btn add');
   } finally {
     await done();
   }
@@ -571,4 +577,407 @@ test('the panel shows no path, address or command, and uses no inline style or m
   const code = readFileSync(new URL('../../src/kitden/web/static/js/gateway-add.js', import.meta.url), 'utf8');
   assert.doesNotMatch(code, /innerHTML|cssText|style\s*=|\.style\./);
   for (const field of ['url', 'command', 'args', 'path']) assert.doesNotMatch(code, new RegExp(`row\\.${field}\\b`));
+});
+
+test('an online server gets its kind, so the map shows its preview in that group', () => {
+  const remote = installBody({ id: 'a', kind: 'mcp', name: 'com.example/agent-docs', remote: true }, []);
+  const local = installBody({ id: 'b', kind: 'mcp', name: 'io.github.x/files', remote: false }, []);
+  assert.equal(addKind(remote.params.server), 'remote');
+  assert.equal(addKind(local.params.server), 'local');
+  assert.equal(addKind('online@registry/unknown'), null);
+});
+
+test('a dragged online server carries the access typed in its details', () => {
+  const access = { headers: { Authorization: 'Bearer test-value' } };
+  const body = installBody({ id: 'c', kind: 'mcp', name: 'test.local/token-demo', remote: true, access }, []);
+  assert.deepEqual(body.params, { discovery: 'c', server: 'online@registry/token-demo', headers: access.headers });
+  // The body holds its own copy: a later edit of the row does not change a queued change.
+  access.headers.Authorization = 'Bearer other';
+  assert.equal(body.params.headers.Authorization, 'Bearer test-value');
+});
+
+test('the header add button is a soft-accent button with its focus key', async () => {
+  const { addHeadButton } = await import('../../src/kitden/web/static/js/map-page.js');
+  const pressed = [];
+  const add = addHeadButton('+ Add servers', 'add:servers', (node) => pressed.push(node));
+  assert.deepEqual([add.textContent, add.className, add.dataset.focus, add.getAttribute('aria-expanded')], ['+ Add servers', 'btn add', 'add:servers', 'false']);
+  await press(add);
+  assert.deepEqual(pressed, [add]);
+});
+
+// The one access form (access-form.js), as the catalog, the map and the dock use it.
+const { accessForm } = await import('../../src/kitden/web/static/js/access-form.js');
+const TOKEN = { field: 'headers', name: 'Authorization', label: 'Access token', prefix: 'Bearer ' };
+const inside = (node) => walk(node);
+const inputsOf = (form) => inside(form.node).filter((n) => n.tagName === 'INPUT');
+const type = (input, value) => { input.value = value; };
+
+test('one Authorization field: only the token is asked', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  const [input] = inputsOf(form);
+  assert.equal(inputsOf(form).length, 1);
+  assert.equal(input.type, 'password');
+  const label = input.parentNode;
+  assert.equal(text(label).includes('Access token'), true);
+  // The header name shows only inside the Details fold.
+  const details = inside(form.node).filter((n) => n.tagName === 'DETAILS');
+  const outside = inside(form.node).filter((n) => n.textContent.includes('Authorization') && !details.some((d) => d.contains(n)));
+  assert.deepEqual(outside, []);
+  assert.equal(details.some((d) => text(d).includes('Sent as the Authorization header')), true);
+});
+
+test('strips a pasted Bearer and trims', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  type(inputsOf(form)[0], '  Bearer abc \n');
+  assert.deepEqual(form.values(), { headers: { Authorization: 'Bearer abc' } });
+  type(inputsOf(form)[0], 'bearer   xyz');
+  assert.deepEqual(form.values(), { headers: { Authorization: 'Bearer xyz' } });
+});
+
+test('optional values fold under More values', () => {
+  const fields = [TOKEN, { field: 'headers', name: 'X-Region', label: 'Region', prefix: '', optional: true }];
+  const form = accessForm({ server: 'neon', kind: 'token', fields }, () => {});
+  const more = inside(form.node).find((n) => n.tagName === 'DETAILS' && text(n).startsWith('More values'));
+  assert.ok(more);
+  assert.equal(inputsOf(form).filter((input) => more.contains(input)).length, 1);
+  type(inputsOf(form)[0], 'abc');
+  assert.deepEqual(form.values(), { headers: { Authorization: 'Bearer abc' } });
+});
+
+test('a required empty field gives no values', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  assert.equal(form.values(), null);
+  type(inputsOf(form)[0], '   ');
+  assert.equal(form.values(), null);
+});
+
+test('Add token sends the values to the check', async () => {
+  const got = [];
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, (values) => { got.push(values); });
+  type(inputsOf(form)[0], 'abc');
+  const submit = inside(form.node).find((n) => n.tagName === 'BUTTON' && n.textContent === 'Add token');
+  assert.ok(submit);
+  fire(form.node, 'submit');
+  await wait();
+  assert.deepEqual(got, [{ headers: { Authorization: 'Bearer abc' } }]);
+});
+
+test('refuse shows amber words as an alert and focuses the field', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  form.refuse('neon did not accept this token.');
+  const why = inside(form.node).find((n) => n.className.split(' ').includes('access-why'));
+  assert.equal(why.getAttribute('role'), 'alert');
+  assert.equal(why.hidden, false);
+  assert.equal(text(why), 'neon did not accept this token.');
+  assert.equal(inside(why).some((n) => n.dataset.icon === 'triangle-alert'), true);
+  assert.equal(document.activeElement, inputsOf(form)[0]);
+});
+
+test('works shows Token works with the green lamp', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  form.refuse('neon did not accept this token.');
+  form.works();
+  const done = inside(form.node).find((n) => n.className.split(' ').includes('access-works'));
+  assert.equal(done.hidden, false);
+  assert.equal(text(done), 'Token works');
+  assert.equal(inside(done).some((n) => n.className === 'lamp on'), true);
+  assert.equal(inside(form.node).find((n) => n.className.split(' ').includes('access-why')).hidden, true);
+});
+
+test('a local value says it is checked when the gateway starts it', () => {
+  const env = { field: 'env', name: 'NEON_KEY', label: 'Neon API key', prefix: '', later: true };
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [env] }, () => {});
+  assert.equal(text(form.node).includes('Checked when the gateway starts it'), true);
+  type(inputsOf(form)[0], 'k1');
+  assert.deepEqual(form.values(), { env: { NEON_KEY: 'k1' } });
+});
+
+// The catalog's rows and details for a server that needs a token (discovery.js).
+const flush = async () => { for (let i = 0; i < 8; i++) await wait(); };
+const NEON = { id: 'n1', name: 'io.github.x/neon', short: 'neon', kind: 'mcp', remote: true, setup: [TOKEN], installed: [], source: 'mcp-registry' };
+async function catalog(previewAnswer, options = {}) {
+  const original = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : {};
+    if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [{ id: 'mcp-registry', name: 'MCP Registry', kind: 'mcp' }] }) };
+    if (url === '/api/discovery/search') return { ok: true, json: async () => ({ clients: [], results: [{ ...NEON }] }) };
+    if (url === '/api/discovery/details') return { ok: true, json: async () => ({ ...NEON, description: 'Neon databases' }) };
+    if (url === '/api/batch/preview') { asked.push(body); return previewAnswer(body); }
+    return original(url, init);
+  };
+  await cancelTray();
+  const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+  await openDiscovery('mcp', options);
+  await flush();
+  return { asked, restore: () => { globalThis.fetch = original; } };
+}
+const neonRow = () => find((n) => n.classList.contains('res') && text(n).includes('neon'))[0];
+const needsAnswer = (refused) => (body) => {
+  const reason = refused ? 'neon did not accept this token.' : 'neon needs a token.';
+  return { ok: false, status: 422, json: async () => ({ detail: reason, row: body.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [TOKEN], reason, refused } }) };
+};
+const okAnswer = (body) => {
+  const rows = body.requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] }));
+  return { ok: true, status: 200, json: async () => ({ id: 'cn', action: 'batch', state: 'previewed', error: null, undo_note: null, steps: rows.map(() => ({ client: 'kitden', name: 'neon' })), rows }) };
+};
+
+test('a row that needs a token says so in amber and still drags', async () => {
+  let dragged = null;
+  const page = await catalog(needsAnswer(false), { drag: (_event, row) => { dragged = row; } });
+  try {
+    const row = neonRow();
+    const status = row.children.find((n) => n.className.split(' ').includes('st'));
+    assert.deepEqual([status.textContent, status.className], ['Needs token', 'st warn']);
+    assert.equal(row.classList.contains('drags'), true);
+    for (const listener of row.listeners.pointerdown) listener({});
+    assert.equal(dragged.id, 'n1');
+  } finally { page.restore(); await cancelTray(); }
+});
+
+test('a refused token shows its reason under the field', async () => {
+  const page = await catalog(needsAnswer(true));
+  try {
+    await press(neonRow());
+    await flush();
+    const input = find((n) => n.tagName === 'INPUT' && n.type === 'password')[0];
+    input.value = 'bad';
+    fire(find((n) => n.tagName === 'FORM' && n.className.includes('access-form'))[0], 'submit');
+    await flush();
+    assert.deepEqual(page.asked.at(-1).requests.at(-1).params.headers, { Authorization: 'Bearer bad' });
+    const why = find((n) => n.className.split(' ').includes('access-why'))[0];
+    assert.equal(why.hidden, false);
+    assert.equal(text(why), 'neon did not accept this token.');
+  } finally { page.restore(); await cancelTray(); }
+});
+
+test('a working token says Token works and the row is added', async () => {
+  const added = [];
+  const page = await catalog(okAnswer, { added: (request) => added.push(request) });
+  try {
+    await press(neonRow());
+    await flush();
+    find((n) => n.tagName === 'INPUT' && n.type === 'password')[0].value = 'good';
+    fire(find((n) => n.tagName === 'FORM' && n.className.includes('access-form'))[0], 'submit');
+    await flush();
+    const works = find((n) => n.className.split(' ').includes('access-works'))[0];
+    assert.equal(works.hidden, false);
+    assert.equal(added.length, 1);
+    assert.equal(tray.rows[0].waits, null);
+  } finally { page.restore(); await cancelTray(); }
+});
+
+test('the catalog hint has no final period', async () => {
+  const page = await catalog(okAnswer);
+  try {
+    const hint = find((n) => n.className.includes('discovery-hint'))[0];
+    assert.equal(hint.textContent, 'Click to review · drag onto the gateway');
+  } finally { page.restore(); }
+});
+
+test('a new token refused for another reason does not say Token works for the old row', async () => {
+  let answers = 0;
+  const page = await catalog((body) => {
+    answers += 1;
+    if (answers === 1) return okAnswer(body);
+    return { ok: false, status: 422, json: async () => ({ detail: 'Kitden could not reach neon.', row: body.requests.at(-1).id }) };
+  });
+  try {
+    await press(neonRow());
+    await flush();
+    const submit = () => fire(find((n) => n.tagName === 'FORM' && n.className.includes('access-form'))[0], 'submit');
+    find((n) => n.tagName === 'INPUT' && n.type === 'password')[0].value = 'first';
+    submit();
+    await flush();
+    find((n) => n.tagName === 'INPUT' && n.type === 'password')[0].value = 'second';
+    submit();
+    await flush();
+    const works = find((n) => n.className.split(' ').includes('access-works'))[0];
+    const why = find((n) => n.className.split(' ').includes('access-why'))[0];
+    assert.equal(works.hidden, true);
+    assert.equal(text(why), 'Kitden could not reach neon.');
+  } finally { page.restore(); await cancelTray(); }
+});
+
+test('values a local server takes are not called checked before it runs', () => {
+  const env = { field: 'env', name: 'NEON_KEY', label: 'Neon API key', prefix: '', later: true };
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [env] }, () => {});
+  form.works();
+  const done = inside(form.node).find((n) => n.className.split(' ').includes('access-works'));
+  assert.equal(text(done), 'Saved on Apply. Checked when the gateway starts it');
+  assert.equal(inside(done).some((n) => n.className === 'lamp on'), false);
+});
+
+// Browser sign-in (Part 3b): Sign in opens the server's page; the form waits for the browser.
+const { signInForm } = await import('../../src/kitden/web/static/js/access-form.js');
+const SIGN_IN_WAITS = { server: 'neon', kind: 'sign-in', sign_in: 's1', fields: [TOKEN], reason: 'neon needs sign-in.' };
+// A stand-in server for the sign-in calls: each address answers from its queue; a function
+// answer may be a held promise.
+function signInServer(answers) {
+  const original = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async (url, init = {}) => {
+    if (!url.startsWith('/api/sign-in/')) return original(url, init);
+    asked.push([url, init.body ? JSON.parse(init.body) : null]);
+    const queue = answers[url] || [];
+    const next = queue.length ? queue.shift() : { status: 200, json: {} };
+    const made = await (typeof next === 'function' ? next() : next);
+    return { ok: made.status < 400, status: made.status, json: async () => made.json };
+  };
+  return { asked, restore: () => { globalThis.fetch = original; } };
+}
+const buttonsOf = (form) => inside(form.node).filter((n) => n.tagName === 'BUTTON' && !n.hidden);
+const buttonWords = (form) => buttonsOf(form).map((n) => n.textContent);
+
+test('Sign in starts, waits for the browser and hands the sign-in on', async () => {
+  const server = signInServer({ '/api/sign-in/wait': [{ status: 200, json: { state: 'done' } }] });
+  try {
+    const got = [];
+    const form = signInForm(SIGN_IN_WAITS, async (id) => { got.push(id); return true; });
+    assert.deepEqual(buttonWords(form), ['Sign in']);
+    await form.start();
+    assert.deepEqual(server.asked, [['/api/sign-in/start', { id: 's1' }], ['/api/sign-in/wait', { id: 's1' }]]);
+    assert.deepEqual(got, ['s1']);
+    const done = inside(form.node).find((n) => n.className.split(' ').includes('access-works'));
+    assert.equal(text(done), 'Signed in');
+    assert.equal(inside(done).some((n) => n.className === 'lamp on'), true);
+  } finally { server.restore(); }
+});
+
+test('while the browser is open it says Waiting for browser… with a Cancel', async () => {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const server = signInServer({ '/api/sign-in/wait': [() => held] });
+  try {
+    const form = signInForm(SIGN_IN_WAITS, async () => true);
+    const running = form.start();
+    await wait(); await wait(); await wait();
+    assert.deepEqual(buttonWords(form), ['Waiting for browser…', 'Cancel']);
+    const cancel = buttonsOf(form).find((n) => n.textContent === 'Cancel');
+    await press(cancel);
+    assert.deepEqual(server.asked.at(-1), ['/api/sign-in/cancel', { id: 's1' }]);
+    release({ status: 200, json: { state: 'cancelled', detail: 'Sign-in was cancelled.' } });
+    await running;
+    const why = inside(form.node).find((n) => n.className.split(' ').includes('access-why'));
+    assert.equal(why.getAttribute('role'), 'alert');
+    assert.equal(text(why), 'Sign-in was cancelled.');
+    assert.deepEqual(buttonWords(form), ['Try again']);
+    await form.start();
+    assert.equal(server.asked.filter(([url]) => url === '/api/sign-in/start').length, 2);
+  } finally { server.restore(); }
+});
+
+test('a server Kitden cannot sign in to gets the reason and the token field', async () => {
+  const later = 'neon does not let Kitden sign in yet. It may take an API key; see its docs.';
+  const server = signInServer({ '/api/sign-in/start': [{ status: 422, json: { detail: later, cannot: true } }] });
+  try {
+    const tokens = [];
+    const form = signInForm(SIGN_IN_WAITS, async () => true, async (values) => { tokens.push(values); });
+    await form.start();
+    assert.equal(text(form.node).includes(later), true);
+    assert.equal(server.asked.some(([url]) => url === '/api/sign-in/wait'), false);
+    const input = inside(form.node).find((n) => n.tagName === 'INPUT');
+    input.value = 'abc';
+    fire(inside(form.node).find((n) => n.tagName === 'FORM'), 'submit');
+    await wait(); await wait();
+    assert.deepEqual(tokens, [{ headers: { Authorization: 'Bearer abc' } }]);
+  } finally { server.restore(); }
+});
+
+test('a refused sign-in keeps its reason and offers Try again', async () => {
+  const server = signInServer({ '/api/sign-in/wait': [{ status: 200, json: { state: 'done' } }] });
+  try {
+    const form = signInForm(SIGN_IN_WAITS, async () => false);
+    await form.start();
+    form.refuse('neon did not accept this sign-in.');
+    assert.equal(text(inside(form.node).find((n) => n.className.split(' ').includes('access-why'))), 'neon did not accept this sign-in.');
+    assert.deepEqual(buttonWords(form), ['Try again']);
+  } finally { server.restore(); }
+});
+
+test('the catalog details of a server that signs in offer Sign in, which adds the row and starts', async () => {
+  const SIGNER = { ...NEON, access_kind: 'sign-in', setup: [] };
+  const original = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : {};
+    asked.push(url);
+    if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [{ id: 'mcp-registry', name: 'MCP Registry', kind: 'mcp' }] }) };
+    if (url === '/api/discovery/search') return { ok: true, json: async () => ({ clients: [], results: [{ ...SIGNER }] }) };
+    if (url === '/api/discovery/details') return { ok: true, json: async () => ({ ...SIGNER }) };
+    if (url === '/api/batch/preview') {
+      return { ok: false, status: 422, json: async () => ({ detail: 'neon needs sign-in.', row: body.requests.at(-1).id, needs: { ...SIGN_IN_WAITS, refused: false } }) };
+    }
+    if (url === '/api/sign-in/start') return { ok: true, status: 200, json: async () => ({}) };
+    if (url === '/api/sign-in/wait') return new Promise(() => {});
+    return original(url, init);
+  };
+  try {
+    await cancelTray();
+    const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+    await openDiscovery('mcp', {});
+    for (let i = 0; i < 8; i++) await wait();
+    await press(find((n) => n.classList.contains('res') && text(n).includes('neon'))[0]);
+    for (let i = 0; i < 8; i++) await wait();
+    const signIn = find((n) => n.tagName === 'BUTTON' && n.textContent === 'Sign in')[0];
+    assert.ok(signIn);
+    await press(signIn);
+    for (let i = 0; i < 8; i++) await wait();
+    assert.equal(tray.rows.length, 1);
+    assert.equal(tray.rows[0].waits.sign_in, 's1');
+    assert.equal(asked.includes('/api/sign-in/start'), true);
+  } finally { globalThis.fetch = original; await cancelTray(); }
+});
+
+test('Cancel shows at once, also while Kitden prepares the sign-in page', async () => {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const server = signInServer({ '/api/sign-in/start': [() => held] });
+  try {
+    const form = signInForm(SIGN_IN_WAITS, async () => true);
+    const running = form.start();
+    await wait(); await wait();
+    assert.deepEqual(buttonWords(form), ['Waiting for browser…', 'Cancel']);
+    await press(buttonsOf(form).find((n) => n.textContent === 'Cancel'));
+    assert.deepEqual(server.asked.at(-1), ['/api/sign-in/cancel', { id: 's1' }]);
+    release({ status: 422, json: { detail: 'Sign-in was cancelled.' } });
+    await running;
+    assert.deepEqual(buttonWords(form), ['Try again']);
+  } finally { server.restore(); }
+});
+
+test('signing a held server in again has no token field to fall back to', async () => {
+  const later = 'neon does not let Kitden sign in yet. It may take an API key; see its docs.';
+  const server = signInServer({ '/api/sign-in/start': [{ status: 422, json: { detail: later, cannot: true } }] });
+  try {
+    const form = signInForm(SIGN_IN_WAITS, async () => true, null);
+    await form.start();
+    assert.equal(text(form.node).includes(later), true);
+    assert.equal(inside(form.node).some((n) => n.tagName === 'INPUT'), false);
+  } finally { server.restore(); }
+});
+
+test('catalog Sign in, when the preview asks for a token instead, opens the token panel', async () => {
+  const SIGNER = { ...NEON, access_kind: 'sign-in', setup: [] };
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : {};
+    if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [{ id: 'mcp-registry', name: 'MCP Registry', kind: 'mcp' }] }) };
+    if (url === '/api/discovery/search') return { ok: true, json: async () => ({ clients: [], results: [{ ...SIGNER }] }) };
+    if (url === '/api/discovery/details') return { ok: true, json: async () => ({ ...SIGNER }) };
+    if (url === '/api/batch/preview') return { ok: false, status: 422, json: async () => ({ detail: 'neon needs a token.', row: body.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [TOKEN], reason: 'neon needs a token.', refused: false } }) };
+    return original(url, init);
+  };
+  try {
+    await cancelTray();
+    const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+    await openDiscovery('mcp', {});
+    for (let i = 0; i < 8; i++) await wait();
+    await press(find((n) => n.classList.contains('res') && text(n).includes('neon'))[0]);
+    for (let i = 0; i < 8; i++) await wait();
+    await press(find((n) => n.tagName === 'BUTTON' && n.textContent === 'Sign in')[0]);
+    for (let i = 0; i < 8; i++) await wait();
+    assert.ok(find((n) => n.tagName === 'INPUT' && n.type === 'password')[0]);
+    assert.ok(find((n) => n.tagName === 'BUTTON' && n.textContent === 'Add token')[0]);
+  } finally { globalThis.fetch = original; await cancelTray(); }
 });

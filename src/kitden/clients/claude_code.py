@@ -26,18 +26,22 @@ from kitden.clients.base import (
     check_toggle,
     expand,
     file_source,
+    hook_items,
     instruction_items,
     is_direct_entry,
     is_home,
     is_own_skill,
     marketplace_source,
     mcp_item,
+    mcp_items,
+    need_folder,
     plain_source,
     project,
     skill_items,
     toggle_action,
 )
 from kitden.clients.versions import highest_version, is_supported
+from kitden.local_gateway.settings import as_dict
 from kitden.model import (
     Client,
     ClientStatus,
@@ -90,10 +94,6 @@ def _on(value: bool | None) -> Enabled:
     return Enabled.UNKNOWN if value is None else (Enabled.ON if value else Enabled.OFF)
 
 
-def _dict(value: Any) -> dict:
-    return value if isinstance(value, dict) else {}
-
-
 # checked 2026-10-26 (code.claude.com/docs/en/skills, "Override skill visibility from settings"):
 # `skillOverrides` maps a skill name to "on", "name-only", "user-invocable-only" or "off"; a
 # skill that is not listed is "on". Only "off" turns a skill off. Plugin skills are not affected.
@@ -108,7 +108,7 @@ def _skill_rules(layers: list[tuple[Scope, dict]]) -> dict[str, tuple[str, Scope
     Values the docs do not list are ignored."""
     rules: dict[str, tuple[str, Scope]] = {}
     for scope, settings in layers:
-        for name, state in _dict(settings.get("skillOverrides")).items():
+        for name, state in as_dict(settings.get("skillOverrides")).items():
             if state in SKILL_STATES:
                 rules[name] = (state, scope)
     return rules
@@ -196,7 +196,7 @@ def rule_file(project: Path, home: Path) -> Path | None:
     return next((f for f in reversed(local_files(project, home)) if f.parent.is_dir()), None)
 
 
-def _holds(path: Path, key: tuple[str, str]) -> bool:
+def holds(path: Path, key: tuple[str, str]) -> bool:
     """The settings file has `key`; a file Kitden cannot read may have it."""
     try:
         data = json.loads(path.read_text())
@@ -204,7 +204,7 @@ def _holds(path: Path, key: tuple[str, str]) -> bool:
         return False
     except (OSError, ValueError):
         return True
-    return isinstance(data, dict) and key[1] in _dict(data.get(key[0]))
+    return isinstance(data, dict) and key[1] in as_dict(data.get(key[0]))
 
 
 class ClaudeCodeAdapter(ClientAdapter):
@@ -251,8 +251,8 @@ class ClaudeCodeAdapter(ClientAdapter):
 
     def plugin_step(self, item: Item, enable: bool) -> Step:
         check_toggle(self, item, enable)
-        if item.scope is Scope.PROJECT and not Path(str(item.project)).is_dir():
-            raise ValueError(f"the project folder {item.project} is missing")
+        if item.scope is Scope.PROJECT:
+            need_folder(item.project)
         edit = FileEdit(
             path=str(item.source.path),
             fmt="json",
@@ -277,7 +277,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         taken out goes from each local file that holds it."""
         if project is None:
             return [self.home / ".claude/settings.json"]
-        holding = [f for f in local_files(Path(project), self.home) if _holds(f, key)]
+        holding = [f for f in local_files(Path(project), self.home) if holds(f, key)]
         if not off and holding:
             return holding
         # A rule set goes to `rule_file`. So does a removal no local file holds (the key is
@@ -329,11 +329,11 @@ class ClaudeCodeAdapter(ClientAdapter):
 
     def marketplace_sources(self) -> dict[str, str | None]:
         read = Reader(CLIENT)
-        settings = _dict(read.json(self.home / ".claude/settings.json"))
-        known = _dict(read.json(self.home / ".claude/plugins/known_marketplaces.json"))
+        settings = as_dict(read.json(self.home / ".claude/settings.json"))
+        known = as_dict(read.json(self.home / ".claude/plugins/known_marketplaces.json"))
         sources: dict[str, str | None] = {}
-        for name, entry in {**_dict(settings.get("extraKnownMarketplaces")), **known}.items():
-            source = _dict(_dict(entry).get("source"))
+        for name, entry in {**as_dict(settings.get("extraKnownMarketplaces")), **known}.items():
+            source = as_dict(as_dict(entry).get("source"))
             value = source.get("repo") or source.get("url") or source.get("path")
             sources[name] = value if isinstance(value, str) else None
         return sources
@@ -367,8 +367,7 @@ class ClaudeCodeAdapter(ClientAdapter):
             # code.claude.com/docs/en/plugins/install): `-s project`, run in the project, puts
             # the plugin in `enabledPlugins` of <project>/.claude/settings.json, the file the
             # project shares; `uninstall -s project` takes it out there.
-            if not Path(project).is_dir():
-                raise ValueError(f"the project folder {project} is missing")
+            need_folder(project)
             root, scope = Path(project), Scope.PROJECT
         edit = FileEdit(
             path=str(root / ".claude/settings.json"),
@@ -399,8 +398,8 @@ class ClaudeCodeAdapter(ClientAdapter):
     def plugin_remove_step(self, item: Item) -> Step:
         if PLUGIN_REMOVE not in self.item_actions(item):
             raise ValueError(f"{item.name} cannot be removed here")
-        if item.scope is Scope.PROJECT and not Path(str(item.project)).is_dir():
-            raise ValueError(f"the project folder {item.project} is missing")
+        if item.scope is Scope.PROJECT:
+            need_folder(item.project)
         edit = FileEdit(
             path=str(item.source.path),
             fmt="json",
@@ -432,21 +431,21 @@ class ClaudeCodeAdapter(ClientAdapter):
         )
 
     def marketplace_roots(self) -> dict[str, Path]:
-        known = _dict(Reader(CLIENT).json(self.home / ".claude/plugins/known_marketplaces.json"))
+        known = as_dict(Reader(CLIENT).json(self.home / ".claude/plugins/known_marketplaces.json"))
         roots = {}
         for name, entry in known.items():
-            where = _dict(entry).get("installLocation")
+            where = as_dict(entry).get("installLocation")
             if isinstance(where, str) and Path(where).is_dir():
                 roots[name] = Path(where)
         return roots
 
     def plugin_folders(self) -> dict[str, Path]:
         """Plugin id -> its install folder, the first one in `installed_plugins.json` on disk."""
-        record = _dict(Reader(CLIENT).json(self.home / ".claude/plugins/installed_plugins.json"))
+        record = as_dict(Reader(CLIENT).json(self.home / ".claude/plugins/installed_plugins.json"))
         out: dict[str, Path] = {}
-        for plugin_id, installs in _dict(record.get("plugins")).items():
+        for plugin_id, installs in as_dict(record.get("plugins")).items():
             for install in installs if isinstance(installs, list) else []:
-                where = _dict(install).get("installPath")
+                where = as_dict(install).get("installPath")
                 if isinstance(where, str) and Path(where).is_dir():
                     out[plugin_id] = Path(where)
                     break
@@ -465,9 +464,6 @@ class ClaudeCodeAdapter(ClientAdapter):
     def setup_server_step(self, command: str, args: list[str]) -> Step:
         return self._add_entry(SETUP_NAME, {"type": "stdio", "command": command, "args": args})
 
-    def add_server_step(self, name: str, entry: dict) -> Step:
-        return self._add_entry(name, entry)
-
     def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
         """A user-scope MCP entry, added with `claude mcp add-json` (FR-021, FR-024), or written
         directly when it holds a secret."""
@@ -483,24 +479,18 @@ class ClaudeCodeAdapter(ClientAdapter):
         # Claude Code keeps user-scope servers in ~/.claude.json. They do not describe editing
         # that file by hand. A secret in the arguments is visible to `ps` while the command
         # runs, so Kitden writes an entry with one into the file itself, with a backup.
-        if redact(value)[1]:
-            return Step(
-                client=CLIENT,
-                scope=Scope.USER,
-                name=name,
-                edit=edit,
-                restart_note=NEW_SESSION,
-                login_note=login,
-            )
+        cli: dict[str, Any] = {}
+        if not redact(value)[1]:
+            command = ["claude", "mcp", "add-json", "-s", "user", name, json.dumps(value)]
+            cli = {"mechanism": "client_cli", "command": command}
         return Step(
             client=CLIENT,
             scope=Scope.USER,
             name=name,
             edit=edit,
-            mechanism="client_cli",
-            command=["claude", "mcp", "add-json", "-s", "user", name, json.dumps(value)],
             restart_note=NEW_SESSION,
             login_note=login,
+            **cli,
         )
 
     def remove_step(self, item: Item) -> Step:
@@ -509,8 +499,8 @@ class ClaudeCodeAdapter(ClientAdapter):
         key: tuple[str, ...] = ("mcpServers", item.name)
         if item.scope is Scope.LOCAL:
             key = ("projects", str(item.project), "mcpServers", item.name)
-        if item.scope is not Scope.USER and not Path(str(item.project)).is_dir():
-            raise ValueError(f"the project folder {item.project} is missing")
+        if item.scope is not Scope.USER:
+            need_folder(item.project)
         edit = FileEdit(
             path=str(item.source.path),
             fmt="json",
@@ -535,46 +525,33 @@ class ClaudeCodeAdapter(ClientAdapter):
         scan = Scan()
         state_path = self.home / ".claude.json"
         settings_path = self.home / ".claude/settings.json"
-        state = _dict(read.json(state_path))
-        settings = _dict(read.json(settings_path))
+        state = as_dict(read.json(state_path))
+        settings = as_dict(read.json(settings_path))
         settings_known = not read.failed(settings_path)
 
         # MCP servers: user scope, then per-project local scope and project .mcp.json files.
-        for name, entry in _dict(state.get("mcpServers")).items():
-            scan.items.append(
-                mcp_item(
-                    CLIENT,
-                    name,
-                    entry,
-                    file_source(state_path, CLIENT, f"mcpServers.{name}"),
-                    Scope.USER,
-                )
-            )
+        scan.items += mcp_items(CLIENT, state.get("mcpServers"), state_path, Scope.USER)
         project_skill_rules: dict[str, dict[str, tuple[str, Scope]]] = {}
-        for path, data in _dict(state.get("projects")).items():
-            data = _dict(data)
+        for path, data in as_dict(state.get("projects")).items():
+            data = as_dict(data)
             scan.projects.append(project(path, CLIENT))
-            for name, entry in _dict(data.get("mcpServers")).items():
-                key = f"projects.{path}.mcpServers.{name}"
-                scan.items.append(
-                    mcp_item(
-                        CLIENT,
-                        name,
-                        entry,
-                        file_source(state_path, CLIENT, key),
-                        Scope.LOCAL,
-                        project=path,
-                    )
-                )
+            scan.items += mcp_items(
+                CLIENT,
+                data.get("mcpServers"),
+                state_path,
+                Scope.LOCAL,
+                project=path,
+                table=f"projects.{path}.mcpServers",
+            )
             found, rules = self._project_files(read, Path(path), data, settings, settings_known)
             scan.items += found
             if rules is not None:
                 project_skill_rules[path] = rules
 
         # Plugins: user settings decide on/off; project settings may override.
-        enabled = _dict(settings.get("enabledPlugins"))
-        installed = _dict(
-            _dict(read.json(self.home / ".claude/plugins/installed_plugins.json")).get("plugins")
+        enabled = as_dict(settings.get("enabledPlugins"))
+        installed = as_dict(
+            as_dict(read.json(self.home / ".claude/plugins/installed_plugins.json")).get("plugins")
         )
         for plugin_id, installs in installed.items():
             state_on = _on(enabled.get(plugin_id)) if settings_known else Enabled.UNKNOWN
@@ -595,17 +572,17 @@ class ClaudeCodeAdapter(ClientAdapter):
             )
             for install in installs if isinstance(installs, list) else []:
                 scan.items += self._plugin_parts(
-                    read, Path(_dict(install).get("installPath", "")), state_on
+                    read, Path(as_dict(install).get("installPath", "")), state_on
                 )
+        account = Source(
+            kind=SourceKind.ACCOUNT,
+            path=None,
+            owner_client=CLIENT,
+            read_status=ReadStatus.UNKNOWN,
+            unknown_reason=UnknownReason.STORED_IN_ACCOUNT,
+        )
         for plugin_id, value in enabled.items():
             if plugin_id.endswith("@synced"):
-                account = Source(
-                    kind=SourceKind.ACCOUNT,
-                    path=None,
-                    owner_client=CLIENT,
-                    read_status=ReadStatus.UNKNOWN,
-                    unknown_reason=UnknownReason.STORED_IN_ACCOUNT,
-                )
                 scan.items.append(
                     Item(
                         client=CLIENT,
@@ -622,13 +599,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                 client=CLIENT,
                 kind=ItemKind.PLUGIN,
                 name="Claude account plugins and connectors",
-                source=Source(
-                    kind=SourceKind.ACCOUNT,
-                    path=None,
-                    owner_client=CLIENT,
-                    read_status=ReadStatus.UNKNOWN,
-                    unknown_reason=UnknownReason.STORED_IN_ACCOUNT,
-                ),
+                source=account,
                 scope=Scope.ACCOUNT,
                 enabled=Enabled.UNKNOWN,
                 change_hint=ACCOUNT_HINT,
@@ -645,10 +616,10 @@ class ClaudeCodeAdapter(ClientAdapter):
         scan.items += instruction_items(
             CLIENT, _instruction_files(self.home / ".claude"), Scope.USER, CLIENT
         )
-        scan.items += self._hooks(settings, settings_path, Scope.USER)
+        scan.items += hook_items(CLIENT, settings, settings_path, Scope.USER)
         marketplaces_path = self.home / ".claude/plugins/known_marketplaces.json"
-        for name, entry in _dict(read.json(marketplaces_path)).items():
-            where = marketplace_source(_dict(entry).get("source"))
+        for name, entry in as_dict(read.json(marketplaces_path)).items():
+            where = marketplace_source(as_dict(entry).get("source"))
             scan.items.append(
                 Item(
                     client=CLIENT,
@@ -662,16 +633,8 @@ class ClaudeCodeAdapter(ClientAdapter):
 
         # Claude Desktop Code tab also loads claude_desktop_config.json.
         desktop_path = self.home / DESKTOP_CONFIG
-        for name, entry in _dict(_dict(read.json(desktop_path)).get("mcpServers")).items():
-            scan.items.append(
-                mcp_item(
-                    DESKTOP,
-                    name,
-                    entry,
-                    file_source(desktop_path, DESKTOP, f"mcpServers.{name}"),
-                    Scope.USER,
-                )
-            )
+        servers = as_dict(read.json(desktop_path)).get("mcpServers")
+        scan.items += mcp_items(DESKTOP, servers, desktop_path, Scope.USER)
 
         scan.problems = read.problems
         return scan
@@ -685,7 +648,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         approved = set(data.get("enabledMcpjsonServers") or [])
         rejected = set(data.get("disabledMcpjsonServers") or [])
         mcp_path = root / ".mcp.json"
-        for name, entry in _dict(_dict(read.json(mcp_path)).get("mcpServers")).items():
+        for name, entry in as_dict(as_dict(read.json(mcp_path)).get("mcpServers")).items():
             state = (
                 Enabled.OFF
                 if name in rejected
@@ -707,9 +670,9 @@ class ClaudeCodeAdapter(ClientAdapter):
                 )
             )
         settings_path = root / ".claude/settings.json"
-        settings = _dict(read.json(settings_path))
+        settings = as_dict(read.json(settings_path))
         # The local files, the winning one last; each plugin key comes from the last that has it.
-        locals_ = [(path, _dict(read.json(path))) for path in local_files(root, self.home)]
+        locals_ = [(path, as_dict(read.json(path))) for path in local_files(root, self.home)]
         # checked 2026-10-26 (code.claude.com/docs/en/plugins/loading, "Find where a plugin is
         # enabled"): `enabledPlugins` is read from user, project (`.claude/settings.json`) and
         # local (`.claude/settings.local.json`) files; the highest source that names a plugin
@@ -721,7 +684,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                 (settings_path, settings, Scope.PROJECT),
                 *((p, data, Scope.LOCAL) for p, data in locals_),
             )
-            for plugin_id, value in _dict(file_settings.get("enabledPlugins")).items()
+            for plugin_id, value in as_dict(file_settings.get("enabledPlugins")).items()
         }
         for (scope, plugin_id), (file_path, value) in plugins.items():
             items.append(
@@ -736,7 +699,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                     state_scope=scope,
                 )
             )
-        items += self._hooks(settings, settings_path, Scope.PROJECT, project=path)
+        items += hook_items(CLIENT, settings, settings_path, Scope.PROJECT, project=path)
         rules = _skill_rules(
             [
                 (Scope.USER, user_settings),
@@ -767,26 +730,7 @@ class ClaudeCodeAdapter(ClientAdapter):
             CLIENT, root / "skills", Scope.PLUGIN, CLIENT, kind=SourceKind.PLUGIN, enabled=enabled
         )
         mcp_path = root / ".mcp.json"
-        for name, entry in _dict(_dict(read.json(mcp_path)).get("mcpServers")).items():
-            source = file_source(mcp_path, CLIENT, f"mcpServers.{name}", kind=SourceKind.PLUGIN)
-            items.append(mcp_item(CLIENT, name, entry, source, Scope.PLUGIN, enabled=enabled))
-        return items
-
-    def _hooks(
-        self, settings: dict, path: Path, scope: Scope, project: str | None = None
-    ) -> list[Item]:
-        items = []
-        for event, groups in _dict(settings.get("hooks")).items():
-            for group in groups if isinstance(groups, list) else []:
-                matcher = _dict(group).get("matcher") or "*"
-                items.append(
-                    Item(
-                        client=CLIENT,
-                        kind=ItemKind.HOOK,
-                        name=f"{event}: {matcher}",
-                        source=file_source(path, CLIENT, f"hooks.{event}"),
-                        scope=scope,
-                        project=project,
-                    )
-                )
-        return items
+        servers = as_dict(read.json(mcp_path)).get("mcpServers")
+        return items + mcp_items(
+            CLIENT, servers, mcp_path, Scope.PLUGIN, enabled=enabled, kind=SourceKind.PLUGIN
+        )

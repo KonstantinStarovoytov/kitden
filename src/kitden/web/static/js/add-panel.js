@@ -6,7 +6,7 @@
 //
 // `config`:
 // - `type`: what panelState says while it shows; `kicker`, `title`, `foot`, `noMatch`, `none`: its
-//   words; `pill`: [[kind, words]], "all" first; `addKey`: the data-focus key of the map's "+ Add".
+//   words; `pill`: [[kind, words]], "all" first; `addKey`: the data-focus key of the page's add button.
 // - `read()`: the rows ({ id, kind, name, marketplace, … } by marketplace), or null when they cannot
 //   be read; `learn(rows)` hears each read (null too).
 // - `words(row, waiting)`: { status, off, line }; `status`: { added, preview }, the words that look
@@ -23,20 +23,21 @@ const FAILED = "Could not read the marketplaces.";
 
 // The rows the search (part of the name, any case) and the pill ("all", or a kind) keep.
 export function matchRows(rows, query = "", kind = "all") {
-  const q = String(query).trim().toLowerCase();
-  return rows.filter((row) => (kind === "all" || row.kind === kind) && row.name.toLowerCase().includes(q));
+  const normalize = (value) => String(value).toLowerCase().replace(/[-_\s]+/g, " ").trim();
+  const terms = normalize(query).split(" ").filter(Boolean);
+  return rows.filter((row) => (kind === "all" || row.kind === kind) && terms.every((term) => normalize(row.name).includes(term)));
 }
 
-// The map's "+ Add", if the map shows it.
+// The page's add button in its header, if the page shows it.
 function mapAddButton(key) {
   const main = $("#main");
   return main && key ? withFocusKey(main, key) : null;
 }
 
-// "+ Add" looks pressed while the panel is open (add-notes §9.5).
+// The add button looks pressed while the panel is open (add-notes §9.5): a soft fill, not the
+// action color.
 function showPressed(node, on) {
   if (!node) return;
-  node.classList.toggle("primary", on);
   node.setAttribute("aria-expanded", String(on));
 }
 
@@ -49,8 +50,22 @@ export function shownList(config) {
   return open && open.config === config && open.list && open.list.node.isConnected ? open.list : null;
 }
 
+// The panel of `config`, while it shows its list, reads the list again and each row says what it
+// is now. An answer to an older read is dropped. The panel stays open and focus stays where it is.
+let reads = 0;
+export async function readAgain(config) {
+  const list = shownList(config);
+  if (!list) return;
+  list.paint();
+  const turn = ++reads;
+  const rows = await config.read();
+  if (!rows || turn !== reads || !list.node.isConnected) return;
+  config.learn(rows);
+  list.update(rows);
+}
+
 // Open the panel beside the map: its skeleton, then the rows read. `from` is the button that gets
-// focus back when it closes (the map's "+ Add"); it looks pressed until then. Focus goes to the
+// focus back when it closes (the page's add button); it looks pressed until then. Focus goes to the
 // search. Opened again while it shows its list, it stays as it is (its search and its pill too)
 // and focus goes to the search.
 export async function openAddPanel(config, { from = mapAddButton(config.addKey) } = {}) {
@@ -88,7 +103,7 @@ function addParts(config, rows, retry) {
   foot.append(icon("info", 13), el("span", null, config.foot));
   if (!rows) {
     const again = button("Try again", retry, "btn ghost small");
-    body.append(el("p", "muted", FAILED), again);
+    body.append(...(config.before ? config.before() : []), el("p", "muted", FAILED), again);
     return { nodes: [head, body, foot], focus: again, landed: () => again.focus(), list: null };
   }
   const list = rowList(rows, config);
@@ -100,7 +115,7 @@ function addParts(config, rows, retry) {
   search.append(icon("search", 14), input);
   const pill = kindPill(config.pill, (kind) => list.filter(input.value, kind));
   input.addEventListener("input", () => list.filter(input.value, pill.kind()));
-  body.append(search, pill.node, list.node, ...(config.after ? config.after() : []));
+  body.append(...(config.before ? config.before() : []), search, pill.node, list.node, ...(config.after ? config.after() : []));
   return { nodes: [head, body, foot], focus: input, landed: () => { input.focus(); pill.place(); }, list };
 }
 

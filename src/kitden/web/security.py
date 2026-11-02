@@ -3,7 +3,8 @@
 - Only Host 127.0.0.1:<port> or localhost:<port> (blocks DNS rebinding).
 - A start link with a random token sets an HttpOnly, SameSite=Strict session cookie.
   The link works while the page runs; `kitden open` reuses it.
-- Every request needs that cookie.
+- Every request needs that cookie, but the page the browser comes back to after a server's
+  sign-in (`/sign-in/done`), which only a waiting sign-in's `state` opens.
 - State-changing requests also need the exact same Origin, `Sec-Fetch-Site: same-origin` when
   sent, and the header `X-Tool-Request: 1`, so other websites cannot trigger them.
 - No CORS headers; a strict Content-Security-Policy without inline scripts (FR-041).
@@ -18,6 +19,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # Named per port: browsers share cookies across ports of one host (RFC 6265, section 8.5).
 COOKIE = "kitden_session"
+SIGN_IN_DONE = "/sign-in/done"
 SAFE_METHODS = {"GET", "HEAD"}
 SECURITY_HEADERS = {
     "content-security-policy": (
@@ -67,6 +69,12 @@ class SecurityMiddleware:
                 self.cookie, self.session, httponly=True, samesite="strict", path="/"
             )
             return redirect
+
+        # The browser comes back from a server's sign-in page here, sent by another site, so
+        # the SameSite=Strict cookie is not sent. Only a sign-in that waits for its `state`
+        # takes what it brings.
+        if path == SIGN_IN_DONE and method == "GET":
+            return None
 
         cookie = _cookie(headers.get("cookie", ""), self.cookie)
         if cookie is None or not secrets.compare_digest(cookie, self.session):

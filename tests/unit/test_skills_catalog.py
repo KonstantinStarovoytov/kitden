@@ -3,6 +3,7 @@
 import json
 import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -209,7 +210,7 @@ def add_cursor_plugin(home: Path) -> Path:
 def install_in_cursor(home: Path, plugin_id: str) -> None:
     """Add a user plugin to Cursor's install records."""
     key = "cursor.plugins.installedIds.123|no-workspace"
-    with sqlite3.connect(home / CURSOR_DB) as con:
+    with closing(sqlite3.connect(home / CURSOR_DB)) as con, con:
         (value,) = con.execute("SELECT value FROM ItemTable WHERE key = ?", (key,)).fetchone()
         records = [*json.loads(value), {"id": plugin_id, "sources": ["user"]}]
         con.execute("INSERT INTO ItemTable VALUES (?, ?)", (key, json.dumps(records)))

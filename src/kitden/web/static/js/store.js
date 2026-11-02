@@ -3,9 +3,9 @@
 import { getJson, query } from "./api.js";
 import { transition } from "./motion.js";
 
-export const VIEWS = ["overview", "library", "gateway", "changes", "agents"];
+const VIEWS = ["overview", "library", "gateway", "changes", "agents"];
 // Places the Library replaced: they open it on what is installed.
-export const OLD_VIEWS = ["map", "discover"];
+const OLD_VIEWS = ["map", "discover"];
 // The List shows what is installed, or only what differs between the clients. An old New or All
 // gives way to the add panel: it opens on what is installed.
 const SHOWS = ["mine", "diff"];
@@ -22,7 +22,7 @@ const OLD_KINDS = { mcp_server: { view: "gateway", mode: "list" }, hook: { mode:
 export const MAP_AT = 15;
 // The kinds of item the address can select: `sel=mcp_server:github`, `sel=tool:github/push_files`,
 // `sel=client:codex`, `sel=group:outside` (a map's group block, its id without `group:`).
-export const SEL_KINDS = ["mcp_server", "plugin", "skill", "hook", "marketplace", "instructions", "tool", "client", "group"];
+const SEL_KINDS = ["mcp_server", "plugin", "skill", "hook", "marketplace", "instructions", "tool", "client", "group"];
 // `selected` is the item picked on any page, { kind, name }, or null. `mode`: "map", "list" or
 // "" (no choice).
 export const state = {
@@ -262,7 +262,7 @@ export function setState(params) {
 
 // Back, Forward or an edited address: take the state from the address without a new entry. Its
 // selection opens as an arrival does.
-export function followAddress(next, { draw = true } = {}) {
+function followAddress(next, { draw = true } = {}) {
   const moving = next.view !== state.view;
   Object.assign(state, next);
   arrival.pending = Boolean(next.selected);
@@ -347,7 +347,7 @@ export async function loadMap() {
   await guarded("map", `/api/map${query({ project })}`, (v) => { data.map = v; }, project);
 }
 
-export async function loadGateway() {
+async function loadGateway() {
   const { project } = state;
   await guarded("gateway", `/api/gateway-view${query({ project })}`, (v) => { data.gateway = v; }, project);
   markGatewayData();
@@ -396,11 +396,7 @@ function openLibraryMap() {
   if (read) read.then(() => { if (state.view === "library") renderPlace(); }).catch((error) => console.error(error));
 }
 
-export async function loadChanges() {
-  await guarded("changes", "/api/changes", (v) => { data.changes = v; });
-}
-
-export async function loadSetupServer() {
+async function loadSetupServer() {
   await guarded("setupServer", "/api/setup-server", (v) => { data.setupServer = v; });
   markGatewayData();
 }

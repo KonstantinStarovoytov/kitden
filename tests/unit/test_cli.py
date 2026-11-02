@@ -100,7 +100,7 @@ def test_mcp_command_serves_the_read_only_server(monkeypatch, tmp_path):
 
 
 def test_installed_command_is_an_absolute_path():
-    from kitden.mcp_server import installed_command
+    from kitden.command import installed_command
 
     command = installed_command()
     assert command is not None and command.startswith("/")
@@ -152,6 +152,18 @@ def test_open_with_a_running_page_opens_it_and_starts_nothing(tmp_path, monkeypa
         lock.release()
     assert opened == ["http://127.0.0.1:47899/?token=tok"]
     assert "http://127.0.0.1:47899/?token=tok" in capsys.readouterr().out
+
+
+def test_open_starts_nothing_while_a_page_is_still_starting(tmp_path, monkeypatch):
+    """The page holds the lock but has not written its record yet: no second page starts."""
+    lock = page.PageLock(tmp_path)
+    assert lock.acquire()
+    monkeypatch.setattr(page, "start_background", lambda *a: pytest.fail("started a second page"))
+    monkeypatch.setattr(page, "wait_for_record", lambda home, seconds=0: None)
+    try:
+        assert main(["open", "--home", str(tmp_path), "--no-browser"]) == cli.EXIT_NOT_STARTED
+    finally:
+        lock.release()
 
 
 def test_open_starts_a_background_page_when_none_runs(tmp_path, monkeypatch):

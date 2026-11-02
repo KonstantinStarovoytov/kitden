@@ -261,9 +261,10 @@ def test_the_tray_bar_is_readable_in_both_themes():
         row = blend(theme["--preview-fill"], theme["--panel"])
         for ink in ("--ink", "--ink-3", "--route", "--success"):
             assert contrast(theme[ink], row) >= 4.5, (ink, row)
-        for ink in ("--ink-3", "--route"):
+        for ink in ("--ink-3", "--route", "--lamp-warn"):
             assert contrast(theme[ink], theme["--panel"]) >= 4.5, ink
-    assert ".dock .bar small.bad { color: var(--route); }" in CSS
+    # A refusal in the bar is amber, as everywhere (one look for refused).
+    assert ".dock .bar small.bad { color: var(--lamp-warn); }" in CSS
     # Applied is green with the label that was checked for it.
     rule = block(".dock .btn.ok, .dock .btn.ok:hover {")
     assert "background: var(--success);" in rule and "color: var(--on-success);" in rule

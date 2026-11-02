@@ -16,13 +16,12 @@ from mcp_types import ToolAnnotations
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import CursorAdapter
-from kitden.command import installed_command
 from kitden.gateways import load_gateways
 from kitden.local_gateway import proxy
 from kitden.local_gateway.settings import load_settings
 from kitden.local_gateway.views import gateway_items
 from kitden.model import Project
-from kitden.views.effective import DESKTOP, found_clients, project_views
+from kitden.views.effective import found_clients, project_views
 from kitden.views.explain import brief, explain
 from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
 from kitden.views.inventory import Inventory, build_inventory
@@ -77,8 +76,11 @@ def create_server(
 ) -> MCPServer:
     server = MCPServer(name="kitden", instructions=instructions)
 
-    def project_for(inventory: Inventory, project_path: str | None) -> Project | None:
-        return resolve_project(inventory, project_path or cwd())
+    def where(project_path: str | None) -> tuple[Inventory, Project | None, str | None]:
+        """A fresh read, the project asked for (the current folder by default) and its path."""
+        inventory = build()
+        project = resolve_project(inventory, project_path or cwd())
+        return inventory, project, project.path if project else None
 
     @server.tool(
         annotations=READ_ONLY,
@@ -91,9 +93,7 @@ def create_server(
         ),
     )
     def show_setup(project_path: str | None = None, client: str | None = None) -> dict[str, Any]:
-        inventory = build()
-        project = project_for(inventory, project_path)
-        path = project.path if project else None
+        inventory, project, path = where(project_path)
         if client is not None and client not in found_clients(inventory):
             raise ValueError(f"Unknown or missing client: {client}")
         views = [
@@ -120,9 +120,7 @@ def create_server(
         ),
     )
     def list_findings(project_path: str | None = None) -> dict[str, Any]:
-        inventory = build()
-        project = project_for(inventory, project_path)
-        path = project.path if project else None
+        inventory, project, path = where(project_path)
         found = find_findings(inventory, path) + find_bypasses(inventory, path)
         return {"project": _project_dict(project), "findings": [finding_dict(f) for f in found]}
 
@@ -137,9 +135,7 @@ def create_server(
     def explain_item(
         name: str, kind: str | None = None, project_path: str | None = None
     ) -> dict[str, Any]:
-        inventory = build()
-        project = project_for(inventory, project_path)
-        path = project.path if project else None
+        inventory, project, path = where(project_path)
         # An agent's answer leaves this computer: a file's first lines stay on the local page.
         definitions = [{**d, "preview": None} for d in explain(inventory, name, kind, path)]
         return {"project": _project_dict(project), "name": name, "definitions": definitions}
@@ -193,4 +189,4 @@ def known_projects(home: Path) -> list[str]:
     return [p.path for p in build_inventory(home, adapters, apps=[]).projects]
 
 
-__all__ = ["DESKTOP", "create_server", "installed_command", "resolve_project", "run"]
+__all__ = ["create_server", "resolve_project", "run"]

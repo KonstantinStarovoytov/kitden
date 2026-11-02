@@ -108,7 +108,8 @@ const batch = (id) => (sent) => ({
   },
 });
 
-const { drawChip, renderGateway } = await import('../../src/kitden/web/static/js/gateway.js');
+const { renderGateway } = await import('../../src/kitden/web/static/js/gateway.js');
+const { drawChip } = await import('../../src/kitden/web/static/js/map-page.js');
 const { dropBody } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { arrival, data, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, cancelTray, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
@@ -1210,7 +1211,7 @@ test('the List keeps its open servers when another project is picked', (t) => {
 
 // Phase 5 Task 4: a server the Add panel adds waits in preview on the map, at the end of its group
 // of the Kitden gateway, and lands there after Apply; an Undo plays it back.
-const { ADD_SERVER, openAdd, wasAdded } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const { ADD_SERVER, openLocalAdd: openAdd, wasAdded } = await import('../../src/kitden/web/static/js/gateway-add.js');
 const { gatewayCard } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const MARKET = [
   { id: 'test-helper@demo/test-status', name: 'test-status', plugin: 'test-helper', marketplace: 'demo', kind: 'remote', held: false, refusal: null },
@@ -1438,19 +1439,24 @@ test('Apply fails: the row still says In preview and the preview block stays', a
   assert.equal(node(box, STATUS_HELD), null);
 });
 
-test('the More door lets go of the selection, as + Add does, and an empty click leaves the panel', async (t) => {
+test('the More door and the Add a server card let go of the selection, as + Add does, and an empty click leaves the panel', async (t) => {
   const box = freshMap();
   t.after(addCleanUp);
   const kitden = VIEW.gateways[0];
   const more = gatewayCard(kitden, { view: VIEW, setup: [], clients: [] }).more.find((m) => m.label === ADD_SERVER);
   const selected = () => walk(box).filter((n) => /\bselected\b/.test(n.className)).length;
-  for (const door of ['more', 'plus']) {
+  for (const door of ['more', 'plus', 'card']) {
     press(box, 'block:gateway:kitden');
     settle();
     assert.equal(selected(), 1, door);
     queue('/api/market-servers', { status: 200, json: { servers: MARKET } });
+    queue('/api/discovery/sources', { status: 200, json: { sources: [], offline: true } });
     if (door === 'more') await more.run();
-    else press(box, 'add:servers');
+    else if (door === 'card') press(box, 'block:addslot:servers');
+    else press(pages['#main'], 'add:servers');
+    await done();
+    const local = walk(pages['#drawer']).find((n) => n.tagName === 'BUTTON' && n.textContent === 'On this Mac');
+    local.listeners.click[0]();
     await done();
     settle();
     assert.deepEqual([selected(), panelState.current && panelState.current.type], [0, 'add'], door);
@@ -1458,7 +1464,11 @@ test('the More door lets go of the selection, as + Add does, and an empty click 
     for (const fn of box.listeners.click) fn({ target: box });
     settle();
     assert.deepEqual([isPanelOpen(), panelState.current && panelState.current.type], [true, 'add'], door);
-    closePanel({ instant: true, focus: false });
+    // Closed, focus goes back to the card that opened it.
+    if (door === 'card') {
+      closePanel({ instant: true });
+      assert.equal(document.activeElement, node(box, 'block:addslot:servers'));
+    } else closePanel({ instant: true, focus: false });
   }
 });
 
@@ -1611,4 +1621,212 @@ test('under reduced motion the count lands at once', async (t) => {
   assert.ok(read);
   assert.equal(read.style.opacity, '');
   assert.equal(countOf(box).getAttribute('aria-expanded'), 'true');
+});
+
+// Picking several servers outside the gateway (gateway-pick.js). The document hears the band's
+// pointer here, as it does in a browser.
+const { clearPick, pick, PICK_HINT } = await import('../../src/kitden/web/static/js/gateway-pick.js');
+// The band and the drags listen for the window losing focus; a quiet stand-in unless a test hears it.
+globalThis.window ||= { addEventListener() {}, removeEventListener() {} };
+function hearDocument(t) {
+  const heard = {};
+  const was = [document.addEventListener, document.removeEventListener];
+  document.addEventListener = (type, fn) => { (heard[type] ||= []).push(fn); };
+  document.removeEventListener = (type, fn) => { heard[type] = (heard[type] || []).filter((f) => f !== fn); };
+  t.after(() => { [document.addEventListener, document.removeEventListener] = was; clearPick(); data.gateway = VIEW; });
+  // Two servers outside the gateway, one per client.
+  data.gateway = { ...VIEW, groups: { ...VIEW.groups, move: [...VIEW.groups.move, { name: 'docs', clients: ['codex'], columns: ['codex'], items: ['d'], stays: null }] } };
+  return heard;
+}
+const hintNow = () => (hintLine.hidden ? '' : hintLine.children.at(-1).textContent);
+const outsideNodes = (box) => walk(box).filter((n) => /^block:outside:/.test(n.dataset.focus || ''));
+const fireOn = (target, type, event = {}) => { for (const fn of target.listeners[type] || []) fn({ button: 0, target, preventDefault() {}, stopPropagation() {}, ...event }); };
+
+test('a band from empty map space picks the outside servers it meets, and the hint counts them', async (t) => {
+  const heard = hearDocument(t);
+  const box = freshMap();
+  const area = walk(box).find((n) => n.className === 'map-area');
+  area.getBoundingClientRect = () => ({ left: 0, top: 0 });
+  const [first, second] = outsideNodes(box).map((n) => n.style.translate.split(' ').map(parseFloat));
+  fireOn(box, 'pointerdown', { clientX: first[0] - 30, clientY: first[1] - 4 });
+  for (const fn of heard.pointermove || []) fn({ clientX: first[0] + 20, clientY: second[1] + 10 });
+  settle();
+  assert.equal(pick.ids.size, 2);
+  assert.ok(walk(area).some((n) => n.className === 'map-band'));
+  assert.equal(outsideNodes(box).filter((n) => n.classList.contains('selected')).length, 2);
+  assert.equal(hintNow(), PICK_HINT(2));
+  for (const fn of [...(heard.pointerup || [])]) fn({ type: 'pointerup', clientX: first[0] + 20, clientY: second[1] + 10 });
+  // The click that ends the band is swallowed.
+  assert.ok((heard.click || []).length > 0);
+  assert.equal(pick.ids.size, 2);
+});
+
+test('Shift- or Cmd-click picks and unpicks one server and opens no Details; Escape and an empty click clear', async (t) => {
+  const heard = hearDocument(t);
+  const box = freshMap();
+  const [a, b] = outsideNodes(box);
+  fireOn(box, 'pointerdown', { target: a, shiftKey: true });
+  press(box, a.dataset.focus);
+  fireOn(box, 'pointerdown', { target: b, metaKey: true });
+  press(box, b.dataset.focus);
+  await done();
+  settle();
+  assert.equal(pick.ids.size, 2);
+  assert.equal(isPanelOpen(), false);
+  fireOn(box, 'pointerdown', { target: a, shiftKey: true });
+  press(box, a.dataset.focus);
+  settle();
+  assert.deepEqual([...pick.ids], [b.dataset.focus.slice('block:'.length)]);
+  for (const fn of heard.keydown || []) fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+  settle();
+  assert.equal(pick.ids.size, 0);
+  assert.equal(hintNow(), MAP_HINT_WORDS);
+  fireOn(box, 'pointerdown', { target: b, shiftKey: true });
+  press(box, b.dataset.focus);
+  for (const fn of box.listeners.click) fn({ target: box });
+  settle();
+  assert.equal(pick.ids.size, 0);
+});
+const MAP_HINT_WORDS = 'Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client';
+
+test('a Shift-click on empty map keeps the pick, and a key press after it opens Details as usual', async (t) => {
+  hearDocument(t);
+  const box = freshMap();
+  const [a, b] = outsideNodes(box);
+  fireOn(box, 'pointerdown', { target: a, shiftKey: true });
+  press(box, a.dataset.focus);
+  settle();
+  fireOn(box, 'pointerdown', { target: box, shiftKey: true });
+  for (const fn of box.listeners.click) fn({ target: box });
+  settle();
+  assert.equal(pick.ids.size, 1);
+  // A key on the map (Enter on a block) is no Shift-click.
+  for (const fn of box.listeners.keydown) fn({ key: 'Enter', preventDefault() {}, stopPropagation() {} });
+  press(box, b.dataset.focus);
+  await done();
+  settle();
+  assert.equal(pick.ids.has(b.dataset.focus.slice('block:'.length)), false);
+});
+
+test('Escape clears the pick wherever focus is', async (t) => {
+  const heard = hearDocument(t);
+  const box = freshMap();
+  const [a] = outsideNodes(box);
+  fireOn(box, 'pointerdown', { target: a, shiftKey: true });
+  press(box, a.dataset.focus);
+  settle();
+  assert.equal(pick.ids.size, 1);
+  for (const fn of heard.keydown || []) fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+  settle();
+  assert.equal(pick.ids.size, 0);
+});
+
+// Fix round of the deferred minors (Parts 1 and 2).
+const { setBusy } = await import('../../src/kitden/web/static/js/store.js');
+// A stand-in window for the drags and the band (map-drag.js and gateway-pick.js listen for blur).
+function fakeWindow(t) {
+  const heard = {};
+  const was = globalThis.window;
+  globalThis.window = {
+    addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); },
+    removeEventListener: (type, fn) => { heard[type] = (heard[type] || []).filter((f) => f !== fn); },
+  };
+  t.after(() => { globalThis.window = was; });
+  return heard;
+}
+const pickOne = (box, node) => { fireOn(box, 'pointerdown', { target: node, shiftKey: true }); press(box, node.dataset.focus); settle(); };
+
+test('another project clears the pick, also when the same servers are outside there', async (t) => {
+  hearDocument(t);
+  const box = freshMap();
+  pickOne(box, outsideNodes(box)[0]);
+  assert.equal(pick.ids.size, 1);
+  t.after(() => { state.project = ''; data.scope.gateway = ''; freshMap(); });
+  pickProject('atlas', data.gateway);
+  settle();
+  assert.equal(pick.ids.size, 0);
+});
+
+test('a plain click on another block lets go of the pick as it opens its Details', async (t) => {
+  hearDocument(t);
+  const box = freshMap();
+  const [a, b] = outsideNodes(box);
+  pickOne(box, a);
+  fireOn(box, 'pointerdown', { target: b });
+  press(box, b.dataset.focus);
+  await done();
+  settle();
+  assert.equal(pick.ids.size, 0);
+  assert.equal(outsideNodes(box).filter((n) => n.classList.contains('selected') && n !== b).length, 0);
+  closePanel({ instant: true });
+});
+
+test('a grip press that clears the pick draws it cleared at once', async (t) => {
+  const hearDocumentNow = () => listened;
+  const listened = hearDocument(t);
+  fakeWindow(t);
+  const box = freshMap();
+  const [a, b] = outsideNodes(box);
+  pickOne(box, a);
+  assert.ok(a.classList.contains('selected'));
+  // A press on b's grip: the fake nodes find no block, and have no place, by themselves.
+  b.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 56 });
+  const heard = hearDocumentNow();
+  fireOn(box, 'pointerdown', { target: { closest: () => b }, clientX: 10, clientY: 10, pointerId: 1 });
+  assert.equal(pick.ids.size, 0);
+  assert.equal(a.classList.contains('selected'), false);
+  for (const fn of [...(heard.pointerup || [])]) fn({ type: 'pointerup', clientX: 10, clientY: 10 });
+  settle();
+});
+
+test('no band while a change is written, from a scrollbar, and none left after the window loses focus', async (t) => {
+  const heard = hearDocument(t);
+  fakeWindow(t);
+  const box = freshMap();
+  const area = walk(box).find((n) => n.className === 'map-area');
+  area.getBoundingClientRect = () => ({ left: 0, top: 0 });
+  const [first, second] = outsideNodes(box).map((n) => n.style.translate.split(' ').map(parseFloat));
+  const drawBand = (extra = {}) => {
+    fireOn(box, 'pointerdown', { clientX: first[0] - 30, clientY: first[1] - 4, ...extra });
+    for (const fn of heard.pointermove || []) fn({ clientX: first[0] + 20, clientY: second[1] + 10 });
+    settle();
+  };
+  setBusy(true);
+  drawBand();
+  setBusy(false);
+  assert.equal(pick.ids.size, 0);
+  // A press on the map's own scrollbar (past its client width) moves the map, not a band.
+  box.clientWidth = 400;
+  drawBand({ offsetX: 405, offsetY: 10 });
+  assert.equal(pick.ids.size, 0);
+  const windowHeard = fakeWindow(t);
+  drawBand();
+  assert.ok(walk(area).some((n) => n.className === 'map-band'));
+  for (const fn of windowHeard.blur || []) fn({});
+  assert.equal((heard.pointermove || []).length, 0);
+});
+
+// A server that waits for access is drawn amber where its preview goes; a press opens the panel
+// with its token field, and the dock row is not needed for it.
+test('a press on a waiting block opens the access panel', async (t) => {
+  const box = freshMap();
+  // The map's clock only runs in settle(): the clean-up lets the preview leave.
+  t.after(async () => { await cancelTray(); closePanel({ instant: true }); settle(); });
+  const needs = (sent) => {
+    const reason = 'github needs a token.';
+    return { status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'github', kind: 'token', fields: [{ field: 'headers', name: 'Authorization', label: 'Access token', prefix: 'Bearer ' }], reason, refused: false } } };
+  };
+  queue(PREVIEW, needs);
+  const body = dropBody(VIEW.groups.move[0], VIEW);
+  assert.equal(await addToTray(body), true);
+  settle();
+  const waiting = node(box, 'block:preview:github');
+  assert.match(waiting.className, /\bneeds\b/);
+  assert.ok(walk(waiting).some((n) => n.className === 'lamp warn'));
+  press(box, 'block:preview:github');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(isPanelOpen(), true);
+  assert.equal(tray.rows.length, 1, 'the press does not take it out');
+  const drawer = pages['#drawer'];
+  assert.ok(walk(drawer).some((n) => n.tagName === 'INPUT' && n.type === 'password'));
 });

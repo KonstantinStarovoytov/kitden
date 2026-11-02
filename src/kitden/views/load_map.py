@@ -12,11 +12,14 @@ gets the item (its route) for the hover text. The Claude Desktop Code tab has no
 own: its extra items show in the Claude Code column, with the route "from the Desktop app".
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from kitden.changes.actions import KITDEN_GATEWAY
+from kitden.clients.base import PLUGIN_REMOVE, REMOVE_DIRECT, SKILL_REMOVE
 from kitden.model import (
+    CLIENT_WORDS,
+    CLIENTS,
     ClientStatus,
     Enabled,
     FindingType,
@@ -25,14 +28,12 @@ from kitden.model import (
     Scope,
     _hash,
 )
-from kitden.views.effective import DESKTOP, effective_view
-from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_findings
+from kitden.views.effective import DESKTOP, column_of, effective_view, overrides
+from kitden.views.findings import base_name, find_bypasses, find_findings, group_of
 from kitden.views.match import Copies, is_compared, odd_sources, plugin_copies, plugin_of
 from kitden.views.words import CLIENT_UNREAD, NOT_SAME, ORIGIN_WORDS, ROUTE_WORDS, STALE
 
-COLUMNS = ("claude_code", "codex", "cursor")
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
-NAMES = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 
 
 @dataclass
@@ -83,8 +84,8 @@ def _route(item: Item, column: str) -> str | None:
     if item.via_gateway == KITDEN_GATEWAY:
         return ROUTE_WORDS["kitden"]
     owner = item.source.owner_client
-    if owner in NAMES and owner != column:
-        return ROUTE_WORDS["folder"].format(NAMES[owner])
+    if owner in CLIENTS and owner != column:
+        return ROUTE_WORDS["folder"].format(CLIENT_WORDS[owner])
     if item.scope is Scope.PLUGIN:
         return ROUTE_WORDS["plugin"]
     return None
@@ -112,7 +113,8 @@ def _deciding_first(item: Item, winners: set[str]) -> tuple[bool, bool]:
 
 
 def _own_first(item: Item, column: str) -> tuple[bool, str]:
-    return (item.source.owner_client in NAMES and item.source.owner_client != column, item.name)
+    owner = item.source.owner_client
+    return (owner in CLIENTS and owner != column, item.name)
 
 
 def _clock(at: str) -> str:
@@ -169,7 +171,7 @@ def _review(row: Row, items: dict[str, Item], copies: Copies) -> None:
         return
     compared = {
         c: [items[i] for i in row.cells[c].items if i in items and is_compared(items[i])]
-        for c in COLUMNS
+        for c in CLIENTS
         if row.cells[c].state == "on"
     }
     for column in odd_sources({c: group for c, group in compared.items() if group}, copies):
@@ -179,9 +181,9 @@ def _review(row: Row, items: dict[str, Item], copies: Copies) -> None:
 
 # What fixes a duplicate, and the action that does it where the page has one.
 DUPLICATE_FIXES = {
-    ItemKind.PLUGIN: ("Remove one copy to keep the other.", "plugin.remove"),
-    ItemKind.MCP_SERVER: ("Remove one entry to keep the other.", "mcp.remove_direct"),
-    ItemKind.SKILL: ("Remove one copy to keep the other.", "skill.remove"),
+    ItemKind.PLUGIN: ("Remove one copy to keep the other.", PLUGIN_REMOVE),
+    ItemKind.MCP_SERVER: ("Remove one entry to keep the other.", REMOVE_DIRECT),
+    ItemKind.SKILL: ("Remove one copy to keep the other.", SKILL_REMOVE),
 }
 
 
@@ -197,7 +199,7 @@ def _warning(text: str, client: str, fix: str, fix_action: str | None) -> dict:
 
 def _cross_client_fix(client: str, via: str, kind: ItemKind) -> str:
     """One copy is the client's own, the other is loaded from another client's folder."""
-    own, other = NAMES.get(client, client), NAMES.get(via, via)
+    own, other = CLIENT_WORDS.get(client, client), CLIENT_WORDS.get(via, via)
     if client == "cursor" and kind is ItemKind.PLUGIN:
         return (
             f"Two copies load in {own}: its own and {other}'s. To keep one: remove it in Cursor "
@@ -213,7 +215,7 @@ def _cross_client_fix(client: str, via: str, kind: ItemKind) -> str:
 def _flag(finding, item: Item, gateway_registered: bool, copies: list[Item]) -> dict | None:
     """A short flag for the row; warnings also carry the fix in words and the action."""
     if finding.type is FindingType.DUPLICATE_IN_CLIENT:
-        text = f"{NAMES.get(finding.client, finding.client)} loads it twice"
+        text = f"{CLIENT_WORDS.get(finding.client, finding.client)} loads it twice"
         others = sorted(
             {c.source.owner_client for c in copies if c.source.owner_client != finding.client}
         )
@@ -225,31 +227,22 @@ def _flag(finding, item: Item, gateway_registered: bool, copies: list[Item]) -> 
         fix, action = DUPLICATE_FIXES.get(item.kind, ("Remove one copy to keep the other.", None))
         return _warning(text, finding.client, fix, action)
     if finding.type is FindingType.BYPASSES_GATEWAY:
-        kind = bypass_kind(item)
-        if "plugin" in kind:
-            return {"text": "From plugin", "level": "info"}
-        if "local server" in kind:
-            return {"text": "Local server", "level": "info"}
+        text = {"plugin": "From plugin", "local": "Local server"}.get(group_of(item))
         # With a gateway, a direct server is an option to move, not a problem.
-        return {"text": "Direct connection" if gateway_registered else "Direct", "level": "info"}
+        text = text or ("Direct connection" if gateway_registered else "Direct")
+        return {"text": text, "level": "info"}
     return None
 
 
 def load_map(inventory, project: str | None, gateway_registered: bool = False) -> list[Row]:
     status = {c.id: c.status for c in inventory.clients}
-    views = {c: effective_view(inventory, c, project) for c in COLUMNS}
+    views = {c: effective_view(inventory, c, project) for c in CLIENTS}
     desktop = effective_view(inventory, DESKTOP, project) if status.get(DESKTOP) else None
     loaded: dict[str, list[Item]] = {c: list(v.items) for c, v in views.items()}
     if desktop:
         loaded["claude_code"] += [i for i in desktop.items if i.client == DESKTOP]
     winners = {w.id for v in views.values() for w, _, _ in v.shadowed}
-    # Project items that win over an all-projects definition of the same name.
-    overrides = {
-        w.id
-        for v in views.values()
-        for w, loser, _ in v.shadowed
-        if w.project is not None and loser.project is None
-    }
+    replacing = set().union(*(overrides(v) for v in views.values()))
 
     rows: dict[str, Row] = {}
 
@@ -270,7 +263,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     # Everywhere means user-level items only; a project adds its own items.
     applies = [i for i in inventory.items if i.project is None or i.project == project]
     for item in applies:
-        if item.client in COLUMNS or item.client == DESKTOP:
+        if item.client in CLIENTS or item.client == DESKTOP:
             row_for(item)
 
     by_row_loaded: dict[tuple[str, str], list[Item]] = {}
@@ -279,8 +272,8 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             by_row_loaded.setdefault((row_for(item).key, column), []).append(item)
     by_row_present: dict[tuple[str, str], list[Item]] = {}
     for item in applies:
-        column = "claude_code" if item.client == DESKTOP else item.client
-        if column in COLUMNS and (item.project is None or item.project == project):
+        column = column_of(item.client)
+        if column in CLIENTS:
             by_row_present.setdefault((row_for(item).key, column), []).append(item)
 
     # The plugin item that decides in each column, by plugin id: its parts follow it.
@@ -293,7 +286,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     items_by_id = {i.id: i for i in inventory.items}
     copies = plugin_copies(inventory)
     for row in rows.values():
-        for column in COLUMNS:
+        for column in CLIENTS:
             read = status.get(column)
             if read not in (ClientStatus.FOUND, ClientStatus.UNREADABLE):
                 row.cells[column] = Cell("missing")
@@ -303,13 +296,13 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
                 by_row_loaded.get((row.key, column), []),
                 by_row_present.get((row.key, column), []),
                 winners,
-                overrides,
+                replacing,
                 plugins.get(column, {}),
                 project is not None,
             )
             # A client Kitden could not read may have it: Unknown, never "—".
             if read is ClientStatus.UNREADABLE and cell.state == "none":
-                cell = Cell("unk", reason=CLIENT_UNREAD.format(NAMES[column]))
+                cell = Cell("unk", reason=CLIENT_UNREAD.format(CLIENT_WORDS[column]))
             row.cells[column] = cell
         _review(row, items_by_id, copies)
         # Kept from the last good read: the row's first flag says when.
@@ -337,8 +330,13 @@ def map_dict(inventory, rows: list[Row]) -> dict:
     status = {c.id: str(c.status) for c in inventory.clients}
     return {
         "columns": [
-            {"id": c, "name": NAMES[c], "mark": MARKS[c], "status": status.get(c, "not_found")}
-            for c in COLUMNS
+            {
+                "id": c,
+                "name": CLIENT_WORDS[c],
+                "mark": MARKS[c],
+                "status": status.get(c, "not_found"),
+            }
+            for c in CLIENTS
         ],
         "rows": [
             {
@@ -348,19 +346,7 @@ def map_dict(inventory, rows: list[Row]) -> dict:
                 "source": r.source,
                 "lookup": r.lookup,
                 "category": r.category,
-                "cells": {
-                    c: {
-                        "state": cell.state,
-                        "where": cell.where,
-                        "origin": cell.origin,
-                        "route": cell.route,
-                        "reason": cell.reason,
-                        "stale_at": cell.stale_at,
-                        "items": cell.items,
-                        "count": cell.count,
-                    }
-                    for c, cell in r.cells.items()
-                },
+                "cells": {c: asdict(cell) for c, cell in r.cells.items()},
                 "flags": r.flags,
             }
             for r in rows

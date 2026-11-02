@@ -16,7 +16,7 @@ from kitden.changes.actions import setup_server_steps
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner, find_command
 from kitden.changes.engine import Engine
-from kitden.mcp_server import installed_command
+from kitden.command import installed_command
 from kitden.model import ChangeState
 from kitden.views.inventory import default_adapters
 from tests.conftest import make_home

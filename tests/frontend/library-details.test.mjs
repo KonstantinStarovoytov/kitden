@@ -118,6 +118,7 @@ globalThis.fetch = (url, init = {}) => {
 
 const { renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
 const details = await import('../../src/kitden/web/static/js/library-details.js');
+const { offBodies, skillOffBodies, skillRuleWaits } = await import('../../src/kitden/web/static/js/library-rules.js');
 const { libraryTree } = await import('../../src/kitden/web/static/js/library-map.js');
 const { closePanel, closeForProject, initPanel, isPanelOpen, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { data, state } = await import('../../src/kitden/web/static/js/store.js');
@@ -319,7 +320,7 @@ test("a skill's Turn off for all projects adds one skill.rule row per client tha
   assert.deepEqual(facts(card), [['Plugin', 'None, a skill on its own'], ['State', 'On'], ['Comes from', 'All projects'], ['Source', 'Your skills'], ['Clients', '3 clients']]);
   assert.deepEqual(labels(card), [['Turn off for all projects…', false], ['Turn off in some projects…', false]]);
   assert.match(card.why, /Codex has no switch for one project\. Cursor has no switch to turn off one skill\.$/);
-  assert.deepEqual(details.offBodies(skill), [
+  assert.deepEqual(offBodies(skill), [
     { action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-rn' }], params: { scope: 'all', off: true } },
     { action: 'skill.rule', targets: [{ client: 'codex', item: 'cx-rn' }], params: { scope: 'all', off: true } },
   ]);
@@ -333,7 +334,7 @@ test("a skill's Turn off for all projects adds one skill.rule row per client tha
   assert.equal(off.getAttribute('aria-disabled'), 'true');
   assert.ok(texts(off).includes('In preview'));
   // A plugin turns off with its own switch, one row per client that has it on.
-  assert.deepEqual(details.offBodies(SUPERPOWERS), [{ action: 'plugin.disable', targets: [{ item: 'cc-sp' }], params: {} }]);
+  assert.deepEqual(offBodies(SUPERPOWERS), [{ action: 'plugin.disable', targets: [{ item: 'cc-sp' }], params: {} }]);
 });
 
 test('Turn off in some projects… uses the project checklist', async () => {
@@ -484,7 +485,7 @@ test('the tray never holds a skill rule for all projects and one for a project i
   press(node(box, 'block:item:s1'));
   await flush();
   // A rule for all projects waits: every project row is off and says why.
-  await addToTray(details.offBodies(skill)[0]);
+  await addToTray(offBodies(skill)[0]);
   await flush();
   press(node(drawer, 'action:Turn off in some projects…'));
   await flush();
@@ -498,7 +499,7 @@ test('the tray never holds a skill rule for all projects and one for a project i
   // A project rule waits: "Turn off for all projects…" leaves Claude Code out and says why.
   press(atlas);
   await flush();
-  assert.equal(details.skillOffBodies(skill, MEDIUM).map((b) => b.targets[0].client).join(), 'codex');
+  assert.equal(skillOffBodies(skill, MEDIUM).map((b) => b.targets[0].client).join(), 'codex');
   press(walk(drawer).find((n) => n.textContent === 'Done'));
   await flush();
   assert.ok(texts(drawer).includes('Apply the project rules in preview first; then Claude Code can turn it off for all projects.'));
@@ -508,7 +509,7 @@ test('the tray never holds a skill rule for all projects and one for a project i
   // A plugin's rule in one project is not skillOverrides: it blocks nothing.
   await cancelTray();
   await addToTray(details.projectBody(SUPERPOWERS, 'atlas'));
-  assert.equal(details.skillRuleWaits('project', MEDIUM), false);
+  assert.equal(skillRuleWaits('project', MEDIUM), false);
   await cancelTray();
 });
 
@@ -549,7 +550,7 @@ test('where the project decides, only Turn off in this project… is offered', a
   await flush();
   assert.deepEqual(tray.rows.map((r) => r.key), ['skill:claude_code:cc-sn@atlas']);
   await cancelTray();
-  await addToTray(details.offBodies(MEDIUM.groups[1].items[0])[0]);
+  await addToTray(offBodies(MEDIUM.groups[1].items[0])[0]);
   await flush();
   assert.equal(details.skillCard(mine, atlas).actions[0].node.hidden, true);
   await cancelTray();
@@ -745,7 +746,7 @@ test("Use the shared rule… takes the project's local key out, for a skill and 
   const skill = { ...MEDIUM.groups[1].items[0], by: { claude_code: 'off', codex: 'on', cursor: 'off' }, here: { claude_code: true }, can: { off: ['codex'], project: ['claude_code'], local: ['claude_code'], shared: [] } };
   assert.ok(labels(details.skillCard(skill, atlas)).some(([label]) => label === 'Use the shared rule…'));
   await addToTray(details.sharedBody(skill, atlas));
-  assert.equal(details.skillRuleWaits('project', MEDIUM), false);
+  assert.equal(skillRuleWaits('project', MEDIUM), false);
   await cancelTray();
   // The project's shared, committed settings: the line says so, and nothing changes that file.
   const committed = { ...plugin, can: { ...plugin.can, local: [], shared: ['claude_code'] } };

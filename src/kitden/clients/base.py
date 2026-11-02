@@ -14,7 +14,9 @@ from urllib.parse import urlsplit
 from kitden.clients import version_cache
 from kitden.clients.entries import entry_key, entry_refusal
 from kitden.clients.versions import is_supported
+from kitden.local_gateway.settings import as_dict
 from kitden.model import (
+    CLIENTS,
     COPY_FOLDER,
     REMOVE_FOLDER,
     Client,
@@ -234,6 +236,95 @@ def mcp_item(
     )
 
 
+def mcp_items(
+    client: str,
+    entries: Any,
+    path: Path,
+    scope: Scope,
+    project: str | None = None,
+    enabled: Enabled = Enabled.ON,
+    table: str = "mcpServers",
+    kind: SourceKind = SourceKind.FILE,
+) -> list[Item]:
+    """One MCP server item for each entry of a file's server table, named `table` in the key
+    each item keeps."""
+    return [
+        mcp_item(
+            client,
+            name,
+            entry,
+            file_source(path, client, f"{table}.{name}", kind=kind),
+            scope,
+            project=project,
+            enabled=enabled,
+        )
+        for name, entry in as_dict(entries).items()
+    ]
+
+
+def hook_items(
+    client: str,
+    settings: dict,
+    path: Path,
+    scope: Scope,
+    owner: str | None = None,
+    kind: SourceKind = SourceKind.FILE,
+    project: str | None = None,
+) -> list[Item]:
+    """One hook item for each matcher of each event in a Claude Code settings file. `owner` is
+    the client whose file it is, when that is not `client`."""
+    items = []
+    for event, groups in as_dict(settings.get("hooks")).items():
+        for group in groups if isinstance(groups, list) else []:
+            matcher = as_dict(group).get("matcher") or "*"
+            items.append(
+                Item(
+                    client=client,
+                    kind=ItemKind.HOOK,
+                    name=f"{event}: {matcher}",
+                    source=file_source(path, owner or client, f"hooks.{event}", kind=kind),
+                    scope=scope,
+                    project=project,
+                )
+            )
+    return items
+
+
+def visible_folders(parent: Path) -> list[Path]:
+    """The folders in `parent` that are not hidden, sorted; none when it is missing."""
+    found = parent.iterdir() if parent.is_dir() else []
+    return sorted(p for p in found if p.is_dir() and not p.name.startswith("."))
+
+
+def need_folder(project: str | None) -> None:
+    """Refuse a change in a project whose folder is missing."""
+    if not Path(str(project)).is_dir():
+        raise ValueError(f"the project folder {project} is missing")
+
+
+def file_step(
+    client: str,
+    path: Any,
+    fmt: str,
+    key: tuple[str, ...],
+    after: Any,
+    scope: Scope,
+    restart_note: str,
+    login: str | None = None,
+) -> Step:
+    """One plain edit of the entry at `key` in a client file, named by the key's last part. A
+    project's own file is shared."""
+    return Step(
+        client=client,
+        scope=scope,
+        name=key[-1],
+        edit=FileEdit(path=str(path), fmt=fmt, key=key, after=after),
+        restart_note=restart_note,
+        login_note=login,
+        shared_file=scope is Scope.PROJECT,
+    )
+
+
 # A git address written as `git@github.com:owner/repo.git`.
 _SCP = re.compile(r"[\w.-]+@([\w.-]+):(.+)")
 
@@ -330,6 +421,10 @@ class ClientAdapter(ABC):
 
     def add_server_step(self, name: str, entry: dict) -> Step:
         """The edit that adds one MCP entry, already in this client's format (user scope)."""
+        return self._add_entry(name, entry)
+
+    def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
+        """The edit that adds one user-scope MCP entry; `login` says how to sign in after."""
         raise ValueError(f"{self.id} cannot take an MCP entry")
 
     def plugin_step(self, item: Item, enable: bool) -> Step:
@@ -388,8 +483,8 @@ class ClientAdapter(ABC):
         """
         if not self.skills_folder:
             raise ValueError(f"{self.id} has no skills folder")
-        if project is not None and not Path(project).is_dir():
-            raise ValueError(f"the project folder {project} is missing")
+        if project is not None:
+            need_folder(project)
         root = Path(project) if project is not None else self.home
         target = root / self.skills_folder / folder.name
         if target.exists() or target.is_symlink():
@@ -453,6 +548,22 @@ def is_own_skill(item: Item, client: str) -> bool:
         and item.source.link_path is None
         and item.source.path is not None
     )
+
+
+def found_clients(inventory) -> list[str]:
+    """The clients found on this computer, the Desktop Code tab too, in scan order."""
+    return [c.id for c in inventory.clients if c.status is ClientStatus.FOUND]
+
+
+def found_columns(inventory) -> list[str]:
+    """The found clients that have a column (CLIENTS), in that order."""
+    found = found_clients(inventory)
+    return [c for c in CLIENTS if c in found]
+
+
+def from_plugin(item: Item) -> bool:
+    """The item comes with a plugin, or from a plugin's folder."""
+    return item.scope is Scope.PLUGIN or item.source.kind is SourceKind.PLUGIN
 
 
 def toggle_action(item: Item) -> tuple[str, ...]:

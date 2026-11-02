@@ -74,17 +74,23 @@ def get_value(text: str, path: tuple[str, ...]) -> Any:
     return _plain(current)
 
 
-def _set_picked(doc: Any, path: tuple[str, ...], value: Any) -> None:
-    """Change the picked table in place, or add it after the others with a blank line before."""
-    if not isinstance(value, dict) or PICK + str(value.get("path")) != path[-1]:
-        raise ValueError("a picked table must keep its path")
-    parent: Any = doc
-    for key in path[:-2]:
+def _parent(doc: Any, keys: tuple[str, ...]) -> Any:
+    """The table at `keys`, with each missing one added as a table that only groups."""
+    parent = doc
+    for key in keys:
         if key not in parent:
             parent[key] = tomlkit.table(is_super_table=True)
         parent = parent[key]
         if not isinstance(parent, dict):
             raise UnrecognizedFormatError(f"{key} is not a table")
+    return parent
+
+
+def _set_picked(doc: Any, path: tuple[str, ...], value: Any) -> None:
+    """Change the picked table in place, or add it after the others with a blank line before."""
+    if not isinstance(value, dict) or PICK + str(value.get("path")) != path[-1]:
+        raise ValueError("a picked table must keep its path")
+    parent = _parent(doc, path[:-2])
     tables = parent.get(path[-2])
     if tables is None:
         tables = parent[path[-2]] = tomlkit.aot()
@@ -115,14 +121,7 @@ def set_value(text: str, path: tuple[str, ...], value: Any) -> str:
     if path[-1].startswith(PICK):
         _set_picked(doc, path, value)
         return _trim(tomlkit.dumps(doc), text)
-    parent: Any = doc
-    for key in path[:-1]:
-        if key not in parent:
-            parent[key] = tomlkit.table(is_super_table=True)
-        parent = parent[key]
-        if not isinstance(parent, dict):
-            raise UnrecognizedFormatError(f"{key} is not a table")
-    parent[path[-1]] = value
+    _parent(doc, path[:-1])[path[-1]] = value
     return tomlkit.dumps(doc)
 
 

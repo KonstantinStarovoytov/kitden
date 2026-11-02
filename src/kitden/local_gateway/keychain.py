@@ -23,6 +23,7 @@ SERVICE = "kitden"
 SECURITY = "/usr/bin/security"  # by its full path, never from PATH
 NOT_FOUND = 44
 TIMEOUT = 20  # seconds; the Keychain may ask the user to unlock it
+SECRET_FIELDS = ("env", "headers")  # the gateway entry's maps whose values may be secrets
 REACH = "Kitden could not reach the Keychain."
 # Characters that would break the `security -i` command line.
 NOT_IN_ACCOUNTS = {'"', "\\"}
@@ -89,9 +90,9 @@ def delete(ref: dict, run: Runner = run_security) -> None:
 
 
 def references_in(entry: dict) -> list[dict]:
-    """The references among an entry's env values and header values."""
-    found = []
-    for field in ("env", "headers"):
+    """The references among an entry's env values and header values, and its sign-in's."""
+    found = [entry["sign_in"]] if is_reference(entry.get("sign_in")) else []
+    for field in SECRET_FIELDS:
         values = entry.get(field)
         if isinstance(values, dict):
             found += [value for value in values.values() if is_reference(value)]
@@ -101,7 +102,7 @@ def references_in(entry: dict) -> list[dict]:
 def resolve_entry(entry: dict, run: Runner = run_security) -> dict:
     """A copy of the entry with each reference replaced by its value from the Keychain."""
     resolved = dict(entry)
-    for field in ("env", "headers"):
+    for field in SECRET_FIELDS:
         values = entry.get(field)
         if isinstance(values, dict):
             resolved[field] = {name: _value(value, run) for name, value in values.items()}

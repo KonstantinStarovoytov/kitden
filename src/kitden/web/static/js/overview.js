@@ -103,7 +103,7 @@ export function renderOverview(main, { again = false } = {}) {
 
 // The lede's words, with each number as { num, value }: "3 things need your attention. Everything
 // else looks fine: 3 clients, 4 projects.", or "Everything looks fine: …" with nothing to fix.
-export function ledeParts({ attention, clients, projects }) {
+function ledeParts({ attention, clients, projects }) {
   const rest = [{ num: "clients", value: clients }, ` ${clients === 1 ? "client" : "clients"}, `, { num: "projects", value: projects }, ` ${projects === 1 ? "project" : "projects"}.`];
   if (!attention) return ["Everything looks fine: ", ...rest];
   return [{ num: "need", value: attention }, ` ${attention === 1 ? "thing needs" : "things need"} your attention. Everything else looks fine: `, ...rest];

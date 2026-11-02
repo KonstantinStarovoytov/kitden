@@ -17,6 +17,23 @@ export function switchedNow() {
   return switched;
 }
 
+// The page's add button, beside Map | List: a soft-accent button that opens the add panel. It keeps
+// the focus key the panel looks for (`add:servers`, `add:plugins`), so it looks pressed while the
+// panel is open and gets focus back when it closes.
+export function addHeadButton(label, key, onPress) {
+  const add = button(label, () => onPress(add), "btn add");
+  add.dataset.focus = key;
+  add.setAttribute("aria-expanded", "false");
+  return add;
+}
+
+// The add button and Map | List together at the head's end, so a narrow head wraps them as one.
+export function headActions(...nodes) {
+  const actions = el("div", "head-actions");
+  actions.append(...nodes);
+  return actions;
+}
+
 // The mark behind Map | List (or any pill) glides to a choice in 280 ms, under its own `key`.
 export const glidePill = (seg, choice, key) => glide(seg, choice, key, { duration: 280 });
 
@@ -51,7 +68,7 @@ function switchView({ place, id, mode, seg, choice, old, letGo, shows }) {
 }
 
 // Go to the other view of `place` (`params`), which comes in as one piece (switchedNow).
-export function goSwitched(place, params) {
+function goSwitched(place, params) {
   onSwitch.drawing = true;
   try {
     go(place, params);
@@ -62,7 +79,7 @@ export function goSwitched(place, params) {
 
 // The view `node` goes up 4 px and out in 120 ms ease-in, then `land()` runs; at once with no node
 // or under reduced motion. Only the latest call lands.
-export function leaveThen(node, land) {
+function leaveThen(node, land) {
   const turn = ++onSwitch.turn;
   const done = () => {
     onSwitch.leaving = false;

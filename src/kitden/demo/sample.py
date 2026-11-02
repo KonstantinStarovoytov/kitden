@@ -350,7 +350,7 @@ def _sqlite(db: Path, rows: dict[str, Any]) -> None:
         )
 
 
-def _tool(name: str, description: str, hints: dict | None = None) -> dict:
+def cached_tool(name: str, description: str, hints: dict | None = None) -> dict:
     """A tool as the gateway keeps it in its cache."""
     tool: dict[str, Any] = {
         "name": name,
@@ -405,15 +405,15 @@ def _gateway(home: Path, medium: bool) -> None:
         folder / TOOLS_FILE,
         {
             "files": [
-                _tool("read_file", "Read a file.", {"readOnlyHint": True}),
-                _tool("write_file", "Write a file.", {"destructiveHint": True}),
-                _tool("delete_file", "Delete a file."),
-                _tool("search_files", "Find files by name."),
+                cached_tool("read_file", "Read a file.", {"readOnlyHint": True}),
+                cached_tool("write_file", "Write a file.", {"destructiveHint": True}),
+                cached_tool("delete_file", "Delete a file."),
+                cached_tool("search_files", "Find files by name."),
             ],
             "tracker": [
-                _tool("list_issues", "List open issues.", {"readOnlyHint": True}),
-                _tool("create_issue", "Open a new issue."),
-                _tool("export_report", "Make a report of all issues."),
+                cached_tool("list_issues", "List open issues.", {"readOnlyHint": True}),
+                cached_tool("create_issue", "Open a new issue."),
+                cached_tool("export_report", "Make a report of all issues."),
             ],
         },
     )
@@ -489,7 +489,7 @@ def _bulk(home: Path) -> None:
         name = f"bench-held-{n:02d}" + (LONG if n == 0 else "")
         remote = {"url": f"https://example.test/{name}"}
         settings["servers"][name] = remote if n % 2 else {"command": "uvx", "args": [name]}
-        tools[name] = [_tool(*tool) for tool in BULK_TOOLS[: 4 + n % 3]]
+        tools[name] = [cached_tool(*tool) for tool in BULK_TOOLS[: 4 + n % 3]]
     _json(settings_file, settings)
     _json(tools_file, tools)
 

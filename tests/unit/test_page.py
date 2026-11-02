@@ -51,8 +51,7 @@ def test_the_record_is_private_and_removed_on_stop(tmp_path):
 
 def test_a_record_without_a_running_page_is_stale(tmp_path):
     page.write_record(tmp_path, port=47811, token="tok", background=False)
-    assert page.running_page(tmp_path) is None
-    assert page.read_record(tmp_path) is None
+    assert not page.page_running(tmp_path)
 
 
 def test_the_running_page_is_found_through_the_lock(tmp_path):
@@ -60,7 +59,8 @@ def test_the_running_page_is_found_through_the_lock(tmp_path):
     assert lock.acquire()
     try:
         page.write_record(tmp_path, port=47811, token="tok", background=False)
-        assert page.running_page(tmp_path)["port"] == 47811
+        assert page.page_running(tmp_path)
+        assert page.read_record(tmp_path)["port"] == 47811
     finally:
         lock.release()
 

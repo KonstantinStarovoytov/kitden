@@ -10,11 +10,9 @@ provided by the kitden plugin (feature 003): the page shows it and never adds a 
 import json
 from pathlib import Path
 
-from kitden.clients.base import SETUP_NAME, ClientAdapter
-from kitden.model import Enabled, Item, ItemKind, Scope, Step
+from kitden.clients.base import SETUP_NAME, ClientAdapter, found_clients
+from kitden.model import CLIENT_WORDS, CLIENTS, Enabled, Item, ItemKind, Scope, Step
 
-CLIENTS = ("claude_code", "codex", "cursor")
-CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 OLD_NAME = "agentsetup"
 
 
@@ -84,7 +82,7 @@ def setup_server_state(inventory) -> list[dict]:
     """Per client: `added`, `old`, `plugin`, `missing` or `not_installed`, and the old entry to
     update. A user-level entry wins over a plugin one, and a plugin one over an old entry, which is
     then only removed (the plugin already provides the server)."""
-    found = {c.id for c in inventory.clients if str(c.status) == "found"}
+    found = found_clients(inventory)
     states = []
     for client in CLIENTS:
         if client not in found:
