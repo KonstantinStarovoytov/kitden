@@ -1348,6 +1348,8 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .access-fields .field { min-width: 0; }
 .access-fields p { margin: 0; }
 .access-fields details[open] { display: grid; gap: 8px; }
+/* Sign in and its Cancel sit side by side while the browser is open. */
+.access-fields.sign-in-row { flex-direction: row; align-items: center; gap: 8px; }
 .access-fields summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
 .access-fields input { width: 100%; box-sizing: border-box; }
 /* The access form (access-form.js): refused is amber words that stay; works is the green lamp

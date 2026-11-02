@@ -807,3 +807,124 @@ test('values a local server takes are not called checked before it runs', () => 
   assert.equal(text(done), 'Saved on Apply. Checked when the gateway starts it');
   assert.equal(inside(done).some((n) => n.className === 'lamp on'), false);
 });
+
+// Browser sign-in (Part 3b): Sign in opens the server's page; the form waits for the browser.
+const { signInForm } = await import('../../src/kitden/web/static/js/access-form.js');
+const SIGN_IN_WAITS = { server: 'neon', kind: 'sign-in', sign_in: 's1', fields: [TOKEN], reason: 'neon needs sign-in.' };
+// A stand-in server for the sign-in calls: each address answers from its queue; a function
+// answer may be a held promise.
+function signInServer(answers) {
+  const original = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async (url, init = {}) => {
+    if (!url.startsWith('/api/sign-in/')) return original(url, init);
+    asked.push([url, init.body ? JSON.parse(init.body) : null]);
+    const queue = answers[url] || [];
+    const next = queue.length ? queue.shift() : { status: 200, json: {} };
+    const made = await (typeof next === 'function' ? next() : next);
+    return { ok: made.status < 400, status: made.status, json: async () => made.json };
+  };
+  return { asked, restore: () => { globalThis.fetch = original; } };
+}
+const buttonsOf = (form) => inside(form.node).filter((n) => n.tagName === 'BUTTON' && !n.hidden);
+const buttonWords = (form) => buttonsOf(form).map((n) => n.textContent);
+
+test('Sign in starts, waits for the browser and hands the sign-in on', async () => {
+  const server = signInServer({ '/api/sign-in/wait': [{ status: 200, json: { state: 'done' } }] });
+  try {
+    const got = [];
+    const form = signInForm(SIGN_IN_WAITS, async (id) => { got.push(id); return true; });
+    assert.deepEqual(buttonWords(form), ['Sign in']);
+    await form.start();
+    assert.deepEqual(server.asked, [['/api/sign-in/start', { id: 's1' }], ['/api/sign-in/wait', { id: 's1' }]]);
+    assert.deepEqual(got, ['s1']);
+    const done = inside(form.node).find((n) => n.className.split(' ').includes('access-works'));
+    assert.equal(text(done), 'Signed in');
+    assert.equal(inside(done).some((n) => n.className === 'lamp on'), true);
+  } finally { server.restore(); }
+});
+
+test('while the browser is open it says Waiting for browser… with a Cancel', async () => {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const server = signInServer({ '/api/sign-in/wait': [() => held] });
+  try {
+    const form = signInForm(SIGN_IN_WAITS, async () => true);
+    const running = form.start();
+    await wait(); await wait(); await wait();
+    assert.deepEqual(buttonWords(form), ['Waiting for browser…', 'Cancel']);
+    const cancel = buttonsOf(form).find((n) => n.textContent === 'Cancel');
+    await press(cancel);
+    assert.deepEqual(server.asked.at(-1), ['/api/sign-in/cancel', { id: 's1' }]);
+    release({ status: 200, json: { state: 'cancelled', detail: 'Sign-in was cancelled.' } });
+    await running;
+    const why = inside(form.node).find((n) => n.className.split(' ').includes('access-why'));
+    assert.equal(why.getAttribute('role'), 'alert');
+    assert.equal(text(why), 'Sign-in was cancelled.');
+    assert.deepEqual(buttonWords(form), ['Try again']);
+    await form.start();
+    assert.equal(server.asked.filter(([url]) => url === '/api/sign-in/start').length, 2);
+  } finally { server.restore(); }
+});
+
+test('a server Kitden cannot sign in to gets the reason and the token field', async () => {
+  const later = 'neon does not let Kitden sign in yet. It may take an API key; see its docs.';
+  const server = signInServer({ '/api/sign-in/start': [{ status: 422, json: { detail: later, cannot: true } }] });
+  try {
+    const tokens = [];
+    const form = signInForm(SIGN_IN_WAITS, async () => true, async (values) => { tokens.push(values); });
+    await form.start();
+    assert.equal(text(form.node).includes(later), true);
+    assert.equal(server.asked.some(([url]) => url === '/api/sign-in/wait'), false);
+    const input = inside(form.node).find((n) => n.tagName === 'INPUT');
+    input.value = 'abc';
+    fire(inside(form.node).find((n) => n.tagName === 'FORM'), 'submit');
+    await wait(); await wait();
+    assert.deepEqual(tokens, [{ headers: { Authorization: 'Bearer abc' } }]);
+  } finally { server.restore(); }
+});
+
+test('a refused sign-in keeps its reason and offers Try again', async () => {
+  const server = signInServer({ '/api/sign-in/wait': [{ status: 200, json: { state: 'done' } }] });
+  try {
+    const form = signInForm(SIGN_IN_WAITS, async () => false);
+    await form.start();
+    form.refuse('neon did not accept this sign-in.');
+    assert.equal(text(inside(form.node).find((n) => n.className.split(' ').includes('access-why'))), 'neon did not accept this sign-in.');
+    assert.deepEqual(buttonWords(form), ['Try again']);
+  } finally { server.restore(); }
+});
+
+test('the catalog details of a server that signs in offer Sign in, which adds the row and starts', async () => {
+  const SIGNER = { ...NEON, access_kind: 'sign-in', setup: [] };
+  const original = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : {};
+    asked.push(url);
+    if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [{ id: 'mcp-registry', name: 'MCP Registry', kind: 'mcp' }] }) };
+    if (url === '/api/discovery/search') return { ok: true, json: async () => ({ clients: [], results: [{ ...SIGNER }] }) };
+    if (url === '/api/discovery/details') return { ok: true, json: async () => ({ ...SIGNER }) };
+    if (url === '/api/batch/preview') {
+      return { ok: false, status: 422, json: async () => ({ detail: 'neon needs sign-in.', row: body.requests.at(-1).id, needs: { ...SIGN_IN_WAITS, refused: false } }) };
+    }
+    if (url === '/api/sign-in/start') return { ok: true, status: 200, json: async () => ({}) };
+    if (url === '/api/sign-in/wait') return new Promise(() => {});
+    return original(url, init);
+  };
+  try {
+    await cancelTray();
+    const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+    await openDiscovery('mcp', {});
+    for (let i = 0; i < 8; i++) await wait();
+    await press(find((n) => n.classList.contains('res') && text(n).includes('neon'))[0]);
+    for (let i = 0; i < 8; i++) await wait();
+    const signIn = find((n) => n.tagName === 'BUTTON' && n.textContent === 'Sign in')[0];
+    assert.ok(signIn);
+    await press(signIn);
+    for (let i = 0; i < 8; i++) await wait();
+    assert.equal(tray.rows.length, 1);
+    assert.equal(tray.rows[0].waits.sign_in, 's1');
+    assert.equal(asked.includes('/api/sign-in/start'), true);
+  } finally { globalThis.fetch = original; await cancelTray(); }
+});

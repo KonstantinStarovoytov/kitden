@@ -1377,6 +1377,19 @@ test('a single waiting row is drawn as a list, so its Add token shows', async ()
   assert.equal(named(bar(), 'tray-head')[0].children[0].textContent, 'neon needs access');
 });
 
+test('a row that waits for sign-in offers Sign in, and it opens the sign-in form', async () => {
+  await fresh();
+  const reason = 'neon needs sign-in.';
+  queue(PREVIEW, (sent) => ({ status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'neon', kind: 'sign-in', sign_in: 's1', fields: [], reason, refused: false } } }));
+  await addToTray(add('neon'));
+  assert.equal(button(bar(), 'Add token'), undefined);
+  const signIn = button(bar(), 'Sign in');
+  assert.ok(signIn);
+  await signIn.click();
+  await settle();
+  assert.ok(all(pages['#drawer']).some((n) => n.tag === 'button' && n.textContent === 'Sign in'));
+});
+
 test('a refused line in the dock is amber, not the accent', () => {
   const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
   assert.match(css, /\.dock \.bar small\.bad \{ color: var\(--lamp-warn\); \}/);

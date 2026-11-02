@@ -242,12 +242,14 @@ function setRowStatus(item, status) {
   item.mark.replaceChildren(...(marks[status] ? [marks[status]()] : []));
 }
 
-// A row that waits for access offers Add token (in place of its review, which it does not have
-// yet); it fades in over 200 ms. Once its token works it goes.
+// A row that waits for access offers Add token, or Sign in for a server that signs in through
+// the browser (in place of its review, which it does not have yet); it fades in over 200 ms.
+// Once its access works it goes.
 function setAddToken(item, row) {
   item.show.hidden = Boolean(row.waits);
   if (row.waits && !item.add) {
-    item.add = button("Add token", () => {
+    const words = row.waits.kind === "sign-in" && row.waits.sign_in ? "Sign in" : "Add token";
+    item.add = button(words, () => {
       const found = tray.rows.find((candidate) => candidate.key === row.key);
       if (found && found.waits) openAccess(found);
     }, "btn small add-token");

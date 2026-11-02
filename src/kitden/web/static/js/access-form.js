@@ -6,6 +6,7 @@ import { busyWhile, el, icon } from "./dom.js";
 import { closePanel, header, openPanel } from "./panel.js";
 import { animateTo, D, shake } from "./motion.js";
 import { giveAccess } from "./tray.js";
+import { postJson } from "./api.js";
 
 // "Token works" shows a moment before the panel goes.
 const WORKS_MS = 600;
@@ -109,22 +110,103 @@ export function accessForm(waits, onCheck) {
   return { node: form, values, focus, checking, works, refuse };
 }
 
+// Browser sign-in (Part 3b): Sign in opens the server's own page in the browser, and the form
+// waits for it ("Waiting for browser…", with a Cancel). `onSigned(id)` then adds the sign-in to
+// the change and answers true (joined), false (refused) or null. A server Kitden cannot sign in
+// to gets its reason and the token field, which runs `onToken(values)`.
+// Returns { node, start, signed, refuse }.
+export function signInForm(waits, onSigned, onToken = async () => {}) {
+  const node = el("div", "form access-form sign-in-form");
+  const row = el("div", "access-fields sign-in-row");
+  const go = el("button", "btn primary", "Sign in");
+  go.type = "button";
+  const cancel = el("button", "btn", "Cancel");
+  cancel.type = "button";
+  cancel.hidden = true;
+  row.append(go, cancel);
+  const why = el("p", "access-why");
+  why.setAttribute("role", "alert");
+  why.hidden = true;
+  const done = el("p", "access-works");
+  done.hidden = true;
+  const token = el("div", "sign-in-token");
+  node.append(row, why, done, el("p", "muted", "Saved in macOS Keychain on Apply."), token);
+
+  const refuse = (reason) => {
+    done.hidden = true;
+    why.replaceChildren(icon("triangle-alert", 14), reason);
+    why.hidden = false;
+    go.textContent = "Try again";
+    animateTo(why, [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { dur: 200 });
+    shake(row);
+  };
+  // Signed in: the green lamp, and a check drawn in 320 ms.
+  const signed = () => {
+    why.hidden = true;
+    const mark = icon("check", 14, "ic access-check");
+    done.replaceChildren(el("span", "lamp on"), mark, "Signed in");
+    done.hidden = false;
+    const line = mark.querySelector?.("path");
+    if (line) animateTo(line, [{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }], { dur: 320 });
+  };
+  const run = async () => {
+    why.hidden = true;
+    const started = await postJson("/api/sign-in/start", { id: waits.sign_in });
+    if (!started.ok) {
+      const reason = started.data?.detail || "Kitden could not open the sign-in page.";
+      refuse(reason);
+      if (started.data?.cannot && !token.children.length) token.append(accessForm({ ...waits, kind: "token" }, onToken).node);
+      return;
+    }
+    cancel.hidden = false;
+    const answer = await postJson("/api/sign-in/wait", { id: waits.sign_in });
+    cancel.hidden = true;
+    const ended = answer.data || {};
+    if (ended.state !== "done") {
+      refuse(ended.detail || `${waits.server} did not finish sign-in.`);
+      return;
+    }
+    if (await onSigned(waits.sign_in)) signed();
+  };
+  // Waiting for browser…: the words change at once, and the busy ring comes after 150 ms.
+  const start = () => {
+    go.textContent = "Waiting for browser…";
+    go.disabled = true;
+    const back = () => {
+      go.disabled = false;
+      if (go.textContent === "Waiting for browser…") go.textContent = "Sign in";
+    };
+    return busyWhile(go, run().finally(back)).catch(() => {});
+  };
+  go.addEventListener("click", () => { if (!go.disabled) start(); });
+  cancel.addEventListener("click", () => { postJson("/api/sign-in/cancel", { id: waits.sign_in }); });
+  return { node, start, signed, refuse };
+}
+
 // The panel for a row that waits (tray.js): its form, checked by asking the preview again. A
-// token that works closes the panel after a moment; a refused one keeps it, with the reason.
-export function openAccess(row) {
+// token that works closes the panel after a moment; a refused one keeps it, with the reason. A
+// server that signs in through the browser gets the Sign in form (`start`: begin at once).
+export function openAccess(row, { start = false } = {}) {
   const { waits } = row;
   const kicker = waits.kind === "sign-in" ? "Needs sign-in" : "Needs token";
-  const form = accessForm(waits, async (values) => {
+  const close = () => setTimeout(() => { if (form.node.isConnected) closePanel(); }, D(WORKS_MS));
+  const check = async (values) => {
     const joined = await giveAccess(row.key, values);
     if (joined) {
-      form.works();
-      setTimeout(() => { if (form.node.isConnected) closePanel(); }, D(WORKS_MS));
+      // The sign-in form shows Signed in itself when its check answers true.
+      if (form.works) form.works();
+      close();
     } else if (joined === false && row.waits) form.refuse(row.waits.reason);
-  });
+    return joined;
+  };
+  const form = waits.kind === "sign-in" && waits.sign_in
+    ? signInForm(waits, (id) => check({ sign_in: id }), check)
+    : accessForm(waits, check);
   const body = el("div", "body");
   body.append(form.node);
   openPanel([header(kicker, waits.server, waits.refused ? null : waits.reason), body]);
   if (waits.refused) form.refuse(waits.reason);
-  form.focus();
+  if (form.focus) form.focus();
+  if (start && form.start) form.start();
   return form;
 }

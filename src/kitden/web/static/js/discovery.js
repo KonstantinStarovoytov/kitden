@@ -2,7 +2,7 @@
 import { getJson, postJson } from "./api.js";
 import { button, el, icon } from "./dom.js";
 import { header, openPanel, panelState, review } from "./panel.js";
-import { accessForm } from "./access-form.js";
+import { accessForm, openAccess } from "./access-form.js";
 import { addFormBody, clientChecks } from "./offer.js";
 import { state } from "./store.js";
 import { cancelTray, inTray, keyFor, tray } from "./tray.js";
@@ -316,7 +316,19 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
     }
     const name = row.short || row.name.split("/").pop();
     const requestOf = (access) => installBody({ ...row, access }, []);
-    if (!definitions.length) {
+    if (row.access_kind === "sign-in" && !(row.setup || []).length) {
+      // Sign in adds the row, which waits for its sign-in, then starts it in the row's panel.
+      const go = el("button", "btn primary", "Sign in");
+      go.type = "button";
+      go.addEventListener("click", async () => {
+        const request = requestOf(null);
+        await review(request);
+        const found = tray.rows.find((each) => each.key === keyFor(request));
+        if (found && found.waits && found.waits.sign_in) openAccess(found, { start: true });
+        else if (found) options.added?.(request);
+      });
+      body.append(go);
+    } else if (!definitions.length) {
       body.append(addFormBody(null, chosen, () => requestOf(null), async (request) => {
         await review(request);
         if (inTray(keyFor(request))) options.added?.(request);
