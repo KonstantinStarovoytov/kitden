@@ -13,6 +13,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   and dark: find a server and drop it in, move several at once, and one token for every agent.
   Two commands and one line of guarantees follow. Steps, privacy and limits moved to
   [the guide](docs/guide.md). `scripts/record_readme.py` records the scenes again.
+- **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
+  so Cancel beside it no longer jumps as the words change.
 
 ### 0.4.0
 

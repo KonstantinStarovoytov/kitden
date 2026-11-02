@@ -329,6 +329,29 @@ function setLabel(words) {
   shown.step = { num, tail: parts[0] + parts[2] };
 }
 
+// While its change is written Apply keeps its place: its words change fast ("Applying…",
+// "Applying 2 of 5", "All applied"), so it only grows, gliding, and Cancel beside it does not jump.
+// Otherwise it is as wide as its words. A glide still running is cancelled first: while it runs
+// the browser reports its width, not the words' own.
+function holdWidth(apply, hold, change) {
+  const before = apply.getBoundingClientRect().width;
+  if (shown.widening) shown.widening.cancel();
+  shown.widening = null;
+  apply.style.minWidth = "";
+  change();
+  if (!hold) {
+    shown.held = 0;
+    return;
+  }
+  shown.held = Math.max(shown.held || before, apply.getBoundingClientRect().width);
+  apply.style.minWidth = `${shown.held}px`;
+  if (Math.abs(shown.held - before) < 1) return;
+  const running = apply.getAnimations ? apply.getAnimations().length : 0;
+  const at = (px) => ({ width: `${px}px`, minWidth: `${px}px` });
+  animateTo(apply, [at(before), at(shown.held)], { dur: 200 });
+  if (apply.getAnimations && apply.getAnimations().length > running) shown.widening = apply.getAnimations().at(-1);
+}
+
 // Apply waits while its preview is asked or its change is written, and while another change (an
 // Undo) is written: then its title says why.
 function patchApply(view) {
@@ -337,7 +360,7 @@ function patchApply(view) {
   const { apply } = shown;
   apply.classList.toggle("primary", !applied);
   apply.classList.toggle("ok", applied);
-  setLabel(words.apply);
+  holdWidth(apply, t.phase === "applying" || applied, () => setLabel(words.apply));
   const other = busy.change && t.phase !== "applying" && !applied;
   showWaits(apply, other);
   if (words.applyWaits) apply.setAttribute("aria-disabled", "true");

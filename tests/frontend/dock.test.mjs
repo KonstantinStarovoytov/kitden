@@ -15,7 +15,9 @@ const textNode = (value) => ({ nodeType: 3, textContent: String(value), parent: 
 const running = (run) => !run.cancelled && Date.now() - run.startedAt < run.options.duration;
 const rects = (node) => {
   const sizing = node.animations.findLast((run) => run.frames[0].height && running(run));
-  return { width: 380, height: sizing ? parseFloat(sizing.frames[0].height) : node.classList.contains('toast') ? 40 : 60 + 50 * all(node).filter((n) => n.tag === 'li').length, bottom: 0 };
+  // Apply is as wide as its words, or its held width (min-width) when that is wider.
+  const width = node.classList.contains('apply') ? Math.max(parseFloat(node.style.minWidth) || 0, 40 + 7 * node.textContent.length) : 380;
+  return { width, height: sizing ? parseFloat(sizing.frames[0].height) : node.classList.contains('toast') ? 40 : 60 + 50 * all(node).filter((n) => n.tag === 'li').length, bottom: 0 };
 };
 function fakeNode(tag) {
   const classes = new Set();
@@ -538,6 +540,47 @@ test('drawTray disables Cancel and × while Apply runs, then shows Applied', asy
   assert.deepEqual(toastParts().map(([, text]) => text), ['', 'Applied 2 changes', 'Undo all']);
   assert.equal(posted().filter((url) => url === '/api/changes/c2/apply').length, 1);
   hideToast();
+});
+
+// docs/design.md: while Apply runs it keeps its place. Its words change fast ("Applying…",
+// "Applying 2 of 5", "All applied"); it only grows, gliding, so Cancel beside it does not jump.
+test('Apply keeps its width while its change is written, and lets it go after a failure', async () => {
+  for (const calm of [false, true]) {
+    await fresh();
+    queue(PREVIEW, previewed('c1'), previewed('c2'));
+    await addToTray(add('github'));
+    await addToTray(add('neon'));
+    reduce(calm);
+    const writing = slow();
+    queue('/api/changes/c2/apply', writing.reply);
+    const apply = button(bar(), 'Apply all');
+    const widths = [apply.getBoundingClientRect().width];
+    const running = apply.click();
+    widths.push(apply.getBoundingClientRect().width);
+    document.fire('kitden:progress', { id: 'c2', done: 2, total: 5, row: tray.rows[1].id });
+    widths.push(apply.getBoundingClientRect().width);
+    const grows = apply.animations.filter((run) => run.frames[0].width);
+    if (calm) assert.equal(grows.length, 0);
+    else assert.ok(grows.length > 0 && grows.every((run) => parseFloat(run.frames[0].width) < parseFloat(run.frames[1].width)), 'it glides wider');
+    writing.release(verified('c2'));
+    await settle();
+    assert.equal(apply.children[0].textContent, 'All applied');
+    widths.push(apply.getBoundingClientRect().width);
+    assert.deepEqual(widths, [...widths].sort((a, b) => a - b), `never narrower: ${widths}`);
+    assert.equal(widths.at(-1), 40 + 7 * 'Applying 2 of 5'.length);
+    await running;
+    hideToast();
+  }
+  // After a failure Apply says "Try again" at its own width.
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(add('github'));
+  queue('/api/changes/c1/apply', stale('c1'));
+  await button(bar(), 'Apply').click();
+  await settle();
+  const again = button(bar(), 'Try again');
+  assert.ok(again, 'the bar stays after a failure');
+  assert.equal(again.style.minWidth || '', '');
 });
 
 // motion-spec M4 step 3: the step number rolls (rollTo) from the second step on.
