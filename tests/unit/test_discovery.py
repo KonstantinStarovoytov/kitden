@@ -582,3 +582,23 @@ def test_a_local_value_is_checked_when_the_gateway_starts_it():
             "later": True,
         }
     ]
+
+
+def test_details_say_up_front_when_kitden_cannot_sign_in(tmp_path):
+    """A remote that offers sign-in Kitden cannot do (no client registration) asks for a token
+    in its details, with the reason, before anything is pressed."""
+    from kitden.discovery import Discovery
+    from tests.unit.fake_oauth import FakeOAuth
+
+    fake = FakeOAuth(no_registration=True)
+    try:
+        found = Discovery(tmp_path)
+        row = {"id": "a" * 24, "kind": "mcp", "name": "io.x/zoom", "entry": {"url": fake.url}}
+        found.results[row["id"]] = row
+        out = found.details(row["id"], set())
+    finally:
+        fake.stop()
+    assert out["access_kind"] == "sign-in-later" and out["access_required"] is True
+    assert out["access_note"] == (
+        "zoom does not let Kitden sign in yet. It may take an API key; see its docs."
+    )

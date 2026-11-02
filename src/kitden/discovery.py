@@ -579,11 +579,13 @@ class Discovery:
         elif row["kind"] == "mcp":
             out["content"] = json.dumps(redact(row.get("entry") or {})[0], indent=2)
             if out["remote"] and not row.get("setup"):
-                from kitden.changes.actions import access_needed
+                from kitden.changes.actions import SIGN_IN_LATER, access_needed
 
                 try:
                     out["access_kind"] = access_needed(row["entry"]["url"], {})
                     out["access_required"] = out["access_kind"] != "open"
+                    if out["access_kind"] == "sign-in-later":  # a token, said so up front
+                        out["access_note"] = SIGN_IN_LATER.format(name=out["short"])
                 except OSError:
                     out["access_note"] = "Could not reach this server. Preview will check again."
         else:

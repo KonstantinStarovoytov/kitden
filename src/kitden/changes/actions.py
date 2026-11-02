@@ -649,6 +649,10 @@ def check_access(
         kind = (sign_in or access_needed)(server["url"], headers)
     except OSError:
         raise ValueError(f"Kitden could not reach {name}.") from None
+    if kind == "sign-in-later":
+        # Sign-in Kitden cannot do: a token, said so up front (no Sign in to press first).
+        later = None if refused else SIGN_IN_LATER.format(name=name)
+        raise NeedsAccess(name, "token", fields, refused=refused, url=server["url"], reason=later)
     if kind != "open":
         reason = f"{name} did not accept this sign-in." if signed_in is not None else None
         raise NeedsAccess(
@@ -671,16 +675,64 @@ def signed_in_server(
 
 
 def access_needed(url: str, headers: dict) -> str:
-    """What a remote server needs: "open" (nothing), "token" or "sign-in". A 401 or 403 means
-    it needs access; sign-in is possible when the 401 names its metadata in WWW-Authenticate
-    (`resource_metadata`: MCP authorization spec 2025-06-18, checked 2026-11-01) or its origin
-    serves that metadata. Raises OSError as `_initialize` does."""
+    """What a remote server needs: "open" (nothing), "token", "sign-in", or "sign-in-later"
+    (it offers sign-in, but Kitden cannot register as its client, so it takes a token). A 401
+    or 403 means it needs access; sign-in is possible when the 401 names its metadata in
+    WWW-Authenticate (`resource_metadata`: MCP authorization spec 2025-06-18, checked
+    2026-11-01) or its origin serves that metadata. Raises OSError as `_initialize` does."""
     status, challenge = _initialize(url, headers)
     if status not in (401, 403):
         return "open"
     if "resource_metadata" in challenge or _has_sign_in_metadata(url):
-        return "sign-in"
+        return "sign-in-later" if _can_register(url, challenge) is False else "sign-in"
     return "token"
+
+
+def _get_json(url: str) -> dict | None:
+    """One GET of a JSON document, with no header of the entry, within 5 seconds; None when
+    there is no such document."""
+    if urlsplit(url).scheme not in ("http", "https"):
+        return None
+    request = urllib.request.Request(url, headers={"User-Agent": "kitden"})  # noqa: S310
+    try:
+        with _opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
+            data = json.loads(answer.read(1_000_000))
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _can_register(url: str, challenge: str) -> bool | None:
+    """Whether Kitden can register as the client of a server that offers sign-in: its
+    authorization server lists a `registration_endpoint` (dynamic registration, the one way
+    Kitden can: it has no public address for a client metadata document). None when Kitden
+    could not read the metadata; the sign-in then tries.
+
+    The metadata comes from the server's protected resource metadata (named by the 401, else
+    at its well-known path) and its first authorization server's metadata (RFC 8414, else
+    OpenID Connect discovery), as the MCP authorization spec says (2026-07-28, checked
+    2026-11-02). Zoom, for one, lists none: it takes only apps registered with it."""
+    parts = urlsplit(url)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    named = re.search(r'resource_metadata="([^"]+)"', challenge)
+    places = [named.group(1)] if named else []
+    path = parts.path.rstrip("/")
+    places += [f"{origin}{SIGN_IN_METADATA}{path}", f"{origin}{SIGN_IN_METADATA}"]
+    resource = next((m for m in map(_get_json, dict.fromkeys(places)) if m), None)
+    servers = resource.get("authorization_servers") if resource else None
+    if not isinstance(servers, list) or not servers or not isinstance(servers[0], str):
+        return None
+    issuer = urlsplit(servers[0])
+    root, tail = f"{issuer.scheme}://{issuer.netloc}", issuer.path.rstrip("/")
+    for place in (
+        f"{root}/.well-known/oauth-authorization-server{tail}",
+        f"{root}/.well-known/openid-configuration{tail}",
+        f"{root}{tail}/.well-known/openid-configuration",
+    ):
+        metadata = _get_json(place)
+        if metadata:
+            return bool(metadata.get("registration_endpoint"))
+    return None
 
 
 def _codex_layers(name: str, known_projects: list[str], user_file: str) -> bool:

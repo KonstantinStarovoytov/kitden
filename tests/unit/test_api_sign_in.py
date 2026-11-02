@@ -134,20 +134,33 @@ def test_refused_sign_in(home, fake):
     assert answer.json()["detail"] == "signer did not accept this sign-in."
 
 
-def test_cannot_sign_in_offers_the_token_field(home):
+def test_a_server_kitden_cannot_register_with_asks_for_a_token_at_once(home):
+    """It offers sign-in, but takes no client Kitden can register (as Zoom, checked
+    2026-11-02): the preview says so up front and asks for a token, with no Sign in."""
     fake = FakeOAuth(no_registration=True)
     try:
         add_claude(home, "signer", {"type": "http", "url": fake.url})
-        opened = Opened()
-        with page_for(home, opened) as page:
-            needs = batch_move(page, home, "signer").json()["needs"]
-            started = page.post("/api/sign-in/start", json={"id": needs["sign_in"]}, headers=POST)
-        assert started.status_code == 422
-        assert started.json() == {"detail": SIGN_IN_LATER.format(name="signer"), "cannot": True}
+        with page_for(home, Opened()) as page:
+            answer = batch_move(page, home, "signer")
+        assert answer.status_code == 422
+        needs = answer.json()["needs"]
+        assert needs["kind"] == "token"
+        assert needs["reason"] == SIGN_IN_LATER.format(name="signer")
+        assert "sign_in" not in needs
         assert needs["fields"][0]["name"] == "Authorization"
-        assert opened == []
     finally:
         fake.stop()
+
+
+def test_access_needed_tells_sign_in_from_sign_in_kitden_cannot_do(fake):
+    from kitden.changes.actions import access_needed
+
+    assert access_needed(fake.url, {}) == "sign-in"
+    other = FakeOAuth(no_registration=True)
+    try:
+        assert access_needed(other.url, {}) == "sign-in-later"
+    finally:
+        other.stop()
 
 
 def test_cancel_and_unknown_ids(home, fake):
