@@ -40,7 +40,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   changes while it waits. A server that signs in through the browser now has "Sign in": Kitden
   opens its page, catches the redirect on its own page, checks the sign-in before Apply and keeps
   the tokens in the Keychain only. The gateway refreshes them; when that fails the server shows
-  "Needs sign-in" with Sign in again.
+  "Needs sign-in" with Sign in again. A held server's Details show its secrets under Access,
+  only their start and end, with Replace and Remove (Sign in again and Sign out for a sign-in).
+  Tools show after Apply without Refresh tools, and a sign-in is kept when its row comes back.
 
 - **Catalog separation:** the MCP picker excludes the built-in plugin catalog.
   Personal GitHub sources still offer MCP servers there. Known unsupported entries

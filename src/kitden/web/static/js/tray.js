@@ -105,6 +105,7 @@ export function keyFor(body) {
   if (action === "project.align") return `align:${params.project || ""}`;
   if (action === "gateway.add") return `add:${params.server}`;
   if (action === "gateway.sign_in") return `signin:${params.server}`;
+  if (action === "gateway.access") return `access:${params.server}/${params.field}/${params.name}`;
   const one = targets[0] || {};
   if (action === "skill.rule") return `skill:${one.client}:${one.item}@${params.project || ""}`;
   return JSON.stringify(sorted({ action, targets: inClientOrder(action, targets), params }));
@@ -121,7 +122,7 @@ function inClientOrder(action, targets) {
 
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove", "gateway.remove"];
 const SWITCHES = ["gateway.rule", "gateway.rules", "gateway.strict", "plugin.enable", "plugin.disable", "setup_server.enable", "skill.rule"];
-const MOVES = ["gateway.move", "gateway.put_back", "gateway.keychain", "gateway.sign_in"];
+const MOVES = ["gateway.move", "gateway.put_back", "gateway.keychain", "gateway.sign_in", "gateway.access"];
 const PLUGS = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "client.disconnect"];
 const ADDS = ["mcp.add", "plugin.install", "plugin.skills", "skill.install", "marketplace.add", "gateway.add"];
 

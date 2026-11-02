@@ -5,6 +5,7 @@ The MCP SDK loads only when a server is asked for its tools: the page must start
 
 import asyncio
 import importlib
+import json
 import re
 from collections.abc import Iterable
 from dataclasses import replace
@@ -14,6 +15,7 @@ from typing import Any
 from kitden.changes.actions import GATEWAY_RULE, KITDEN_GATEWAY, secrets_out
 from kitden.clients.base import mcp_item
 from kitden.gateways import data_dir
+from kitden.local_gateway import keychain
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import (
     CLIENT,
@@ -31,6 +33,7 @@ from kitden.local_gateway.settings import (
     strict_step,
 )
 from kitden.model import Change, Enabled, Item, Scope, Source, SourceKind, Step
+from kitden.redact import redact_line
 from kitden.views.setup_server import setup_server_state
 
 
@@ -257,6 +260,71 @@ def tool_hint(tool: dict) -> tuple[str, str | None]:
     if any(w.lower() in WRITE_VERBS for w in _WORD.findall(tool["name"])):
         return "may write", "name"
     return "unknown", None
+
+
+SHOWN = 4  # characters shown at each end of a secret
+SHORT = 12  # a secret shorter than this shows no character
+
+
+def masked(value: str) -> str:
+    """Only the start and the end of a secret, so the owner can tell which one it is:
+    "Bearer sk-a…1234". A "Bearer " prefix stays whole; a short value shows none of it."""
+    prefix = "Bearer " if value.startswith("Bearer ") else ""
+    rest = value[len(prefix) :]
+    if len(rest) < SHORT:
+        return "••••"
+    return f"{prefix}{rest[:SHOWN]}…{rest[-SHOWN:]}"
+
+
+def access_rows(server: str, entry: dict, run: keychain.Runner | None = None) -> list[dict]:
+    """A held server's secrets for its Access block: each header or env value that is a
+    Keychain reference or whose name or shape says secret (`redact_line`), and its sign-in, by name, with only its start
+    and end (`masked`, None when its Keychain item is missing) and where it is kept. A sign-in
+    also says when its token ends and whether the gateway can refresh it."""
+    run = run or keychain.run_security
+    rows = []
+    for field in ("headers", "env"):
+        values = entry.get(field)
+        if not isinstance(values, dict):
+            continue
+        for name, value in values.items():
+            if keychain.is_reference(value):
+                found = keychain.read(value, run)
+                stored = "keychain" if found is not None else "missing"
+                rows.append(
+                    {
+                        "field": field,
+                        "name": name,
+                        "masked": found and masked(found),
+                        "stored": stored,
+                    }
+                )
+            elif (
+                isinstance(value, str)
+                and value
+                and redact_line(f"{name}={value}") != f"{name}={value}"
+            ):
+                rows.append(
+                    {"field": field, "name": name, "masked": masked(value), "stored": "settings"}
+                )
+    ref = entry.get("sign_in")
+    if keychain.is_reference(ref):
+        found = keychain.read(ref, run)
+        row = {"field": "sign_in", "name": "Sign-in", "masked": None, "stored": "missing"}
+        try:
+            data = json.loads(found) if found else None
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            tokens = data.get("tokens") or {}
+            row.update(
+                masked=masked(str(tokens.get("access_token") or "")),
+                stored="keychain",
+                ends=data.get("expires_at"),
+                refresh=bool(tokens.get("refresh_token")),
+            )
+        rows.append(row)
+    return rows
 
 
 def tools_view(

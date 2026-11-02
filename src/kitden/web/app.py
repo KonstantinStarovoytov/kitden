@@ -25,6 +25,7 @@ from kitden import __version__
 from kitden.changes.actions import (
     CLIENT_DISCONNECT,
     CLIENT_WORDS,
+    GATEWAY_ACCESS,
     GATEWAY_ADD,
     GATEWAY_CONNECT,
     GATEWAY_KEYCHAIN,
@@ -48,6 +49,7 @@ from kitden.changes.actions import (
     SKILL_INSTALL,
     SKILL_RULE,
     NeedsAccess,
+    access_steps,
     add_server_steps,
     connect_steps,
     disconnect_steps,
@@ -120,6 +122,7 @@ from kitden.local_gateway.settings import (
     settings_unreadable,
 )
 from kitden.local_gateway.views import (
+    access_rows,
     gateway_items,
     held_servers,
     load_proxy,
@@ -1044,7 +1047,10 @@ def create_app(
         chains = {ids[k]: chain for k, chain in _chains().items() if k in ids}
         calls = load_calls(home)
         answer = tools_view(settings, load_tools(home), server, _chain(path), calls, chains)
-        return JSONResponse({**answer, "problem": tool_problems.get(server)})
+        # Its secrets by name, only their start and end; it reads the Keychain, in a thread.
+        held = settings["servers"][server]
+        access = await asyncio.to_thread(access_rows, server, held, keychain_run)
+        return JSONResponse({**answer, "problem": tool_problems.get(server), "access": access})
 
     async def gateway_tools_refresh(request: Request) -> JSONResponse:
         """Starts asking each held server for its tools; `gateway_tools` says when it is done."""
@@ -1368,6 +1374,21 @@ def create_app(
             ]
         elif action == GATEWAY_KEYCHAIN:
             steps = keychain_steps(home, str(params.get("server", "")))
+        elif action == GATEWAY_ACCESS:
+            value = params.get("value")
+            if value is not None and not isinstance(value, str):
+                raise ValueError("Enter a valid access value again.")
+            # It may ask the server whether a new token works, so not on the event loop.
+            steps = await asyncio.to_thread(
+                access_steps,
+                home,
+                str(params.get("server", "")),
+                str(params.get("field", "")),
+                str(params.get("name", "")),
+                value,
+                sign_in=sign_in,
+                keychain_run=keychain_run,
+            )
         elif action == GATEWAY_SIGN_IN:
             # It asks the server whether the new token works, so not on the event loop.
             steps = await asyncio.to_thread(

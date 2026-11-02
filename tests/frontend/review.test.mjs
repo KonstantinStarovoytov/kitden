@@ -142,6 +142,14 @@ const remove = { action: 'mcp.remove_direct', steps: [{ client: 'codex', name: '
 const add = { action: 'skill.install', steps: [{ client: 'codex', name: 'tidy', reaches: ['codex'] }] };
 const NOTE = 'Undo installs it again; its saved options are not brought back.';
 
+test('a changed secret of a held server says what changes', () => {
+  const change = { action: 'gateway.access', steps: [{ client: 'kitden', name: 'neon' }], target: { scope: 'all', project: null, others_unchanged: false } };
+  const words = (field, name, value) => changeWords(change, { params: { server: 'neon', field, name, value } });
+  assert.deepEqual(words('headers', 'Authorization', 'Bearer x'), { title: 'Replace Authorization of neon', done: 'Replaced Authorization of neon' });
+  assert.deepEqual(words('headers', 'Authorization', null), { title: 'Remove Authorization from neon', done: 'Removed Authorization from neon' });
+  assert.deepEqual(words('sign_in', 'Sign-in', null), { title: 'Sign out of neon', done: 'Signed out of neon' });
+});
+
 test('signing a held server in again says so', () => {
   const change = { action: 'gateway.sign_in', steps: [{ client: 'kitden', name: 'neon' }], target: target('all') };
   assert.deepEqual(changeWords(change, { params: { server: 'neon' } }), { title: 'Sign in to neon again', done: 'Signed in to neon again' });

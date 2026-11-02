@@ -1348,6 +1348,11 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .access-fields .field { min-width: 0; }
 .access-fields p { margin: 0; }
 .access-fields details[open] { display: grid; gap: 8px; }
+/* A held server's Access block: each secret's name and its start and end, its buttons right. */
+.access .access-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; }
+.access .access-what { display: grid; gap: 2px; min-width: 0; }
+.access .access-what small { overflow-wrap: anywhere; }
+.access .access-acts { display: flex; gap: 6px; flex: none; }
 /* Sign in and its Cancel sit side by side while the browser is open. */
 .access-fields.sign-in-row { flex-direction: row; align-items: center; gap: 8px; }
 .access-fields summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }

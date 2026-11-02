@@ -491,6 +491,7 @@ GATEWAY_MOVE_OUT = "gateway.move_out"  # a held server put back in one client an
 GATEWAY_KEYCHAIN = "gateway.keychain"  # a held server's plain secrets moved to the Keychain
 GATEWAY_ADD = "gateway.add"  # a server a marketplace plugin offers, added to the Kitden gateway
 GATEWAY_SIGN_IN = "gateway.sign_in"  # a held server signed in again: only its Keychain item
+GATEWAY_ACCESS = "gateway.access"  # one secret of a held server replaced or removed, or sign out
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.
 CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
@@ -1071,6 +1072,59 @@ def sign_in_steps(
     values.pop("sign_in", None)
     check_access(server, values, sign_in, [TOKEN_FIELD], False, signed_in)
     return [signed_in_server(home, server, values, held, signed_in, keychain_run)]
+
+
+def access_steps(
+    home: Path,
+    server: str,
+    field: str,
+    name: str,
+    value: str | None,
+    *,
+    sign_in: Callable[[str, dict], str] | None = None,
+    keychain_run: Runner | None = None,
+) -> list[Step]:
+    """Replace one secret of a held server (`value`), or remove it (None): an env or header
+    value, or its sign-in (sign out; a sign-in is changed by signing in again). A new value
+    goes to the Keychain on Apply; a remote server is asked with it first, a local one checks
+    it when it starts. A removed value's Keychain item stays, so Undo brings the server back."""
+    held = load_settings(home)["servers"].get(server)
+    if not isinstance(held, dict):
+        raise ValueError("Choose a server in the Kitden gateway.")
+    if field == "sign_in":
+        if value is not None:
+            raise ValueError("Sign in again to change a sign-in.")
+        if "sign_in" not in held:
+            raise ValueError(f"{server} is not signed in.")
+        entry = {k: v for k, v in held.items() if k != "sign_in"}
+        return [settings_step(home, ("servers", server), entry, server)]
+    if field not in SECRET_FIELDS:
+        raise ValueError("Choose a value to change.")
+    values = dict(held.get(field) or {}) if isinstance(held.get(field), dict) else {}
+    if value is None:
+        if name not in values:
+            raise ValueError(f"{server} has no {name}.")
+        values.pop(name)
+        entry = {k: v for k, v in held.items() if k != field}
+        if values:
+            entry[field] = values
+        return [settings_step(home, ("servers", server), entry, server)]
+    value = value.strip()
+    if not value or "\n" in value or "\r" in value:
+        raise ValueError("Enter a valid access value again.")
+    if field == "headers" and "url" in held:
+        try:
+            resolved = resolve_entry(held, run=keychain_run or run_security)
+        except KeychainError as problem:
+            raise ValueError(str(problem)) from None
+        resolved.pop("sign_in", None)
+        given = {**resolved, "headers": {**(resolved.get("headers") or {}), name: value}}
+        check_access(server, given, sign_in, [TOKEN_FIELD], True)
+    item = KeychainItem(server, name, value)
+    entry = {**held, field: {**values, name: item.ref}}
+    step = settings_step(home, ("servers", server), entry, server)
+    step.keychain = [item]
+    return [step]
 
 
 def keychain_steps(home: Path, server: str) -> list[Step]:

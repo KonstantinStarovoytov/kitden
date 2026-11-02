@@ -1488,6 +1488,11 @@ def test_a_held_server_lists_its_tools_with_a_switch_each():
     assert '"gateway_tools"' in script("app.js") and '"kitden:tools"' in script("app.js")
 
 
+def _sign_in_actions(text):
+    """How often "Sign in" is a button: a server whose sign-in ended, or its Access block."""
+    return text.count('stepAction("Sign in"') + text.count('button("Sign in again"')
+
+
 def test_tools_read_in_the_background_show_without_a_refresh():
     # After an Apply that brings a server in, its tools are read in the background; when that
     # ends, the page draws again, so they show without pressing Refresh tools.
@@ -1730,7 +1735,7 @@ def test_tool_and_server_details_use_the_owner_words():
         assert words in text, words
     assert "Allowed" not in text and "Blocked" not in text
     # "Sign in" is only the action of a server whose sign-in ended (Part 3b), never a state.
-    assert text.count("Sign in") == text.count('stepAction("Sign in"')
+    assert text.count("Sign in") == _sign_in_actions(text)
     # With All projects a card says "in every project" or "in any project", then each known project
     # that decides otherwise ("Except atlas, where it is on."); never "Other projects follow".
     assert "Other projects follow" not in gw() and '"Read only"' not in gw()
@@ -1797,7 +1802,7 @@ def test_the_server_panel_says_the_mockups_words():
     ):
         assert words in tools, words
     assert "Signed in" not in text
-    assert text.count("Sign in") == text.count('stepAction("Sign in"')
+    assert text.count("Sign in") == _sign_in_actions(text)
     # A server off by the shared rule is never "off in all projects": projects may turn it on.
     assert "is off by the shared rule, so none of its tools are offered.${otherwise}`" in tools
     assert 'off in ${where || "all projects"}' not in tools
@@ -2472,7 +2477,7 @@ def test_the_list_has_the_mockups_columns_and_quiet_read_and_write_words():
     for words in ("Signed in", "Running"):
         assert words not in text, words
     # "Sign in" is only the action of a server whose sign-in ended (Part 3b), never a state.
-    assert text.count("Sign in") == text.count('stepAction("Sign in"')
+    assert text.count("Sign in") == _sign_in_actions(text)
 
 
 def test_the_view_switch_goes_out_in_120_and_comes_in_in_260():

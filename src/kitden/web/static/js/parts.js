@@ -713,6 +713,7 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.remove" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} from the Kitden gateway`;
   if (entry.action === "gateway.keychain" && entry.steps.length) return `Moved the secrets of ${entry.steps[0].name} to the Keychain`;
   if (entry.action === "gateway.sign_in" && entry.steps.length) return `Signed in to ${entry.steps[0].name} again`;
+  if (entry.action === "gateway.access" && entry.steps.length) return `Changed the access of ${entry.steps[0].name}`;
   // An add's first step is the server's entry; a PATH step and Codex's timeouts may follow.
   if (entry.action === "gateway.add" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} to the Kitden gateway`;
   const kitden = kitdenMove(entry);

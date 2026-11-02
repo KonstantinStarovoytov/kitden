@@ -102,6 +102,12 @@ test('a row asked before the words are set is sent as New change', async () => {
   setTrayWords(words);
 });
 
+test('keyFor names a changed secret by its server and name, so Replace and Remove replace each other', () => {
+  const access = (value) => ({ action: 'gateway.access', targets: [], params: { server: 'neon', field: 'headers', name: 'Authorization', value } });
+  assert.equal(keyFor(access('Bearer x')), 'access:neon/headers/Authorization');
+  assert.equal(keyFor(access(null)), keyFor(access('Bearer y')));
+});
+
 test('keyFor names a sign-in again by its server', () => {
   const again = (id) => ({ action: 'gateway.sign_in', targets: [], params: { server: 'neon', sign_in: id } });
   assert.equal(keyFor(again('s1')), 'signin:neon');

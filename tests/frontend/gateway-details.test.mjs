@@ -1628,3 +1628,54 @@ test("a project pick says in preview on its line while its rule waits, and not a
     assert.deepEqual(line(), ['on now', 'sandbox, on now']);
   }, { open: () => showTool('files', 'write_file'), projects: MEDIUM_PROJECTS });
 });
+
+// A held server's Access block: each secret by name, only its start and end, with Replace and
+// Remove; a sign-in says when it ends, with Sign in again and Sign out.
+const { accessBlock } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const ACCESS = [
+  { field: 'headers', name: 'Authorization', masked: 'Bearer sk-a…1234', stored: 'keychain' },
+  { field: 'env', name: 'API_KEY', masked: null, stored: 'missing' },
+  { field: 'sign_in', name: 'Sign-in', masked: 'acce…cdef', stored: 'keychain', ends: 1_000_000 + 50 * 60, refresh: true },
+];
+const nodesOf = (node) => [node, ...node.childNodes.flatMap(nodesOf)];
+const buttonsIn = (node) => nodesOf(node).filter((n) => n.tag === 'button');
+
+test('the Access block names each secret and shows only its start and end', () => {
+  const block = accessBlock('neon', ACCESS, { now: 1_000_000 });
+  const [head, ...rows] = block.childNodes;
+  assert.equal(textOf(head), 'Access');
+  assert.deepEqual(rows.map((row) => textOf(row.childNodes[0])), [
+    'AuthorizationBearer sk-a…1234',
+    'API_KEYNot in the Keychain',
+    'Sign-inacce…cdef · ends in 50 min · refreshes by itself',
+  ]);
+  assert.deepEqual(rows.map((row) => buttonsIn(row).map((b) => b.textContent)), [
+    ['Replace…', 'Remove'], ['Replace…', 'Remove'], ['Sign in again', 'Sign out'],
+  ]);
+});
+
+test('a sign-in that ended and cannot refresh says so', () => {
+  const ended = [{ ...ACCESS[2], ends: 999_000, refresh: false }];
+  const [, row] = accessBlock('neon', ended, { now: 1_000_000 }).childNodes;
+  assert.equal(textOf(row.childNodes[0]), 'Sign-inacce…cdef · ended');
+});
+
+test('Remove and Sign out add a gateway.access row to the tray', async () => {
+  const block = accessBlock('neon', ACCESS, { now: 1_000_000 });
+  await withTray(() => [block], async ([shown]) => {
+    const remove = buttonsIn(shown).find((b) => b.textContent === 'Remove');
+    await click(remove);
+    const out = buttonsIn(shown).find((b) => b.textContent === 'Sign out');
+    await click(out);
+    assert.deepEqual(tray.rows.map((r) => r.body), [
+      { action: 'gateway.access', targets: [], params: { server: 'neon', field: 'headers', name: 'Authorization', value: null } },
+      { action: 'gateway.access', targets: [], params: { server: 'neon', field: 'sign_in', name: 'Sign-in', value: null } },
+    ]);
+  });
+});
+
+test('the server panel shows its Access block when it has secrets', () => {
+  const card = held(FILES_HELD, { detail: { ...FILES_TOOLS, access: ACCESS.slice(0, 1) } });
+  assert.equal(textOf(card.list).includes('Bearer sk-a…1234'), true);
+  assert.equal(textOf(held(FILES_HELD).list).includes('Access'), false);
+});

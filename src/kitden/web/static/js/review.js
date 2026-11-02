@@ -65,7 +65,15 @@ export function reviewLede(change, picked) {
 // The review title names the exact entry; the toast uses the short name ("superpowers").
 // `previewBody` is what the review asked for; Add skills names its plugin and a tool rule its
 // tool and project from it.
+// A held server's secret replaced or removed, or a sign-out (gateway.access).
+function accessText({ server, field, name, value }) {
+  if (field === "sign_in") return { title: `Sign out of ${server}`, done: `Signed out of ${server}` };
+  if (value === null || value === undefined) return { title: `Remove ${name} from ${server}`, done: `Removed ${name} from ${server}` };
+  return { title: `Replace ${name} of ${server}`, done: `Replaced ${name} of ${server}` };
+}
+
 export function changeWords(change, previewBody) {
+  if (change.action === "gateway.access") return accessText((previewBody && previewBody.params) || {});
   if (change.action === "gateway.rule") {
     const params = (previewBody && previewBody.params) || {};
     return ruleText(params, params.project ? projectLabel(params.project) : null);

@@ -3,7 +3,7 @@
 // that detailsCard draws, so a test reads it without a page), and a show… that opens it beside the
 // page. The forms to add a gateway and to connect clients live here too, with what each registered
 // gateway holds.
-import { signInAgain } from "./access-form.js";
+import { replaceAccess, signInAgain } from "./access-form.js";
 import { getJson, postJson, query } from "./api.js";
 import { $, busyWhile, button, el, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { ADD_SERVER, openAdd } from "./gateway-add.js";
@@ -853,7 +853,49 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
   }
   const more = [...heldMore(server, picked, detail, some), ...heldActions(name, clients, server.plain_secrets)];
   const id = `${server.kind === "remote" ? "Remote" : "Local"} · in the Kitden gateway`;
-  return { kind: KIND.server, title: name, id, facts, list: heldList(name, detail, picked, folder), actions, more, warning };
+  // Its secrets come first (Access), then its tools.
+  const shown = [detail.access && detail.access.length ? accessBlock(name, detail.access) : null, heldList(name, detail, picked, folder)].filter(Boolean);
+  const parts = shown.length > 1 ? el("div", "held-parts") : shown[0] || null;
+  if (shown.length > 1) parts.append(...shown);
+  return { kind: KIND.server, title: name, id, facts, list: parts, actions, more, warning };
+}
+
+// A held server's secrets (Access): each by name, with only its start and end ("Bearer
+// sk-a…1234"; the server never sends more), and where it is missing from the Keychain. A
+// sign-in says when its token ends and whether the gateway refreshes it. Its buttons (replace,
+// remove, sign in again, sign out) each go through the tray: preview, Apply, Undo.
+export function accessBlock(server, rows, { now = Date.now() / 1000 } = {}) {
+  const section = el("section", "access");
+  section.append(el("h2", "sw-head", "Access"));
+  for (const row of rows) {
+    const line = el("div", "access-row");
+    const what = el("div", "access-what");
+    let small = row.stored === "missing" ? "Not in the Keychain" : row.masked || "••••";
+    if (row.field === "sign_in" && row.stored !== "missing") small += ` · ${endsWords(row, now)}`;
+    what.append(el("strong", null, row.name), el("small", "muted", small));
+    const acts = el("div", "access-acts");
+    const change = (value) => addToTray({ action: "gateway.access", targets: [], params: { server, field: row.field, name: row.name, value } });
+    if (row.field === "sign_in") {
+      acts.append(button("Sign in again", () => signInAgain(server)), button("Sign out", () => change(null)));
+    } else {
+      acts.append(button("Replace…", () => replaceAccess(server, row)), button("Remove", () => change(null)));
+    }
+    line.append(what, acts);
+    section.append(line);
+  }
+  return section;
+}
+
+// When a sign-in's token ends, in words: "ends in 50 min", "ends in 3 h", or "ended"; and
+// "refreshes by itself" when the gateway can get a new one.
+function endsWords(row, now) {
+  const left = typeof row.ends === "number" ? row.ends - now : null;
+  let words = "no end date";
+  if (left !== null) {
+    const minutes = Math.round(left / 60);
+    words = left <= 0 ? "ended" : minutes < 120 ? `ends in ${minutes} min` : `ends in ${Math.round(minutes / 60)} h`;
+  }
+  return row.refresh ? `${words} · refreshes by itself` : words;
 }
 
 // A held server's actions the mockup has no place for, under More (D18): back to the rule it

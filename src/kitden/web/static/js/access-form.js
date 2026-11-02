@@ -232,3 +232,26 @@ export async function signInAgain(name) {
   form.start();
   return form;
 }
+
+// Replace… in a held server's Access block: the access form for that one value, in its own
+// panel. Its check is the preview of the change, as when the server was added: a value that
+// works joins the tray (preview, Apply, Undo); a refused one keeps the panel, with the reason.
+export function replaceAccess(server, row) {
+  const local = row.field === "env";
+  const field = { field: row.field, name: row.name, label: row.name, prefix: row.name === "Authorization" ? "Bearer " : "", later: local };
+  const waits = { server, kind: "token", fields: [field], reason: "" };
+  const form = accessForm(waits, async (values) => {
+    const value = values && values[row.field] && values[row.field][row.name];
+    const body = { action: "gateway.access", targets: [], params: { server, field: row.field, name: row.name, value } };
+    await addToTray(body);
+    if (inTray(keyFor(body))) {
+      form.works();
+      setTimeout(() => { if (form.node.isConnected) closePanel(); }, D(WORKS_MS));
+    } else if (tray.refused) form.refuse(tray.refused.reason);
+  });
+  const body = el("div", "body");
+  body.append(form.node);
+  openPanel([header("Replace", server, `A new ${row.name}. The old one stays until Apply.`), body]);
+  form.focus();
+  return form;
+}
