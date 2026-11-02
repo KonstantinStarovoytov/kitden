@@ -4,13 +4,12 @@
 // adds its change to the tray (tray.js); nothing is written before the tray's Apply. The panel
 // shows no path, address or command.
 import { addModes, installBody, onlineKind, openDiscovery } from "./discovery.js";
-import { button } from "./dom.js";
-import { matchRows, openAddPanel, shownList } from "./add-panel.js";
+import { matchRows, openAddPanel, readAgain } from "./add-panel.js";
 import { getJson } from "./api.js";
 import { closePanel } from "./panel.js";
 import { KIND, SERVER_ICONS } from "./gateway-details.js";
 import { pressRow } from "./gateway-drag.js";
-import { addToTray, inTray, keyFor, onTray, takeOut } from "./tray.js";
+import { inTray, keyFor, onTray, toggleInTray } from "./tray.js";
 
 // The search and the pill are the shared panel's (add-panel.js).
 export { matchRows };
@@ -100,10 +99,7 @@ const GATEWAY = {
   icon: (row) => SERVER_ICONS[row.kind] || SERVER_ICONS.local,
   key: (row) => keyFor(addBody(row)),
   waits: (row) => inTray(keyFor(addBody(row))),
-  press: (row) => {
-    const key = keyFor(addBody(row));
-    return inTray(key) ? takeOut(key) : addToTray(addBody(row));
-  },
+  press: (row) => toggleInTray(addBody(row)),
   before: () => [addModes("local", () => openAdd(), () => openLocalAdd())],
   drag: (event, row, node) => pressRow(event, { name: addName(row.id), kind: row.kind, body: addBody(row), node }),
 };
@@ -130,7 +126,6 @@ export function openLocalAdd(options = {}) {
 // rows of an Apply say Added now, and an open panel reads the marketplaces again, so each row says
 // what is held now. The panel stays open and focus stays where it is.
 let seen = null;
-let reads = 0;
 export async function pageRead(view) {
   if (view === seen) return;
   seen = view;
@@ -139,12 +134,5 @@ export async function pageRead(view) {
   for (const id of added) if (!held.has(addName(id))) added.delete(id);
   for (const id of applied) added.add(id);
   applied = [];
-  const list = shownList(GATEWAY);
-  if (!list) return;
-  list.paint();
-  const turn = ++reads;
-  const rows = await readServers();
-  if (!rows || turn !== reads || !list.node.isConnected) return;
-  learn(rows);
-  list.update(rows);
+  await readAgain(GATEWAY);
 }

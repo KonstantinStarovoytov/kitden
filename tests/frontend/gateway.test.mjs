@@ -10,15 +10,15 @@ globalThis.window = {
   addEventListener: (type, fn) => { (windowHeard[type] ||= []).push(fn); },
   removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
 };
-const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, heldServer, letGoCloses, linkRemoval, linkTip, linksWait, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, letGoCloses, linkRemoval, linkTip, listRows, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, pressRow, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
-const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { heldServer, offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, litFor, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, setBusy, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
-const { addToTray, applyTray, cancelTray, endApplied, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, applyTray, cancelTray, endApplied, keyFor, linksWait, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
 // A stand-in server for the tray: each address answers from its own queue (a reply, or a function
 // of the request body that gives one); an address with nothing queued answers 200 with no body.
@@ -858,7 +858,7 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
     const layout = layoutTree(tree, { open: new Set(), narrow: false });
     const held = [];
     const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
-    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id, ms) => held.push(['homeIn', id, ms]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id) => held.push(['homeIn', id]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
     placeMoved({ view, model: tree, layout });
     // The drop is asked; a second add drops that ask, and both it and the ask for the rest are
     // refused. The move stays in the tray with no part, and nothing is asked any more.
@@ -884,7 +884,7 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
     // The block the drop parked on the slot goes home.
     held.length = 0;
     placeMoved({ view, model: now, layout: layoutTree(now, { open: new Set(), narrow: false }) });
-    assert.deepEqual(held, [['homeIn', 'outside:move:github', 220]]);
+    assert.deepEqual(held, [['homeIn', 'outside:move:github']]);
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null });
@@ -1257,7 +1257,7 @@ test('a drop adds a move to the tray', async (t) => {
     const layout = layoutTree(tree, { open: new Set(), narrow: false });
     const held = [];
     const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
-    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id, ms) => held.push(['homeIn', id, ms]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id) => held.push(['homeIn', id]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
     placeMoved({ view, model: tree, layout });
     const home = layout.blocks.find((b) => b.id === 'outside:move:github');
     const files = layout.blocks.find((b) => b.id === 'held:kitden:files');
@@ -1380,7 +1380,7 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
   const view = {
     node: () => node,
     hold: (at, point, how = {}) => asked.push(['hold', at, point, how]),
-    homeIn: (at, ms) => asked.push(['homeIn', at, ms]),
+    homeIn: (at) => asked.push(['homeIn', at]),
     lightTarget: (at) => asked.push(['light', at]),
     unlightTarget: () => asked.push(['unlight']),
     glance: (set) => asked.push(['glance', set ? [...set] : null]),
@@ -1476,7 +1476,7 @@ test('a drop over Details, over the dock, on nothing or home leaves the tray as 
       map.up(dropX, dropY);
       await flush();
       assert.deepEqual([tray.rows, posted()], [[], []], name);
-      assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github', 220], name);
+      assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github'], name);
       // Over Details or the dock the gateway never lights and no slot opens.
       assert.ok(!map.asked.some(([what]) => what === 'light'), name);
       assert.deepEqual(movingOn(), {}, name);
@@ -1488,7 +1488,7 @@ test('a drop over Details, over the dock, on nothing or home leaves the tray as 
     const escape = { key: 'Escape', preventDefault() {}, stopImmediatePropagation() { this.stopped = true; } };
     for (const fn of map.heard.keydown) fn(escape);
     assert.ok(escape.stopped);
-    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github', 220]]);
+    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github']]);
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null });
@@ -1506,7 +1506,7 @@ test('Escape, then release, selects nothing', async (t) => {
     map.move(...map.onto('held:kitden:tracker'));
     const escape = { key: 'Escape', preventDefault() {}, stopImmediatePropagation() {} };
     for (const fn of map.heard.keydown) fn(escape);
-    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github', 220]]);
+    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github']]);
     // The button is let go later: the click of that release, which the captured block hears, is
     // swallowed then.
     t.mock.timers.tick(10);
@@ -1534,7 +1534,7 @@ test('a blur of the window ends a drag: nothing stays held and the tray is as it
     for (const fn of [...(windowHeard.blur || [])]) fn({ type: 'blur' });
     assert.equal(map.grabbing.size, 0);
     assert.ok(map.asked.some(([what]) => what === 'unlight'));
-    assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github', 220]);
+    assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github']);
     assert.deepEqual([movingOn(), tray.rows.length, windowHeard.blur.length], [{}, 0, 0]);
     // The pointer that moves on moves nothing.
     const before = map.asked.length;
@@ -2152,7 +2152,7 @@ test('a held server shows the client tip and a wire that follows it', async (t) 
     // A drop on nothing glides home and leaves the tray as it was.
     map.up(codex.x + codex.w + 41, codex.y + 10);
     await flush();
-    assert.deepEqual(map.asked.at(-1), ['homeIn', 'held:kitden:files', 220]);
+    assert.deepEqual(map.asked.at(-1), ['homeIn', 'held:kitden:files']);
     assert.deepEqual([tray.rows, posted()], [[], []]);
   } finally {
     delete globalThis.document;
@@ -2251,7 +2251,7 @@ test('a client that has the name refuses before the drop, with the reason, and s
       // On release the block goes home, the tray is as it was, and Cursor shakes once.
       map.up(cursor.x + 20, cursor.y + 20);
       await flush();
-      assert.deepEqual(map.asked.at(-1), ['homeIn', id, 220], why);
+      assert.deepEqual(map.asked.at(-1), ['homeIn', id], why);
       assert.deepEqual([tray.rows, posted()], [[], []], why);
       assert.deepEqual(shook, [[['translateX(0)', 'translateX(-7px)', 'translateX(6px)', 'translateX(-3px)', 'translateX(0)'], 380, 'ease-out']], why);
     };

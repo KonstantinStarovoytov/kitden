@@ -4,8 +4,9 @@ import { button, el, icon } from "./dom.js";
 import { header, openPanel, panelState, review } from "./panel.js";
 import { accessForm, openAccess } from "./access-form.js";
 import { addFormBody, clientChecks } from "./offer.js";
+import { INSTALLERS } from "./parts.js";
 import { state } from "./store.js";
-import { cancelTray, inTray, keyFor, tray } from "./tray.js";
+import { cancelTray, inTray, keyFor, tray, trayRow } from "./tray.js";
 
 // The token field a remote server gets when its entry declares none (actions.py TOKEN_FIELD).
 const TOKEN_FIELD = { field: "headers", name: "Authorization", label: "Access token", prefix: "Bearer " };
@@ -323,7 +324,7 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
       go.addEventListener("click", async () => {
         const request = requestOf(null);
         await review(request);
-        const found = tray.rows.find((each) => each.key === keyFor(request));
+        const found = trayRow(keyFor(request));
         // It may ask for a token after all (the server changed): its panel then asks for that.
         if (found && found.waits) openAccess(found, { start: Boolean(found.waits.sign_in) });
         else if (found) options.added?.(request);
@@ -340,10 +341,10 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
       const form = accessForm(waits, async (access) => {
         const request = requestOf(access);
         const before = tray.refused;
-        const prior = tray.rows.find((each) => each.key === keyFor(request));
+        const prior = trayRow(keyFor(request));
         await review(request);
         // A row that is still the one from before means this ask did not join.
-        const found = tray.rows.find((each) => each.key === keyFor(request));
+        const found = trayRow(keyFor(request));
         const queued = found !== prior ? found : null;
         if (queued && !queued.waits) {
           if (access) form.works();
@@ -362,7 +363,7 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
       body.append(form.node);
     }
   } else {
-    const available = clients.filter((c) => (row.kind !== "plugin" || ["claude_code", "codex"].includes(c)) && !row.installed.includes(c));
+    const available = clients.filter((c) => (row.kind !== "plugin" || INSTALLERS.includes(c)) && !row.installed.includes(c));
     const chosen = new Set();
     let project = null;
     if (state.project && row.kind === "skill") {

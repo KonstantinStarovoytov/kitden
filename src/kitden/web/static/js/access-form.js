@@ -10,6 +10,39 @@ import { postJson } from "./api.js";
 
 // "Token works" shows a moment before the panel goes.
 const WORKS_MS = 600;
+const closeSoon = (form) => setTimeout(() => { if (form.node.isConnected) closePanel(); }, D(WORKS_MS));
+
+// The lines under a form's fields: why it was refused (`refused(reason)`: amber words that stay,
+// read out), or that it works (`worked(words)`: the green lamp, and a check drawn in 320 ms).
+function statusLines() {
+  const why = el("p", "access-why");
+  why.setAttribute("role", "alert");
+  why.hidden = true;
+  const done = el("p", "access-works");
+  done.hidden = true;
+  const refused = (reason) => {
+    done.hidden = true;
+    why.replaceChildren(icon("triangle-alert", 14), reason);
+    why.hidden = false;
+    animateTo(why, [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { dur: 200 });
+  };
+  const worked = (words) => {
+    why.hidden = true;
+    const mark = icon("check", 14, "ic access-check");
+    done.replaceChildren(el("span", "lamp on"), mark, words);
+    done.hidden = false;
+    const line = mark.querySelector?.("path");
+    if (line) animateTo(line, [{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }], { dur: 320 });
+  };
+  return { why, done, refused, worked };
+}
+
+// A panel with a form (its `node`) in its body.
+function openForm(kicker, title, lede, node) {
+  const body = el("div", "body");
+  body.append(node);
+  openPanel([header(kicker, title, lede), body]);
+}
 
 // The form for `waits` ({ server, kind, fields, reason }): `onCheck(values)` runs on Add token
 // (Preview when every value is optional; `values` is then null when none is typed).
@@ -41,11 +74,7 @@ export function accessForm(waits, onCheck) {
   const names = el("details", "access-names");
   names.append(el("summary", null, "Details"));
   for (const { name, field } of waits.fields) names.append(el("p", "muted", field === "env" ? `Set as ${name}` : `Sent as the ${name} header`));
-  const why = el("p", "access-why");
-  why.setAttribute("role", "alert");
-  why.hidden = true;
-  const done = el("p", "access-works");
-  done.hidden = true;
+  const { why, done, refused, worked } = statusLines();
   // With only optional values (a remote that may take a token), the form previews without one.
   const label = required.length ? "Add token" : "Preview";
   const submit = el("button", "btn primary", label);
@@ -72,28 +101,21 @@ export function accessForm(waits, onCheck) {
     const back = () => { submit.textContent = label; };
     return busyWhile(submit, Promise.resolve(work).finally(back));
   };
-  // Token works: the green lamp, and a check drawn in 320 ms. Values only a running server can
-  // check (a local server's) are not called checked: Apply's verify checks them.
+  // Token works. Values only a running server can check (a local server's) are not called
+  // checked: Apply's verify checks them.
   const unchecked = waits.fields.length > 0 && waits.fields.every((f) => f.later);
   const works = () => {
-    why.hidden = true;
-    if (unchecked) {
-      done.replaceChildren("Saved on Apply. Checked when the gateway starts it");
-      done.hidden = false;
+    if (!unchecked) {
+      worked("Token works");
       return;
     }
-    const mark = icon("check", 14, "ic access-check");
-    done.replaceChildren(el("span", "lamp on"), mark, "Token works");
+    why.hidden = true;
+    done.replaceChildren("Saved on Apply. Checked when the gateway starts it");
     done.hidden = false;
-    const line = mark.querySelector?.("path");
-    if (line) animateTo(line, [{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }], { dur: 320 });
   };
-  // Refused: amber words that stay, focus back in the field, and one shake of the fields.
+  // Refused: the reason, focus back in the field, and one shake of the fields.
   const refuse = (reason) => {
-    done.hidden = true;
-    why.replaceChildren(icon("triangle-alert", 14), reason);
-    why.hidden = false;
-    animateTo(why, [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { dur: 200 });
+    refused(reason);
     focus();
     shake(rows);
   };
@@ -124,31 +146,16 @@ export function signInForm(waits, onSigned, onToken = null) {
   cancel.type = "button";
   cancel.hidden = true;
   row.append(go, cancel);
-  const why = el("p", "access-why");
-  why.setAttribute("role", "alert");
-  why.hidden = true;
-  const done = el("p", "access-works");
-  done.hidden = true;
+  const { why, done, refused, worked } = statusLines();
   const token = el("div", "sign-in-token");
   node.append(row, why, done, el("p", "muted", "Saved in macOS Keychain on Apply."), token);
 
   const refuse = (reason) => {
-    done.hidden = true;
-    why.replaceChildren(icon("triangle-alert", 14), reason);
-    why.hidden = false;
+    refused(reason);
     go.textContent = "Try again";
-    animateTo(why, [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { dur: 200 });
     shake(row);
   };
-  // Signed in: the green lamp, and a check drawn in 320 ms.
-  const signed = () => {
-    why.hidden = true;
-    const mark = icon("check", 14, "ic access-check");
-    done.replaceChildren(el("span", "lamp on"), mark, "Signed in");
-    done.hidden = false;
-    const line = mark.querySelector?.("path");
-    if (line) animateTo(line, [{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }], { dur: 320 });
-  };
+  const signed = () => worked("Signed in");
   const run = async () => {
     why.hidden = true;
     // Cancel shows at once: finding the server's sign-in page may take a while too.
@@ -191,22 +198,19 @@ export function signInForm(waits, onSigned, onToken = null) {
 export function openAccess(row, { start = false } = {}) {
   const { waits } = row;
   const kicker = waits.kind === "sign-in" ? "Needs sign-in" : "Needs token";
-  const close = () => setTimeout(() => { if (form.node.isConnected) closePanel(); }, D(WORKS_MS));
   const check = async (values) => {
     const joined = await giveAccess(row.key, values);
     if (joined) {
       // The sign-in form shows Signed in itself when its check answers true.
       if (form.works) form.works();
-      close();
+      closeSoon(form);
     } else if (joined === false && row.waits) form.refuse(row.waits.reason);
     return joined;
   };
   const form = waits.kind === "sign-in" && waits.sign_in
     ? signInForm(waits, (id) => check({ sign_in: id }), check)
     : accessForm(waits, check);
-  const body = el("div", "body");
-  body.append(form.node);
-  openPanel([header(kicker, waits.server, waits.refused ? null : waits.reason), body]);
+  openForm(kicker, waits.server, waits.refused ? null : waits.reason, form.node);
   if (waits.refused) form.refuse(waits.reason);
   if (form.focus) form.focus();
   if (start && form.start) form.start();
@@ -228,9 +232,7 @@ export async function signInAgain(name) {
     return false;
   };
   const form = signInForm(waits, signed);
-  const body = el("div", "body");
-  body.append(form.node);
-  openPanel([header("Needs sign-in", name, reason), body]);
+  openForm("Needs sign-in", name, reason, form.node);
   form.start();
   return form;
 }
@@ -248,12 +250,10 @@ export function replaceAccess(server, row) {
     await addToTray(body);
     if (inTray(keyFor(body))) {
       form.works();
-      setTimeout(() => { if (form.node.isConnected) closePanel(); }, D(WORKS_MS));
+      closeSoon(form);
     } else if (tray.refused) form.refuse(tray.refused.reason);
   });
-  const body = el("div", "body");
-  body.append(form.node);
-  openPanel([header("Replace", server, `A new ${row.name}. The old one stays until Apply.`), body]);
+  openForm("Replace", server, `A new ${row.name}. The old one stays until Apply.`, form.node);
   form.focus();
   return form;
 }

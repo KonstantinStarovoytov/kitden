@@ -68,7 +68,7 @@ function switchView({ place, id, mode, seg, choice, old, letGo, shows }) {
 }
 
 // Go to the other view of `place` (`params`), which comes in as one piece (switchedNow).
-export function goSwitched(place, params) {
+function goSwitched(place, params) {
   onSwitch.drawing = true;
   try {
     go(place, params);
@@ -79,7 +79,7 @@ export function goSwitched(place, params) {
 
 // The view `node` goes up 4 px and out in 120 ms ease-in, then `land()` runs; at once with no node
 // or under reduced motion. Only the latest call lands.
-export function leaveThen(node, land) {
+function leaveThen(node, land) {
   const turn = ++onSwitch.turn;
   const done = () => {
     onSwitch.leaving = false;

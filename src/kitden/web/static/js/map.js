@@ -37,15 +37,14 @@ import { plural } from "./dom.js";
 
 export const GAP = 46; // between two columns
 export const NARROW_GAP = 28; // between two columns in a narrow window
-export const GROUP_H = 22; // narrow: a group caption's height
-export const GROUP_MAX = 6; // a group with more children pages: five a page and "N more"
+const GROUP_H = 22; // narrow: a group caption's height
 const PAGE = 5; // the children a page of a group shows, unless the group has a `pageSize`
 export const CAPTION_H = 18; // a column's caption, at the top of its column; a group's too
-export const CAPTION_ROW = 24; // the blocks of a column start under its caption
-export const CAPTION_GAP = 5; // between a group's caption and its first block
+const CAPTION_ROW = 24; // the blocks of a column start under its caption
+const CAPTION_GAP = 5; // between a group's caption and its first block
 export const LINK_MS = 170; // an unfold draws its links first, then its children fade in
-export const CHANNELS = [16, 24, 32]; // wide: how far right of its client a direct line turns
-export const NARROW_CHANNEL = 14; // narrow: the same, in the smaller gap between columns
+const CHANNELS = [16, 24, 32]; // wide: how far right of its client a direct line turns
+const NARROW_CHANNEL = 14; // narrow: the same, in the smaller gap between columns
 const ROW_GAP = 8; // between two blocks of a column
 const RAIL = 16; // narrow: children sit this far inside their parent, beside its rail
 const CORNER = 6; // the round corners of a rail
@@ -100,7 +99,7 @@ const pinned = (child) => Boolean(child.pinned) || PINNED.includes(child.kind);
 // The words of "N more" on a group's last page: a press goes back to the first.
 const firstPage = (size) => `Show the first ${size}`;
 
-// How a group pages: past one more than a page (GROUP_MAX for five a page), its `pageSize` (PAGE
+// How a group pages: past one more than a page (six for five a page), its `pageSize` (PAGE
 // unless set) at a time. It gives the children that page (not a preview or a slot), the page size,
 // how many pages, and the page it shows (`pages`, from 0; past the last, the last). Null for any
 // other block.
@@ -113,7 +112,7 @@ function paging(block, children, pages = new Map()) {
   return { rest, size, count, page: Math.min(Math.max(0, pages.get(block.id) || 0), count - 1) };
 }
 
-// The children a block shows: a group's always (past GROUP_MAX the five of its page, each marked
+// The children a block shows: a group's always (past six the five of its page, each marked
 // as turning with it, and a block "N more", then a preview or a slot), any other block's only
 // while it is open.
 function shownChildren(block, children, open, pages) {
@@ -210,7 +209,7 @@ export function pagesWith(model, pages, ids) {
 // blocks are drawn: `shape` is "rail", "step" (a direct line) or "curve", and `d` its SVG path. A
 // direct line carries the `chan` it turns on, how far right of its client: wide, one of CHANNELS by
 // the place of its block among those with a direct line, so the lines to blocks one after the other
-// run side by side; narrow, NARROW_CHANNEL. A group of more than GROUP_MAX shows five a page, the
+// run side by side; narrow, NARROW_CHANNEL. A group of more than six shows five a page, the
 // page `pages` names (group id -> from 0), and "N more".
 export function layoutTree(model, { open = new Set(), pages = new Map(), width = 0, narrow = isNarrow(width) } = {}) {
   const byId = new Map(model.blocks.map((block) => [block.id, block]));

@@ -321,7 +321,7 @@ function drawChange(id) {
 
 // The kind and title with the day and time under it, the facts, every tray row's title when there
 // were several, the backup's secret note, the actions, and the paths under Technical details.
-export function changeCard(entry) {
+function changeCard(entry) {
   const status = el("p", "gone-note");
   status.setAttribute("role", "status");
   const tech = techRowsOf(entry.technical);

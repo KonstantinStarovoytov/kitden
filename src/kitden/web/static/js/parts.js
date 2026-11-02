@@ -62,7 +62,7 @@ export function optionAfter(key, at, count) {
 // The parts of one option row in the project menu: an icon (layers for
 // All projects, a folder for a project), the name over its sub line, the count, and a check when
 // `check` is set.
-export function optionParts(item, check = false) {
+function optionParts(item, check = false) {
   const text = el("span", "where-tx");
   text.append(el("span", "where-label", item.name));
   if (item.sub) text.append(el("span", "where-sub", item.sub));
@@ -279,7 +279,7 @@ export function baseNames(text) {
 
 // The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
-  on: "On", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",
+  on: "On", off: "Off", unk: "Unknown", review: "Needs review", gw: "Via gateway",
   missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
   unread: "Could not read",
 };
@@ -331,9 +331,8 @@ export function sourceLines(progress, kind) {
 }
 
 // With no client found: each client Kitden looks for and the folder it checks, in client order.
-const LOOKS_FOR = ["claude_code", "codex", "cursor"];
 export function lookFor(clients) {
-  return LOOKS_FOR.map((id) => (clients || []).find((c) => c.id === id)).filter(Boolean)
+  return WRITABLE.map((id) => (clients || []).find((c) => c.id === id)).filter(Boolean)
     .map((c) => ({ name: c.display_name, where: shortPath((c.config_roots || [])[0]) }));
 }
 
@@ -354,15 +353,22 @@ export function versionsOpened(before, after) {
 }
 
 // "gateway" is a registered gateway's own step; "kitden" is the Kitden gateway's settings file.
-export const CLIENT_MARKS = {
+const CLIENT_MARKS = {
   claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", gateway: "GW", kitden: "GW",
 };
 // Icon file names under /static/brand/clients. Codex and Cursor also ship a "-dark" version.
-export const CLIENT_ICONS = {
+const CLIENT_ICONS = {
   claude_code: "claude", claude_desktop_code_tab: "claude", codex: "codex", cursor: "cursor",
 };
-export const DARK_ICONS = new Set(["codex", "cursor"]);
+const DARK_ICONS = new Set(["codex", "cursor"]);
 export const CLIENT_ORDER = ["claude_code", "claude_desktop_code_tab", "codex", "cursor"];
+// Sorts client ids in client order.
+export const byClientOrder = (a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b);
+// The clients Kitden writes and the Kitden gateway reaches, in client order.
+export const WRITABLE = ["claude_code", "codex", "cursor"];
+// Clients whose own command line installs plugins. Cursor keeps its plugins in the account,
+// and it loads Claude Code's plugins by itself when "Include Third-Party Plugins" is on.
+export const INSTALLERS = ["claude_code", "codex"];
 export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
   claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway", kitden: "Kitden gateway",
@@ -429,9 +435,6 @@ export function kitdenMove(change) {
 // A direct server, when no gateway here can take it: the Gateway page and Details say the same.
 export const GATEWAY_NOTE = "Add the server in the gateway first, then remove its direct entry here.";
 
-// The clients the Kitden gateway can reach.
-const KITDEN_CLIENTS = ["claude_code", "codex", "cursor"];
-
 // The Kitden gateway reaches a client through the client's `kitden` entry, when that entry is
 // on (`linked`); an entry that is there but off is `off`. A client without the entry is offered
 // to set it up; an old entry is updated. `entries` is the answer of /api/setup-server; without
@@ -442,7 +445,7 @@ export function kitdenClients(entries) {
   const off = [];
   const setup = [];
   for (const entry of entries || []) {
-    if (!KITDEN_CLIENTS.includes(entry.client)) continue;
+    if (!WRITABLE.includes(entry.client)) continue;
     if (entry.state === "added" || entry.state === "plugin") (entry.enabled === false ? off : linked).push(entry.client);
     const label = `Set up in ${CLIENT_NAMES[entry.client]}…`;
     if (entry.state === "missing") {
@@ -671,7 +674,7 @@ export function skillRemoval(steps) {
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
   const keeps = new Set(steps.flatMap((s) => s.keeps || []));
   const lose = reached.filter((c) => !keeps.has(c));
-  const clients = (lose.length ? lose : reached).sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+  const clients = (lose.length ? lose : reached).sort(byClientOrder);
   return { clients, oneCopy: !lose.length };
 }
 
@@ -727,7 +730,7 @@ export function changeTitle(entry) {
   const names = [...new Set(steps.map((s) => (plugin ? s.name.split("@")[0] : s.name)))];
   // A copied skill folder reaches every client that reads that folder.
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
-  reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+  reached.sort(byClientOrder);
   const clients = reached.map((c) => CLIENT_NAMES[c] || c);
   // Where it went, as the review's title said it; a line from before Kitden kept it says none.
   const place = PLACE_IN_TITLE.includes(entry.action) ? "" : targetWords(entry.target);
@@ -768,4 +771,3 @@ export function notesSection(heading, steps) {
   return section;
 }
 
-export { plural };

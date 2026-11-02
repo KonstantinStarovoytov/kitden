@@ -296,7 +296,7 @@ export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}
 // - hold(id, point, { glide, ms, pressed, onto }): the block shows at that map point until homeIn,
 //   at once or gliding there in `ms` (OUT3); `pressed` keeps the press scale on it (style.css);
 //   `onto` (a block's id) hides that block at once while this one takes its spot.
-//   homeIn(id, ms): it glides back to its place, 220 ms OUT3.
+//   homeIn(id): it glides back to its place, 220 ms OUT3.
 // - lightTarget(id) / unlightTarget(): one block at a time takes the drop look (`.drop`).
 // - tip(text, { on, at }): the drag tip (`.dragtip`), 6 px right of and 28 px over the held
 //   block's top left, or 12 px right of and 30 px over `at` (the pointer, a map point); plain or
@@ -1249,13 +1249,13 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
     return run(!canMove());
   }
 
-  // A held block glides from where it is to its place in `ms`, and loses `.dragging` when it lands.
-  function homeIn(id, ms = HOME_MS) {
+  // A held block glides from where it is to its place, and loses `.dragging` when it lands.
+  function homeIn(id) {
     const item = blocks.get(id);
     if (!item || item.leaving) return Promise.resolve();
     Object.assign(item, { held: false, pressed: false });
     cover(item, null);
-    go(item, { ...item.home, s: 1, o: 1 }, { dur: D(ms), ease: OUT3, start: performance.now() });
+    go(item, { ...item.home, s: 1, o: 1 }, { dur: D(HOME_MS), ease: OUT3, start: performance.now() });
     item.back = Boolean(item.move);
     paint(item);
     return run(!canMove());

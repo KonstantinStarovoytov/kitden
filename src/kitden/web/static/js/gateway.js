@@ -1,9 +1,9 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
-import { $, button, byKeys, el, gridKey, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
+import { $, button, byKeys, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, pageWaits, plural, reportError, treeRow, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
-import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
+import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
@@ -11,19 +11,12 @@ import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNo
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
-import { arrival, busy, current, currentError, data, gatewayShows, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote, WRITABLE } from "./parts.js";
+import { arrival, busy, current, currentError, data, gatewayShows, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { openAccess } from "./access-form.js";
-import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
+import { inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray, trayRow, undone, writing } from "./tray.js";
 
-// Overview sets a client up with the same note. A server the Kitden gateway holds, and its
-// links, are found where its Details are drawn. The find chip is drawn as every map page draws it.
-export { heldServer, SETUP_NOTE } from "./gateway-details.js";
-export { drawChip };
-export { litFor } from "./map.js";
-
-const WRITABLE = ["claude_code", "codex", "cursor"];
 // The group of servers outside the gateway: the List's words, and the map's, which asks for a drag.
 const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
 const OUTSIDE_MAP = "Outside the gateway · drag one in";
@@ -134,7 +127,7 @@ export function renderGateway(main, { again = false } = {}) {
   const mode = viewMode(state, serverCount(view));
   gatewayShows.mode = mode;
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
-  head.append(headActions(addHeadButton("+ Add servers", "add:servers", pressAdd), seg));
+  head.append(headActions(addHeadButton("+ Add servers", "add:servers", (node) => openAdd({ from: node })), seg));
   const model = treeFor(view, mode);
   setHint(mode === "map" ? mapHint() : "");
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
@@ -880,11 +873,15 @@ function bringPages(model, { fresh = false, projectChanged = false } = {}) {
 }
 
 // Let go of a selection the map has but does not show now, before the draw that follows (so it
-// draws nothing again itself): its Details close, as letGoOnMap's do.
+// draws nothing again itself).
 function letGoHidden(model) {
   const { selected } = onMap;
   const known = selected && (model.blocks.some((b) => b.id === selected) || model.links.some((l) => linkKey(l) === selected));
-  if (!known || shownOnMap(model, selected)) return;
+  if (known && !shownOnMap(model, selected)) dropSelection();
+}
+
+// The map selects nothing, and Details close (letGoCloses) or the address forgets the selection.
+function dropSelection() {
   onMap.selected = null;
   if (isPanelOpen() && letGoCloses(panelState.current)) closePanel({ focus: false });
   else setState({ selected: null });
@@ -946,16 +943,6 @@ function rowsOfLink(model, link) {
   return shown && shown.row ? shown.rows || [shown.row] : [];
 }
 
-// The tray's change is being written or has just been: as in the bar, nothing can be added to it
-// or taken out of it now.
-const writing = () => tray.phase === "applying" || tray.phase === "applied";
-
-// While a change is written (the tray's, or an Undo) every link keeps its hit, and so its focus,
-// and its × waits (map-view.js): it says why and removes nothing. Its words: the tray's own Apply
-// is "your change", an Undo or another change is "another change". False while nothing is written.
-export const OWN_WAITS = "Your change is being written.";
-export const linksWait = () => (writing() ? OWN_WAITS : busy.change && WAITS);
-
 // What the × of a link does, in words: a link the tray draws, or whose removal waits in the tray,
 // is taken out of it, and the map acts on the others as linkRemoval says. "" where it does not act
 // on the link: the link then has no ×.
@@ -974,8 +961,7 @@ export function removeLink(model, link, picked) {
   if (drawn.length) return takeOutHere(model, drawn);
   const removal = linkRemoval(model, link, picked);
   if (!removal) return null;
-  const key = keyFor(removal.body);
-  return inTray(key) ? takeOut(key) : addToTray(removal.body, { icon: removalIcon(removal.body) });
+  return toggleInTray(removal.body, { icon: removalIcon(removal.body) });
 }
 
 // A press on a link: a second press on the link picked, while its panel is open, lets go of it,
@@ -1246,9 +1232,7 @@ export function letGoCloses(current) {
 // Let go of the selection: the map shows none and Details close (letGoCloses). Focus stays where
 // it is.
 function letGoOnMap() {
-  onMap.selected = null;
-  if (isPanelOpen() && letGoCloses(panelState.current)) closePanel({ focus: false });
-  else setState({ selected: null });
+  dropSelection();
   drawAgain();
 }
 
@@ -1284,15 +1268,12 @@ function mapHint() {
   return pick.ids.size ? PICK_HINT(pick.ids.size) : MAP_HINT;
 }
 
-// "+ Add servers" in the page header opens the Add a server panel (gateway-add.js). Both its doors,
-// this and Details' More, let go of what is selected first.
+// The Add a server panel (gateway-add.js) lets go of what is selected first, from both its doors:
+// "+ Add servers" in the page header and Details' More.
 onOpenAdd(letGoIfSelected);
-function pressAdd(node) {
-  return openAdd({ from: node });
-}
 
 // A press on a block (a held server opened or folded first, by onOpen). "N more" turns its group's
-// page (turnOnMap). The Add a server card opens the add panel. A second press on the selected block lets go. The first run's slot adds the
+// page (turnOnMap). A second press on the selected block lets go. The first run's slot adds the
 // change that sets every client up; the slot of a drag does nothing. A preview block takes its row
 // out of the tray (D12), unless it waits for access: then it opens the access panel. Any other
 // block is selected.
@@ -1315,7 +1296,7 @@ export function pressBlock(model, id) {
   if (block.kind === "slot" && block.setup) review(block.setup, { note: SETUP_NOTE }).catch(reportError);
   else if (block.kind === "preview" && block.needs) {
     // A server that waits for access opens its token field; the dock row's × takes it out.
-    const row = tray.rows.find((each) => each.key === block.row);
+    const row = trayRow(block.row);
     if (row && row.waits) openAccess(row);
   } else if (block.kind === "preview") takeOutHere(model, block.row).catch(reportError);
   else if (block.kind !== "slot" || block.gateway) selectOnMap(block);
@@ -1546,16 +1527,7 @@ function gatewayList(main, view, model, found, { enter = false } = {}) {
   // One row takes the Tab key; the arrows move between rows, Right and Left fold, Enter opens.
   // Keys on a row's own button stay that button's.
   holdKeys(grid);
-  grid.addEventListener("keydown", (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey || !event.target.dataset.row) return;
-    const next = gridKey(rows, rows.findIndex((r) => r.id === event.target.dataset.row), event.key);
-    if (!next) return;
-    event.preventDefault();
-    const row = rows[next.at];
-    if (next.toggle) toggleRow(row);
-    else if (next.details) press.open(row);
-    else focusRow(grid, row.id);
-  });
+  gridKeys(grid, rows, { toggle: toggleRow, details: press.open, focus: (id) => focusRow(grid, id) });
   main.append(grid);
   onList.box = grid;
   if (enter) rise([grid], { delay: afterOldPage() });
@@ -1576,32 +1548,15 @@ function selectedRow(rows, byId) {
   return (own || matches[0] || {}).id || null;
 }
 
-function cell(className, text) {
-  const node = el("div", className, text);
-  node.setAttribute("role", "gridcell");
-  return node;
-}
+const cell = (className, text) => gridCell("gridcell", className, text);
 
 // One row: a fold mark where it folds, what it is (a client's tile, a gateway's mark, the dot of a
 // server or tool, filled when on), its name, tags and quiet words; then the clients that use it,
 // its tools, and › or "Move in…". A click opens its Details, or folds it on the fold mark; a
 // group row folds.
 function listRow(row, block, { current, selected, view, press }) {
-  const node = el("div", row.group ? "tg-row group" : `tg-row ${row.kind}`);
+  const { node, name } = treeRow(row.group ? "tg-row group" : `tg-row ${row.kind}`, row, { current, selected });
   if (row.found) node.classList.add("found");
-  node.setAttribute("role", "row");
-  node.setAttribute("aria-level", String(row.depth + 1));
-  if (row.expanded !== undefined) node.setAttribute("aria-expanded", String(row.expanded));
-  node.setAttribute("aria-selected", String(selected));
-  node.tabIndex = current ? 0 : -1;
-  node.dataset.row = row.id;
-  node.dataset.focus = `row:${row.id}`;
-  const name = cell("tg-name");
-  name.style.setProperty("--depth", String(row.depth));
-  const caret = el("span", row.expanded === undefined ? "caret none" : "caret", "▸");
-  caret.setAttribute("aria-hidden", "true");
-  name.append(caret);
-  if (row.icon) name.append(icon(row.icon, 13));
   if (row.kind === "client") name.append(mark(block.client));
   else if (GATEWAY_KINDS.includes(row.kind)) name.append(mark(block.gateway.kind === "kitden" ? "kitden" : "gateway"));
   else if (row.kind === "held" || row.kind === "tool") {
@@ -1647,12 +1602,7 @@ function listRow(row, block, { current, selected, view, press }) {
 // Move the Tab key, and focus, to another row (and to its own button).
 function focusRow(grid, id) {
   onList.current = id;
-  for (const node of grid.querySelectorAll("[data-row]")) {
-    const on = node.dataset.row === id;
-    node.tabIndex = on ? 0 : -1;
-    for (const control of node.querySelectorAll("button")) control.tabIndex = on ? 0 : -1;
-    if (on) node.focus();
-  }
+  focusTreeRow(grid.querySelectorAll("[data-row]"), id, (node) => node.querySelectorAll("button"));
 }
 
 // Fold or unfold a row: a server shows its tools; a group or a gateway hides its rows.

@@ -344,7 +344,7 @@ test('the dragged block keeps its press scale while the pointer is down', async 
   v.hold('s2', { x: 400, y: 300 }, { glide: true, ms: 200 });
   assert.ok(!v.node('s2').classList.contains('pressed') && v.node('s2').classList.contains('dragging'));
   v.hold('s2', { x: 500, y: 300 }, { pressed: true });
-  v.homeIn('s2', 220);
+  v.homeIn('s2');
   assert.ok(!v.node('s2').classList.contains('pressed'));
 });
 
@@ -364,7 +364,7 @@ test('under reduced motion the drop and the way home land at once', async () => 
   v.hold('s2', { x: 500, y: 300 }, { pressed: true });
   v.hold('s2', { x: 400, y: 200 }, { glide: true, ms: 200 });
   assert.deepEqual([pos(v.node('s2')), frames.length], [{ x: 400, y: 200, s: 1 }, 0]);
-  v.homeIn('s2', 220);
+  v.homeIn('s2');
   const home = place(lay(), 's2');
   assert.deepEqual([pos(v.node('s2')), frames.length], [{ x: home.x, y: home.y, s: 1 }, 0]);
   assert.ok(!v.node('s2').classList.contains('dragging'));

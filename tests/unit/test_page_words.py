@@ -920,7 +920,8 @@ def test_one_mark_slides_between_the_choices_of_a_group():
 def test_gateway_list_is_a_tree_grid_the_keys_move_through():
     # The List is a tree grid: the arrows move, Right opens, Left closes (dom.js gridKey).
     text = script("gateway.js")
-    assert 'setAttribute("role", "treegrid")' in text and "gridKey(" in text
+    assert 'setAttribute("role", "treegrid")' in text and "gridKeys(grid, rows," in text
+    assert "gridKey(rows," in script("dom.js").split("export function gridKeys")[1]
     # "Connect clients" folds smoothly in a registered gateway's Details.
     assert "fold(box)" in gw()
 
@@ -1236,13 +1237,15 @@ def test_every_control_a_render_replaces_names_itself_for_focus():
             '"add:missing"',
             "`hide:${column.id}`",
             '"hidden:show"',
-            "`row:${row.id}`",
         ),
     }.items():
         text = script(name)
         for key in keys:
             assert f"dataset.focus = {key}" in text, (name, key)
-        assert "gridKey(" in text
+        assert "gridKeys(" in text and "treeRow(" in text
+    # A tree grid's row is named by its row key (dom.js treeRow).
+    tree_row = script("dom.js").split("export function treeRow")[1]
+    assert "node.dataset.focus = `row:${row.id}`;" in tree_row
 
 
 def test_client_checkboxes_come_from_one_named_part():
@@ -1307,7 +1310,9 @@ def test_buttons_show_progress_and_the_scan_line_no_longer_blinks():
 def test_while_a_change_is_written_the_tray_offers_nothing_to_stop_it():
     dock = script("dock.js")
     # Cancel and every × are off while the change is written: it cannot stop halfway.
-    assert 'shown.cancel.disabled = t.phase === "applying" || t.phase === "applied";' in dock
+    assert "shown.cancel.disabled = writing(t);" in dock
+    writing = 'writing = (t = tray) => t.phase === "applying" || t.phase === "applied";'
+    assert writing in script("tray.js")
     assert "item.out.disabled = working;" in dock
     # The line says what is written, and Apply takes no press until it ends.
     assert "line: writingLine(t.change.steps)" in dock and "applyWaits: true" in dock
@@ -1893,7 +1898,7 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
         '"Kitden\'s gateway file"',
         '"In place"',
         '"This link is a change in preview. Nothing is written until you Apply."',
-        '"Take it out of the preview"',
+        "TAKE_OUT",
         "`Disconnect ${",
         "· outside the gateway`",
         '"Set up in"',
@@ -2145,7 +2150,7 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
     ):
         assert words in text, words
     assert '"/api/map"' not in text and "loadMap(" not in text
-    assert 'role", "treegrid"' in script("gateway.js") and "gridKey(" in script("gateway.js")
+    assert 'role", "treegrid"' in script("gateway.js") and "gridKeys(" in script("gateway.js")
 
 
 def test_the_gateway_says_what_it_could_not_read():
@@ -2205,9 +2210,12 @@ def test_the_map_previews_are_tray_rows():
     review = script("review.js")
     assert "setMapReview" not in review and "mapReview" not in review
     text = gw()
+    assert 'export const TAKE_OUT = "Take it out of the preview";' in script("tray.js")
+    # A link's × takes its row out of the tray, or adds it (tray.js toggleInTray).
+    assert "return inTray(key) ? takeOut(key) : addToTray(body, opts);" in script("tray.js")
     for words in (
-        'const TAKE_OUT = "Take it out of the preview";',
-        "addToTray(removal.body, { icon: removalIcon(removal.body) })",
+        "TAKE_OUT",
+        "toggleInTray(removal.body, { icon: removalIcon(removal.body) })",
         '(body.action === "client.disconnect" ? iconFor(body) : "x")',
         "addToTray(body)",
         "takeOut(",
@@ -2310,7 +2318,8 @@ def test_a_server_drags_onto_a_client():
     # gateway-notes 6.2: the tip asks for a client, then says where a drop moves the server; a
     # client that cannot take it says why before the drop, in the tip's plain look.
     drag = script("gateway-drag.js")
-    assert 'export const ON_CLIENT = "Drop on a client";' in script("map-drag.js")
+    assert 'const ON_CLIENT = "Drop on a client";' in script("map-drag.js")
+    assert "aimWords(drag," in drag
     for words in (
         "`Move into ${CLIENT_NAMES[client.client]}`",
         "`${who} already has ${name}.`",
@@ -2343,7 +2352,7 @@ def test_the_tray_bar_sits_in_the_dock_and_says_its_words():
         "changes in preview",
         "Nothing is written until you Apply.",
         "Click one on the map to take it out.",
-        "Take it out of the preview",
+        'iconButton("x", TAKE_OUT, "x",',
         "Show changes",
         "Cancel all",
         "Apply all",
@@ -2577,7 +2586,8 @@ def test_a_control_that_waits_for_another_change_says_why():
     assert '.dock .btn[aria-disabled="true"] { cursor: progress; }' in CSS
     assert 'div.map .link-x[aria-disabled="true"] { cursor: progress; }' in CSS
     # During the tray's own Apply a link's × says the change is the person's own.
-    assert 'export const OWN_WAITS = "Your change is being written.";' in script("gateway.js")
+    assert 'const OWN_WAITS = "Your change is being written.";' in script("tray.js")
+    assert "linksWait" in script("gateway.js") and "linksWait" in script("library-map.js")
 
 
 def test_a_gateway_kitden_cannot_reach_says_a_short_state_and_no_block_words_run_out():
@@ -2751,8 +2761,8 @@ def test_a_plugin_or_skill_drags_onto_a_client():
         "`Already in ${who}`",
         'const WAITS_ALREADY = "Already in preview";',
         "`${who} cannot get ${item.name}`",
-        "const meta = `Preview · ${wait.all ? ALL_PROJECTS : joinWords(wait.names)}`;",
-        'const ALL_PROJECTS = "all projects";',
+        "const meta = `Preview · ${wait.all ? ALL_PROJECTS_LOWER : joinWords(wait.names)}`;",
+        'const ALL_PROJECTS_LOWER = "all projects";',
         'const CLICK_OUT = "Click to take it out.";',
         "takeOut: `${meta}. ${CLICK_OUT}`",
         "pinned: true, parent: marketGroup(model, offer.marketplace)",
@@ -2837,8 +2847,7 @@ def test_a_library_link_x_removes_or_turns_off():
     assert 'if (client === "cursor") {' in rules
     text = script("library-map.js")
     for words in (
-        'const TAKE_OUT = "Take it out of the preview";',
-        'const OWN_WAITS = "Your change is being written.";',
+        "TAKE_OUT",
         "const LINKS = { canHit: () => true, tip: linkTip, waits: linksWait, onClick: pressLink, "
         "onRemove: removeLink };",
         "inTray(keyFor(change.body)) ? TAKE_OUT : change.tip",
@@ -2879,7 +2888,7 @@ def test_the_instructions_map_words():
         "const TAB_FROM = { x: 150, y: 200 };",
         '`${who} · ${plural(file.count, "rule", "rules")}`',
         '`${who} · ${plural(pulls, "import", "imports")}`',
-        '`${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS}`',
+        '`${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS_LOWER}`',
         'file: ["block-icon", "file-text", 15], import: ["block-icon bare", "scroll-text", 13]',
         "const importsOf = (file) => ((file.by || {}).claude_code ? file.imports || [] : []);",
     ):
@@ -2972,7 +2981,7 @@ def test_the_library_list_words_and_looks():
     ):
         assert words in text, words
     # A row opens the map's Details; the keys are the tree grid's.
-    assert "libraryDetails(id);" in text and "gridKey(rows," in text
+    assert "libraryDetails(id);" in text and "gridKeys(grid, rows," in text
     assert "export function libraryDetails(id, how)" in script("library-map.js")
     # The look: the Gateway List's grid, a sticky 30 px head, a 34 px part row.
     assert ".tg-row.part { min-height: 34px; }" in CSS

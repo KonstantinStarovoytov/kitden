@@ -9,9 +9,9 @@ import { animateTo, D, finishTransition, rise } from "./motion.js";
 import { arrival, projectGone, setState, state } from "./store.js";
 import { onTray, tray } from "./tray.js";
 
-export { backToDetails, detailsCard, followTray, heldActions, keepFrom, moveBody, moveInto, moveTargets, offerLabel, previewButton, showInPreview, techRows, technical } from "./details.js";
+export { detailsCard, followTray, heldActions, keepFrom, moveBody, moveInto, moveTargets, offerLabel, previewButton, showInPreview, techRows, technical } from "./details.js";
 export { callsText, NO_TOOLS, offNote, projectLabel, refreshTools, switchList, toolRows, toolsHead, writingToolsOn } from "./tools.js";
-export { ADDS, addScope, afterParts, alignGroups, canShowReview, changeOutcome, changeWords, chosenKeys, leftOutText, redoChange, redoStands, review, reviewLede, undoChange } from "./review.js";
+export { addScope, afterParts, alignGroups, canShowReview, changeWords, chosenKeys, leftOutText, redoChange, redoStands, review, reviewLede, undoChange } from "./review.js";
 export { hideToast, toast } from "./toast.js";
 
 // What is open now (`current`): Details ("item", or a Gateway card), a row's review ("row-review"),
@@ -36,7 +36,7 @@ export const isQuiet = () => quiet !== null && whatShows(panelState.current) ===
 // page with no scrim and no focus trap; the page keeps its width and stays usable. Anywhere else
 // they are the drawer.
 export const FLOAT_MIN = 1024;
-export const FLOATS = ["gateway", "library", "changes"];
+const FLOATS = ["gateway", "library", "changes"];
 export const floatsAt = (view, width) => FLOATS.includes(view) && width >= FLOAT_MIN;
 const isWide = () => matchMedia(`(min-width: ${FLOAT_MIN}px)`).matches;
 // How the open panel sits: `floating` beside the page, else the drawer. `wantsFloat` is what the
@@ -137,11 +137,14 @@ function place(on) {
     drawer.removeAttribute("aria-modal");
     drawer.removeAttribute("aria-labelledby");
     placeFloat();
-  } else {
-    drawer.setAttribute("role", "dialog");
-    drawer.setAttribute("aria-modal", "true");
-    drawer.setAttribute("aria-labelledby", "panel-title");
-  }
+  } else asDialog(drawer);
+}
+
+// The drawer is a modal dialog, named by the panel's title.
+function asDialog(drawer) {
+  drawer.setAttribute("role", "dialog");
+  drawer.setAttribute("aria-modal", "true");
+  drawer.setAttribute("aria-labelledby", "panel-title");
 }
 
 // The page's head: its title, lede and scope line, and the Library's tabs. What comes after it is
@@ -262,7 +265,7 @@ export function openPanel(content, { instant = false, float = FLOATS.includes(st
 
 // A panel that loads: its kind and Close at once, and still bars where its title, facts, sentence
 // and first button will be.
-export function skeleton(kind) {
+function skeleton(kind) {
   const head = el("header");
   const top = el("div", "top");
   top.append(el("span", "kicker", kind), button("Close", () => closePanel(), "btn ghost small"));
@@ -411,7 +414,7 @@ export async function holdPanel(work) {
   }
 }
 
-export function restoreFocus() {
+function restoreFocus() {
   if (opener && opener.isConnected) { opener.focus(); return; }
   const nodes = [...$$("[data-focus]"), ...$$("tr[data-key]")];
   for (const key of openerKeys) {
@@ -476,9 +479,7 @@ function trapFocus(event) {
 
 export function initPanel() {
   const drawer = $("#drawer");
-  drawer.setAttribute("role", "dialog");
-  drawer.setAttribute("aria-modal", "true");
-  drawer.setAttribute("aria-labelledby", "panel-title");
+  asDialog(drawer);
   // A window that grows or shrinks while the panel is open switches the floating panel and the
   // drawer.
   matchMedia(`(min-width: ${FLOAT_MIN}px)`).addEventListener("change", (event) => {
@@ -492,7 +493,6 @@ export function initPanel() {
   $("#content").addEventListener("scroll", placeSoon, { passive: true });
   addEventListener("resize", placeSoon);
   new MutationObserver(placeSoon).observe($("#main"), { childList: true });
-  // A refresh of the gateway's tool lists ended: an open tool list reads them again.
   // The tray changed: switches and buttons in Details show whether their change waits there.
   onTray(syncTray);
   $("#scrim").addEventListener("click", () => closePanel());

@@ -10,7 +10,7 @@ import { afterParts, changeWords, detailsAgain, nothingChanged, reloadAll, showE
 import { busy, go, onBusy, state } from "./store.js";
 import { hideToast, makeRoom, onToastGone, say, toast } from "./toast.js";
 import { openAccess } from "./access-form.js";
-import { applyTray, cancelTray, endApplied, onTray, setTrayWords, takeOut, tray, tryAgain } from "./tray.js";
+import { applyTray, cancelTray, endApplied, onTray, setTrayWords, TAKE_OUT, takeOut, tray, trayRow, tryAgain, writing } from "./tray.js";
 
 // Every client the steps write, as the bar says it while Apply runs. Not the one being written:
 // the engine's count names no step, and it does not write them in the preview's order.
@@ -224,11 +224,11 @@ function makeRow(row) {
   const words = el("span", "tt");
   words.append(title, detail);
   const show = iconButton("file-text", "", "ib", `tray:show:${row.key}`, () => {
-    const found = tray.rows.find((candidate) => candidate.key === row.key);
+    const found = trayRow(row.key);
     if (found && found.part) showRowReview(found);
   });
   const mark = el("span", "ts");
-  const out = iconButton("x", "Take it out of the preview", "x", `tray:x:${row.key}`, () => takeOut(row.key));
+  const out = iconButton("x", TAKE_OUT, "x", `tray:x:${row.key}`, () => takeOut(row.key));
   li.append(lead, words, show, mark, out);
   return { li, title, detail, show, mark, out, status: "" };
 }
@@ -250,7 +250,7 @@ function setAddToken(item, row) {
   if (row.waits && !item.add) {
     const words = row.waits.kind === "sign-in" && row.waits.sign_in ? "Sign in" : "Add token";
     item.add = button(words, () => {
-      const found = tray.rows.find((candidate) => candidate.key === row.key);
+      const found = trayRow(row.key);
       if (found && found.waits) openAccess(found);
     }, "btn small add-token");
     item.add.dataset.focus = `tray:access:${row.key}`;
@@ -263,7 +263,7 @@ function setAddToken(item, row) {
 }
 
 function patchRows(view, known, animate) {
-  const working = view.t.phase === "applying" || view.t.phase === "applied";
+  const working = writing(view.t);
   for (const row of view.rows) {
     let item = shown.rows.get(row.key);
     if (!item) {
@@ -359,7 +359,7 @@ function patch(view, { known = new Set(), animate = true } = {}) {
   else set(shown.head, words.head);
   set(shown.cancel, words.cancel);
   // Cancel, and every ×, wait while the change is written: it cannot stop halfway.
-  shown.cancel.disabled = t.phase === "applying" || t.phase === "applied";
+  shown.cancel.disabled = writing(t);
   if (shown.apply) patchApply(view);
   if (kind === "many") patchRows(view, known, animate);
 }
