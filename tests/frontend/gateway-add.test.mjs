@@ -190,7 +190,7 @@ test('+ Add opens the panel, focus goes to the search, and + Add looks pressed',
     assert.deepEqual([search().placeholder, search().getAttribute('aria-label')], ['Search the marketplaces…', 'Search the marketplaces']);
     assert.deepEqual(pill().map((b) => [b.textContent, b.getAttribute('aria-pressed')]), [['All', 'true'], ['Remote', 'false'], ['Local', 'false']]);
     assert.equal(body.className, 'body add-body');
-    assert.deepEqual([foot.className, text(foot)], ['step-foot', 'Click a server or drag it onto the map to preview it.']);
+    assert.deepEqual([foot.className, text(foot)], ['step-foot', 'Click to preview · drag onto the gateway']);
     assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn add', 'true']);
     // Only the list was read: nothing is written, and the tray is empty.
     assert.deepEqual(sent.map((s) => s.url).filter((u) => u !== '/api/market-servers'), []);

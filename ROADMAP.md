@@ -35,7 +35,10 @@ What Kitden does today and what comes next. Ideas and bugs:
   as `com.neon/mcp` show as the publisher's name. Adding is now a main action: "+ Add servers"
   and "+ Add plugins" sit in the page header, and an "Add a server" / "Add a plugin" card ends
   the map's groups. Several servers outside the gateway can be picked with a band or
-  Shift-click and dragged onto the gateway together, each becoming its own preview.
+  Shift-click and dragged onto the gateway together, each becoming its own preview. A server
+  that needs a token or sign-in no longer stops there: it waits in preview, amber, with "Add
+  token"; the token is checked against the server before Apply, and Apply writes the other
+  changes while it waits.
 
 - **Catalog separation:** the MCP picker excludes the built-in plugin catalog.
   Personal GitHub sources still offer MCP servers there. Known unsupported entries
@@ -296,7 +299,8 @@ Part 6, the Instructions tab and tool counts, is done.
 The add, group drag and sign-in design of 2026-11-01,
 [docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md](docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md),
 in order: the add button (done), selecting several servers and dragging them together (done), a token
-step checked before Apply, then browser sign-in.
+step checked before Apply (done: a server that needs access waits in preview, amber, with one token
+field checked against the server; Apply writes the rest), then browser sign-in.
 
 ## Next
 

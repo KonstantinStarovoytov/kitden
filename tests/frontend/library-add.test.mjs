@@ -239,7 +239,7 @@ test('+ Add opens Add a plugin or skill; the pill filters Plugins and Skills', a
     assert.equal(document.activeElement, search());
     assert.deepEqual([search().placeholder, search().getAttribute('aria-label')], ['Search the marketplaces…', 'Search the marketplaces']);
     assert.deepEqual(pill().map((b) => [b.textContent, b.getAttribute('aria-pressed')]), [['All', 'true'], ['Plugins', 'false'], ['Skills', 'false']]);
-    assert.deepEqual(text(foot), 'Click to preview, or drag onto a client.');
+    assert.deepEqual(text(foot), 'Click to preview · drag onto a client');
     assert.deepEqual([add.className, add.getAttribute('aria-expanded')], ['btn add', 'true']);
     // One group per marketplace, in name order, each with the store icon.
     assert.deepEqual(captions().map(text), ['demo-market', 'team-market']);

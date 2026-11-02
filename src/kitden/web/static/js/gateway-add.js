@@ -18,7 +18,7 @@ export { matchRows };
 export const ADD_TITLE = "Add a server";
 // Its door in the Kitden gateway's Details, under More.
 export const ADD_SERVER = "Add a server…";
-const FOOT = "Click a server or drag it onto the map to preview it.";
+const FOOT = "Click to preview · drag onto the gateway";
 const NO_MATCH = "No servers match.";
 const NONE = "No marketplace on this computer offers an MCP server.";
 export const STATUS = { added: "Added", held: "In the gateway", preview: "In preview" };

@@ -349,7 +349,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 /* A note on its own line between the clients and Preview. It stays in the page so a screen reader
    hears it change; empty, it is a zero-width item that takes back its gap. */
 .form-message { color: var(--ink-3); font-size: 12px; }
-.form-message.error { color: var(--danger); }
+.form-message.error { color: var(--lamp-warn); }
 
 /* Client marks: one rounded tile that follows the theme; the vendor icon inside keeps its colors.
    The Claude glyph has no tile of its own, so it gets padding; the Codex and Cursor icons fill it

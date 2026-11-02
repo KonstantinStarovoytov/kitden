@@ -14,7 +14,7 @@ import { busy, onBusy } from "./store.js";
 import { addToTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
 export const LIBRARY_ADD_TITLE = "Add a plugin or skill";
-const FOOT = "Click to preview, or drag onto a client.";
+const FOOT = "Click to preview · drag onto a client";
 const NO_MATCH = "No plugins or skills match.";
 const NONE = "No marketplace on this computer offers a plugin or skill.";
 const ADD_MARKETPLACE = "Add a marketplace…";

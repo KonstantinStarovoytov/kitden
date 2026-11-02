@@ -1569,7 +1569,7 @@ def test_the_add_a_server_panel_says_what_the_mockup_says():
     assert "{ label: ADD_SERVER, run: () => openAdd() }" in details
     assert 'const SEARCH = "Search the marketplaces";' in shared
     assert "input.placeholder = `${SEARCH}…`;" in shared
-    assert 'const FOOT = "Click a server or drag it onto the map to preview it.";' in add
+    assert 'const FOOT = "Click to preview · drag onto the gateway";' in add
     assert 'const NO_MATCH = "No servers match.";' in add
     assert 'const NONE = "No marketplace on this computer offers an MCP server.";' in add
     assert 'const FAILED = "Could not read the marketplaces.";' in shared
@@ -2762,7 +2762,7 @@ def test_the_library_add_panel_says_the_decided_words():
     text = script("library-add.js")
     for words in (
         'export const LIBRARY_ADD_TITLE = "Add a plugin or skill";',
-        'const FOOT = "Click to preview, or drag onto a client.";',
+        'const FOOT = "Click to preview · drag onto a client";',
         'const NO_MATCH = "No plugins or skills match.";',
         'const NONE = "No marketplace on this computer offers a plugin or skill.";',
         'const ADD_MARKETPLACE = "Add a marketplace…";',
@@ -3116,3 +3116,14 @@ def test_how_it_works_dark_svg_uses_no_old_amber():
         svg = (images / name).read_text().lower()
         assert "#e0a347" not in svg, name
         assert f'<circle cx="684" cy="142" r="4" fill="{warn}"/>' in svg, name
+
+
+def test_hints_follow_one_pattern_and_refusals_are_amber():
+    # One hint pattern ("Click to … · drag onto …", no final period) in the add panels and the
+    # catalog; a refusal in a form is amber, as in the dock and under a token field.
+    for name in ("gateway-add.js", "library-add.js"):
+        foot = re.search(r'const FOOT = "([^"]+)";', script(name)).group(1)
+        assert re.fullmatch(r"Click to [a-z]+ · drag onto [a-z ]+", foot), foot
+    assert '"Click to review · drag onto the gateway"' in script("discovery.js")
+    css = (STATIC / "style.css").read_text()
+    assert ".form-message.error { color: var(--lamp-warn); }" in css
