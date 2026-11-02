@@ -1,7 +1,7 @@
 // The Library's "Add a marketplace…" form (from its add panel), and the note an add for all
 // projects carries in a project.
-import { busyWhile, button, el, reportError } from "./dom.js";
-import { closePanel, openPanel, review, showInPreview } from "./panel.js";
+import { busyWhile, el, reportError } from "./dom.js";
+import { header, openPanel, review, showInPreview } from "./panel.js";
 import { clientCheck, INSTALLERS } from "./parts.js";
 import { state } from "./store.js";
 import { inTray, keyFor } from "./tray.js";
@@ -75,16 +75,6 @@ export function marketplaceForm({ back = null } = {}) {
   const form = addFormBody(clientChecks(INSTALLERS, chosen), chosen, ask, (change) => review(change, { note: projectNote(state.project), back }));
   form.prepend(field);
   body.append(el("p", "muted", "For a GitHub repository, Kitden reads its marketplace file once to name it. Cursor keeps its marketplaces in the Cursor account: add them in Cursor."), form);
-  openPanel([panelHead("Add marketplace", "From a link"), body, el("footer")]);
+  openPanel([header("Add marketplace", "From a link", null, "Close", true), body, el("footer")]);
   setTimeout(() => input.focus(), 0);
-}
-
-function panelHead(kicker, title) {
-  const head = el("header");
-  const top = el("div", "top");
-  top.append(el("span", "kicker", kicker), button("Close", () => closePanel(), "btn ghost small"));
-  const h1 = el("h1", "title-mono", title);
-  h1.id = "panel-title";
-  head.append(top, h1);
-  return head;
 }
