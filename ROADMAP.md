@@ -7,6 +7,16 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not released yet
+
+- **Lean README:** the logo and slogan, then three short animations of the real page in light
+  and dark, each cropped to the part it is about: find a server and drag it in, move several at
+  once, and one token for every agent. They are filmed one frame at a time, so the motion is
+  even. Two commands and one line of guarantees follow. Steps, privacy and limits moved to
+  [the guide](docs/guide.md). `scripts/record_readme.py` makes the animations again.
+- **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
+  so Cancel beside it no longer jumps as the words change.
+
 ### 0.4.0
 
 - **Add button and cards:** "+ Add servers" and "+ Add plugins" sit in the page header, and an
