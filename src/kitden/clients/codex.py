@@ -25,17 +25,21 @@ from kitden.clients.base import (
     Scan,
     check_toggle,
     file_source,
+    file_step,
     instruction_items,
     is_direct_entry,
     is_own_skill,
     marketplace_source,
     mcp_item,
+    mcp_items,
     plain_source,
     project,
     skill_items,
     toggle_action,
+    visible_folders,
 )
 from kitden.clients.versions import version_command
+from kitden.local_gateway.settings import as_dict
 from kitden.model import (
     Client,
     Enabled,
@@ -66,10 +70,6 @@ _LIST_CACHE: dict[tuple, dict] = {}
 _FILLING: set[tuple] = set()
 _FILL_LOCK = threading.Lock()
 REMOTE_INSTALL_RECORD = ".codex-remote-plugin-install.json"
-
-
-def _dict(value: Any) -> dict:
-    return value if isinstance(value, dict) else {}
 
 
 def _on(value: Any) -> Enabled:
@@ -179,7 +179,7 @@ class CodexAdapter(ClientAdapter):
             listing = self._list_plugins()
         except (OSError, ValueError, subprocess.SubprocessError):
             return {}
-        installed = _dict(listing).get("installed")
+        installed = as_dict(listing).get("installed")
         plugins = installed if isinstance(installed, list) else []
         return {
             p["pluginId"]: bool(p.get("enabled"))
@@ -247,10 +247,10 @@ class CodexAdapter(ClientAdapter):
         )
 
     def marketplace_sources(self) -> dict[str, str | None]:
-        config = _dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
+        config = as_dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
         sources: dict[str, str | None] = {}
-        for name, entry in _dict(config.get("marketplaces")).items():
-            source = _dict(entry).get("source")
+        for name, entry in as_dict(config.get("marketplaces")).items():
+            source = as_dict(entry).get("source")
             built_in = name.startswith("openai-") or (
                 isinstance(source, str) and any(f in source for f in BUILT_IN_FOLDERS)
             )
@@ -330,8 +330,8 @@ class CodexAdapter(ClientAdapter):
 
     def trusts(self, project: str) -> bool:
         """config.toml marks the project as trusted."""
-        config = _dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
-        settings = _dict(_dict(config.get("projects")).get(project))
+        config = as_dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
+        settings = as_dict(as_dict(config.get("projects")).get(project))
         return settings.get("trust_level") == "trusted"
 
     def skill_copy_step(self, folder: Path, readers: list[str], project: str | None = None) -> Step:
@@ -346,17 +346,17 @@ class CodexAdapter(ClientAdapter):
         """Marketplaces from config.toml, plus the curated one Codex keeps in `.tmp`. A local
         one is its folder; a git one is the copy Codex clones into `.tmp/marketplaces/<name>`
         (seen with Codex 0.163.0, 2026-10-20)."""
-        config = _dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
+        config = as_dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
         roots = {}
-        for name, entry in _dict(config.get("marketplaces")).items():
-            source = _dict(entry).get("source")
-            kind = _dict(entry).get("source_type")
+        for name, entry in as_dict(config.get("marketplaces")).items():
+            source = as_dict(entry).get("source")
+            kind = as_dict(entry).get("source_type")
             if kind == "local" and isinstance(source, str) and Path(source).is_dir():
                 roots[name] = Path(source)
             elif kind == "git" and (self.codex_home / ".tmp/marketplaces" / name).is_dir():
                 roots[name] = self.codex_home / ".tmp/marketplaces" / name
         curated = self.codex_home / ".tmp/plugins"
-        listed = _dict(Reader(CLIENT).json(curated / ".agents/plugins/marketplace.json"))
+        listed = as_dict(Reader(CLIENT).json(curated / ".agents/plugins/marketplace.json"))
         if isinstance(listed.get("name"), str):
             roots.setdefault(listed["name"], curated)
         return roots
@@ -371,50 +371,25 @@ class CodexAdapter(ClientAdapter):
     def setup_server_step(self, command: str, args: list[str]) -> Step:
         return self._add_entry(SETUP_NAME, {"command": command, "args": args})
 
-    def add_server_step(self, name: str, entry: dict) -> Step:
-        return self._add_entry(name, entry)
-
     def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
-        edit = FileEdit(
-            path=str(self.codex_home / "config.toml"),
-            fmt="toml",
-            key=("mcp_servers", name),
-            after=value,
-        )
-        return Step(
-            client=CLIENT,
-            scope=Scope.USER,
-            name=name,
-            edit=edit,
-            restart_note=RESTART,
-            login_note=login,
+        path = self.codex_home / "config.toml"
+        return file_step(
+            CLIENT, path, "toml", ("mcp_servers", name), value, Scope.USER, RESTART, login
         )
 
     def remove_step(self, item: Item) -> Step:
         if REMOVE_DIRECT not in self.item_actions(item):
             raise ValueError(f"{item.name} cannot be removed here")
-        edit = FileEdit(
-            path=str(item.source.path),
-            fmt="toml",
-            key=("mcp_servers", item.name),
-            after=ABSENT,
-        )
-        return Step(
-            client=CLIENT,
-            scope=item.scope,
-            name=item.name,
-            edit=edit,
-            restart_note=RESTART,
-            shared_file=item.scope is Scope.PROJECT,
-        )
+        key = ("mcp_servers", item.name)
+        return file_step(CLIENT, item.source.path, "toml", key, ABSENT, item.scope, RESTART)
 
     def scan(self) -> Scan:
         read = Reader(CLIENT)
         scan = Scan()
         config_path = self.codex_home / "config.toml"
-        config = _dict(read.toml(config_path))
+        config = as_dict(read.toml(config_path))
 
-        for name, entry in _dict(config.get("mcp_servers")).items():
+        for name, entry in as_dict(config.get("mcp_servers")).items():
             scan.items.append(
                 mcp_item(
                     CLIENT,
@@ -422,13 +397,13 @@ class CodexAdapter(ClientAdapter):
                     entry,
                     file_source(config_path, CLIENT, f"mcp_servers.{name}"),
                     Scope.USER,
-                    enabled=_on(_dict(entry).get("enabled")),
+                    enabled=_on(as_dict(entry).get("enabled")),
                 )
             )
 
-        configured = _dict(config.get("plugins"))
+        configured = as_dict(config.get("plugins"))
         for plugin_id, entry in configured.items():
-            enabled = _on(_dict(entry).get("enabled"))
+            enabled = _on(as_dict(entry).get("enabled"))
             scan.items.append(
                 Item(
                     client=CLIENT,
@@ -442,8 +417,8 @@ class CodexAdapter(ClientAdapter):
             scan.items += self._plugin_servers(read, self._plugin_folder(plugin_id), enabled)
         scan.items += self._cached_plugins(set(configured))
 
-        for name, entry in _dict(config.get("marketplaces")).items():
-            where = marketplace_source(_dict(entry))
+        for name, entry in as_dict(config.get("marketplaces")).items():
+            where = marketplace_source(as_dict(entry))
             scan.items.append(
                 Item(
                     client=CLIENT,
@@ -457,7 +432,7 @@ class CodexAdapter(ClientAdapter):
 
         disabled_skills = (
             {
-                os.path.realpath(_dict(rule).get("path", ""))
+                os.path.realpath(as_dict(rule).get("path", ""))
                 for rule in config.get("skills", {}).get("config", [])
                 if isinstance(rule, dict) and rule.get("enabled") is False
             }
@@ -471,9 +446,9 @@ class CodexAdapter(ClientAdapter):
 
         scan.items += instruction_items(CLIENT, _agents_md(self.codex_home), Scope.USER, CLIENT)
 
-        for path, settings in _dict(config.get("projects")).items():
+        for path, settings in as_dict(config.get("projects")).items():
             scan.projects.append(project(path, CLIENT))
-            trusted = _dict(settings).get("trust_level") == "trusted"
+            trusted = as_dict(settings).get("trust_level") == "trusted"
             scan.items += self._project(read, Path(path), trusted, disabled_skills)
             # The user's file lives in codex_home, so a home-folder project's files are its own.
             files = _agents_md(Path(path))
@@ -485,9 +460,9 @@ class CodexAdapter(ClientAdapter):
     def _project(self, read: Reader, root: Path, trusted: bool, off: set[str]) -> list[Item]:
         items = []
         layer_path = root / ".codex/config.toml"
-        layer = _dict(read.toml(layer_path))
-        for name, entry in _dict(layer.get("mcp_servers")).items():
-            state = _on(_dict(entry).get("enabled")) if trusted else Enabled.OFF
+        layer = as_dict(read.toml(layer_path))
+        for name, entry in as_dict(layer.get("mcp_servers")).items():
+            state = _on(as_dict(entry).get("enabled")) if trusted else Enabled.OFF
             items.append(
                 mcp_item(
                     CLIENT,
@@ -524,15 +499,10 @@ class CodexAdapter(ClientAdapter):
         The cache is `plugins/cache/<marketplace>/<plugin>/`, and the files may sit one version
         folder down (the newest one is used). Hidden folders are skipped.
         """
-
-        def folders(parent: Path) -> list[Path]:
-            found = parent.iterdir() if parent.is_dir() else []
-            return sorted(p for p in found if p.is_dir() and not p.name.startswith("."))
-
         out: dict[str, Path] = {}
-        for marketplace in folders(self.codex_home / "plugins/cache"):
-            for plugin in folders(marketplace):
-                versions = folders(plugin)
+        for marketplace in visible_folders(self.codex_home / "plugins/cache"):
+            for plugin in visible_folders(marketplace):
+                versions = visible_folders(plugin)
                 has_files = (plugin / ".codex-plugin").is_dir() or not versions
                 newest = plugin if has_files else max(versions, key=lambda v: v.stat().st_mtime)
                 out[f"{plugin.name}@{marketplace.name}"] = newest
@@ -549,9 +519,10 @@ class CodexAdapter(ClientAdapter):
             mcp_path = next((place / n for n in names if (place / n).is_file()), None)
             if mcp_path is None:
                 continue
-            for name, entry in _dict(_dict(read.json(mcp_path)).get("mcpServers")).items():
-                source = file_source(mcp_path, CLIENT, f"mcpServers.{name}", kind=SourceKind.PLUGIN)
-                items.append(mcp_item(CLIENT, name, entry, source, Scope.PLUGIN, enabled=enabled))
+            servers = as_dict(read.json(mcp_path)).get("mcpServers")
+            items += mcp_items(
+                CLIENT, servers, mcp_path, Scope.PLUGIN, enabled=enabled, kind=SourceKind.PLUGIN
+            )
         return items
 
     def _cached_plugins(self, configured: set[str]) -> list[Item]:

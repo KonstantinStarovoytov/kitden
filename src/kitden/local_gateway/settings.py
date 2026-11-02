@@ -31,28 +31,33 @@ START_TIME = "startup_timeout_sec"
 PLACEHOLDERS = ("${workspaceFolder}", "${CLAUDE_PROJECT_DIR}", "${CLAUDE_PROJECT_DIR:-.}")
 
 
-def _dict(value: Any) -> dict:
+def as_dict(value: Any) -> dict:
+    """The value when it is a dict, else {}."""
     return value if isinstance(value, dict) else {}
 
 
-def _read(path: Path) -> dict:
+def read_object(path: Path) -> dict:
+    """A JSON file's object as read now; {} when it is missing or not a JSON object."""
     try:
-        return _dict(json.loads(path.read_text()))
+        return as_dict(json.loads(path.read_text()))
     except (OSError, ValueError):
         return {}
 
 
 def load_settings(home: Path) -> dict:
     """The gateway's servers and rules; a missing or unreadable file reads as empty."""
-    return _settings(_read(data_dir(home) / SETTINGS_FILE))
+    return _settings(read_object(data_dir(home) / SETTINGS_FILE))
 
 
 def _settings(data: dict) -> dict:
-    rules = _dict(data.get("rules"))
+    rules = as_dict(data.get("rules"))
     return {
         **data,
-        "servers": _dict(data.get("servers")),
-        "rules": {"global": _dict(rules.get("global")), "projects": _dict(rules.get("projects"))},
+        "servers": as_dict(data.get("servers")),
+        "rules": {
+            "global": as_dict(rules.get("global")),
+            "projects": as_dict(rules.get("projects")),
+        },
     }
 
 
@@ -69,7 +74,7 @@ def settings_unreadable(home: Path) -> bool:
 
 def load_tools(home: Path) -> dict[str, list[dict]]:
     """Each server's known tools, by server name. Entries that are not tools are left out."""
-    data = _read(data_dir(home) / TOOLS_FILE)
+    data = read_object(data_dir(home) / TOOLS_FILE)
     return {
         server: [t for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str)]
         for server, tools in data.items()
@@ -103,7 +108,7 @@ def load_calls(home: Path) -> dict[str, dict[str, dict]]:
     `last` as a UTC minute. A missing or broken file reads as empty."""
     return {
         server: {t: c for t, c in tools.items() if isinstance(c, dict)}
-        for server, tools in _read(data_dir(home) / CALLS_FILE).items()
+        for server, tools in read_object(data_dir(home) / CALLS_FILE).items()
         if isinstance(tools, dict)
     }
 
@@ -130,15 +135,15 @@ def count_call(home: Path, server: str, tool: str, now: datetime | None = None) 
 def own_state(rules: Any, server: str, tool: str | None) -> str | None:
     """The state one scope of rules sets for a server (`tool` None) or one of its tools, or
     None when it sets none. An empty object left by a removed rule sets none."""
-    entry = _dict(_dict(rules).get(server))
-    state = entry.get("server") if tool is None else _dict(entry.get("tools")).get(tool)
+    entry = as_dict(as_dict(rules).get(server))
+    state = entry.get("server") if tool is None else as_dict(entry.get("tools")).get(tool)
     return state if state in STATES else None
 
 
 def strict_mode(settings: dict, server: str) -> bool:
     """Whether a server is in strict mode: a tool without a rule is off."""
-    rules = _dict(_dict(settings.get("rules")).get("global"))
-    return _dict(rules.get(server)).get("mode") == "strict"
+    rules = as_dict(as_dict(settings.get("rules")).get("global"))
+    return as_dict(rules.get(server)).get("mode") == "strict"
 
 
 def _is_on(scopes: list[dict], server: str, tool: str | None, strict: bool = False) -> bool:
@@ -153,9 +158,9 @@ def _is_on(scopes: list[dict], server: str, tool: str | None, strict: bool = Fal
 
 def _scopes(settings: dict, chain: Sequence[str]) -> list[dict]:
     """The rules to read: each project's of the chain, deepest first, then the global ones."""
-    rules = _dict(settings.get("rules"))
-    projects = _dict(rules.get("projects"))
-    return [*(_dict(projects.get(project)) for project in chain), _dict(rules.get("global"))]
+    rules = as_dict(settings.get("rules"))
+    projects = as_dict(rules.get("projects"))
+    return [*(as_dict(projects.get(project)) for project in chain), as_dict(rules.get("global"))]
 
 
 def state_in(settings: dict, chain: Sequence[str], server: str, tool: str | None) -> str:
@@ -189,14 +194,14 @@ def deciding_project(
 ) -> str | None:
     """The first project of the chain with its own state for a server or tool; None when the
     global rule decides."""
-    projects = _dict(_dict(settings.get("rules")).get("projects"))
+    projects = as_dict(as_dict(settings.get("rules")).get("projects"))
     return next((p for p in chain if own_state(projects.get(p), server, tool)), None)
 
 
 def servers_on(settings: dict, chain: Sequence[str]) -> list[str]:
     """Every gateway server that is on along the chain, whether or not its tools are known."""
     scopes = _scopes(settings, chain)
-    return [server for server in _dict(settings.get("servers")) if _is_on(scopes, server, None)]
+    return [server for server in as_dict(settings.get("servers")) if _is_on(scopes, server, None)]
 
 
 def allowed_tools(settings: dict, tools: dict, chain: Sequence[str]) -> dict[str, list[dict]]:
@@ -283,7 +288,7 @@ def remove_server_steps(home: Path, server: str) -> list[Step]:
     if server in rules["global"]:
         steps.append(settings_step(home, ("rules", "global", server), ABSENT, server))
     for project, held in rules["projects"].items():
-        if server in _dict(held):
+        if server in as_dict(held):
             key = ("rules", "projects", project, server)
             steps.append(settings_step(home, key, ABSENT, server))
     return steps

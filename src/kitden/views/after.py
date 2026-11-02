@@ -1,6 +1,5 @@
 """What each client shows after a change: the first line of the review (feature 004)."""
 
-import json
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -28,12 +27,14 @@ from kitden.local_gateway.keychain import references_in
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import (
+    as_dict,
     deciding_project,
     is_mode_key,
     load_settings,
     load_tools,
     moved_in,
     own_state,
+    read_object,
     rule_parts,
     state_in,
 )
@@ -737,18 +738,9 @@ def _disconnect_words(change: Change) -> list[dict]:
     return out
 
 
-def _settings(path: Path) -> dict:
-    """A Claude Code settings file as read now; {} when it is missing or not JSON."""
-    try:
-        data = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
-
 def _rules(path: Path, key: str) -> dict:
-    value = _settings(path).get(key)
-    return value if isinstance(value, dict) else {}
+    """One key's object in a Claude Code settings file as read now; {} when it has none."""
+    return as_dict(read_object(path).get(key))
 
 
 def _skill_keepers(inventory, home: Path, name: str) -> str | None:
