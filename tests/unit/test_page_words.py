@@ -1244,7 +1244,8 @@ def test_every_control_a_render_replaces_names_itself_for_focus():
             assert f"dataset.focus = {key}" in text, (name, key)
         assert "gridKeys(" in text and "treeRow(" in text
     # A tree grid's row is named by its row key (dom.js treeRow).
-    assert "node.dataset.focus = `row:${row.id}`;" in script("dom.js").split("export function treeRow")[1]
+    tree_row = script("dom.js").split("export function treeRow")[1]
+    assert "node.dataset.focus = `row:${row.id}`;" in tree_row
 
 
 def test_client_checkboxes_come_from_one_named_part():
@@ -1310,7 +1311,8 @@ def test_while_a_change_is_written_the_tray_offers_nothing_to_stop_it():
     dock = script("dock.js")
     # Cancel and every × are off while the change is written: it cannot stop halfway.
     assert "shown.cancel.disabled = writing(t);" in dock
-    assert 'export const writing = (t = tray) => t.phase === "applying" || t.phase === "applied";' in script("tray.js")
+    writing = 'writing = (t = tray) => t.phase === "applying" || t.phase === "applied";'
+    assert writing in script("tray.js")
     assert "item.out.disabled = working;" in dock
     # The line says what is written, and Apply takes no press until it ends.
     assert "line: writingLine(t.change.steps)" in dock and "applyWaits: true" in dock
@@ -2316,7 +2318,8 @@ def test_a_server_drags_onto_a_client():
     # gateway-notes 6.2: the tip asks for a client, then says where a drop moves the server; a
     # client that cannot take it says why before the drop, in the tip's plain look.
     drag = script("gateway-drag.js")
-    assert 'const ON_CLIENT = "Drop on a client";' in script("map-drag.js") and "aimWords(drag," in drag
+    assert 'const ON_CLIENT = "Drop on a client";' in script("map-drag.js")
+    assert "aimWords(drag," in drag
     for words in (
         "`Move into ${CLIENT_NAMES[client.client]}`",
         "`${who} already has ${name}.`",
