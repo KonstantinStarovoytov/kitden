@@ -4,6 +4,7 @@ import json
 import shutil
 import sqlite3
 import tomllib
+from contextlib import closing
 
 import pytest
 
@@ -320,7 +321,7 @@ def test_under_all_projects_cursor_never_gets_a_plugin(home):
     # Cursor does not load Claude Code's plugins here, and it lacks linter. It adds plugins only
     # in its own window (D26), so it is not offered, and not said as left out either.
     _user_plugin(home, "linter@claude-plugins-official")
-    with sqlite3.connect(home / CURSOR_DB) as db:
+    with closing(sqlite3.connect(home / CURSOR_DB)) as db, db:
         row = db.execute("SELECT value FROM ItemTable WHERE key = ?", (REACTIVE_KEY,)).fetchone()
         flags = {**(json.loads(row[0]) if row else {}), "importPluginsFromClaudeOnBoot": False}
         db.execute("INSERT INTO ItemTable VALUES (?, ?)", (REACTIVE_KEY, json.dumps(flags)))

@@ -40,6 +40,7 @@ from tests.conftest import fake_client_command  # noqa: E402
 from kitden.cli import WATCHED  # noqa: E402
 from kitden.clients import version_cache  # noqa: E402
 from kitden.demo import build_demo_home, demo_build  # noqa: E402
+from kitden.model import CLIENTS  # noqa: E402
 from kitden.views.inventory import build_inventory  # noqa: E402
 from kitden.web.app import create_app  # noqa: E402
 
@@ -109,7 +110,7 @@ def measure(home: Path, slow: float) -> dict:
     long /api/gateway-view then takes to answer."""
     os.environ.update(HOME=str(home), PATH=f"{home.parent / 'bin'}:/usr/bin:/bin")
     os.environ.pop("CODEX_HOME", None)
-    version_cache.refresh_versions(home, version_cache.CLIENTS)  # the common start: known
+    version_cache.refresh_versions(home, CLIENTS)  # the common start: known
 
     port, token = _free_port(), secrets.token_urlsafe(16)
     app = create_app(
@@ -130,7 +131,7 @@ def measure(home: Path, slow: float) -> dict:
     try:
         with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=GIVE_UP_SECONDS) as http:
             _poll(lambda: http.get("/", params={"token": token}).status_code == 303)
-            _poll(lambda: "headline" in _json(http.get("/api/overview")))
+            _poll(lambda: "cards" in _json(http.get("/api/overview")))
             found["first_usable"] = time.monotonic() - started
             found["still_checking"] = still_checking(http.get("/api/progress").json())
             if slow > 0 and SLOW_STEP not in found["still_checking"]:
@@ -159,7 +160,7 @@ def measure_demo(root: Path) -> float:
     try:
         with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=GIVE_UP_SECONDS) as http:
             _poll(lambda: http.get("/", params={"token": token}).status_code == 303)
-            _poll(lambda: "headline" in _json(http.get("/api/overview")))
+            _poll(lambda: "cards" in _json(http.get("/api/overview")))
             return time.monotonic() - started
     finally:
         server.should_exit = True

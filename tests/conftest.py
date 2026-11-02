@@ -6,6 +6,7 @@ import shlex
 import shutil
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -122,7 +123,7 @@ def write_cursor_state(home: Path, rows: dict, db_path: str = CURSOR_DB) -> Path
     """Create a Cursor state database with the given key → value rows."""
     db = home / db_path
     db.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db) as con:
+    with closing(sqlite3.connect(db)) as con, con:
         con.execute("CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)")
         for key, value in rows.items():
             text = value if isinstance(value, str) else json.dumps(value)
