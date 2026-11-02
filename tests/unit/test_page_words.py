@@ -920,7 +920,8 @@ def test_one_mark_slides_between_the_choices_of_a_group():
 def test_gateway_list_is_a_tree_grid_the_keys_move_through():
     # The List is a tree grid: the arrows move, Right opens, Left closes (dom.js gridKey).
     text = script("gateway.js")
-    assert 'setAttribute("role", "treegrid")' in text and "gridKey(" in text
+    assert 'setAttribute("role", "treegrid")' in text and "gridKeys(grid, rows," in text
+    assert "gridKey(rows," in script("dom.js").split("export function gridKeys")[1]
     # "Connect clients" folds smoothly in a registered gateway's Details.
     assert "fold(box)" in gw()
 
@@ -1236,13 +1237,14 @@ def test_every_control_a_render_replaces_names_itself_for_focus():
             '"add:missing"',
             "`hide:${column.id}`",
             '"hidden:show"',
-            "`row:${row.id}`",
         ),
     }.items():
         text = script(name)
         for key in keys:
             assert f"dataset.focus = {key}" in text, (name, key)
-        assert "gridKey(" in text
+        assert "gridKeys(" in text and "treeRow(" in text
+    # A tree grid's row is named by its row key (dom.js treeRow).
+    assert "node.dataset.focus = `row:${row.id}`;" in script("dom.js").split("export function treeRow")[1]
 
 
 def test_client_checkboxes_come_from_one_named_part():
@@ -2146,7 +2148,7 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
     ):
         assert words in text, words
     assert '"/api/map"' not in text and "loadMap(" not in text
-    assert 'role", "treegrid"' in script("gateway.js") and "gridKey(" in script("gateway.js")
+    assert 'role", "treegrid"' in script("gateway.js") and "gridKeys(" in script("gateway.js")
 
 
 def test_the_gateway_says_what_it_could_not_read():
@@ -2976,7 +2978,7 @@ def test_the_library_list_words_and_looks():
     ):
         assert words in text, words
     # A row opens the map's Details; the keys are the tree grid's.
-    assert "libraryDetails(id);" in text and "gridKey(rows," in text
+    assert "libraryDetails(id);" in text and "gridKeys(grid, rows," in text
     assert "export function libraryDetails(id, how)" in script("library-map.js")
     # The look: the Gateway List's grid, a sticky 30 px head, a 34 px part row.
     assert ".tg-row.part { min-height: 34px; }" in CSS

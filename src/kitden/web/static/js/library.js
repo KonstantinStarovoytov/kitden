@@ -5,7 +5,7 @@
 // server builds the rows and cells (views/library.py library_list). A row opens the same Details as
 // the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
 import { getJson, query } from "./api.js";
-import { button, el, gridKey, icon, plural } from "./dom.js";
+import { button, el, focusTreeRow, gridCell, gridKeys, icon, plural, treeRow } from "./dom.js";
 import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, pressLibraryAdd, renderLibraryMap, setListOnly } from "./library-map.js";
 import { addHeadButton, headActions, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterOldPage, animate, entrance, glide, reducedMotion, rise } from "./motion.js";
@@ -653,17 +653,7 @@ function listGrid(rows, columns, kind) {
     onList.nodes.set(row.id, node);
     grid.append(node);
   }
-  // Keys on a row's own button stay that button's.
-  grid.addEventListener("keydown", (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey || !event.target.dataset.row) return;
-    const next = gridKey(rows, rows.findIndex((r) => r.id === event.target.dataset.row), event.key);
-    if (!next) return;
-    event.preventDefault();
-    const row = rows[next.at];
-    if (next.toggle) toggleRow(row);
-    else if (next.details) openRow(row);
-    else focusRow(row.id);
-  });
+  gridKeys(grid, rows, { toggle: toggleRow, details: openRow, focus: focusRow });
   return grid;
 }
 
@@ -686,30 +676,11 @@ function headRow(columns) {
   return head;
 }
 
-function gridCell(role, className, text) {
-  const node = el("div", className, text);
-  node.setAttribute("role", role);
-  return node;
-}
-
 // One row: a fold mark where it folds, a group's icon, the name, its flags and quiet words, then a
 // cell per client. A click opens its Details, or folds it on the fold mark; a group with no
 // Details folds.
 function listRow(row, columns, { current, selected }) {
-  const node = el("div", row.kind === "group" ? "tg-row group" : `tg-row ${row.kind === "part" ? "part" : "item"}`);
-  node.setAttribute("role", "row");
-  node.setAttribute("aria-level", String(row.depth + 1));
-  if (row.expanded !== undefined) node.setAttribute("aria-expanded", String(row.expanded));
-  node.setAttribute("aria-selected", String(selected));
-  node.tabIndex = current ? 0 : -1;
-  node.dataset.row = row.id;
-  node.dataset.focus = `row:${row.id}`;
-  const name = gridCell("gridcell", "tg-name");
-  name.style.setProperty("--depth", String(row.depth));
-  const caret = el("span", row.expanded === undefined ? "caret none" : "caret", "▸");
-  caret.setAttribute("aria-hidden", "true");
-  name.append(caret);
-  if (row.icon) name.append(icon(row.icon, 13));
+  const { node, name } = treeRow(row.kind === "group" ? "tg-row group" : `tg-row ${row.kind === "part" ? "part" : "item"}`, row, { current, selected });
   // A file's name is in mono, as on the Instructions map.
   const words = el("span", row.kind === "group" ? "words" : row.kind === "file" ? "words name mono" : "words name", row.name);
   words.title = row.name;
@@ -761,15 +732,11 @@ function finish(rows) {
 
 const cellKey = (cell) => `${cell.state}|${cell.where || ""}|${cell.add ? cell.add.label : ""}`;
 
-// Move the Tab key, and focus, to another row (and to its own buttons).
+// Move the Tab key, and focus, to another row (and to the buttons in its client cells).
+const cellButtons = (node) => [...node.children].slice(1).flatMap((cell) => [...cell.children].filter((control) => control.tagName === "BUTTON"));
 function focusRow(id) {
   onList.current = id;
-  for (const [rowId, node] of onList.nodes) {
-    const on = rowId === id;
-    node.tabIndex = on ? 0 : -1;
-    for (const cell of [...node.children].slice(1)) for (const control of [...cell.children]) if (control.tagName === "BUTTON") control.tabIndex = on ? 0 : -1;
-    if (on) node.focus();
-  }
+  focusTreeRow(onList.nodes.values(), id, cellButtons);
 }
 
 // Fold or unfold a row: a plugin shows its parts; a group hides its rows.

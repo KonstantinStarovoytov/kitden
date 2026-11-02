@@ -141,6 +141,59 @@ export function gridKey(rows, at, key) {
   return null;
 }
 
+// A tree grid's keys on `grid` (gridKey, for its `rows` as shown): `toggle(row)` folds, `details(row)`
+// opens and `focus(id)` moves. A key with a modifier, or on a row's own button, is left alone.
+export function gridKeys(grid, rows, { toggle, details, focus }) {
+  grid.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || !event.target.dataset.row) return;
+    const next = gridKey(rows, rows.findIndex((r) => r.id === event.target.dataset.row), event.key);
+    if (!next) return;
+    event.preventDefault();
+    const row = rows[next.at];
+    if (next.toggle) toggle(row);
+    else if (next.details) details(row);
+    else focus(row.id);
+  });
+}
+
+// A cell of a tree grid: "gridcell" or "columnheader".
+export function gridCell(role, className, text) {
+  const node = el("div", className, text);
+  node.setAttribute("role", role);
+  return node;
+}
+
+// A tree grid's row and its name cell, which starts with the fold mark (and the row's icon). The
+// row says its level, whether it is open and selected, and takes the Tab key when `current`.
+export function treeRow(className, row, { current, selected }) {
+  const node = el("div", className);
+  node.setAttribute("role", "row");
+  node.setAttribute("aria-level", String(row.depth + 1));
+  if (row.expanded !== undefined) node.setAttribute("aria-expanded", String(row.expanded));
+  node.setAttribute("aria-selected", String(selected));
+  node.tabIndex = current ? 0 : -1;
+  node.dataset.row = row.id;
+  node.dataset.focus = `row:${row.id}`;
+  const name = gridCell("gridcell", "tg-name");
+  name.style.setProperty("--depth", String(row.depth));
+  const caret = el("span", row.expanded === undefined ? "caret none" : "caret", "▸");
+  caret.setAttribute("aria-hidden", "true");
+  name.append(caret);
+  if (row.icon) name.append(icon(row.icon, 13));
+  return { node, name };
+}
+
+// The Tab key, and focus, go to the row `id` of a tree grid's row `nodes`, and to the controls of
+// that row that `controls(node)` gives; every other row's leave the Tab order.
+export function focusTreeRow(nodes, id, controls) {
+  for (const node of nodes) {
+    const on = node.dataset.row === id;
+    node.tabIndex = on ? 0 : -1;
+    for (const control of controls(node)) control.tabIndex = on ? 0 : -1;
+    if (on) node.focus();
+  }
+}
+
 export function shortPath(path) {
   return path ? String(path).replace(/^\/Users\/[^/]+/, "~") : "";
 }

@@ -1,6 +1,6 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
-import { $, button, byKeys, el, gridKey, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
+import { $, button, byKeys, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, pageWaits, plural, reportError, treeRow, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool } from "./gateway-details.js";
@@ -1528,16 +1528,7 @@ function gatewayList(main, view, model, found, { enter = false } = {}) {
   // One row takes the Tab key; the arrows move between rows, Right and Left fold, Enter opens.
   // Keys on a row's own button stay that button's.
   holdKeys(grid);
-  grid.addEventListener("keydown", (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey || !event.target.dataset.row) return;
-    const next = gridKey(rows, rows.findIndex((r) => r.id === event.target.dataset.row), event.key);
-    if (!next) return;
-    event.preventDefault();
-    const row = rows[next.at];
-    if (next.toggle) toggleRow(row);
-    else if (next.details) press.open(row);
-    else focusRow(grid, row.id);
-  });
+  gridKeys(grid, rows, { toggle: toggleRow, details: press.open, focus: (id) => focusRow(grid, id) });
   main.append(grid);
   onList.box = grid;
   if (enter) rise([grid], { delay: afterOldPage() });
@@ -1558,32 +1549,15 @@ function selectedRow(rows, byId) {
   return (own || matches[0] || {}).id || null;
 }
 
-function cell(className, text) {
-  const node = el("div", className, text);
-  node.setAttribute("role", "gridcell");
-  return node;
-}
+const cell = (className, text) => gridCell("gridcell", className, text);
 
 // One row: a fold mark where it folds, what it is (a client's tile, a gateway's mark, the dot of a
 // server or tool, filled when on), its name, tags and quiet words; then the clients that use it,
 // its tools, and › or "Move in…". A click opens its Details, or folds it on the fold mark; a
 // group row folds.
 function listRow(row, block, { current, selected, view, press }) {
-  const node = el("div", row.group ? "tg-row group" : `tg-row ${row.kind}`);
+  const { node, name } = treeRow(row.group ? "tg-row group" : `tg-row ${row.kind}`, row, { current, selected });
   if (row.found) node.classList.add("found");
-  node.setAttribute("role", "row");
-  node.setAttribute("aria-level", String(row.depth + 1));
-  if (row.expanded !== undefined) node.setAttribute("aria-expanded", String(row.expanded));
-  node.setAttribute("aria-selected", String(selected));
-  node.tabIndex = current ? 0 : -1;
-  node.dataset.row = row.id;
-  node.dataset.focus = `row:${row.id}`;
-  const name = cell("tg-name");
-  name.style.setProperty("--depth", String(row.depth));
-  const caret = el("span", row.expanded === undefined ? "caret none" : "caret", "▸");
-  caret.setAttribute("aria-hidden", "true");
-  name.append(caret);
-  if (row.icon) name.append(icon(row.icon, 13));
   if (row.kind === "client") name.append(mark(block.client));
   else if (GATEWAY_KINDS.includes(row.kind)) name.append(mark(block.gateway.kind === "kitden" ? "kitden" : "gateway"));
   else if (row.kind === "held" || row.kind === "tool") {
@@ -1629,12 +1603,7 @@ function listRow(row, block, { current, selected, view, press }) {
 // Move the Tab key, and focus, to another row (and to its own button).
 function focusRow(grid, id) {
   onList.current = id;
-  for (const node of grid.querySelectorAll("[data-row]")) {
-    const on = node.dataset.row === id;
-    node.tabIndex = on ? 0 : -1;
-    for (const control of node.querySelectorAll("button")) control.tabIndex = on ? 0 : -1;
-    if (on) node.focus();
-  }
+  focusTreeRow(grid.querySelectorAll("[data-row]"), id, (node) => node.querySelectorAll("button"));
 }
 
 // Fold or unfold a row: a server shows its tools; a group or a gateway hides its rows.
