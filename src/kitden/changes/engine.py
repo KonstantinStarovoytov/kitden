@@ -58,8 +58,6 @@ if TYPE_CHECKING:
 
 EDITORS = {"json": json_splice, "toml": toml_edit}
 CLIENT_CLI = "client_cli"
-FILE_EDIT = "format_preserving_edit"
-GATEWAY_API = "gateway_api"  # a step that adds a server to a gateway (feature 006)
 # A step that copies a skill folder has mechanism model.COPY_FOLDER; one that removes a skill
 # folder has model.REMOVE_FOLDER.
 
@@ -232,6 +230,14 @@ def _matches(step: Step, value: Any, expected: Any) -> bool:
     return value == expected
 
 
+def _edited(edit: FileEdit, text: str, value: Any) -> str:
+    """The text with the entry set to `value`, or taken out when it is ABSENT."""
+    editor = EDITORS[edit.fmt]
+    if value is ABSENT:
+        return editor.delete_value(text, edit.key)
+    return editor.set_value(text, edit.key, value)
+
+
 def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
     """Put back each entry of one file, last step first. None if any entry is no longer ours."""
     try:
@@ -242,18 +248,22 @@ def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
         edit = step.edit
         if edit.check != "entry":
             return None
-        editor = EDITORS[edit.fmt]
         try:
-            ours = _matches(step, editor.get_value(text, edit.key), edit.after)
+            ours = _matches(step, EDITORS[edit.fmt].get_value(text, edit.key), edit.after)
         except UnrecognizedFormatError:
             return None
         if not ours:
             return None
-        if edit.before is ABSENT:
-            text = editor.delete_value(text, edit.key)
-        else:
-            text = editor.set_value(text, edit.key, edit.before)
+        text = _edited(edit, text, edit.before)
     return text.encode()
+
+
+def _same_folder(path: str, content_hash: str | None) -> bool:
+    """The folder still hashes as it did; False when it cannot be read (or is a link)."""
+    try:
+        return digest(path) == content_hash
+    except (CopyRefusedError, OSError):
+        return False
 
 
 def _by_command(step: Step) -> bool:
@@ -306,25 +316,9 @@ def _edit_record(edit: FileEdit | None) -> dict | None:
     }
 
 
-def _gateway_record(gateway: GatewayEdit | None) -> dict | None:
-    if gateway is None:
-        return None
-    return {
-        "gateway_id": gateway.gateway_id,
-        "url": gateway.url,
-        "name": gateway.name,
-        "server": gateway.server,
-        "server_uuid": gateway.server_uuid,
-        "masked_diff": gateway.masked_diff,
-    }
-
-
-def _copy_record(copy: FolderCopy | None) -> dict | None:
-    return None if copy is None else dict(copy.__dict__)
-
-
-def _removal_record(removal: FolderRemoval | None) -> dict | None:
-    return None if removal is None else dict(removal.__dict__)
+def _fields(part: GatewayEdit | FolderCopy | FolderRemoval | None) -> dict | None:
+    """A gateway edit, folder copy or folder removal as a record; read back with `X(**r)`."""
+    return None if part is None else dict(part.__dict__)
 
 
 def _keychain_record(items: list[KeychainItem]) -> list[dict]:
@@ -349,9 +343,9 @@ def _record(change: Change) -> dict:
                 "login_note": step.login_note,
                 "shared_file": step.shared_file,
                 "edit": _edit_record(step.edit),
-                "gateway": _gateway_record(step.gateway),
-                "copy": _copy_record(step.copy),
-                "removal": _removal_record(step.removal),
+                "gateway": _fields(step.gateway),
+                "copy": _fields(step.copy),
+                "removal": _fields(step.removal),
                 "keychain": _keychain_record(step.keychain),
                 "reaches": step.reaches,
             }
@@ -653,12 +647,7 @@ class Engine:
                 raise _ApplyError(f"`{shown}` failed: {result.output}")
             self.on_write(edit.path, _sha(_read(edit.path)))
             return None
-        editor = EDITORS[edit.fmt]
-        text = (data or b"").decode()
-        if edit.after is ABSENT:
-            new = editor.delete_value(text, edit.key)
-        else:
-            new = editor.set_value(text, edit.key, edit.after)
+        new = _edited(edit, (data or b"").decode(), edit.after)
         self._write(edit.path, new.encode())
         return new.encode()
 
@@ -854,10 +843,7 @@ class Engine:
         copy = step.copy
         if os.path.lexists(copy.target):
             return f"{copy.target} appeared since preview; review the change again"
-        try:
-            same = digest(copy.source) == copy.content_hash
-        except (CopyRefusedError, OSError):
-            same = False
+        same = _same_folder(copy.source, copy.content_hash)
         return None if same else f"{copy.source} changed since preview; review the change again"
 
     def _apply_copy(self, step: Step, copied: list[Step]) -> None:
@@ -876,10 +862,7 @@ class Engine:
         removal = step.removal
         if not os.path.lexists(removal.path):
             return f"{removal.path} is gone since preview; review the change again"
-        try:
-            same = not os.path.islink(removal.path) and digest(removal.path) == removal.content_hash
-        except (CopyRefusedError, OSError):
-            same = False
+        same = _same_folder(removal.path, removal.content_hash)
         return None if same else f"{removal.path} changed since preview; review the change again"
 
     def _apply_removal(self, change_id: str, step: Step, removed: list[Step]) -> None:
@@ -925,9 +908,7 @@ class Engine:
 
         return tick
 
-    def _apply_gateway(
-        self, steps: list[Step], tick: Callable[[Step], None] = lambda step: None
-    ) -> None:
+    def _apply_gateway(self, steps: list[Step], tick: Callable[[Step], None]) -> None:
         """Add each server, then read the list back: every name must be there."""
         if not steps:
             return
@@ -983,13 +964,11 @@ class Engine:
                 continue
             restored = _undo_entries(steps, data)
             if restored is None:
-                change.move_to(ChangeState.UNDO_BLOCKED)
-                change.error = (
+                return self._blocked(
+                    change,
                     f"{path} changed after the change was applied; undo would overwrite that, "
-                    "so nothing was changed"
+                    "so nothing was changed",
                 )
-                self._finish(change)
-                return change
             plans[path] = restored
 
         copies = [s for s in change.steps if s.copy is not None]
@@ -997,18 +976,12 @@ class Engine:
             copy = step.copy
             if not os.path.lexists(copy.target):
                 continue  # already gone; nothing to remove
-            try:
-                same = digest(copy.target) == copy.content_hash
-            except (CopyRefusedError, OSError):
-                same = False
-            if not same:
-                change.move_to(ChangeState.UNDO_BLOCKED)
-                change.error = (
+            if not _same_folder(copy.target, copy.content_hash):
+                return self._blocked(
+                    change,
                     f"{copy.target} changed after the change was applied; undo would delete "
-                    "that, so nothing was changed"
+                    "that, so nothing was changed",
                 )
-                self._finish(change)
-                return change
 
         removals = [s for s in change.steps if s.removal is not None]
         for step in removals:
@@ -1019,10 +992,7 @@ class Engine:
                 reason = f"the backup of {removal.path} is gone, so nothing was changed"
             else:
                 continue
-            change.move_to(ChangeState.UNDO_BLOCKED)
-            change.error = reason
-            self._finish(change)
-            return change
+            return self._blocked(change, reason)
 
         # The Keychain is checked first: if it cannot be reached, nothing else changes. The
         # items the change created are deleted last, once the files read back as before, so a
@@ -1034,10 +1004,9 @@ class Engine:
             for item in created:
                 keychain.read(item.ref, run=self._security())
         except KeychainError:
-            change.move_to(ChangeState.UNDO_BLOCKED)
-            change.error = "Kitden could not reach the Keychain; nothing was changed."
-            self._finish(change)
-            return change
+            return self._blocked(
+                change, "Kitden could not reach the Keychain; nothing was changed."
+            )
         kept = [
             f"{i.server}/{i.key} in your Keychain keeps the new value." for i in items if i.existed
         ]
@@ -1049,10 +1018,7 @@ class Engine:
                 [s for s in change.steps if s.gateway is not None], tick=tick
             )
         except GatewayError as error:
-            change.move_to(ChangeState.UNDO_BLOCKED)
-            change.error = f"{error}; the client files were not changed"
-            self._finish(change)
-            return change
+            return self._blocked(change, f"{error}; the client files were not changed")
         for step in reversed(copies):
             remove_folder(step.copy.target)
             tick(step)
@@ -1068,21 +1034,18 @@ class Engine:
                 continue
             result = self.run(step.undo_command, step.cwd)
             if result.returncode != 0:
-                change.move_to(ChangeState.UNDO_BLOCKED)
-                change.error = f"`{_shown(step.undo_command)}` failed: {result.output}"
-                self._finish(change)
-                return change
+                return self._blocked(
+                    change, f"`{_shown(step.undo_command)}` failed: {result.output}"
+                )
             if step.edit.path in by_command:
                 try:
                     self._put_entry_back(step)
                 except (OSError, RefusedWriteError, UnicodeDecodeError, UnrecognizedFormatError):
-                    change.move_to(ChangeState.UNDO_BLOCKED)
-                    change.error = (
+                    return self._blocked(
+                        change,
                         f"{step.name} is back, but {step.edit.path} could not be set as it was "
-                        "before. Check it by hand."
+                        "before. Check it by hand.",
                     )
-                    self._finish(change)
-                    return change
             self.on_write(step.edit.path, _sha(_read(step.edit.path)))
             tick(step)
         for path, data in plans.items():
@@ -1105,6 +1068,13 @@ class Engine:
         notes += kept
         if notes:
             change.error = " ".join(notes)
+        self._finish(change)
+        return change
+
+    def _blocked(self, change: Change, reason: str) -> Change:
+        """Undo stops here, with the reason."""
+        change.move_to(ChangeState.UNDO_BLOCKED)
+        change.error = reason
         self._finish(change)
         return change
 

@@ -6,21 +6,16 @@ Each add is built by the same step builders as a single add from the Library.
 
 from pathlib import Path
 
-from kitden.changes.actions import (
-    CLIENT_WORDS,
-    add_server_steps,
-    folder_readers,
-    install_steps,
-)
+from kitden.changes.actions import add_server_steps, folder_readers, install_steps
 from kitden.clients.base import SETUP_NAME, ClientAdapter, is_direct_entry
-from kitden.model import Item, ItemKind, Scope, Step
+from kitden.model import CLIENT_WORDS, CLIENTS, Item, ItemKind, Scope, Step
 from kitden.views.catalog import catalog
 from kitden.views.effective import effective_view
 from kitden.views.findings import base_name
 from kitden.views.match import Copies, is_compared, odd_sources, plugin_copies
 from kitden.views.skills import read_skill, skill_catalog
+from kitden.views.words import join_words
 
-CLIENTS = ("claude_code", "codex", "cursor")
 KINDS = (ItemKind.MCP_SERVER, ItemKind.PLUGIN, ItemKind.SKILL)
 # Under All projects MCP servers are left to the Gateway.
 ALL_KINDS = (ItemKind.PLUGIN, ItemKind.SKILL)
@@ -93,11 +88,6 @@ def _build(
         raise ValueError("needs the rest of its plugin")
     readers = folder_readers(client, adapters, found)
     return [adapters[client].skill_copy_step(folder, readers, into)]
-
-
-def _words(clients: list[str]) -> str:
-    names = [CLIENT_WORDS[c] for c in clients]
-    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 def _not_same(views: dict[str, list[Item]], copies: Copies) -> list[dict]:
@@ -213,7 +203,9 @@ def align_steps(
                     if first != key[1] and not alike:
                         notes.append(f"This list also adds {first}; this adds {key[1]} beside it.")
                     if twice:
-                        notes.append(f"{_words(twice)} would load it twice.")
+                        notes.append(
+                            f"{join_words([CLIENT_WORDS[c] for c in twice])} would load it twice."
+                        )
                     if key[:2] in elsewhere[client]:
                         folder = Path(elsewhere[client][key[:2]]).name
                         who = CLIENT_WORDS[client]

@@ -76,7 +76,7 @@ def _dotenv(text: str) -> dict[str, str]:
     return pairs
 
 
-def file_holds_secret(data: bytes, name: str = "") -> bool:
+def file_holds_secret(data: bytes, name: str) -> bool:
     """Whether a file's bytes hold a secret: a .env file's values are env values; other files
     are read as JSON, then as TOML, else as plain text."""
     text = data.decode("utf-8", errors="replace")

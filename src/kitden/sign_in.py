@@ -71,13 +71,6 @@ class SignIns:
             None,
         )
 
-    def signed(self, id: str, url: str) -> SignIn | None:
-        """The finished sign-in with this id, only for this address."""
-        record = self._all.get(id)
-        if record is None or record.state != "done" or record.url != url:
-            return None
-        return record
-
     def kept(self, url: str) -> SignIn | None:
         """A finished sign-in for this address: a row that comes back uses it again."""
         return next((r for r in self._all.values() if r.url == url and r.state == "done"), None)

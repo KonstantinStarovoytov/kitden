@@ -39,8 +39,8 @@ A project folder (settings.PLACEHOLDERS) is not a shell value; each client names
 import re
 from typing import Any
 
-from kitden.changes.actions import CLIENT_WORDS
 from kitden.local_gateway.settings import PLACEHOLDERS, START_TIME
+from kitden.model import CLIENT_WORDS
 
 UNREADABLE = "The entry could not be read."
 PROJECT_FOLDER = {"claude_code": "${CLAUDE_PROJECT_DIR:-.}"}
@@ -87,7 +87,8 @@ def _text_list(value: Any) -> bool:
     return isinstance(value, list) and all(isinstance(a, str) for a in value)
 
 
-def _number(value: Any) -> bool:
+def is_number(value: Any) -> bool:
+    """A number, not True or False."""
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 
@@ -104,8 +105,8 @@ _CHECKS = {
     "env_vars": _text_list,
     "cwd": lambda v: isinstance(v, str),
     "enabled": lambda v: isinstance(v, bool),
-    START_TIME: _number,
-    TOOL_TIME: _number,
+    START_TIME: is_number,
+    TOOL_TIME: is_number,
 }
 
 

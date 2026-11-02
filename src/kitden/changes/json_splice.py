@@ -136,16 +136,7 @@ def _indent_unit(text: str) -> str:
 
 
 def _key_separator(text: str, root: _Node) -> str:
-    def first(node: _Node) -> _Member | None:
-        if node.members:
-            return node.members[0]
-        for member in node.members or []:
-            found = first(member.value)
-            if found:
-                return found
-        return None
-
-    member = first(root)
+    member = root.members[0] if root.members else None
     return text[member.key_end : member.value.start] if member else ": "
 
 
