@@ -11,7 +11,7 @@ import { animateTo, CALM } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { CLIENT_NAMES } from "./parts.js";
 import { busy, current, data, state } from "./store.js";
-import { addToTray, inTray, keyFor, tray } from "./tray.js";
+import { addToTray, inTray, keyFor, tray, writing } from "./tray.js";
 
 // A dropped block flies onto its slot.
 const DROP_MS = 200;
@@ -208,14 +208,28 @@ export function pointOf(drag) {
 // does; only the gateway is a target, so the Add a server card stays dim with the rest. The
 // Outside caption's top is where the gateway's room ends.
 function beginIn(drag) {
-  const { model, layout, view } = onMap;
-  const caption = layout.blocks.find((b) => b.id === "group:outside");
-  drag.line = caption ? caption.y : Infinity;
-  drag.group = drag.block.groupKey === "local" ? "local" : "remote";
-  const kitden = model.blocks.find((b) => b.kind === "gateway" && b.gateway.kind === "kitden");
-  drag.gateway = kitden ? kitden.id : null;
+  const { model, view } = onMap;
+  Object.assign(drag, gatewayRoom(), { group: drag.block.groupKey === "local" ? "local" : "remote" });
   const lines = model.links.filter((l) => l.to === drag.id).map(linkKey);
   view.glance(new Set([drag.id, ...(drag.gateway ? [drag.gateway] : []), ...lines]));
+}
+
+// Where a drag into the gateway may drop: the Kitden gateway (`gateway`, its id, or null) and the
+// top of the Outside caption (`line`), where the gateway's room ends.
+function gatewayRoom() {
+  const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
+  const kitden = kitdenGateway();
+  return { line: caption ? caption.y : Infinity, gateway: kitden ? kitden.id : null };
+}
+
+// The gateway lights while a drop there would land (`open`), and goes out when it would not. True
+// when that changed.
+function lightGateway(drag, open) {
+  if (open === drag.open) return false;
+  drag.open = open;
+  if (open) onMap.view.lightTarget(drag.gateway);
+  else onMap.view.unlightTarget();
+  return true;
 }
 
 // Its centre over the gateway (inZone), and not over Details or the dock: the gateway lights and the
@@ -223,11 +237,7 @@ function beginIn(drag) {
 function overIn(drag) {
   const held = heldAt(onMap, drag);
   const open = Boolean(held && drag.gateway && !covered(drag.at) && inZone(onMap.layout, held.centre, drag.line));
-  if (open === drag.open) return;
-  drag.open = open;
-  if (open) onMap.view.lightTarget(drag.gateway);
-  else onMap.view.unlightTarget();
-  onMap.redraw();
+  if (lightGateway(drag, open)) onMap.redraw();
 }
 
 // A drop while the slot is open adds the same move as "Move into the gateway…" to the tray, and the
@@ -365,27 +375,25 @@ function dropClient(drag, at) {
 // caption's top is where the gateway's room ends.
 function beginAdd(drag) {
   const { node, kind } = drag.block;
-  const { ghost, box } = liftGhost(node);
-  const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
-  const kitden = kitdenGateway();
-  Object.assign(drag, { ghost, box, line: caption ? caption.y : Infinity, group: kind === "local" ? "local" : "remote", gateway: kitden ? kitden.id : null });
-  if (kitden) onMap.view.glance(new Set([kitden.id]));
+  Object.assign(drag, liftGhost(node), gatewayRoom(), { group: kind === "local" ? "local" : "remote" });
+  if (drag.gateway) onMap.view.glance(new Set([drag.gateway]));
 }
 
 // The ghost keeps the spot of the press under the pointer. With the pointer in the zone (inAddZone)
 // and not over Details or the dock, the ghost takes the drop look (`.over`), the Kitden gateway
 // lights and the slot opens in the row's own group, wherever the pointer is; off it, all three go.
 function overAdd(drag) {
-  const { ghost } = drag;
+  if (overRoom(drag)) onMap.redraw();
+}
+
+// A ghost over the gateway's room (inAddZone), and not over Details or the dock, takes the drop
+// look and the gateway lights. True when that changed.
+function overRoom(drag) {
   moveGhost(drag);
   const point = covered(drag.at) ? null : pointOf(drag);
   const open = Boolean(point && drag.gateway && inAddZone(onMap.layout, point, drag.line));
-  ghost.classList.toggle("over", open);
-  if (open === drag.open) return;
-  drag.open = open;
-  if (open) onMap.view.lightTarget(drag.gateway);
-  else onMap.view.unlightTarget();
-  onMap.redraw();
+  drag.ghost.classList.toggle("over", open);
+  return lightGateway(drag, open);
 }
 
 // Whether a map point is where a row of the Add panel opens the slot (ADD_ZONE), with `line` the
@@ -440,24 +448,15 @@ function beginGroup(drag) {
   const count = el("span", "ghost-count", plural(pick.ids.size, "server", "servers"));
   ghost.append(count);
   animateTo(count, [{ opacity: 0 }, { opacity: 1 }], { dur: 120 });
-  const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
-  const kitden = kitdenGateway();
-  Object.assign(drag, { ghost, box, block: { ...drag.block, node }, line: caption ? caption.y : Infinity, gateway: kitden ? kitden.id : null, ids: [...pick.ids] });
+  Object.assign(drag, { ghost, box, block: { ...drag.block, node }, ids: [...pick.ids] }, gatewayRoom());
   onMap.view.box.classList.toggle("lifting", true);
-  if (kitden) onMap.view.glance(new Set([kitden.id]));
+  if (drag.gateway) onMap.view.glance(new Set([drag.gateway]));
 }
 
-// As a panel row: the ghost follows the pointer, and over the gateway's room (inAddZone) it takes
-// the drop look and the gateway lights.
+// As a panel row: the ghost follows the pointer, and over the gateway's room it takes the drop
+// look and the gateway lights.
 function overGroup(drag) {
-  moveGhost(drag);
-  const point = covered(drag.at) ? null : pointOf(drag);
-  const open = Boolean(point && drag.gateway && inAddZone(onMap.layout, point, drag.line));
-  drag.ghost.classList.toggle("over", open);
-  if (open === drag.open) return;
-  drag.open = open;
-  if (open) onMap.view.lightTarget(drag.gateway);
-  else onMap.view.unlightTarget();
+  overRoom(drag);
 }
 
 // A drop on the gateway flies the ghost onto the gateway's box and adds one move per picked
@@ -468,7 +467,7 @@ function dropGroup(drag, at) {
   const view = current("gateway");
   const rows = drag.ids.map((id) => onMap.model.blocks.find((b) => b.id === id)).filter(Boolean).map((b) => b.row);
   const bodies = view ? rows.map((row) => dropBody(row, view)).filter(Boolean) : [];
-  if (!drag.open || !at || !bodies.length || busy.change || ["applying", "applied"].includes(tray.phase)) {
+  if (!drag.open || !at || !bodies.length || busy.change || writing()) {
     flyGhost(drag, null);
     return false;
   }
@@ -497,7 +496,7 @@ async function addInTurn(bodies) {
   const added = [];
   for (const body of bodies) {
     if (!mapArea(onMap) || state.project !== project || added.some((key) => !inTray(key))) return;
-    if (busy.change || ["applying", "applied"].includes(tray.phase)) return;
+    if (busy.change || writing()) return;
     if (await addToTray(body)) added.push(keyFor(body));
   }
 }
