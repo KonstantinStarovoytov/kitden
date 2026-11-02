@@ -9,6 +9,10 @@ from enum import StrEnum
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+# The three clients Kitden can write, in the order the pages show them, and their names.
+CLIENTS = ("claude_code", "codex", "cursor")
+CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
+
 
 def _hash(*parts: object) -> str:
     return hashlib.sha256("\x1f".join(str(p) for p in parts).encode()).hexdigest()[:16]
