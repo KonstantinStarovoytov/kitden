@@ -137,8 +137,8 @@ export function iconFor(body) {
 }
 
 // The rows the change covers, and the ones that wait for access.
-export const readyRows = (t = tray) => t.rows.filter((row) => !row.waits);
-export const waitingRows = (t = tray) => t.rows.filter((row) => row.waits);
+export function readyRows(t = tray) { return t.rows.filter((row) => !row.waits); }
+export function waitingRows(t = tray) { return t.rows.filter((row) => row.waits); }
 
 export function inTray(key) {
   return tray.rows.some((row) => row.key === key);
