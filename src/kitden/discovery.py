@@ -19,8 +19,9 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from kitden.changes.actions import SIGN_IN_LATER, NeedsAccess, access_needed
 from kitden.gateways import data_dir
-from kitden.marketplace_link import _repo
+from kitden.marketplace_link import MARKET_NAME, repo_of
 from kitden.redact import redact
 from kitden.views.skills import _read_skill, front_matter
 
@@ -33,6 +34,9 @@ HOSTS = {
     "www.skills.sh",
     "registry.modelcontextprotocol.io",
 }
+# A skill's or a plugin's folder name.
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
+PUBLIC_REPO = "Use a public GitHub repository: owner/repo."
 DEFAULTS = [
     {"id": "skills.sh", "name": "skills.sh", "kind": "skills"},
     {"id": "mcp-registry", "name": "Official MCP Registry", "kind": "mcp"},
@@ -164,11 +168,12 @@ def server_setup(server: dict) -> tuple[dict | None, str | None, list[dict]]:
     simple, refusal = server_entry(server)
     if simple:
         return simple, None, []
-    for group, field in (("remotes", "headers"), ("packages", "env")):
+    for group, field, key in (
+        ("remotes", "headers", "headers"),
+        ("packages", "env", "environmentVariables"),
+    ):
         for record in server.get(group, []):
-            definitions = record.get(
-                "headers" if field == "headers" else "environmentVariables", []
-            )
+            definitions = record.get(key, [])
             needed = [d for d in definitions if d.get("isRequired")]
             if not needed:
                 continue
@@ -177,7 +182,7 @@ def server_setup(server: dict) -> tuple[dict | None, str | None, list[dict]]:
             ):
                 continue
             clean = copy.deepcopy(record)
-            clean["headers" if field == "headers" else "environmentVariables"] = []
+            clean[key] = []
             entry, error = server_entry({group: [clean]})
             if entry is None:
                 continue
@@ -239,8 +244,6 @@ def configured_entry(row: dict, params: dict) -> dict:
             entry.setdefault(field, {})[key] = value.strip()
     missing = [f for f in fields if not entry.get(f["field"], {}).get(f["name"])]
     if missing:
-        from kitden.changes.actions import NeedsAccess
-
         raise NeedsAccess(short_name(str(row.get("name", ""))), "token", fields)
     return entry
 
@@ -261,7 +264,7 @@ class Discovery:
         repos = [
             r
             for r in values
-            if isinstance(r, str) and _repo(r) == r and not (legacy and r == "obra/superpowers")
+            if isinstance(r, str) and repo_of(r) == r and not (legacy and r == "obra/superpowers")
         ]
         return DEFAULTS + [
             {"id": r, "name": r, "kind": "github"}
@@ -270,17 +273,15 @@ class Discovery:
         ]
 
     def add_source(self, value: str) -> list[dict]:
-        repo = _repo(value)
+        repo = repo_of(value)
         if repo is None:
-            raise ValueError("Use a public GitHub repository: owner/repo.")
+            raise ValueError(PUBLIC_REPO)
         repos = [s["id"] for s in self.sources() if s["kind"] == "github"]
         if repo not in repos:
             repos.append(repo)
         if len(repos) > 25:
             raise ValueError("Keep at most 25 GitHub sources.")
-        self.root.mkdir(parents=True, exist_ok=True)
-        (self.root / "sources.json").write_text(json.dumps({"repositories": repos}))
-        return self.sources()
+        return self._save_sources(repos)
 
     def change_source(self, operation: str, value: str, previous: str) -> list[dict]:
         if operation == "add":
@@ -290,33 +291,32 @@ class Discovery:
         if previous not in repos:
             raise ValueError("Choose a custom GitHub source.")
         if operation == "edit":
-            repo = _repo(value)
+            repo = repo_of(value)
             if repo is None:
-                raise ValueError("Use a public GitHub repository: owner/repo.")
+                raise ValueError(PUBLIC_REPO)
             repos[repos.index(previous)] = repo
         elif operation == "remove":
             repos.remove(previous)
         else:
             raise ValueError("Choose add, edit or remove.")
+        return self._save_sources(list(dict.fromkeys(repos)))
+
+    def _save_sources(self, repos: list[str]) -> list[dict]:
         self.root.mkdir(parents=True, exist_ok=True)
-        (self.root / "sources.json").write_text(
-            json.dumps({"repositories": list(dict.fromkeys(repos))})
-        )
+        (self.root / "sources.json").write_text(json.dumps({"repositories": repos}))
         return self.sources()
 
     def tree(self, repo: str) -> tuple[str, list[str]]:
-        if _repo(repo) != repo:
+        if repo_of(repo) != repo:
             raise ValueError("This result has no supported GitHub source.")
         if repo not in self.trees:
             commit = read_json(f"https://api.github.com/repos/{repo}/commits/HEAD")["sha"]
             if not re.fullmatch(r"[a-f0-9]{40}", commit):
                 raise ValueError("GitHub returned no commit.")
-            tree = read_json(f"https://api.github.com/repos/{repo}/git/trees/{commit}?recursive=1")
-            if tree.get("truncated"):
-                raise ValueError("This repository is too large to browse completely.")
+            nodes = tree_nodes(repo, commit, "This repository is too large to browse completely.")
             paths = [
                 safe_path(n["path"])
-                for n in tree.get("tree", [])
+                for n in nodes
                 if n.get("type") == "blob" and n.get("mode") != "120000"
             ]
             self.trees[repo] = commit, paths
@@ -346,7 +346,7 @@ class Discovery:
             for path in paths:
                 if PurePosixPath(path).name not in ("server.json", ".mcp.json"):
                     continue
-                data = read_json(f"https://raw.githubusercontent.com/{repo}/{commit}/{quote(path)}")
+                data = read_json(raw_url(repo, commit, path))
                 if "name" in data and ("packages" in data or "remotes" in data):
                     entry, refusal, setup = server_setup(data)
                     rows.append(
@@ -388,9 +388,7 @@ class Discovery:
                 None,
             )
             if manifest_path:
-                manifest = read_json(
-                    f"https://raw.githubusercontent.com/{repo}/{commit}/{manifest_path}"
-                )
+                manifest = read_json(raw_url(repo, commit, manifest_path))
                 for entry in manifest.get("plugins", []):
                     name = entry.get("name", "")
                     if isinstance(name, str) and words_match(
@@ -411,9 +409,7 @@ class Discovery:
                             }
                         )
             elif ".claude-plugin/plugin.json" in paths:
-                manifest = read_json(
-                    f"https://raw.githubusercontent.com/{repo}/{commit}/.claude-plugin/plugin.json"
-                )
+                manifest = read_json(raw_url(repo, commit, ".claude-plugin/plugin.json"))
                 name = manifest.get("name", repo.split("/")[-1])
                 if words_match(query, str(name)):
                     rows.append(
@@ -455,7 +451,7 @@ class Discovery:
                         "description": f"{r.get('source', '')} · {r.get('installs', 0)} installs",
                     }
                     for r in data.get("skills", [])
-                    if _repo(str(r.get("source", ""))) and isinstance(r.get("name"), str)
+                    if repo_of(str(r.get("source", ""))) and isinstance(r.get("name"), str)
                 ]
                 if kind in ("all", "skill")
                 else []
@@ -470,9 +466,8 @@ class Discovery:
                 )
                 for record in data.get("servers", []):
                     records[record["server"]["name"]] = record
-            data = {"servers": list(records.values())}
             rows = []
-            for record in data.get("servers", []):
+            for record in records.values():
                 if (
                     record.get("_meta", {})
                     .get("io.modelcontextprotocol.registry/official", {})
@@ -497,13 +492,16 @@ class Discovery:
                 )
         else:
             rows = self.github(source, query, kind)
-        for row in rows:
-            row["id"] = row_key(row)
-            self.results[row["id"]] = row
-            folder = self.root / "results"
-            folder.mkdir(parents=True, exist_ok=True)
-            (folder / f"{row['id']}.json").write_text(json.dumps(row))
-        return [self.public(row) for row in rows]
+        return [self.public(self._remember(row)) for row in rows]
+
+    def _remember(self, row: dict) -> dict:
+        """Keep a result by its id, also on disk, so an add can find it again after a restart."""
+        row["id"] = row_key(row)
+        self.results[row["id"]] = row
+        folder = self.root / "results"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{row['id']}.json").write_text(json.dumps(row))
+        return row
 
     def public(self, row: dict) -> dict:
         out = {k: v for k, v in row.items() if k not in ("entry", "formats")}
@@ -541,21 +539,24 @@ class Discovery:
                 name=PurePosixPath(path).parent.name or row["repo"].split("/")[-1],
                 description="Skill from this GitHub source.",
             )
-            candidate["id"] = row_key(candidate)
-            self.results[candidate["id"]] = candidate
-            cache = self.root / "results"
-            cache.mkdir(parents=True, exist_ok=True)
-            (cache / f"{candidate['id']}.json").write_text(json.dumps(candidate))
-            choices.append(self.public(candidate))
+            choices.append(self.public(self._remember(candidate)))
         return choices
+
+    def _one_folder(self, row: dict) -> tuple[dict | None, list[dict]]:
+        """A skill found by name only: its one folder, picked by itself when there is only one
+        or only one has that name, and the choices."""
+        choices = self.skill_choices(row)
+        exact = [c for c in choices if c["name"] == row["name"]]
+        if len(choices) == 1 or len(exact) == 1:
+            return self.get((exact or choices)[0]["id"]), choices
+        return None, choices
 
     def details(self, key: str) -> dict:
         row = self.get(key)
         if row["kind"] == "skill" and row.get("path") is None:
-            choices = self.skill_choices(row)
-            exact = [c for c in choices if c["name"] == row["name"]]
-            if len(choices) == 1 or len(exact) == 1:
-                row = self.get((exact or choices)[0]["id"])
+            chosen, choices = self._one_folder(row)
+            if chosen is not None:
+                row = chosen
             elif choices:
                 return {**self.public(row), "choices": choices}
             else:
@@ -567,9 +568,7 @@ class Discovery:
             skill_md = metadata / "SKILL.md"
             if not skill_md.is_file():
                 path = (PurePosixPath(row["path"]) / "SKILL.md").as_posix()
-                content = download(
-                    f"https://raw.githubusercontent.com/{row['repo']}/{row['commit']}/{quote(path)}"
-                )
+                content = download(raw_url(row["repo"], row["commit"], path))
                 metadata.mkdir(parents=True, exist_ok=True)
                 skill_md.write_bytes(content)
             meta = front_matter(skill_md)
@@ -579,8 +578,6 @@ class Discovery:
         elif row["kind"] == "mcp":
             out["content"] = json.dumps(redact(row.get("entry") or {})[0], indent=2)
             if out["remote"] and not row.get("setup"):
-                from kitden.changes.actions import SIGN_IN_LATER, access_needed
-
                 try:
                     out["access_kind"] = access_needed(row["entry"]["url"], {})
                     out["access_required"] = out["access_kind"] != "open"
@@ -610,16 +607,12 @@ class Discovery:
         staging = Path(tempfile.mkdtemp(dir=folder.parent))
         try:
             if subfolder:
-                tree = read_json(
-                    f"https://api.github.com/repos/{repo}/git/trees/{commit}?recursive=1"
-                )
-                if tree.get("truncated"):
-                    raise ValueError("This repository is too large to read completely.")
+                nodes = tree_nodes(repo, commit, "This repository is too large to read completely.")
                 total = 0
                 deadline = time.monotonic() + 45
                 files = [
                     n
-                    for n in tree.get("tree", [])
+                    for n in nodes
                     if n.get("type") == "blob"
                     and PurePosixPath(safe_path(n["path"])).is_relative_to(PurePosixPath(subfolder))
                 ]
@@ -631,35 +624,15 @@ class Discovery:
                     if item.get("mode") == "120000":
                         raise ValueError("This skill contains symbolic links.")
                     path = safe_path(item["path"])
-                    value = download(
-                        f"https://raw.githubusercontent.com/{repo}/{commit}/{quote(path)}"
-                    )
+                    value = download(raw_url(repo, commit, path))
                     total += len(value)
                     if total > MAX_BYTES:
                         raise ValueError("This skill is too large to install.")
                     target = staging / path
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(value)
-                staging.rename(folder)
-                return folder
-            with zipfile.ZipFile(io.BytesIO(content)) as archive:
-                files = archive.infolist()
-                if len(files) > 5000 or sum(f.file_size for f in files) > MAX_BYTES:
-                    raise ValueError("This repository is too large to install.")
-                for item in files:
-                    rel = PurePosixPath(safe_path(item.filename))
-                    relative = PurePosixPath(*rel.parts[1:])
-                    if subfolder and not relative.is_relative_to(PurePosixPath(subfolder)):
-                        continue
-                    if stat.S_ISLNK(item.external_attr >> 16):
-                        raise ValueError(
-                            "This repository contains symbolic links. Use its marketplace instead."
-                        )
-                    if len(rel.parts) < 2 or item.is_dir():
-                        continue
-                    target = staging.joinpath(*rel.parts[1:])
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(archive.read(item))
+            else:
+                _unzip(content, staging)
             staging.rename(folder)
         finally:
             if staging.exists():
@@ -668,42 +641,33 @@ class Discovery:
 
     def skill(self, row: dict, found: set[str]) -> dict:
         if row.get("path") is None:
-            choices = self.skill_choices(row)
-            exact = [c for c in choices if c["name"] == row["name"]]
-            if len(choices) != 1 and len(exact) != 1:
+            row = self._one_folder(row)[0]
+            if row is None:
                 raise ValueError("Open this skill and choose a folder before previewing.")
-            row = self.get((exact or choices)[0]["id"])
-        repo = row["repo"]
-        commit = row["commit"]
-        path = row["path"]
-        folder = self.checkout(repo, row.get("commit", commit), path) / safe_path(path)
+        commit, path = row["commit"], row["path"]
+        folder = self.checkout(row["repo"], commit, path) / safe_path(path)
         if not (folder / "SKILL.md").is_file():
             raise ValueError("The selected skill no longer has a SKILL.md file.")
         info = _read_skill(folder)
-        name = (
-            info["name"]
-            if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", info["name"])
-            else row["name"]
-        )
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", name):
+        name = info["name"] if NAME.fullmatch(info["name"]) else row["name"]
+        if not NAME.fullmatch(name):
             raise ValueError("This skill has no usable folder name.")
         prepared = self.root / "skills" / row["id"] / name
         if not prepared.exists():
             prepared.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(folder, prepared)
-        folder = prepared
         return {
             **info,
-            "path": str(folder),
+            "path": str(prepared),
             "installed": {},
             "routes": {c: "ready" for c in found},
             "id": row["id"],
-            "commit": row.get("commit", commit),
+            "commit": commit,
         }
 
     def plugin(self, row: dict) -> dict:
         repo = row["repo"]
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", row["name"]):
+        if not NAME.fullmatch(row["name"]):
             raise ValueError("This plugin has no usable name.")
         name = row.get("marketplace")
         source = repo
@@ -727,7 +691,7 @@ class Discovery:
                 )
             )
             source = str(wrapper)
-        if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", name):
+        if not isinstance(name, str) or not MARKET_NAME.fullmatch(name):
             raise ValueError("This plugin source has no usable marketplace name.")
         return {
             "name": name,
@@ -735,3 +699,37 @@ class Discovery:
             "formats": formats,
             "plugin": f"{row['name']}@{name}",
         }
+
+
+def _unzip(content: bytes, target: Path) -> None:
+    """A repository's GitHub archive, unpacked into `target` without its top folder. Refuses a
+    large archive or one with symbolic links."""
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        files = archive.infolist()
+        if len(files) > 5000 or sum(f.file_size for f in files) > MAX_BYTES:
+            raise ValueError("This repository is too large to install.")
+        for item in files:
+            rel = PurePosixPath(safe_path(item.filename))
+            if stat.S_ISLNK(item.external_attr >> 16):
+                raise ValueError(
+                    "This repository contains symbolic links. Use its marketplace instead."
+                )
+            if len(rel.parts) < 2 or item.is_dir():
+                continue
+            place = target.joinpath(*rel.parts[1:])
+            place.parent.mkdir(parents=True, exist_ok=True)
+            place.write_bytes(archive.read(item))
+
+
+def raw_url(repo: str, commit: str, path: str) -> str:
+    """A file of a repository at a commit."""
+    return f"https://raw.githubusercontent.com/{repo}/{commit}/{quote(path)}"
+
+
+def tree_nodes(repo: str, commit: str, too_large: str) -> list[dict]:
+    """Every node of a repository's tree at a commit; refused with `too_large` when GitHub cuts
+    the list short."""
+    tree = read_json(f"https://api.github.com/repos/{repo}/git/trees/{commit}?recursive=1")
+    if tree.get("truncated"):
+        raise ValueError(too_large)
+    return tree.get("tree", [])

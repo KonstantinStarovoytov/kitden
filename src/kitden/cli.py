@@ -19,7 +19,7 @@ from kitden import __version__, page
 from kitden.clients.version_cache import CLIENTS, refresh_versions
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
-HOST = "127.0.0.1"
+HOST = page.HOST
 DEFAULT_PORT = 47800
 # The demo's own ports, so its browser storage (theme, hidden columns) never mixes with the page's.
 DEMO_PORT = 47900
@@ -108,10 +108,9 @@ def _show(url: str, args: argparse.Namespace) -> None:
 def _open(args: argparse.Namespace) -> int:
     """Open the running page for this home folder, or start one in the background (FR-008)."""
     root = _home(args) or Path.home()
-    if not page.page_running(root):
-        page.remove_record(root)  # left by a page that ended without cleaning up
+    if page.running_page(root) is None:
         page.start_background(root, args.home)
-    record = page.wait_for_record(root, page.WAIT_SECONDS)
+    record = page.wait_for_record(root)
     if record is None:
         print(f"The page did not start. See {page.log_path(root)}.", file=sys.stderr)
         return EXIT_NOT_STARTED
@@ -131,22 +130,12 @@ def _serve(args: argparse.Namespace) -> int:
         return 0 if args.background else _open(args)
     try:
         page.remove_record(root)  # left by a page that ended without cleaning up
-        port = pick_port(DEFAULT_PORT)
-        if port is None:
-            print(f"No free port from {DEFAULT_PORT}.", file=sys.stderr)
-            return EXIT_NO_PORT
-        token = secrets.token_urlsafe(32)
-        app = create_app(
-            lambda **options: build_inventory(home, **options),
-            token=token,
-            port=port,
-            watch_folders=[root / name for name in WATCHED],
-            flat_folders=[root],
-            home=root,
-            first_scan_later=True,  # listen first; the page shows its skeleton while it scans
-            quick_first=True,  # data in a second or two; slow answers come in the background
+        made = _page(
+            create_app, lambda **options: build_inventory(home, **options), root, DEFAULT_PORT
         )
-        url = f"http://{HOST}:{port}/?token={token}"
+        if made is None:
+            return EXIT_NO_PORT
+        app, port, token, url = made
         if not args.background:  # a background page writes to page.log; keep the token out
             print(f"Kitden is running. Open: {url}", flush=True)
             print("Press Ctrl+C to stop.", flush=True)
@@ -171,6 +160,28 @@ def _serve(args: argparse.Namespace) -> int:
         lock.release()
 
 
+def _page(create_app: Callable, build: Callable, home: Path, start: int, **more):
+    """The page app on the first free port from `start`, watching `home`'s setup folders, with
+    its port, token and start link; None (and why) when no port is free."""
+    port = pick_port(start)
+    if port is None:
+        print(f"No free port from {start}.", file=sys.stderr)
+        return None
+    token = secrets.token_urlsafe(32)
+    app = create_app(
+        build,
+        token=token,
+        port=port,
+        watch_folders=[home / name for name in WATCHED],
+        flat_folders=[home],
+        home=home,
+        first_scan_later=True,  # listen first; the page shows its skeleton while it scans
+        quick_first=True,  # data in a second or two; slow answers come in the background
+        **more,
+    )
+    return app, port, token, page.start_link({"port": port, "token": token})
+
+
 def _demo(args: argparse.Namespace) -> int:
     """Run the page on a sample setup in a temporary folder; the folder is deleted when the page
     stops. No page lock, no page record, no data-folder copy: nothing of the real home is used."""
@@ -183,23 +194,10 @@ def _demo(args: argparse.Namespace) -> int:
         folder = Path(tempfile.mkdtemp(prefix="kitden-demo-")).resolve()
         try:
             home = demo.build_demo_home(folder, args.size)
-            port = pick_port(DEMO_PORT)
-            if port is None:
-                print(f"No free port from {DEMO_PORT}.", file=sys.stderr)
+            made = _page(create_app, demo.demo_build(home), home, DEMO_PORT, demo=True)
+            if made is None:
                 return EXIT_NO_PORT
-            token = secrets.token_urlsafe(32)
-            app = create_app(
-                demo.demo_build(home),
-                token=token,
-                port=port,
-                watch_folders=[home / name for name in WATCHED],
-                flat_folders=[home],
-                home=home,
-                first_scan_later=True,
-                quick_first=True,
-                demo=True,
-            )
-            url = f"http://{HOST}:{port}/?token={token}"
+            app, port, _, url = made
             print(f"Kitden demo is running on a sample setup. Open: {url}", flush=True)
             print("Press Ctrl+C to stop. The sample folder is deleted then.", flush=True)
 
@@ -236,7 +234,7 @@ def _print_summary(inventory: Inventory) -> None:
 
 
 def _scan(args: argparse.Namespace) -> int:
-    home = Path(args.home).expanduser() if args.home else None
+    home = _home(args)
     refresh_versions(home or Path.home(), CLIENTS)  # a one-off scan waits for the versions
     inventory = build_inventory(home)
     if args.json:
@@ -283,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         return _demo(args)
     from kitden.gateways import ensure_data_folder
 
-    note = ensure_data_folder(Path(args.home).expanduser() if args.home else Path.home())
+    note = ensure_data_folder(_home(args) or Path.home())
     # The MCP server talks over stdio; keep its output clean.
     if note and args.command != "mcp":
         print(note, file=sys.stderr)

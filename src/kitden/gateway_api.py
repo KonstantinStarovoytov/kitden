@@ -47,6 +47,28 @@ def endpoint_name(url: str) -> str:
     raise GatewayError("The gateway address is not a MetaMCP endpoint (…/metamcp/<name>/mcp)")
 
 
+def _send(
+    base: str, method: str, path: str, body: dict | None, headers: dict, timeout: float
+) -> tuple[int, Any, Mapping[str, str]]:
+    """One JSON request to a gateway: its status, its JSON body (None when it is not JSON) and
+    its headers. An error answer is an answer; no answer at all is a GatewayError."""
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(base + path, data=data, method=method)  # noqa: S310 - http(s) checked
+    request.add_header("Accept", "application/json")
+    if data is not None:
+        request.add_header("Content-Type", "application/json")
+    for name, value in headers.items():
+        request.add_header(name, value)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+            return response.status, _json(response.read()), response.headers
+    except urllib.error.HTTPError as error:
+        return error.code, _json(error.read()), {}
+    except (urllib.error.URLError, OSError, TimeoutError) as error:
+        reason = getattr(error, "reason", error)
+        raise GatewayError(f"Could not reach the gateway at {base}: {reason}") from None
+
+
 class MetaMcpClient:
     """One signed-in conversation with a MetaMCP gateway. Use it as a context manager."""
 
@@ -77,24 +99,11 @@ class MetaMcpClient:
     # HTTP ----------------------------------------------------------------------------------
 
     def _request(self, method: str, path: str, body: dict | None = None) -> tuple[int, Any, str]:
-        data = json.dumps(body).encode() if body is not None else None
         if not self.base.startswith(("http://", "https://")):
             raise GatewayError("The gateway address must be http or https")
-        request = urllib.request.Request(self.base + path, data=data, method=method)  # noqa: S310 - checked above
-        request.add_header("Accept", "application/json")
-        if data is not None:
-            request.add_header("Content-Type", "application/json")
-        if self._cookie:
-            request.add_header("Cookie", self._cookie)
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - checked above
-                cookie = response.headers.get("Set-Cookie", "")
-                return response.status, _json(response.read()), cookie
-        except urllib.error.HTTPError as error:
-            return error.code, _json(error.read()), ""
-        except (urllib.error.URLError, OSError, TimeoutError) as error:
-            reason = getattr(error, "reason", error)
-            raise GatewayError(f"Could not reach the gateway at {self.base}: {reason}") from None
+        headers = {"Cookie": self._cookie} if self._cookie else {}
+        status, answer, sent = _send(self.base, method, path, body, headers, self.timeout)
+        return status, answer, sent.get("Set-Cookie", "") if status < 400 else ""
 
     def sign_in(self) -> None:
         var = self.gateway.login_password_env_var or ""
@@ -251,20 +260,10 @@ class ObotClient:
         key = self.env.get(var)
         if not key:
             raise GatewayError(f"Set {var} in the environment before starting Kitden")
-        data = json.dumps(body).encode() if body is not None else None
-        request = urllib.request.Request(self.base + path, data=data, method=method)  # noqa: S310 - http(s) checked on save
-        request.add_header("Accept", "application/json")
-        request.add_header("Authorization", f"Bearer {key}")
-        if data is not None:
-            request.add_header("Content-Type", "application/json")
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310
-                return response.status, _json(response.read())
-        except urllib.error.HTTPError as error:
-            return error.code, None
-        except (urllib.error.URLError, OSError, TimeoutError) as error:
-            reason = getattr(error, "reason", error)
-            raise GatewayError(f"Could not reach the gateway at {self.base}: {reason}") from None
+        auth = {"Authorization": f"Bearer {key}"}
+        status, answer, _ = _send(self.base, method, path, body, auth, self.timeout)
+        # Obot's error bodies are not read: they may echo the request.
+        return status, answer if status < 400 else None
 
     def _refused(self, status: int, what: str) -> GatewayError:
         if status in (401, 403):
@@ -399,24 +398,19 @@ class ObotClient:
 
     def remove(self, entry: str) -> bool:
         """Take the server off the connection and delete its entry. False if already gone."""
-        body = self._vmcp_manifest()
-        kept = [c for c in body["components"] if c.get("mcpServerCatalogEntryID") != entry]
-        catalog = next(
-            (
-                c.get("mcpCatalogID")
-                for c in body["components"]
-                if c.get("mcpServerCatalogEntryID") == entry
-            ),
-            None,
-        )
-        if len(kept) != len(body["components"]):
+        mine = [
+            c
+            for c in self._vmcp_manifest()["components"]
+            if c.get("mcpServerCatalogEntryID") == entry
+        ]
+        if mine:
 
             def drop(components: list[dict]) -> list[dict] | None:
                 left = [c for c in components if c.get("mcpServerCatalogEntryID") != entry]
                 return left if len(left) != len(components) else None
 
             self._change_components(drop)
-        catalog = catalog or self._catalog()
+        catalog = (mine[0].get("mcpCatalogID") if mine else None) or self._catalog()
         status, _ = self._request(
             "DELETE", f"/api/mcp-catalogs/{quote(catalog)}/entries/{quote(entry)}"
         )

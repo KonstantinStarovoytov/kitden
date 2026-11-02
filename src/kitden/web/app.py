@@ -298,7 +298,6 @@ class _RowRefused(Exception):
 
 
 # What the first scan reads, step by step, so the page can say what it still waits for.
-CLIENT_STEPS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SLOW_STEP = "Codex plugins"
 VERSION_STEP = "client versions"
 WARM_STEP = "marketplaces"
@@ -319,21 +318,18 @@ class Progress:
         self._publish()
 
     def done(self, *names: str) -> None:
-        if not any(s["name"] in names and not s["done"] for s in self.steps):
-            return
-        for step in self.steps:
-            if step["name"] in names:
-                step["done"] = True
-        self._publish()
+        self._mark(names, True)
 
     def reopen(self, *names: str) -> None:
         """Steps that wait again, such as Codex plugins once Codex's version is known."""
-        if not any(s["name"] in names and s["done"] for s in self.steps):
-            return
-        for step in self.steps:
-            if step["name"] in names:
-                step["done"] = False
-        self._publish()
+        self._mark(names, False)
+
+    def _mark(self, names: tuple[str, ...], done: bool) -> None:
+        changed = [s for s in self.steps if s["name"] in names and s["done"] != done]
+        for step in changed:
+            step["done"] = done
+        if changed:
+            self._publish()
 
     def mark_ready(self, *names: str) -> None:
         """The page has its data; `names` are steps that ended with it."""
@@ -428,12 +424,12 @@ class State:
     async def _quick_first_scan(self) -> None:
         later = [SLOW_STEP]
         later += ([VERSION_STEP] if self.versions else []) + ([WARM_STEP] if self.warm else [])
-        self.progress.start(list(CLIENT_STEPS.values()), later)
+        self.progress.start(list(CLIENT_WORDS.values()), later)
         loop = asyncio.get_running_loop()
 
         def step(client: str) -> None:
-            if client in CLIENT_STEPS:
-                loop.call_soon_threadsafe(self.progress.done, CLIENT_STEPS[client])
+            if client in CLIENT_WORDS:
+                loop.call_soon_threadsafe(self.progress.done, CLIENT_WORDS[client])
 
         async with self.lock:
             options = self._options(on_step=step)
@@ -441,7 +437,7 @@ class State:
             self.data = inventory_dict(self.inventory)
         self.ready.set()
         # Every client step ends here, also for a client the build did not report.
-        done = list(CLIENT_STEPS.values()) + ([] if self.inventory.partial else [SLOW_STEP])
+        done = list(CLIENT_WORDS.values()) + ([] if self.inventory.partial else [SLOW_STEP])
         self.progress.mark_ready(*done)
         await asyncio.gather(self._read_versions(), self._warm())
 
@@ -932,23 +928,29 @@ def create_app(
         rows = load_map(state.inventory, path, gateway_registered=bool(gateways))
         return JSONResponse({"project": project, **map_dict(state.inventory, rows)})
 
+    def _list_query(params) -> dict:
+        """What both Library lists read from the address: the search, the hidden columns and
+        Needs attention; and whether a gateway is registered."""
+        return {
+            "gateway_registered": bool(_registered()),
+            "q": params.get("q", ""),
+            "hidden": frozenset(c for c in params.get("hidden", "").split(",") if c),
+            "attention": params.get("attention") == "1",
+        }
+
     def _library(request, project, path):
         """One kind tab of the Library: rows, columns, counts and the lines above the table."""
         params = request.query_params
         kind = params.get("kind")
         show = params.get("show")
-        hidden = frozenset(c for c in params.get("hidden", "").split(",") if c)
         answer = library(
             state.inventory,
             adapters,
             path,
-            gateway_registered=bool(_registered()),
             kind=kind if kind in KINDS else "mcp_server",
             show=show if show in SHOWS else "mine",
-            q=params.get("q", ""),
             category=params.get("category", ""),
-            hidden=hidden,
-            attention=params.get("attention") == "1",
+            **_list_query(params),
         )
         return JSONResponse({"project": project, **answer})
 
@@ -961,12 +963,9 @@ def create_app(
             state.inventory,
             adapters,
             path,
-            gateway_registered=bool(_registered()),
             tab=tab if tab in LIST_TABS else "plugin",
             show=show if show in LIST_SHOWS else "mine",
-            q=params.get("q", ""),
-            hidden=frozenset(c for c in params.get("hidden", "").split(",") if c),
-            attention=params.get("attention") == "1",
+            **_list_query(params),
         )
         return JSONResponse({"project": project, **answer})
 
@@ -1032,8 +1031,6 @@ def create_app(
 
     async def gateway_tools(request: Request) -> JSONResponse:
         """A held server's tools with their states for the project, from the cache and rules."""
-        if home is None:
-            return _error("Changes are not available.", 404)
         try:
             project = _project(request)
         except _UnknownProject:
@@ -1055,8 +1052,6 @@ def create_app(
 
     async def gateway_tools_refresh(request: Request) -> JSONResponse:
         """Starts asking each held server for its tools; `gateway_tools` says when it is done."""
-        if home is None:
-            return _error("Changes are not available.", 404)
         refresh_later()
         return JSONResponse({"refreshing": True}, status_code=202)
 
@@ -1495,9 +1490,18 @@ def create_app(
             words["align"] = built.align
         return words
 
+    def _with_changes(handler: Callable) -> Callable:
+        """A route that changes or reads the setup's changes: none without a home folder (the
+        engine is built only with one)."""
+
+        async def endpoint(request: Request) -> JSONResponse:
+            if engine is None:
+                return _error("Changes are not available.", 404)
+            return await handler(request)
+
+        return endpoint
+
     async def preview(request: Request) -> JSONResponse:
-        if engine is None:
-            return _error("Changes are not available.", 404)
         body = await _body(request)
         action = body.get("action")
         targets = body.get("targets") if isinstance(body.get("targets"), list) else []
@@ -1596,8 +1600,6 @@ def create_app(
         """Whether the last request can join the ones before it in the preview tray: the same
         checks as `batch_preview`, with nothing kept. A refusal is an answer, not an error:
         {"ok": False, "reason", "row"}, `row` being the request that cannot join."""
-        if engine is None:
-            return _error("Changes are not available.", 404)
         try:
             requests = requests_in(await _body(request))
             await _batch(requests, keep=False)
@@ -1613,8 +1615,6 @@ def create_app(
         """The preview tray as one change (changes/batch.py): each request's own builder, the
         steps joined in tray order. Apply, Undo and Cancel are the change's own verbs. A
         refusal names the row it comes from (`row`), or none when the engine refuses."""
-        if engine is None:
-            return _error("Changes are not available.", 404)
         body = await _body(request)
         try:
             requests = requests_in(body)
@@ -1649,8 +1649,6 @@ def create_app(
         return JSONResponse(answer)
 
     async def change_action(request: Request) -> JSONResponse:
-        if engine is None:
-            return _error("Changes are not available.", 404)
         change_id = request.path_params["change_id"]
         verb = request.path_params["verb"]
         if change_id not in engine.changes:
@@ -1702,8 +1700,6 @@ def create_app(
         """One change as it stands now, so the page can check an Apply whose answer was lost.
         `stale`: a previewed change whose files changed since, which Apply would stop; an open
         review asks after each rescan. A file Kitden cannot read now counts as changed."""
-        if engine is None:
-            return _error("Changes are not available.", 404)
         change_id = request.path_params["change_id"]
         if change_id in engine.changes:
             try:
@@ -1750,7 +1746,7 @@ def create_app(
         if request.method == "GET":
             return JSONResponse({"sources": discovery.sources(), "offline": bool(stand_ins)})
         try:
-            body = await request.json()
+            body = await _body(request)
             sources = discovery.change_source(
                 str(body.get("operation", "add")),
                 str(body.get("source", "")),
@@ -1855,19 +1851,23 @@ def create_app(
             Route("/api/rescan", rescan, methods=["POST"]),
             Route("/api/gateways", gateways, methods=["GET", "POST"]),
             Route("/api/gateways/{gateway_id}/servers", gateway_servers),
-            Route("/api/gateway/tools", gateway_tools),
-            Route("/api/gateway/tools/refresh", gateway_tools_refresh, methods=["POST"]),
+            Route("/api/gateway/tools", _with_changes(gateway_tools)),
+            Route(
+                "/api/gateway/tools/refresh", _with_changes(gateway_tools_refresh), methods=["POST"]
+            ),
             Route("/api/changes", changes),
-            Route("/api/changes/preview", preview, methods=["POST"]),
-            Route("/api/batch/preview", batch_preview, methods=["POST"]),
-            Route("/api/batch/check", batch_check, methods=["POST"]),
+            Route("/api/changes/preview", _with_changes(preview), methods=["POST"]),
+            Route("/api/batch/preview", _with_changes(batch_preview), methods=["POST"]),
+            Route("/api/batch/check", _with_changes(batch_check), methods=["POST"]),
             Route("/api/sign-in/offer", sign_in_offer, methods=["POST"]),
             Route("/api/sign-in/start", sign_in_start, methods=["POST"]),
             Route("/api/sign-in/wait", sign_in_wait, methods=["POST"]),
             Route("/api/sign-in/cancel", sign_in_cancel, methods=["POST"]),
             Route("/sign-in/done", sign_in_done),
-            Route("/api/changes/{change_id}", change_view),
-            Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
+            Route("/api/changes/{change_id}", _with_changes(change_view)),
+            Route(
+                "/api/changes/{change_id}/{verb}", _with_changes(change_action), methods=["POST"]
+            ),
             Route("/api/commands", commands),
             Route("/api/map", _read_model(_map)),
             Route("/api/library", _read_model(_library)),

@@ -100,7 +100,7 @@ def test_mcp_command_serves_the_read_only_server(monkeypatch, tmp_path):
 
 
 def test_installed_command_is_an_absolute_path():
-    from kitden.mcp_server import installed_command
+    from kitden.command import installed_command
 
     command = installed_command()
     assert command is not None and command.startswith("/")
