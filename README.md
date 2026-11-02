@@ -70,14 +70,23 @@ uv tool install --python 3.13 kitden && kitden
 
 Update later with `uv tool upgrade kitden`.
 
-## Good to know
+## And more
 
-- Find more in the catalogs: the official MCP Registry, skills.sh, the Claude plugins
-  marketplace and any public GitHub repository. Drag a result onto a client or the gateway.
-- Every change shows a preview first. Apply keeps a backup, and Undo puts it back.
-- Everything stays on your Mac: no account, no telemetry.
-- Tokens are checked before Apply and kept in the macOS Keychain only.
-- Add only servers and plugins you trust: they run with your permissions.
+- **Find and add.** Search the official MCP Registry, skills.sh, the Claude plugins marketplace
+  and any public GitHub repository. Drag a result onto a client or the gateway.
+- **Fill the gaps.** A plugin or skill one agent has goes to the others in one step.
+- **Tokens and sign-in, once.** Checked before Apply, kept in the macOS Keychain, refreshed by
+  the gateway.
+- **Per project.** Turn a server or a tool on or off for one project only.
+- **See what runs.** How often each tool is called, and which tools only read.
+- **Instructions in view.** Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each
+  client loads, and where they come from.
+- **Ask your agent.** "Show my setup" works from any agent, through Kitden's own read-only
+  MCP server.
+- **Safe by design.** Every change shows a preview first. Apply keeps a backup, Undo puts it
+  back. Everything stays on your Mac: no account, no telemetry.
+
+Add only servers and plugins you trust: they run with your permissions.
 
 [Guide](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md) ·
 [Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) ·
