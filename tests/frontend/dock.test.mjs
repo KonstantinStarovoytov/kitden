@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 
 // Reduced motion is switched per test (D() reads it at every call). Any other query is a wide window.
 const motionQuery = { matches: true };
@@ -51,6 +52,7 @@ function fakeNode(tag) {
     },
     append(...items) { node.childNodes.push(...node.adopt(items)); },
     prepend(...items) { node.childNodes.unshift(...node.adopt(items)); },
+    before(...items) { const up = node.parent; const made = up.adopt(items); up.childNodes.splice(up.childNodes.indexOf(node), 0, ...made); },
     // A node that leaves the page takes focus with it: the page is left with none.
     replaceChildren(...items) { for (const child of node.childNodes) { leave(child); child.parent = null; } node.childNodes = []; node.childNodes = node.adopt(items); },
     remove() { leave(node); if (node.parent) node.parent.childNodes = node.parent.childNodes.filter((child) => child !== node); node.parent = null; },
@@ -1328,4 +1330,69 @@ test('Details read again stay quiet only while the panel shows them; a read draw
   assert.equal(panelState.current.type, 'row-review');
   assert.equal(globalThis.document.activeElement, out);
   closePanel({ focus: false });
+});
+
+// Rows that wait for access (tray.js `waits`): the bar says who waits and Apply counts the rest.
+const waitRow = (server, kind = 'token') => ({ title: server, detail: `${server} needs a token.`, part: null, waits: { server, kind, fields: [], reason: `${server} needs a token.`, refused: false, checking: false } });
+
+test('the bar says who waits and Apply counts only ready rows', () => {
+  const one = barWords(trayOf([row('Add github'), waitRow('neon')]));
+  assert.deepEqual([one.head, one.apply, one.line, one.applyWaits], ['2 changes in preview', 'Apply', 'neon waits for a token. It stays in preview.', false]);
+  const two = barWords(trayOf([row('a'), row('b'), waitRow('neon', 'sign-in')]));
+  assert.deepEqual([two.apply, two.line], ['Apply 2', 'neon waits for sign-in. It stays in preview.']);
+  const many = barWords(trayOf([row('a'), waitRow('neon'), waitRow('linear')]));
+  assert.equal(many.line, '2 wait for access.');
+  const alone = barWords(trayOf([waitRow('neon')], { phase: 'waiting' }));
+  assert.deepEqual([alone.head, alone.apply, alone.applyWaits, alone.cancel], ['neon needs access', 'Apply', true, 'Cancel']);
+  assert.equal(barWords(trayOf([waitRow('neon'), waitRow('linear')], { phase: 'waiting' })).head, '2 servers need access');
+});
+
+test('a waiting dock row offers Add token, and it opens the token field', async () => {
+  await fresh();
+  const reason = 'neon needs a token.';
+  queue(PREVIEW, previewed('c1'), (sent) => ({ status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [{ field: 'headers', name: 'Authorization', label: 'Access token', prefix: 'Bearer ' }], reason, refused: false } } }));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  const items = named(bar(), 'tray-list')[0].children;
+  assert.equal(items.length, 2);
+  const waiting = items[1];
+  assert.ok(named(waiting, 'lamp').some((n) => n.classList.contains('warn')));
+  assert.equal(waiting.children[1].children[1].textContent, 'Needs token');
+  const addToken = button(waiting, 'Add token');
+  assert.ok(addToken);
+  await addToken.click();
+  await settle();
+  assert.ok(all(pages['#drawer']).some((n) => n.tag === 'input' && n.type === 'password'));
+});
+
+test('a single waiting row is drawn as a list, so its Add token shows', async () => {
+  await fresh();
+  const reason = 'neon needs a token.';
+  queue(PREVIEW, (sent) => ({ status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [], reason, refused: false } } }));
+  await addToTray(add('neon'));
+  assert.equal(bar().className, 'bar tray many');
+  assert.ok(button(bar(), 'Add token'));
+  // Nothing to count: the head says who needs access.
+  assert.equal(named(bar(), 'tray-head')[0].children[0].textContent, 'neon needs access');
+});
+
+test('a refused line in the dock is amber, not the accent', () => {
+  const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
+  assert.match(css, /\.dock \.bar small\.bad \{ color: var\(--lamp-warn\); \}/);
+});
+
+test('a partial apply toasts only what it wrote and keeps the waiting row in the bar', async () => {
+  await fresh();
+  const reason = 'neon needs a token.';
+  queue(PREVIEW, previewed('c1'), (sent) => ({ status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [], reason, refused: false } } }));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  queue('/api/changes/c1/apply', verified('c1'));
+  await button(bar(), 'Apply').click();
+  await settle();
+  assert.deepEqual(toastParts().map(([, text]) => text), ['', 'Added github to Codex for all projects', 'Undo']);
+  assert.deepEqual([tray.phase, tray.rows.map((r) => r.title)], ['waiting', ['neon']]);
+  hideToast();
+  await settle();
+  assert.ok(button(bar(), 'Add token'));
 });

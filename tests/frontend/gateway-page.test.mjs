@@ -1717,3 +1717,28 @@ test('Escape clears the pick wherever focus is', async (t) => {
   settle();
   assert.equal(pick.ids.size, 0);
 });
+
+// A server that waits for access is drawn amber where its preview goes; a press opens the panel
+// with its token field, and the dock row is not needed for it.
+test('a press on a waiting block opens the access panel', async (t) => {
+  const box = freshMap();
+  // The map's clock only runs in settle(): the clean-up lets the preview leave.
+  t.after(async () => { await cancelTray(); closePanel({ instant: true }); settle(); });
+  const needs = (sent) => {
+    const reason = 'github needs a token.';
+    return { status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'github', kind: 'token', fields: [{ field: 'headers', name: 'Authorization', label: 'Access token', prefix: 'Bearer ' }], reason, refused: false } } };
+  };
+  queue(PREVIEW, needs);
+  const body = dropBody(VIEW.groups.move[0], VIEW);
+  assert.equal(await addToTray(body), true);
+  settle();
+  const waiting = node(box, 'block:preview:github');
+  assert.match(waiting.className, /\bneeds\b/);
+  assert.ok(walk(waiting).some((n) => n.className === 'lamp warn'));
+  press(box, 'block:preview:github');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(isPanelOpen(), true);
+  assert.equal(tray.rows.length, 1, 'the press does not take it out');
+  const drawer = pages['#drawer'];
+  assert.ok(walk(drawer).some((n) => n.tagName === 'INPUT' && n.type === 'password'));
+});

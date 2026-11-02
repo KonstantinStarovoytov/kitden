@@ -828,6 +828,8 @@ div.map .dragtip.on { background: var(--route-soft); border-color: var(--route);
    keyboard focus its edge is accent and an 18 px × says a press takes it out. */
 div.map .block.preview { border: 1px dashed var(--preview-line); background: var(--preview-fill); }
 div.map .block.preview .block-meta { color: var(--route); }
+/* A preview that waits for access: still a preview (dashed), with the amber lamp and words. */
+div.map .block.preview.needs .block-meta { color: var(--lamp-warn); }
 div.map .block.preview:hover { border-color: var(--route); }
 /* A Library plugin or skill whose add waits in the tray takes the same look ("Preview · Codex"). */
 div.map .block:is(.plugin, .skill)[data-state="preview"] { border: 1px dashed var(--preview-line); background: var(--preview-fill); }
@@ -866,7 +868,7 @@ div.map .block-count.leaving:focus-visible { filter: none; }
 .dock .tx { flex: 1; }
 .dock .bar b { font-size: 13px; font-weight: 600; }
 .dock .bar small { font-size: 11px; color: var(--ink-3); overflow-wrap: anywhere; }
-.dock .bar small.bad { color: var(--route); }
+.dock .bar small.bad { color: var(--lamp-warn); }
 .dock .tx .btn { align-self: flex-start; margin: 2px 0 -4px -9px; }
 .dock .acts { display: flex; gap: 8px; }
 .dock .bar.many .acts { justify-content: flex-end; }

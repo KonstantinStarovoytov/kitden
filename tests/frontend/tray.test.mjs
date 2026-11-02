@@ -806,3 +806,15 @@ test('taking out the ready row leaves the waiting one and cancels the change', a
   assert.deepEqual(asked('/api/changes/c1/cancel').length, 1);
   assert.equal(tray.phase, 'waiting');
 });
+
+test('a group drop keeps the servers that need access as waiting rows', async () => {
+  // gateway-drag.js addInTurn adds them one by one and goes on while each joins.
+  await fresh();
+  queue(PREVIEW, previewed('c1'), needs('neon'), previewed('c2'));
+  const joined = [];
+  for (const name of ['github', 'neon', 'docs']) joined.push(await addToTray(add(name)));
+  assert.deepEqual(joined, [true, true, true]);
+  assert.deepEqual(tray.rows.map((row) => [row.body.params.item, Boolean(row.waits)]), [['github', false], ['neon', true], ['docs', false]]);
+  assert.deepEqual(asked(PREVIEW).at(-1).body.requests.map((request) => request.params.item), ['github', 'docs']);
+  assert.equal(tray.change.id, 'c2');
+});

@@ -3073,3 +3073,30 @@ test('a Cancel while the pick is still being added stops the rest', async (t) =>
     await freshTray();
   }
 });
+
+// A move that waits for access (tray.js `waits`): drawn where its preview goes, amber, and a
+// press opens the access panel instead of taking it out.
+const WAITS = { server: 'github', kind: 'token', fields: [], reason: 'github needs a token.', refused: false, checking: false };
+const waitingRow = (row, waits = WAITS) => ({ ...moveRow(row, null), waits });
+
+test('a waiting move draws an amber Needs token block where its preview goes', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [waitingRow(GITHUB)] });
+  const shown = block(tree, 'preview:github');
+  assert.deepEqual([shown.parent, shown.kind, shown.lamp, shown.meta, shown.needs, shown.takeOut, shown.state], ['group:kitden:remote', 'preview', 'warn', 'Needs token', true, null, 'needs']);
+  assert.equal(shown.title, 'Needs a token. Click to add it.');
+  const sign = block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [waitingRow(GITHUB, { ...WAITS, kind: 'sign-in' })] }), 'preview:github');
+  assert.deepEqual([sign.meta, sign.title], ['Needs sign-in', 'Needs sign-in. Click to add a token instead.']);
+});
+
+test('a move whose token works shows the green lamp and says so', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [{ ...moveRow(GITHUB), works: true }] });
+  const shown = block(tree, 'preview:github');
+  assert.deepEqual([shown.lamp, shown.meta], ['on', 'Token works']);
+});
+
+test('the map draws rows that wait in any phase but applied', () => {
+  const rows = [waitingRow(GITHUB)];
+  assert.deepEqual(rowsOnMap({ phase: 'waiting', rows }), rows);
+  assert.deepEqual(rowsOnMap({ phase: 'ready', rows }), rows);
+  assert.deepEqual(rowsOnMap({ phase: 'applied', rows }), []);
+});

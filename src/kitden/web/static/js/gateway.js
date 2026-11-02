@@ -14,6 +14,7 @@ import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, 
 import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, busy, current, currentError, data, gatewayShows, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
+import { openAccess } from "./access-form.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
@@ -193,7 +194,19 @@ function growBack(model) {
 // a refused preview it has none, and nothing is asked for it.
 export function rowsOnMap(t) {
   if (t.phase === "applied") return [];
-  return t.phase === "asking" ? t.rows : t.rows.filter((row) => row.part);
+  return t.phase === "asking" ? t.rows : t.rows.filter((row) => row.part || row.waits);
+}
+
+// How a preview block looks when its server waits for access (tray.js `waits`): the amber lamp,
+// what it needs, and a press that opens the access panel (pressBlock); once a token works, the
+// green lamp says so. Else nothing changes.
+function accessLook(row) {
+  if (row.waits) {
+    const signIn = row.waits.kind === "sign-in";
+    const title = signIn ? "Needs sign-in. Click to add a token instead." : "Needs a token. Click to add it.";
+    return { needs: true, lamp: "warn", meta: signIn ? "Needs sign-in" : "Needs token", state: "needs", takeOut: null, title };
+  }
+  return row.works ? { lamp: "on", meta: "Token works" } : {};
 }
 
 function noGateway() {
@@ -536,7 +549,7 @@ function movesIn(view, kitden, rows, drop) {
         if (!each.items.length || !each.items.every((item) => items.has(item))) continue;
         const backTo = `outside:${group}:${each.name}`;
         const look = { icon: SERVER_ICONS[group === "local" ? "local" : "remote"], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW };
-        add(group, each.name, row.part ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", ...look, row: row.key, backTo, from: backTo } : slot(each.name));
+        add(group, each.name, row.part || row.waits ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", ...look, row: row.key, backTo, from: backTo, ...accessLook(row) } : slot(each.name));
       }
     }
   }
@@ -550,10 +563,10 @@ function movesIn(view, kitden, rows, drop) {
 // side and shrinks back into it (ADD_GROW_MS), and focus on it goes to the gateway when it goes.
 // After a drop it takes the place of the drop's slot instead (`from`), where that one shows.
 function addPreview(kitden, row) {
-  if (!kitden || !row.part || !KINDS.some(([kind]) => kind === row.kind)) return null;
+  if (!kitden || !(row.part || row.waits) || !KINDS.some(([kind]) => kind === row.kind)) return null;
   const name = addName(row.body.params.server);
   const gateway = `gateway:${kitden.id}`;
-  const block = { id: `preview:${name}`, column: "servers", kind: "preview", name, meta: "Preview", stateInMeta: true, state: "preview", icon: SERVER_ICONS[row.kind], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW, row: row.key, backTo: gateway, growsFrom: gateway, growMs: ADD_GROW_MS, from: `slot:${name}` };
+  const block = { id: `preview:${name}`, column: "servers", kind: "preview", name, meta: "Preview", stateInMeta: true, state: "preview", icon: SERVER_ICONS[row.kind], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW, row: row.key, backTo: gateway, growsFrom: gateway, growMs: ADD_GROW_MS, from: `slot:${name}`, ...accessLook(row) };
   return { kind: row.kind, block };
 }
 
@@ -1272,7 +1285,8 @@ function pressAdd(node) {
 // A press on a block (a held server opened or folded first, by onOpen). "N more" turns its group's
 // page (turnOnMap). The Add a server card opens the add panel. A second press on the selected block lets go. The first run's slot adds the
 // change that sets every client up; the slot of a drag does nothing. A preview block takes its row
-// out of the tray (D12). Any other block is selected.
+// out of the tray (D12), unless it waits for access: then it opens the access panel. Any other
+// block is selected.
 export function pressBlock(model, id) {
   if (id.startsWith("more:")) {
     turnOnMap(model, id);
@@ -1290,7 +1304,11 @@ export function pressBlock(model, id) {
     return;
   }
   if (block.kind === "slot" && block.setup) review(block.setup, { note: SETUP_NOTE }).catch(reportError);
-  else if (block.kind === "preview") takeOutHere(model, block.row).catch(reportError);
+  else if (block.kind === "preview" && block.needs) {
+    // A server that waits for access opens its token field; the dock row's × takes it out.
+    const row = tray.rows.find((each) => each.key === block.row);
+    if (row && row.waits) openAccess(row);
+  } else if (block.kind === "preview") takeOutHere(model, block.row).catch(reportError);
   else if (block.kind !== "slot" || block.gateway) selectOnMap(block);
 }
 

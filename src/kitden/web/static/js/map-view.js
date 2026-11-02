@@ -60,9 +60,10 @@ function quiet(node) {
 }
 
 // A lamp's look by the block's `lamp` (style.css): grey is off, green on, a dashed accent ring in
-// preview, a grey ring works outside the gateway, a dashed amber ring is not known. It pops when it
+// preview, a grey ring works outside the gateway, a dashed amber ring is not known, and amber
+// needs you (a server that waits for access). It pops when it
 // turns on or off, not when it goes into a preview or comes back from one.
-const LAMP_LOOKS = { on: "on", off: "", preview: "pv", out: "out", unk: "unk" };
+const LAMP_LOOKS = { on: "on", off: "", preview: "pv", out: "out", unk: "unk", warn: "warn" };
 const lampClass = (base, lamp) => [base, LAMP_LOOKS[lamp]].filter(Boolean).join(" ");
 const SOLID = ["on", "off"];
 const MOVES = ["move", "project", "undo"]; // the draws that move what changed
@@ -527,7 +528,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
       const group = place.kind === "group";
       const folding = folds.has(place.id);
       // A block whose removal waits in the tray looks leaving too, and stays a Tab stop.
-      item.look = [group ? "caption" : `block ${place.kind}`, !group && folding && typeof block.count === "number" && "counted", block.leaving && "leaving", block.drags && "drags", (place.id === selected || chosen.has(place.id)) && "selected", matched && "found"].filter(Boolean).join(" ");
+      item.look = [group ? "caption" : `block ${place.kind}`, !group && folding && typeof block.count === "number" && "counted", block.leaving && "leaving", block.drags && "drags", block.needs && "needs", (place.id === selected || chosen.has(place.id)) && "selected", matched && "found"].filter(Boolean).join(" ");
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
