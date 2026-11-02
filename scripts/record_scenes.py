@@ -21,8 +21,9 @@ SCALE = 2  # device pixels per CSS pixel, so text stays sharp
 FPS = 30
 DENSITY = 1.5  # the WebP's pixels per CSS pixel; the README shows it at its CSS size
 
-# A pointer drawn on the page: it follows the mouse and dips while pressed. Animations note when
-# they start in page time, so a filmed frame can show each one where it should be.
+# A pointer drawn on the page: it follows the mouse and dips at its tip while pressed.
+# Animations note when they start in page time, so a filmed frame can show each one where it
+# should be.
 CURSOR = """
 (() => {
   const animate = Element.prototype.animate;
@@ -40,12 +41,14 @@ CURSOR = """
     c.id = 'readme-cursor';
     c.innerHTML = arrow;
     Object.assign(c.style, {
-      position: 'fixed', left: '0', top: '0', zIndex: 2147483647, pointerEvents: 'none',
-      transform: 'translate(-100px,-100px)', transition: 'scale 120ms ease',
+      position: 'fixed', left: '0', top: '0', width: '22px', height: '22px',
+      transformOrigin: '3px 2px', zIndex: 2147483647, pointerEvents: 'none',
+      translate: '-100px -100px', transition: 'scale 120ms ease',
       filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.35))',
     });
     document.documentElement.append(c);
-    const at = (e) => { c.style.transform = `translate(${e.clientX - 3}px, ${e.clientY - 2}px)`; };
+    // `translate`, not `transform`: the press scale then shrinks it at its tip, not toward 0,0.
+    const at = (e) => { c.style.translate = `${e.clientX - 3}px ${e.clientY - 2}px`; };
     addEventListener('pointermove', at, true);
     addEventListener('pointerdown', () => { c.style.scale = '0.86'; }, true);
     addEventListener('pointerup', () => { c.style.scale = '1'; }, true);
