@@ -30,8 +30,8 @@ agent has and another lacks shows at a glance.
 
 ### Share servers across all agents
 
-Move a server into the Kitden gateway and every agent gets it: one setup and one token
-instead of three.
+Move a server into the Kitden gateway and every agent you use gets it. Set it up once,
+not once per agent.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.webp">
