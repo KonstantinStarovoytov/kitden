@@ -1638,9 +1638,10 @@ def create_app(
             if verb != "cancel":
                 await state.rescan()
         if verb == "apply" and change.state is ChangeState.VERIFIED:
-            # Servers just moved or added into the Kitden gateway: Details shows their tools
-            # soon. In a tray change, only its move and add rows brought servers in.
-            brings = (GATEWAY_MOVE, GATEWAY_ADD)
+            # Servers just moved or added into the Kitden gateway, or signed in again: Details
+            # shows their tools soon (and a sign-in that ended says so no more). In a tray
+            # change, only those rows brought servers in.
+            brings = (GATEWAY_MOVE, GATEWAY_ADD, GATEWAY_SIGN_IN)
             if change.rows:
                 moves = [part_of(change, r) for r in change.rows if r["kind"] in brings]
             else:

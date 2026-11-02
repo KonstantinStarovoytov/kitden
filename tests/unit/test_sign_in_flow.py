@@ -148,3 +148,25 @@ async def test_no_secret_in_reasons():
         assert "SENTINEL" not in repr(record)
     finally:
         fake.stop()
+
+
+async def test_the_sdks_error_text_never_reaches_the_log(capfd):
+    """The SDK logs a failed flow with its exception, which may hold a token response."""
+    import logging
+
+    fake = FakeOAuth(token_error_body='{"error":"x","token":"SENTINEL_SECRET_LOG"}')
+    root = logging.getLogger()
+    handler = logging.StreamHandler()  # to stderr, as a terminal would show it
+    root.addHandler(handler)
+    try:
+        signins, opened = SignIns(), Browser()
+        record = signins.get(signins.offer(fake.url, "neon"))
+        await oauth().start(record, REDIRECT, opened)
+        oauth().finish(signins, await asyncio.to_thread(opened.back))
+        await oauth().wait(record)
+    finally:
+        root.removeHandler(handler)
+        fake.stop()
+    out, err = capfd.readouterr()
+    assert "SENTINEL" not in out + err
+    assert "OAuth flow error" not in out + err

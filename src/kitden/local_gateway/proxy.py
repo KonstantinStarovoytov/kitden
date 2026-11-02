@@ -21,7 +21,6 @@ MCP SDK facts this relies on (mcp 2.3.0, checked 2026-10-21):
 """
 
 import hashlib
-import logging
 import os
 import re
 import sys
@@ -93,10 +92,8 @@ NOT_IN_NAMES = re.compile(r"[^A-Za-z0-9_-]")
 SDK_CODES = {CONNECTION_CLOSED, REQUEST_TIMEOUT}
 HTTP_CODES = SDK_CODES | {PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INTERNAL_ERROR}
 
-# The HTTP library logs each request with its full address, and the MCP client logs some failures
-# with addresses too; an address may hold a token. The gateway prints its own plain line instead.
-for _logger in ("httpx2", "mcp.client"):
-    logging.getLogger(_logger).setLevel(logging.CRITICAL)
+# The HTTP library's and the MCP client's own logs are silenced by `oauth` (imported above): an
+# address or an error they log may hold a token. The gateway prints its own plain line instead.
 
 
 def exposed_names(

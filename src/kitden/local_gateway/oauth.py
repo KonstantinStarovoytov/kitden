@@ -16,6 +16,7 @@ The SDK's error text may hold a token response, so it is never passed on: every 
 
 import asyncio
 import json
+import logging
 import sys
 from urllib.parse import parse_qs, urlsplit
 
@@ -30,6 +31,12 @@ from kitden.local_gateway import keychain
 from kitden.sign_in import SignIn, SignIns
 
 SECONDS = 10  # for each request of the flow; the person in the browser has sign_in.TIMEOUT
+
+# The HTTP library logs each request with its full address, and the MCP client logs a failed
+# sign-in with its exception, which may hold a token response; an address may hold a token too.
+# Kitden says its own plain words instead, on the page and in the gateway.
+for _logger in ("httpx2", "mcp.client"):
+    logging.getLogger(_logger).setLevel(logging.CRITICAL)
 
 
 class CannotSignIn(Exception):

@@ -663,8 +663,8 @@ def signed_in_server(
     item = KeychainItem(name, SIGN_IN_KEY, signed_in.secret or "")
     entry = {**server, "sign_in": item.ref}
     step = _server_step(home, name, entry, old, run)
-    if step is None:  # the same entry: only the Keychain item changes
-        step = settings_step(home, ("servers", name), secrets_out(name, entry)[0], name)
+    if step is None:  # the same entry: only the Keychain item changes; the entry stays as held
+        step = settings_step(home, ("servers", name), {**old, "sign_in": item.ref}, name)
     step.keychain = [*step.keychain, item]
     return step
 

@@ -2,6 +2,7 @@
 keeps the tokens in the Keychain only. Against the local fake OAuth server, never a real one."""
 
 import json
+import time
 from contextlib import contextmanager
 from urllib.parse import urlsplit
 
@@ -275,3 +276,65 @@ def test_offer_needs_a_held_sign_in_server(home):
     with page_for(home, Opened()) as page:
         answer = page.post("/api/sign-in/offer", json={"server": "nope"}, headers=POST)
     assert answer.status_code == 404
+
+
+def test_signing_in_again_clears_needs(home, fake, monkeypatch):
+    add_claude(home, "signer", {"type": "http", "url": fake.url})
+    opened = Opened()
+    ended = {"now": True}  # what the server's next tool read says
+
+    async def tools(home, names=None):
+        return {"signer": "signer needs sign-in again." if ended["now"] else None}
+
+    def needs(page):
+        for _ in range(50):
+            view = page.get("/api/gateway-view").json()
+            [kitden] = [g for g in view["gateways"] if g["kind"] == "kitden"]
+            [server] = [s for s in kitden["servers"] if s["name"] == "signer"]
+            if ("needs" in server) == ended["now"]:
+                break
+            time.sleep(0.02)
+        return "needs" in server
+
+    monkeypatch.setattr("kitden.web.app.refresh_tools", tools)
+    with page_for(home, opened) as page:
+        held_signer(page, home, opened)
+        page.post("/api/gateway/tools/refresh", headers=POST)
+        assert needs(page)
+        id = page.post("/api/sign-in/offer", json={"server": "signer"}, headers=POST).json()["id"]
+        sign_in(page, opened, id)
+        body = {
+            "action": "gateway.sign_in",
+            "targets": [],
+            "params": {"server": "signer", "sign_in": id},
+        }
+        change_id = page.post("/api/changes/preview", json=body, headers=POST).json()["id"]
+        ended["now"] = False
+        page.post(f"/api/changes/{change_id}/apply", headers=POST)
+        # Apply asks the server for its tools again, so the card stops saying Needs sign-in.
+        assert not needs(page)
+
+
+def test_sign_in_again_keeps_a_plain_secret_as_it_is(home, fake, fake_keychain):
+    """A held server with a plain secret value (not moved to the Keychain yet) keeps it."""
+    add_claude(home, "signer", {"type": "http", "url": fake.url})
+    opened = Opened()
+    with page_for(home, opened) as page:
+        held_signer(page, home, opened)
+        settings = json.loads(gateway_file(home).read_text())
+        settings["servers"]["signer"]["headers"] = {"X-Api-Key": "SENTINEL_PLAIN_KEY"}
+        gateway_file(home).write_text(json.dumps(settings))
+        id = page.post("/api/sign-in/offer", json={"server": "signer"}, headers=POST).json()["id"]
+        sign_in(page, opened, id)
+        body = {
+            "action": "gateway.sign_in",
+            "targets": [],
+            "params": {"server": "signer", "sign_in": id},
+        }
+        answer = page.post("/api/changes/preview", json=body, headers=POST)
+        assert answer.status_code == 200, answer.text
+        applied = page.post(f"/api/changes/{answer.json()['id']}/apply", headers=POST)
+        assert applied.json()["state"] == "verified", applied.json()
+        held = load_settings(home)["servers"]["signer"]
+        assert held["headers"] == {"X-Api-Key": "SENTINEL_PLAIN_KEY"}
+        assert held["sign_in"] == {"keychain": "signer/sign-in"}
