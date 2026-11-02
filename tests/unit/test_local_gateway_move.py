@@ -388,8 +388,6 @@ def waits(home, wanted, **options):
     return error.value
 
 
-
-
 def test_access_needed_tells_sign_in_token_and_open(home):
     signs, plain, open_ = FakeRemote(401), FakeRemote(403), FakeRemote(200)
     try:

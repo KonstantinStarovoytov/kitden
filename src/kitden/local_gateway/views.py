@@ -278,9 +278,10 @@ def masked(value: str) -> str:
 
 def access_rows(server: str, entry: dict, run: keychain.Runner | None = None) -> list[dict]:
     """A held server's secrets for its Access block: each header or env value that is a
-    Keychain reference or whose name or shape says secret (`redact_line`), and its sign-in, by name, with only its start
-    and end (`masked`, None when its Keychain item is missing) and where it is kept. A sign-in
-    also says when its token ends and whether the gateway can refresh it."""
+    Keychain reference or whose name or shape says secret (`redact_line`), and its sign-in, by
+    name, with only its start and end (`masked`, None when its Keychain item is missing) and
+    where it is kept. A sign-in also says when its token ends and whether the gateway can
+    refresh it."""
     run = run or keychain.run_security
     rows = []
     for field in ("headers", "env"):
