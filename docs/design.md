@@ -26,8 +26,9 @@ Kitden does. Three scenes of the real page follow, each with a heading of a few 
 plain sentences on what it shows, and cropped to the part it is about, and each different in look: a still of the Library map (what
 each agent loads), then two short looping animations (servers of three clients joined in the
 gateway, tools turned off on the map). No captions on the pictures themselves and no invented UI states. Each animation
-ends on its key moment and fades back to its start. Then what Kitden needs, two commands, one
-line to update, the other features as a list of benefits, the trust line and links; the rest lives in the guide. [README media](readme-media.md)
+ends on its key moment and fades back to its start. Then the other features as a list of benefits, why it is safe to use (preview, backup
+and Undo, local only, the Keychain, read-only agent tools), the trust line, what Kitden needs,
+two commands, one line to update and links; the rest lives in the guide. [README media](readme-media.md)
 records how to make the pictures again.
 
 ## Color roles

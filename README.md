@@ -50,6 +50,34 @@ not just hidden.
   <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/tools-light.webp" width="860" alt="memory in the Kitden gateway shows its nine tools; its three delete tools are turned off on the map and applied for every agent.">
 </picture>
 
+## And more
+
+- **Find and add.** Search the official MCP Registry, skills.sh, the Claude plugins marketplace
+  and any public GitHub repository. Drag a result onto a client or the gateway.
+- **Fill the gaps.** A plugin or skill one agent has goes to the others in one step.
+- **Tokens and sign-in, once.** Checked before Apply, kept in the macOS Keychain, refreshed by
+  the gateway.
+- **Per project.** Turn a server or a tool on or off for one project only.
+- **See what runs.** How often each tool is called, and which tools only read.
+- **Instructions in view.** Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each
+  client loads, and where they come from.
+- **Ask your agent.** "Show my setup" works from any agent, through Kitden's own read-only
+  MCP server.
+## Safe to use
+
+- **Nothing is written until you press Apply.** Every change shows a preview first, with
+  the exact edit under Show changes.
+- **Apply keeps a backup, and Undo puts it back.** If a file changed since, Kitden stops
+  instead of overwriting it.
+- **Everything stays on your Mac.** The page runs at 127.0.0.1 behind a private link. No
+  account, no telemetry. Kitden goes online only for the catalogs you open and the remote
+  servers you add.
+- **Secrets live in the macOS Keychain only.** The page shows no more than their first and
+  last characters.
+- **Kitden's agent tools only read.** Asking an agent to show your setup changes nothing.
+
+Add only servers and plugins you trust: they run with your permissions.
+
 ## Get started
 
 Needs **macOS**, [uv](https://docs.astral.sh/uv/getting-started/installation/) and at least
@@ -69,24 +97,6 @@ uv tool install --python 3.13 kitden && kitden
 ```
 
 Update later with `uv tool upgrade kitden`.
-
-## And more
-
-- **Find and add.** Search the official MCP Registry, skills.sh, the Claude plugins marketplace
-  and any public GitHub repository. Drag a result onto a client or the gateway.
-- **Fill the gaps.** A plugin or skill one agent has goes to the others in one step.
-- **Tokens and sign-in, once.** Checked before Apply, kept in the macOS Keychain, refreshed by
-  the gateway.
-- **Per project.** Turn a server or a tool on or off for one project only.
-- **See what runs.** How often each tool is called, and which tools only read.
-- **Instructions in view.** Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each
-  client loads, and where they come from.
-- **Ask your agent.** "Show my setup" works from any agent, through Kitden's own read-only
-  MCP server.
-- **Safe by design.** Every change shows a preview first. Apply keeps a backup, Undo puts it
-  back. Everything stays on your Mac: no account, no telemetry.
-
-Add only servers and plugins you trust: they run with your permissions.
 
 [Guide](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md) ·
 [Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) ·
