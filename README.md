@@ -52,7 +52,7 @@ not just hidden.
 
 ## And more
 
-| | |
+| Feature | What it does |
 | --- | --- |
 | **Find and add** | Search the official MCP Registry, skills.sh, the Claude plugins marketplace and any public GitHub repository. Drag a result onto a client or the gateway. |
 | **Fill the gaps** | A plugin or skill one agent has goes to the others in one step. |
