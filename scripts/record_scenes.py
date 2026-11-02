@@ -3,7 +3,7 @@
 Used by scripts/record_readme.py, which starts a fresh page for each one. Each scene is set up
 first, then filmed: the page runs on a paused clock that moves one frame at a time, and the part
 of the page the scene is about is saved after each step. So the motion is as even as on a real
-screen, however long a frame takes to save. ffmpeg joins the frames into one looping WebP. A
+screen, however long a frame takes to save. img2webp joins the frames into one looping WebP. A
 drawn cursor shows the pointer, since a headless browser shows none.
 """
 
@@ -17,9 +17,8 @@ from pathlib import Path
 from playwright.sync_api import Page, sync_playwright
 
 VIEW = {"width": 1280, "height": 800}
-SCALE = 2  # device pixels per CSS pixel, so text stays sharp
+SCALE = 1.5  # device pixels per CSS pixel; the README shows each animation at its CSS size
 FPS = 30
-DENSITY = 1.5  # the WebP's pixels per CSS pixel; the README shows it at its CSS size
 
 # A pointer drawn on the page: it follows the mouse and dips at its tip while pressed.
 # Animations note when they start in page time, so a filmed frame can show each one where it
@@ -289,25 +288,16 @@ def run_ffmpeg(*args: str) -> None:
     subprocess.run([ffmpeg, "-y", "-loglevel", "error", *args], check=True)  # noqa: S603
 
 
-def encode(frames: Path, out: Path, width: int) -> None:
-    """One looping WebP from the numbered frames."""
-    run_ffmpeg(
-        "-framerate",
-        str(FPS),
-        "-i",
-        str(frames / "%05d.png"),
-        "-vf",
-        f"scale={width}:-2:flags=lanczos",
-        "-c:v",
-        "libwebp_anim",
-        "-loop",
-        "0",
-        "-quality",
-        "80",
-        "-compression_level",
-        "6",
-        str(out),
-    )
+def encode(frames: Path, out: Path) -> None:
+    """One looping WebP from the numbered frames. Lossy WebP leaves dark blocks where frames
+    differ a little, so it is near-lossless: no colour moves more than a few steps."""
+    args = ["-loop", "0", "-lossless", "-near_lossless", "60", "-m", "6"]
+    for index, frame in enumerate(sorted(frames.glob("*.png"))):
+        ms = round((index + 1) * 1000 / FPS) - round(index * 1000 / FPS)
+        args += ["-d", str(ms), str(frame)]
+    img2webp = shutil.which("img2webp") or "img2webp"
+    # Fixed arguments; img2webp from PATH is the point.
+    subprocess.run([img2webp, *args, "-o", str(out)], check=True, capture_output=True)  # noqa: S603
 
 
 def record_all(fresh_page, out: Path, only: str = "") -> None:
@@ -339,7 +329,7 @@ def record_all(fresh_page, out: Path, only: str = "") -> None:
                     finally:
                         context.close()
                         server.should_exit = True
-                    encode(Path(frames), target, round(w * DENSITY))
+                    encode(Path(frames), target)
                 seconds = film.frames / FPS
                 print(f"{target.name}: {seconds:.1f} s, {target.stat().st_size // 1024} KB")
         browser.close()

@@ -7,7 +7,8 @@ animations.
 ## Animations
 
 Each animation is a looping WebP in `docs/images/readme/`, in light and dark, cropped to the
-part of the page it is about and shown at its CSS size (880 or 450 px wide).
+part of the page it is about, filmed at 1.5 pixels per CSS pixel and shown at its CSS size (880
+or 450 px wide).
 
 - `find`: context7, found in the catalog, is dragged onto the gateway, which lights up.
 - `pick`: memory (Claude Code), playwright (Codex) and sequential-thinking (Cursor) are picked
@@ -21,6 +22,9 @@ paused clock. Each step moves the page one frame (1/30 s) on, puts every animati
 time, and saves the frame. So the motion is even, however long a frame takes to save.
 Waiting for the network is cut out.
 
+The WebPs are near-lossless (`-near_lossless 60`). Lossy WebP left dark bars and blocks
+where frames differ a little, and lower settings left grain on warm dark cards.
+
 ## Make them again
 
 ```bash
@@ -28,7 +32,7 @@ uv run --with playwright==1.64.1 python scripts/record_readme.py
 ```
 
 `--only pick-dark` makes one animation; `--serve` only starts the page to look around. It needs
-`ffmpeg` on the PATH.
+`ffmpeg` and `img2webp` (from libwebp) on the PATH.
 Each animation starts the real page on a fresh copy of the sample from
 `scripts/readme_demo.py`, in a temporary folder. Stand-ins keep it local: a fake Keychain,
 fake client commands, canned tool lists, and a local test server that takes one key in place

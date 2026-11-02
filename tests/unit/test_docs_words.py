@@ -119,4 +119,4 @@ def test_the_readme_shows_three_scenes_in_both_themes():
             image = ROOT / f"docs/images/readme/{scene}-{theme}.webp"
             assert f"docs/images/readme/{scene}-{theme}.webp" in readme, image.name
             # Small enough for a phone on a slow line.
-            assert image.stat().st_size <= 800_000, image.name
+            assert image.stat().st_size <= 1_400_000, image.name
