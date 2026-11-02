@@ -84,14 +84,6 @@ def remove_record(home: Path) -> None:
     (data_dir(home) / RECORD).unlink(missing_ok=True)
 
 
-def running_page(home: Path) -> dict | None:
-    """The record of the page that runs now. A record left by a page that ended is removed."""
-    if page_running(home):
-        return read_record(home)
-    remove_record(home)
-    return None
-
-
 def wait_for_record(home: Path, seconds: float = WAIT_SECONDS) -> dict | None:
     """Wait until a running page has written its record."""
     deadline = time.monotonic() + seconds

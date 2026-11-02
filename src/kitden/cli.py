@@ -109,7 +109,8 @@ def _show(url: str, args: argparse.Namespace) -> None:
 def _open(args: argparse.Namespace) -> int:
     """Open the running page for this home folder, or start one in the background (FR-008)."""
     root = _home(args) or Path.home()
-    if page.running_page(root) is None:
+    if not page.page_running(root):  # a page still starting holds the lock: none starts again
+        page.remove_record(root)  # left by a page that ended without cleaning up
         page.start_background(root, args.home)
     record = page.wait_for_record(root)
     if record is None:

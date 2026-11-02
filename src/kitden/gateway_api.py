@@ -48,10 +48,17 @@ def endpoint_name(url: str) -> str:
 
 
 def _send(
-    base: str, method: str, path: str, body: dict | None, headers: dict, timeout: float
+    base: str,
+    method: str,
+    path: str,
+    body: dict | None,
+    headers: dict,
+    timeout: float,
+    read_errors: bool = True,
 ) -> tuple[int, Any, Mapping[str, str]]:
-    """One JSON request to a gateway: its status, its JSON body (None when it is not JSON) and
-    its headers. An error answer is an answer; no answer at all is a GatewayError."""
+    """One JSON request to a gateway: its status, its JSON body (None when it is not JSON, and
+    for an error answer when `read_errors` is off) and its headers. An error answer is an
+    answer; no answer at all is a GatewayError."""
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(base + path, data=data, method=method)  # noqa: S310 - http(s) checked
     request.add_header("Accept", "application/json")
@@ -63,7 +70,7 @@ def _send(
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
             return response.status, _json(response.read()), response.headers
     except urllib.error.HTTPError as error:
-        return error.code, _json(error.read()), {}
+        return error.code, _json(error.read()) if read_errors else None, {}
     except (urllib.error.URLError, OSError, TimeoutError) as error:
         reason = getattr(error, "reason", error)
         raise GatewayError(f"Could not reach the gateway at {base}: {reason}") from None
@@ -261,9 +268,9 @@ class ObotClient:
         if not key:
             raise GatewayError(f"Set {var} in the environment before starting Kitden")
         auth = {"Authorization": f"Bearer {key}"}
-        status, answer, _ = _send(self.base, method, path, body, auth, self.timeout)
         # Obot's error bodies are not read: they may echo the request.
-        return status, answer if status < 400 else None
+        status, answer, _ = _send(self.base, method, path, body, auth, self.timeout, False)
+        return status, answer
 
     def _refused(self, status: int, what: str) -> GatewayError:
         if status in (401, 403):
