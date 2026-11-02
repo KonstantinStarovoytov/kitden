@@ -1087,7 +1087,7 @@ export function stepHead(crumb, title, back) {
 }
 
 // A step's quiet note at its foot, after an info icon; `words` can change.
-export function stepFoot(words) {
+function stepFoot(words) {
   const foot = el("p", "step-foot");
   foot.append(icon("info", 13), words);
   return foot;

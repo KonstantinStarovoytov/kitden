@@ -14,7 +14,7 @@ const ENDED = {
 export const LOST = "Could not confirm the result. Check Changes before trying again.";
 
 // The change as the server holds it now, or null when it cannot be read.
-export async function readChange(id) {
+async function readChange(id) {
   try {
     return await getJson(`/api/changes/${encodeURIComponent(id)}`);
   } catch {

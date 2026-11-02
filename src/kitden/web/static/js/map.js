@@ -37,15 +37,15 @@ import { plural } from "./dom.js";
 
 export const GAP = 46; // between two columns
 export const NARROW_GAP = 28; // between two columns in a narrow window
-export const GROUP_H = 22; // narrow: a group caption's height
-export const GROUP_MAX = 6; // a group with more children pages: five a page and "N more"
+const GROUP_H = 22; // narrow: a group caption's height
+const GROUP_MAX = 6; // a group with more children pages: five a page and "N more"
 const PAGE = 5; // the children a page of a group shows, unless the group has a `pageSize`
 export const CAPTION_H = 18; // a column's caption, at the top of its column; a group's too
-export const CAPTION_ROW = 24; // the blocks of a column start under its caption
-export const CAPTION_GAP = 5; // between a group's caption and its first block
+const CAPTION_ROW = 24; // the blocks of a column start under its caption
+const CAPTION_GAP = 5; // between a group's caption and its first block
 export const LINK_MS = 170; // an unfold draws its links first, then its children fade in
-export const CHANNELS = [16, 24, 32]; // wide: how far right of its client a direct line turns
-export const NARROW_CHANNEL = 14; // narrow: the same, in the smaller gap between columns
+const CHANNELS = [16, 24, 32]; // wide: how far right of its client a direct line turns
+const NARROW_CHANNEL = 14; // narrow: the same, in the smaller gap between columns
 const ROW_GAP = 8; // between two blocks of a column
 const RAIL = 16; // narrow: children sit this far inside their parent, beside its rail
 const CORNER = 6; // the round corners of a rail

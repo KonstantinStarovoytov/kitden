@@ -367,9 +367,9 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
   says its level and whether it is open, and the arrow keys move (`gridKey()` in `dom.js`).
   Every control keeps `:focus-visible`.
 - A redraw keeps keyboard focus: a tab, filter button, menu or row with a `data-focus` key (or
-  a row key) gets focus back. Arrow keys, Home and End move between tabs and select (`tabKeys()`
-  in `dom.js`). The review's Tab loop includes its "Show file change" summary. After a page's
-  Retry, focus goes to the new Retry if the read failed again, else to the page's first control.
+  a row key) gets focus back. The review's Tab loop includes its "Show file change" summary.
+  After a page's Retry, focus goes to the new Retry if the read failed again, else to the page's
+  first control.
 - A link the page can act on is a button after the blocks, named "<from> to <to>": keyboard
   focus (focus after a key, `byKeys()` in `dom.js`, as Safari does not always match
   `:focus-visible` on SVG; focus the panel gives back after a mouse Close does not) gives it the

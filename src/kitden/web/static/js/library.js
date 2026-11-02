@@ -45,12 +45,12 @@ const SETTLE_ROWS = 40;
 const RISE_ROWS = 12;
 
 // What each cell showed last time, so a change can morph from the old state to the new one.
-export let previousCells = {};
+let previousCells = {};
 let morphNext = false;
 export function morphOnNextRender() { morphNext = true; }
 
 // A Details title: the source too when two rows share the name ("superpowers · cursor-public").
-export function rowTitle(row) {
+function rowTitle(row) {
   return row.same_name && row.source ? `${row.name} · ${row.source}` : row.name;
 }
 

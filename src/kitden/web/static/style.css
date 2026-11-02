@@ -376,7 +376,6 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .s-on { color: var(--lamp-on); } .s-on .dot::after { transform: scale(1); }
 .s-gw { color: var(--route); } .s-gw .dot { border-radius: 3px; } .s-gw .dot::after { transform: scale(1); }
 .s-off { color: var(--lamp-off); }
-.s-over { color: var(--ink-3); } .s-over .dot { background: linear-gradient(135deg, transparent 44%, currentColor 45% 55%, transparent 56%); }
 .s-unk { color: var(--lamp-warn); } .s-unk .dot { border-style: dashed; }
 /* Needs review: an amber ring with a small dot, apart from Unknown's dashed ring. */
 .s-review { color: var(--lamp-warn); } .s-review .dot::after { transform: scale(0.5); border-radius: 50%; }
@@ -393,9 +392,6 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .flag.info { background: var(--wire-soft); color: var(--ink-3); font-weight: 400; }
 .flag.gone { animation: flag-out 360ms var(--ease-in-out) forwards; }
 @keyframes flag-out { 60% { opacity: 0; transform: scale(0.85); } to { opacity: 0; transform: scale(0.85); max-width: 0; padding: 0; } }
-.badge { font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 4px; border: 1px solid var(--wire); color: var(--ink-2); white-space: nowrap; }
-.badge.win { border-color: var(--ink-3); color: var(--ink); font-weight: 500; }
-.badge.warn { border-color: var(--lamp-warn); color: var(--lamp-warn); }
 /* The switch shows the real state; pressing it adds its change to the tray. The button is 24 px high to press.
    Its track (34 x 20) is drawn by ::before between two clear 2 px bands, and the knob (14 px) sits
    2 px inside the track's line. Off the knob is grey, on it is white on the accent. */
@@ -521,7 +517,6 @@ div.map .block.page .block-label { color: var(--ink-4); }
 
 /* Gateway */
 .kicker { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 500; }
-.section-title { font-size: 15px; margin: 28px 0 0; letter-spacing: -0.01em; }
 .group-note { margin: 0 0 10px; color: var(--ink-3); }
 .conn { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .conn .cell { border: 1px solid var(--wire-soft); border-radius: 6px; padding: 10px 12px; background: var(--canvas); display: grid; gap: 6px; justify-items: start; }
@@ -1015,7 +1010,6 @@ div.stack { display: grid; border: 1px solid var(--wire); border-radius: 8px; ov
    on the Gateway and in the Library: a quiet head, then one framed list, the whole server first on
    the dim fill. A row is the name (a tool's in mono) over its quiet line, and its switch; under a
    project with its own rule an accent line ends in the link "Use all projects". */
-.tools-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tool-list { display: grid; gap: 8px; }
 h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); }
 .sw-list { display: flex; flex-direction: column; border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
@@ -1140,7 +1134,6 @@ pre.diff .del { color: var(--diff-del); background: color-mix(in srgb, var(--dan
 .callout.error { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .callout.stale { margin-bottom: 12px; }
 .checklist { margin: 0; padding-left: 18px; color: var(--ink-2); }
-.checklist .badge { margin-left: 6px; }
 .commands { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .looks-for { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
 .commands pre, pre.command { margin: 4px 0 0; padding: 8px 10px; background: var(--inset); border-radius: 6px; font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -79,7 +79,8 @@ globalThis.fetch = (url, init = {}) => {
 const queue = (url, ...items) => replies.set(url, [...(replies.get(url) || []), ...items]);
 const posted = () => calls.filter((call) => call.method === 'POST').map((call) => call.url);
 
-const { PLACE_IN_TITLE, addScope, changeWords, review, reviewLede, showRowReview, targetWords } = await import('../../src/kitden/web/static/js/review.js');
+const { addScope, changeWords, review, reviewLede, showRowReview } = await import('../../src/kitden/web/static/js/review.js');
+const { PLACE_IN_TITLE, targetWords } = await import('../../src/kitden/web/static/js/parts.js');
 const { closePanel, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');

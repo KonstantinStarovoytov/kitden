@@ -11,8 +11,6 @@ import { busy, data, gatewayShows, reload, render, setBusy, state } from "./stor
 import { projectLabel } from "./tools.js";
 import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone } from "./tray.js";
 
-// changeOutcome lives in tray.js; panel.js still exports it from here.
-export { changeOutcome };
 
 const DONE_WORDS = {
   "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed", "plugin.remove": "Removed",
@@ -35,8 +33,6 @@ const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 // already, setup_server.update changes an entry where it is, setup_server.register says "to
 // Kitden" and gateway.move_out names the client it goes into.
 export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "gateway.connect", "gateway.put_back", "gateway.add"];
-// Where the steps go, as the title ends (parts.js, so the Changes page says it too).
-export { PLACE_IN_TITLE, targetWords };
 // No promise of Undo for every change: the server names the known limit (`undo_note`).
 const LEDE = "Nothing is written until you press Apply. A backup is kept.";
 // The twin of views/words.py UNCHANGED; said only when the server guarantees it.
@@ -522,7 +518,7 @@ export function showEffect() {
 // The Library morphs its cells, the Gateway map lands its rows (gateway.js landRows), the
 // Overview's card leaves or comes back and a Changes row draws its Undo (changes.js): each is the
 // one motion of the change, so none cross-fades the page too. Other places cross-fade.
-export function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
+function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
   return view === "library" || view === "overview" || view === "changes" || (view === "gateway" && mode === "map");
 }
 

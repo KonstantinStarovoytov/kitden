@@ -62,7 +62,7 @@ export function optionAfter(key, at, count) {
 // The parts of one option row in the project menu: an icon (layers for
 // All projects, a folder for a project), the name over its sub line, the count, and a check when
 // `check` is set.
-export function optionParts(item, check = false) {
+function optionParts(item, check = false) {
   const text = el("span", "where-tx");
   text.append(el("span", "where-label", item.name));
   if (item.sub) text.append(el("span", "where-sub", item.sub));
@@ -279,7 +279,7 @@ export function baseNames(text) {
 
 // The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
-  on: "On", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",
+  on: "On", off: "Off", unk: "Unknown", review: "Needs review", gw: "Via gateway",
   missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
   unread: "Could not read",
 };
@@ -354,14 +354,14 @@ export function versionsOpened(before, after) {
 }
 
 // "gateway" is a registered gateway's own step; "kitden" is the Kitden gateway's settings file.
-export const CLIENT_MARKS = {
+const CLIENT_MARKS = {
   claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", gateway: "GW", kitden: "GW",
 };
 // Icon file names under /static/brand/clients. Codex and Cursor also ship a "-dark" version.
-export const CLIENT_ICONS = {
+const CLIENT_ICONS = {
   claude_code: "claude", claude_desktop_code_tab: "claude", codex: "codex", cursor: "cursor",
 };
-export const DARK_ICONS = new Set(["codex", "cursor"]);
+const DARK_ICONS = new Set(["codex", "cursor"]);
 export const CLIENT_ORDER = ["claude_code", "claude_desktop_code_tab", "codex", "cursor"];
 export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
@@ -768,4 +768,3 @@ export function notesSection(heading, steps) {
   return section;
 }
 
-export { plural };

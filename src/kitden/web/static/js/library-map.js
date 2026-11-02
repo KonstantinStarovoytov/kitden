@@ -62,8 +62,8 @@ export const INSTRUCTION_COLUMNS = [
 ];
 const FILE_GROUPS = { all: "layers", project: "folder", commands: "square-terminal" };
 // The words for a block of "Commands and agents" (`file.kind`), and with none here at all.
-export const FILE_KINDS = { command: "command", agent: "agent" };
-export const NO_FILES = "No instruction files here.";
+const FILE_KINDS = { command: "command", agent: "agent" };
+const NO_FILES = "No instruction files here.";
 // The Instructions tab's group ids carry this, so they never share an id with a group of Plugins
 // and skills (`group:project`).
 export const filesGroup = (key) => `group:files:${key}`;
@@ -344,7 +344,7 @@ function fileMeta(file, group) {
 // on it, or its ×, takes the row out. A plugin's removal from a client takes the faint lines through
 // that client with it (Cursor through Claude Code): they draw leaving too, with no × and no row of
 // their own. `answer` is the /api/library-map answer the model is from.
-export function withLeaving(model, rows, answer) {
+function withLeaving(model, rows, answer) {
   const byId = new Map(model.blocks.map((b) => [b.id, b]));
   const removed = new Set(); // "<client>>block id" of a waiting plugin removal
   for (const link of model.links.filter((l) => l.kind === "on")) {

@@ -26,14 +26,14 @@ const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };
 const ADD_KEY = "add:plugins";
 
 // The clients a row adds to: those that can take it and lack it, in column order.
-export function lacking(row) {
+function lacking(row) {
   const has = new Set(row.installed || []);
   return Object.keys(row.routes || {}).filter((client) => !has.has(client)).sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
 }
 
 // A row as the map's blocks have their item, for its drag and for the adds in the tray: the
 // clients that have it are on, and the ones it lacks can take it.
-export function itemOf(row) {
+function itemOf(row) {
   const by = Object.fromEntries((row.installed || []).map((client) => [client, "on"]));
   return { kind: row.kind, name: row.name, [row.kind]: row.id, by, can: { add: lacking(row) } };
 }

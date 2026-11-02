@@ -933,7 +933,7 @@ test("a client→skill link's × turns it off in Claude Code or Codex, and remov
       { action: 'skill.remove', targets: [{ item: 'cu-pol' }], params: {} },
     ]);
     // The same rows as Details' "Turn off for all projects…".
-    const { offBodies } = await import('../../src/kitden/web/static/js/library-details.js');
+    const { offBodies } = await import('../../src/kitden/web/static/js/library-rules.js');
     assert.deepEqual(bodies()[0], offBodies(X_SAMPLE.groups[2].items[0])[1]);
     await flush();
     // The row of Details is the same row: the × says so.

@@ -84,7 +84,7 @@ export function dropBody(row, view) {
 // Whether a block whose centre is at `centre` (map point) is over the gateway: by the Servers
 // column and above `line`, the top of the Outside caption when the drag started, or on the
 // gateway's own box (onGatewayBox).
-export function inZone(layout, centre, line) {
+function inZone(layout, centre, line) {
   const column = layout.columns.find((c) => c.id === "servers");
   if (!column) return false;
   return (centre.x > column.x - ZONE.left && centre.x < column.x + column.w + ZONE.right && centre.y < line - ZONE.above) || onGatewayBox(layout, centre);

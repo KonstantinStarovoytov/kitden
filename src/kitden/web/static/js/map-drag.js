@@ -22,7 +22,7 @@ const COVERS = ["#drawer.open", "#dock"];
 // A block dragged onto a client: what its tip says until it is over one, and where a client takes
 // it: the pointer in the client's box, widened 24 px left, 40 right, 16 up and down.
 export const ON_CLIENT = "Drop on a client";
-export const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };
+const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };
 
 const onCount = (node) => Boolean(node.dataset && node.dataset.focus && node.dataset.focus.startsWith("count:"));
 

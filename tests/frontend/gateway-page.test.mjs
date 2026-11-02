@@ -108,7 +108,8 @@ const batch = (id) => (sent) => ({
   },
 });
 
-const { drawChip, renderGateway } = await import('../../src/kitden/web/static/js/gateway.js');
+const { renderGateway } = await import('../../src/kitden/web/static/js/gateway.js');
+const { drawChip } = await import('../../src/kitden/web/static/js/map-page.js');
 const { dropBody } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { arrival, data, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, cancelTray, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');

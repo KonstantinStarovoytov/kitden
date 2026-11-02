@@ -8,12 +8,12 @@ delete globalThis.navigator;
 // What watches the page: each observer's callback and the node it observes.
 const observers = [];
 globalThis.MutationObserver = class { constructor(fn) { this.fn = fn; observers.push(this); } observe(node, options) { this.node = node; this.options = options; } };
-const { FLOAT_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, holdPanel, changeOutcome, chosenKeys, callsText, changeWords, floatRoom, floatTop, floatsAt, heldActions, initPanel, isPanelOpen, loadPanel, offerLabel, leftOutText, moveTargets, openPanel, panelState, projectLabel, review, reviewLede, stepTo, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { FLOAT_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, holdPanel, chosenKeys, callsText, changeWords, floatRoom, floatTop, floatsAt, heldActions, initPanel, isPanelOpen, loadPanel, offerLabel, leftOutText, moveTargets, openPanel, panelState, projectLabel, review, reviewLede, stepTo, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { readFileSync } = await import('node:fs');
 const { detailsCard, factsBlock, scopeWords } = await import('../../src/kitden/web/static/js/details.js');
 const { data, state } = await import('../../src/kitden/web/static/js/store.js');
-const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, cancelTray, changeOutcome, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
 const direct = { name: 'github', items: ['entry-1', 'entry-2'] };
 const obot = { id: 'gw-1', movable: true };

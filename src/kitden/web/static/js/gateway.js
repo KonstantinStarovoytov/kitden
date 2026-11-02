@@ -17,12 +17,6 @@ import { say } from "./toast.js";
 import { openAccess } from "./access-form.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
 
-// Overview sets a client up with the same note. A server the Kitden gateway holds, and its
-// links, are found where its Details are drawn. The find chip is drawn as every map page draws it.
-export { heldServer, SETUP_NOTE } from "./gateway-details.js";
-export { drawChip };
-export { litFor } from "./map.js";
-
 const WRITABLE = ["claude_code", "codex", "cursor"];
 // The group of servers outside the gateway: the List's words, and the map's, which asks for a drag.
 const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
