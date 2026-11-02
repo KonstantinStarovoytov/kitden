@@ -4,7 +4,7 @@
 // every client that can take it and lacks it; a second click takes it out. A drag onto a client
 // adds it there only (library-map.js). Nothing is written before the tray's Apply.
 import { addModes, openDiscovery } from "./discovery.js";
-import { openAddPanel, shownList } from "./add-panel.js";
+import { openAddPanel, readAgain } from "./add-panel.js";
 import { getJson } from "./api.js";
 import { button, plural, reportError } from "./dom.js";
 import { addsOf, learnOffers, letGoLibraryMap, onLibraryAdd, pressRow } from "./library-map.js";
@@ -129,22 +129,9 @@ export function openLocalLibraryAdd(options = {}) {
   return openAddPanel(LIBRARY, options);
 }
 
-// An open panel reads the marketplaces again and each row says what it is now.
-let reads = 0;
-async function readAgain() {
-  const list = shownList(LIBRARY);
-  if (!list) return;
-  list.paint();
-  const turn = ++reads;
-  const rows = await readOffers();
-  if (!rows || turn !== reads || !list.node.isConnected) return;
-  learn(rows);
-  list.update(rows);
-}
-
-// "+ Add plugins" in the page header, or the Add a plugin card, opens the panel. An Apply's adds say Added once the page has
-// read the result (the tray empties after it), and an open panel reads again after every Apply
-// or Undo.
+// "+ Add plugins" in the page header, or the Add a plugin card, opens the panel. An Apply's adds
+// say Added once the page has read the result (the tray empties after it), and an open panel
+// reads the marketplaces again after every Apply or Undo.
 export function initLibraryAdd() {
   onLibraryAdd((node) => openLibraryAdd({ from: node }));
   onTray((t) => {
@@ -155,7 +142,7 @@ export function initLibraryAdd() {
     if (!applied.length) return;
     for (const body of applied) added.set(body.params.plugin || body.params.skill, body.targets.map((target) => target.client));
     applied = [];
-    readAgain().catch(reportError);
+    readAgain(LIBRARY).catch(reportError);
   });
-  onBusy(() => busy.change || readAgain().catch(reportError));
+  onBusy(() => busy.change || readAgain(LIBRARY).catch(reportError));
 }

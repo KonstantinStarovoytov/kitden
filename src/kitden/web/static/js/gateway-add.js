@@ -4,7 +4,7 @@
 // adds its change to the tray (tray.js); nothing is written before the tray's Apply. The panel
 // shows no path, address or command.
 import { addModes, installBody, onlineKind, openDiscovery } from "./discovery.js";
-import { matchRows, openAddPanel, shownList } from "./add-panel.js";
+import { matchRows, openAddPanel, readAgain } from "./add-panel.js";
 import { getJson } from "./api.js";
 import { closePanel } from "./panel.js";
 import { KIND, SERVER_ICONS } from "./gateway-details.js";
@@ -126,7 +126,6 @@ export function openLocalAdd(options = {}) {
 // rows of an Apply say Added now, and an open panel reads the marketplaces again, so each row says
 // what is held now. The panel stays open and focus stays where it is.
 let seen = null;
-let reads = 0;
 export async function pageRead(view) {
   if (view === seen) return;
   seen = view;
@@ -135,12 +134,5 @@ export async function pageRead(view) {
   for (const id of added) if (!held.has(addName(id))) added.delete(id);
   for (const id of applied) added.add(id);
   applied = [];
-  const list = shownList(GATEWAY);
-  if (!list) return;
-  list.paint();
-  const turn = ++reads;
-  const rows = await readServers();
-  if (!rows || turn !== reads || !list.node.isConnected) return;
-  learn(rows);
-  list.update(rows);
+  await readAgain(GATEWAY);
 }

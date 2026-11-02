@@ -50,6 +50,20 @@ export function shownList(config) {
   return open && open.config === config && open.list && open.list.node.isConnected ? open.list : null;
 }
 
+// The panel of `config`, while it shows its list, reads the list again and each row says what it
+// is now. An answer to an older read is dropped. The panel stays open and focus stays where it is.
+let reads = 0;
+export async function readAgain(config) {
+  const list = shownList(config);
+  if (!list) return;
+  list.paint();
+  const turn = ++reads;
+  const rows = await config.read();
+  if (!rows || turn !== reads || !list.node.isConnected) return;
+  config.learn(rows);
+  list.update(rows);
+}
+
 // Open the panel beside the map: its skeleton, then the rows read. `from` is the button that gets
 // focus back when it closes (the page's add button); it looks pressed until then. Focus goes to the
 // search. Opened again while it shows its list, it stays as it is (its search and its pill too)
