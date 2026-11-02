@@ -63,6 +63,7 @@ not just hidden.
   client loads, and where they come from.
 - **Ask your agent.** "Show my setup" works from any agent, through Kitden's own read-only
   MCP server.
+
 ## Safe to use
 
 - **Nothing is written until you press Apply.** Every change shows a preview first, with
