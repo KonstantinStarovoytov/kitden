@@ -113,9 +113,9 @@ export function accessForm(waits, onCheck) {
 // Browser sign-in (Part 3b): Sign in opens the server's own page in the browser, and the form
 // waits for it ("Waiting for browser…", with a Cancel). `onSigned(id)` then adds the sign-in to
 // the change and answers true (joined), false (refused) or null. A server Kitden cannot sign in
-// to gets its reason and the token field, which runs `onToken(values)`.
-// Returns { node, start, signed, refuse }.
-export function signInForm(waits, onSigned, onToken = async () => {}) {
+// to gets its reason and the token field, which runs `onToken(values)` (none when `onToken` is
+// null: the reason alone). Returns { node, start, signed, refuse }.
+export function signInForm(waits, onSigned, onToken = null) {
   const node = el("div", "form access-form sign-in-form");
   const row = el("div", "access-fields sign-in-row");
   const go = el("button", "btn primary", "Sign in");
@@ -151,14 +151,16 @@ export function signInForm(waits, onSigned, onToken = async () => {}) {
   };
   const run = async () => {
     why.hidden = true;
+    // Cancel shows at once: finding the server's sign-in page may take a while too.
+    cancel.hidden = false;
     const started = await postJson("/api/sign-in/start", { id: waits.sign_in });
     if (!started.ok) {
+      cancel.hidden = true;
       const reason = started.data?.detail || "Kitden could not open the sign-in page.";
       refuse(reason);
-      if (started.data?.cannot && !token.children.length) token.append(accessForm({ ...waits, kind: "token" }, onToken).node);
+      if (started.data?.cannot && onToken && !token.children.length) token.append(accessForm({ ...waits, kind: "token" }, onToken).node);
       return;
     }
-    cancel.hidden = false;
     const answer = await postJson("/api/sign-in/wait", { id: waits.sign_in });
     cancel.hidden = true;
     const ended = answer.data || {};

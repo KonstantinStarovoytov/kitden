@@ -170,3 +170,69 @@ async def test_the_sdks_error_text_never_reaches_the_log(capfd):
     out, err = capfd.readouterr()
     assert "SENTINEL" not in out + err
     assert "OAuth flow error" not in out + err
+
+
+async def test_two_starts_at_once_open_one_browser(fake):
+    signins, opened = SignIns(), Browser()
+    record = signins.get(signins.offer(fake.url, "neon"))
+    await asyncio.gather(
+        oauth().start(record, REDIRECT, opened), oauth().start(record, REDIRECT, opened)
+    )
+    assert len(opened.opened) == 1
+    oauth().finish(signins, await asyncio.to_thread(opened.back))
+    assert await oauth().wait(record) == {"state": "done"}
+
+
+async def test_offer_gives_a_new_id_once_a_sign_in_is_done(fake):
+    signins, opened = SignIns(), Browser()
+    first = signins.offer(fake.url, "neon")
+    record = signins.get(first)
+    await oauth().start(record, REDIRECT, opened)
+    oauth().finish(signins, await asyncio.to_thread(opened.back))
+    await oauth().wait(record)
+    assert signins.offer(fake.url, "neon") != first
+    assert signins.kept(fake.url) is record
+
+
+async def test_a_browser_that_does_not_open_fails_at_once(fake):
+    signins = SignIns()
+    record = signins.get(signins.offer(fake.url, "neon"))
+    with pytest.raises(ValueError) as refused:
+        await oauth().start(record, REDIRECT, lambda url: False)
+    assert str(refused.value) == "Kitden could not open the browser."
+
+
+async def test_cancel_before_the_browser_opens_ends_the_start(fake, monkeypatch):
+    signins = SignIns()
+    record = signins.get(signins.offer(fake.url, "neon"))
+    held = asyncio.Event()
+
+    def slow_browser(url):
+        return True
+
+    async def slow(*args, **kwargs):
+        await held.wait()
+
+    monkeypatch.setattr(oauth().httpx2.AsyncClient, "post", slow)
+    starting = asyncio.create_task(oauth().start(record, REDIRECT, slow_browser))
+    await asyncio.sleep(0.05)
+    oauth().cancel(record)
+    with pytest.raises(ValueError) as refused:
+        await starting
+    assert str(refused.value) == "Sign-in was cancelled."
+    assert await oauth().wait(record) == {"state": "cancelled", "detail": "Sign-in was cancelled."}
+
+
+async def test_a_sign_in_that_fails_before_the_browser_gives_the_token_field():
+    """Its metadata is not what the MCP spec asks (here the issuer names another server): a
+    token, not a dead end."""
+    fake = FakeOAuth()
+    fake.wrong_issuer = True
+    try:
+        signins, opened = SignIns(), Browser()
+        record = signins.get(signins.offer(fake.url, "neon"))
+        with pytest.raises(oauth().CannotSignIn):
+            await oauth().start(record, REDIRECT, opened)
+        assert opened.opened == []
+    finally:
+        fake.stop()

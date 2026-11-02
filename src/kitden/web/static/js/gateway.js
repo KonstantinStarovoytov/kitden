@@ -348,6 +348,9 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const unread = kitden.problem ? "Could not read its settings." : null;
     addGateway(kitden, { reaches: known ? linked : null, servers: kitden.servers || [], kindOf: (s) => s.kind, server, unread, ends: adds, away: out });
     leaveParts(blocks, links, kitden, rows, picked);
+    // The map ends the Kitden gateway's groups with a card that opens the add panel, before any
+    // other gateway: once there is a gateway to add to.
+    if (addCard && !kitden.problem) blocks.push({ ...ADD_CARD });
   }
   if (kitden) connectParts(links, kitden, waits);
   for (const other of usedFirst(view, view.gateways.filter((g) => g.kind !== "kitden"))) {
@@ -362,9 +365,6 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     };
     addGateway(other, { reaches: WRITABLE.filter((c) => (per[c] || []).length), servers: (answer && answer.servers) || [], kindOf, server, unread });
   }
-  // The map ends the gateway's groups with a card that opens the add panel, once there is a
-  // gateway to add to.
-  if (addCard && kitden && !first && !kitden.problem) blocks.push({ ...ADD_CARD });
   blocks.push(...tools);
   const outside = outsideParts(view, kitden, { picked, first, moved, out, gone: directRemovals(rows) });
   return { columns: GATEWAY_COLUMNS, blocks: [...blocks, ...outside.blocks], links: [...links, ...outside.links] };
@@ -842,6 +842,8 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   if (onMap.project !== state.project) {
     onMap.project = state.project;
     projectChanged = true;
+    // A pick is of servers in one project's map: another project starts with none.
+    clearPick();
   }
   if (!onMap.view) {
     onMap.view = newMap();
@@ -1054,7 +1056,11 @@ function newMap() {
       const toggles = withModifier;
       withModifier = false;
       if (toggles) togglePickHere(id);
-      else pressBlock(onMap.model, id);
+      else {
+        // A plain click on another block lets go of the pick, as it opens that block's Details.
+        if (clearPick()) pickChanged();
+        pressBlock(onMap.model, id);
+      }
     },
     // An empty click clears the pick, but not one with Shift or Cmd held (a pick being built).
     onEmpty: () => {
@@ -1081,10 +1087,11 @@ function newMap() {
   });
   view.box.addEventListener("pointerdown", (event) => {
     withModifier = Boolean(event.shiftKey || event.metaKey);
-    pressGrip(event, letGoIfSelected);
-    // A press on empty map space may draw a band; once it does, the selection lets go.
+    pressGrip(event, letGoIfSelected, pickChanged);
+    // A press on empty map space may draw a band, but not while a change is written or the page
+    // waits; once it does, the selection lets go.
     const onSomething = event.target && event.target.closest && event.target.closest("button, .hit");
-    if (!onSomething && !withModifier) {
+    if (!onSomething && !withModifier && !busy.change && !pageWaits()) {
       pressBand(event, { map: onMap, onPick: () => {
         letGoIfSelected();
         pickChanged();

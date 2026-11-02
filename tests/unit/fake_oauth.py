@@ -36,6 +36,8 @@ class FakeOAuth(ThreadingHTTPServer):
         self.expires_in = expires_in
         self.no_refresh_token = no_refresh_token
         self.token_error_body = token_error_body
+        self.no_metadata = False  # every metadata path answers 404
+        self.wrong_issuer = False  # its server metadata names another issuer
         self.issued: set[str] = set()  # live access tokens
         self.refresh_tokens: set[str] = set()
         self.refreshes = 0
@@ -46,6 +48,8 @@ class FakeOAuth(ThreadingHTTPServer):
             def do_GET(self):
                 path = urlsplit(self.path).path
                 base = fake.base
+                if fake.no_metadata and path.startswith("/.well-known/"):
+                    return self.json(404, None)
                 if path == "/.well-known/oauth-protected-resource" or path.startswith(
                     "/.well-known/oauth-protected-resource/"
                 ):
@@ -54,7 +58,7 @@ class FakeOAuth(ThreadingHTTPServer):
                     )
                 if path == "/.well-known/oauth-authorization-server":
                     meta = {
-                        "issuer": f"{base}/",
+                        "issuer": "https://elsewhere.example/" if fake.wrong_issuer else f"{base}/",
                         "authorization_endpoint": f"{base}/authorize",
                         "token_endpoint": f"{base}/token",
                         "response_types_supported": ["code"],

@@ -7,7 +7,6 @@ memory here until Apply writes them to the Keychain as one item, `<server>/sign-
 This module never imports the MCP SDK; `kitden.local_gateway.oauth` runs the flow.
 """
 
-import asyncio
 import secrets
 from dataclasses import dataclass, field
 from typing import Any
@@ -18,6 +17,7 @@ TIMEOUT = 300  # seconds a flow waits for the person in the browser
 CANCELLED = "Sign-in was cancelled."
 NOT_FINISHED = "{name} did not finish sign-in."
 TIMED_OUT = "Sign-in did not finish in 5 minutes."
+NO_BROWSER = "Kitden could not open the browser."
 GONE = "Sign in again: that sign-in is no longer here."
 # A held server whose stored sign-in no longer works and could not be refreshed.
 SIGNED_OUT = "{server} needs sign-in again."
@@ -38,8 +38,8 @@ class SignIn:
     secret: str | None = field(default=None, repr=False)
     flow_state: str | None = field(default=None, repr=False)  # the `state` of the authorize URL
     task: Any = field(default=None, repr=False)
+    starting: Any = field(default=None, repr=False)  # the start running now, which others join
     code: Any = field(default=None, repr=False)  # a future the callback fills
-    ended: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
 
 
 class SignIns:
@@ -49,9 +49,10 @@ class SignIns:
         self._all: dict[str, SignIn] = {}
 
     def offer(self, url: str, name: str) -> str:
-        """The id for this address: the one not used or failed yet, else a new one."""
+        """The id for this address: the one not finished yet, else a new one (a finished one is
+        `kept`, and a new Sign in must not throw its tokens away)."""
         for record in self._all.values():
-            if record.url == url and record.state != "failed":
+            if record.url == url and record.state in ("new", "waiting"):
                 return record.id
         record = SignIn(id=secrets.token_urlsafe(12), url=url, name=name)
         self._all[record.id] = record
@@ -80,6 +81,3 @@ class SignIns:
     def kept(self, url: str) -> SignIn | None:
         """A finished sign-in for this address: a row that comes back uses it again."""
         return next((r for r in self._all.values() if r.url == url and r.state == "done"), None)
-
-    def forget(self, id: str) -> None:
-        self._all.pop(id, None)

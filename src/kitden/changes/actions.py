@@ -616,16 +616,11 @@ def needs_sign_in(url: str, headers: dict) -> bool:
 
 def _has_sign_in_metadata(url: str) -> bool:
     """Whether the server's origin serves sign-in metadata: one GET with no header of the
-    entry, within 5 seconds."""
+    entry, within 5 seconds, that answers a JSON document naming its authorization servers
+    (RFC 9728), so a web page every address answers does not count."""
     parts = urlsplit(url)
-    request = urllib.request.Request(  # noqa: S310 - the scheme is http or https
-        f"{parts.scheme}://{parts.netloc}{SIGN_IN_METADATA}", headers={"User-Agent": "kitden"}
-    )
-    try:
-        with _opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
-            return answer.status == 200
-    except (OSError, ValueError, http.client.HTTPException):
-        return False
+    found = _get_json(f"{parts.scheme}://{parts.netloc}{SIGN_IN_METADATA}")
+    return bool(found) and isinstance(found.get("authorization_servers"), list)
 
 
 def check_access(
@@ -1236,7 +1231,9 @@ def gateway_add_steps(
     if signed_in is not None and "url" not in server:
         raise ValueError("A sign-in goes with one remote server.")
     if "url" in server:
-        given = bool(server.get("headers"))
+        # A value typed for it was refused: for a marketplace server only a token typed here
+        # (its entry may send a header of its own); a catalog row's headers are all typed.
+        given = bool(headers) if discovered is None else bool(server.get("headers"))
         check_access(name, server, sign_in, fields or [TOKEN_FIELD], given, signed_in)
     if signed_in is not None:
         step = signed_in_server(home, name, server, None, signed_in, keychain_run)

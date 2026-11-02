@@ -554,7 +554,8 @@ def refusal_words(error: ValueError) -> str:
 
 
 # The page the browser shows back from a server's sign-in page.
-SIGNED_IN_PAGE = "Signed in. You can close this tab."
+# It says only that the browser is back: the code is swapped for tokens after this.
+SIGNED_IN_PAGE = "Back in Kitden. You can close this tab."
 NOT_SIGNED_IN_PAGE = "Sign-in did not finish. You can close this tab and try again in Kitden."
 
 # The API calls that answer before the first scan is done.

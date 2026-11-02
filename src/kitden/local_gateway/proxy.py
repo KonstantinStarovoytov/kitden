@@ -182,6 +182,7 @@ class Upstreams:
         self.settings = settings
         self.folder = folder
         self._clients: dict[str, Client] = {}
+        self._auths: dict[str, oauth.StoredSignIn] = {}  # the stored sign-in of each running one
         self._locks: dict[str, anyio.Lock] = {}
         self._group: TaskGroup | None = None
 
@@ -251,10 +252,17 @@ class Upstreams:
         except MCPError as refused:
             if refused.code not in (HTTP_CODES if self._remote(server) else SDK_CODES):
                 return _answer(refused.message)  # the server's own answer
-            return _error(f"The call to {server} failed.")
+            return _error(self._failed(server))
         except Exception:
             # The text of an error may hold the server's address; say it plainly instead.
-            return _error(f"The call to {server} failed.")
+            return _error(self._failed(server))
+
+    def _failed(self, server: str) -> str:
+        """Why a call failed: a sign-in that ended while the server ran, or plainly."""
+        auth = self._auths.get(server)
+        if auth is not None and auth.signed_out:
+            return SIGNED_OUT.format(server=server)
+        return f"The call to {server} failed."
 
     def _start_time(self, server: str) -> float:
         """Seconds for the server to start and list its tools: the gateway's own, or the longer
@@ -306,6 +314,8 @@ class Upstreams:
                     # asks `server/discover`; a server that leaves it unanswered costs 10 s.
                     client = await stack.enter_async_context(Client(target, mode="legacy"))
                     self._clients[server] = client
+                    if auth is not None:
+                        self._auths[server] = auth
                     task_status.started(client)
                     ready = True
                     await anyio.sleep_forever()
@@ -321,6 +331,7 @@ class Upstreams:
                 _say(f"{server} stopped.")
             finally:
                 self._clients.pop(server, None)
+                self._auths.pop(server, None)
             return
 
     @staticmethod

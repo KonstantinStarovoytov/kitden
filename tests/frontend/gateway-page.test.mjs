@@ -1625,6 +1625,8 @@ test('under reduced motion the count lands at once', async (t) => {
 // Picking several servers outside the gateway (gateway-pick.js). The document hears the band's
 // pointer here, as it does in a browser.
 const { clearPick, pick, PICK_HINT } = await import('../../src/kitden/web/static/js/gateway-pick.js');
+// The band and the drags listen for the window losing focus; a quiet stand-in unless a test hears it.
+globalThis.window ||= { addEventListener() {}, removeEventListener() {} };
 function hearDocument(t) {
   const heard = {};
   const was = [document.addEventListener, document.removeEventListener];
@@ -1716,6 +1718,91 @@ test('Escape clears the pick wherever focus is', async (t) => {
   for (const fn of heard.keydown || []) fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
   settle();
   assert.equal(pick.ids.size, 0);
+});
+
+// Fix round of the deferred minors (Parts 1 and 2).
+const { setBusy } = await import('../../src/kitden/web/static/js/store.js');
+// A stand-in window for the drags and the band (map-drag.js and gateway-pick.js listen for blur).
+function fakeWindow(t) {
+  const heard = {};
+  const was = globalThis.window;
+  globalThis.window = {
+    addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); },
+    removeEventListener: (type, fn) => { heard[type] = (heard[type] || []).filter((f) => f !== fn); },
+  };
+  t.after(() => { globalThis.window = was; });
+  return heard;
+}
+const pickOne = (box, node) => { fireOn(box, 'pointerdown', { target: node, shiftKey: true }); press(box, node.dataset.focus); settle(); };
+
+test('another project clears the pick, also when the same servers are outside there', async (t) => {
+  hearDocument(t);
+  const box = freshMap();
+  pickOne(box, outsideNodes(box)[0]);
+  assert.equal(pick.ids.size, 1);
+  t.after(() => { state.project = ''; data.scope.gateway = ''; freshMap(); });
+  pickProject('atlas', data.gateway);
+  settle();
+  assert.equal(pick.ids.size, 0);
+});
+
+test('a plain click on another block lets go of the pick as it opens its Details', async (t) => {
+  hearDocument(t);
+  const box = freshMap();
+  const [a, b] = outsideNodes(box);
+  pickOne(box, a);
+  fireOn(box, 'pointerdown', { target: b });
+  press(box, b.dataset.focus);
+  await done();
+  settle();
+  assert.equal(pick.ids.size, 0);
+  assert.equal(outsideNodes(box).filter((n) => n.classList.contains('selected') && n !== b).length, 0);
+  closePanel({ instant: true });
+});
+
+test('a grip press that clears the pick draws it cleared at once', async (t) => {
+  const hearDocumentNow = () => listened;
+  const listened = hearDocument(t);
+  fakeWindow(t);
+  const box = freshMap();
+  const [a, b] = outsideNodes(box);
+  pickOne(box, a);
+  assert.ok(a.classList.contains('selected'));
+  // A press on b's grip: the fake nodes find no block, and have no place, by themselves.
+  b.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 56 });
+  const heard = hearDocumentNow();
+  fireOn(box, 'pointerdown', { target: { closest: () => b }, clientX: 10, clientY: 10, pointerId: 1 });
+  assert.equal(pick.ids.size, 0);
+  assert.equal(a.classList.contains('selected'), false);
+  for (const fn of [...(heard.pointerup || [])]) fn({ type: 'pointerup', clientX: 10, clientY: 10 });
+  settle();
+});
+
+test('no band while a change is written, from a scrollbar, and none left after the window loses focus', async (t) => {
+  const heard = hearDocument(t);
+  fakeWindow(t);
+  const box = freshMap();
+  const area = walk(box).find((n) => n.className === 'map-area');
+  area.getBoundingClientRect = () => ({ left: 0, top: 0 });
+  const [first, second] = outsideNodes(box).map((n) => n.style.translate.split(' ').map(parseFloat));
+  const drawBand = (extra = {}) => {
+    fireOn(box, 'pointerdown', { clientX: first[0] - 30, clientY: first[1] - 4, ...extra });
+    for (const fn of heard.pointermove || []) fn({ clientX: first[0] + 20, clientY: second[1] + 10 });
+    settle();
+  };
+  setBusy(true);
+  drawBand();
+  setBusy(false);
+  assert.equal(pick.ids.size, 0);
+  // A press on the map's own scrollbar (past its client width) moves the map, not a band.
+  box.clientWidth = 400;
+  drawBand({ offsetX: 405, offsetY: 10 });
+  assert.equal(pick.ids.size, 0);
+  const windowHeard = fakeWindow(t);
+  drawBand();
+  assert.ok(walk(area).some((n) => n.className === 'map-band'));
+  for (const fn of windowHeard.blur || []) fn({});
+  assert.equal((heard.pointermove || []).length, 0);
 });
 
 // A server that waits for access is drawn amber where its preview goes; a press opens the panel

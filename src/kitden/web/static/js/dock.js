@@ -585,7 +585,7 @@ async function land() {
 
 // What a screen reader was last told of the tray: its rows with words (key -> title), its phase,
 // and the refusal.
-let told = { rows: new Map(), phase: "idle", refused: null };
+let told = { rows: new Map(), phase: "idle", refused: null, waits: new Set() };
 
 // How the tray changed, in words for a screen reader, or "": each row that joined ("…: in the
 // preview.", and the count from two on), the rows taken out, and why an add was refused when the
@@ -600,10 +600,14 @@ function trayNews(t, had) {
   if (gone.length && told.phase !== "applied") news.push(gone.length > 1 ? `${gone.length} changes taken out of the preview.` : `${gone[0]}: taken out of the preview.`);
   for (const row of joined) news.push(`${row.title}: in the preview.`);
   if (joined.length && rows.length > 1) news.push(`${rows.length}${IN_PREVIEW}.`);
+  // A server that joins as one that waits for access (it has no part, so it is not counted).
+  for (const row of t.rows.filter((each) => each.waits && !told.waits.has(each.key))) {
+    news.push(`${row.waits.server} waits for ${row.waits.kind === "sign-in" ? "sign-in" : "a token"}. It stays in preview.`);
+  }
   if (t.refused && t.refused !== told.refused && !had) {
     news.push(`${t.phase === "failed" ? "Could not prepare the preview" : "Could not prepare this change"}. ${baseNames(t.refused.reason)}`);
   }
-  told = { rows: new Map(rows.map((row) => [row.key, row.title])), phase: t.phase, refused: t.refused };
+  told = { rows: new Map(rows.map((row) => [row.key, row.title])), phase: t.phase, refused: t.refused, waits: new Set(t.rows.filter((row) => row.waits).map((row) => row.key)) };
   return news.join(" ");
 }
 

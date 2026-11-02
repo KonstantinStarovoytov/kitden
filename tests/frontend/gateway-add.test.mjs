@@ -928,3 +928,56 @@ test('the catalog details of a server that signs in offer Sign in, which adds th
     assert.equal(asked.includes('/api/sign-in/start'), true);
   } finally { globalThis.fetch = original; await cancelTray(); }
 });
+
+test('Cancel shows at once, also while Kitden prepares the sign-in page', async () => {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const server = signInServer({ '/api/sign-in/start': [() => held] });
+  try {
+    const form = signInForm(SIGN_IN_WAITS, async () => true);
+    const running = form.start();
+    await wait(); await wait();
+    assert.deepEqual(buttonWords(form), ['Waiting for browser…', 'Cancel']);
+    await press(buttonsOf(form).find((n) => n.textContent === 'Cancel'));
+    assert.deepEqual(server.asked.at(-1), ['/api/sign-in/cancel', { id: 's1' }]);
+    release({ status: 422, json: { detail: 'Sign-in was cancelled.' } });
+    await running;
+    assert.deepEqual(buttonWords(form), ['Try again']);
+  } finally { server.restore(); }
+});
+
+test('signing a held server in again has no token field to fall back to', async () => {
+  const later = 'neon does not let Kitden sign in yet. It may take an API key; see its docs.';
+  const server = signInServer({ '/api/sign-in/start': [{ status: 422, json: { detail: later, cannot: true } }] });
+  try {
+    const form = signInForm(SIGN_IN_WAITS, async () => true, null);
+    await form.start();
+    assert.equal(text(form.node).includes(later), true);
+    assert.equal(inside(form.node).some((n) => n.tagName === 'INPUT'), false);
+  } finally { server.restore(); }
+});
+
+test('catalog Sign in, when the preview asks for a token instead, opens the token panel', async () => {
+  const SIGNER = { ...NEON, access_kind: 'sign-in', setup: [] };
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : {};
+    if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [{ id: 'mcp-registry', name: 'MCP Registry', kind: 'mcp' }] }) };
+    if (url === '/api/discovery/search') return { ok: true, json: async () => ({ clients: [], results: [{ ...SIGNER }] }) };
+    if (url === '/api/discovery/details') return { ok: true, json: async () => ({ ...SIGNER }) };
+    if (url === '/api/batch/preview') return { ok: false, status: 422, json: async () => ({ detail: 'neon needs a token.', row: body.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [TOKEN], reason: 'neon needs a token.', refused: false } }) };
+    return original(url, init);
+  };
+  try {
+    await cancelTray();
+    const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+    await openDiscovery('mcp', {});
+    for (let i = 0; i < 8; i++) await wait();
+    await press(find((n) => n.classList.contains('res') && text(n).includes('neon'))[0]);
+    for (let i = 0; i < 8; i++) await wait();
+    await press(find((n) => n.tagName === 'BUTTON' && n.textContent === 'Sign in')[0]);
+    for (let i = 0; i < 8; i++) await wait();
+    assert.ok(find((n) => n.tagName === 'INPUT' && n.type === 'password')[0]);
+    assert.ok(find((n) => n.tagName === 'BUTTON' && n.textContent === 'Add token')[0]);
+  } finally { globalThis.fetch = original; await cancelTray(); }
+});

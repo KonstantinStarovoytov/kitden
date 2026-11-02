@@ -413,3 +413,14 @@ def test_a_token_typed_for_a_marketplace_server_is_checked_and_kept_out_of_the_a
         bad = page.post("/api/changes/preview", json=body, headers=POST)
         assert bad.status_code == 422
         assert bad.json() == {"detail": "test-status did not accept this token."}
+
+
+def test_a_server_with_its_own_header_that_needs_a_token_is_not_called_refused(home, monkeypatch):
+    """Its entry sends a header of its own, but no token was typed: it needs one, nothing more."""
+    monkeypatch.setattr(kitden.demo, "no_sign_in", lambda url, headers: "token")
+    _offer(
+        home,
+        "moded",
+        {"type": "http", "url": "https://moded.example/mcp", "headers": {"X-Mode": "fast"}},
+    )
+    _refused(home, f"extra@{MARKET}/moded", "moded needs a token.")

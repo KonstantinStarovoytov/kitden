@@ -934,3 +934,15 @@ async def test_expiry_restored_on_load(fake_keychain, fake_sign_in):
     await auth._initialize()
     assert auth.context.token_expiry_time == when
     assert auth.context.current_tokens.access_token in fake_sign_in.issued
+
+
+async def test_a_sign_in_that_ends_mid_session_says_so_on_the_call(
+    home, fake_keychain, fake_sign_in
+):
+    stored_sign_in(fake_keychain, fake_sign_in, expires_at=time.time() + 3600, refresh=False)
+    async with Upstreams(home, signer_settings(fake_sign_in)) as upstreams:
+        await upstreams.list_tools("signer")
+        fake_sign_in.issued.clear()  # the server ends the token while the gateway runs
+        answer = await upstreams.call("signer", "echo", {})
+    assert answer.is_error
+    assert text(answer) == "signer needs sign-in again."

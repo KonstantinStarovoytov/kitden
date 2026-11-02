@@ -1390,6 +1390,17 @@ test('a row that waits for sign-in offers Sign in, and it opens the sign-in form
   assert.ok(all(pages['#drawer']).some((n) => n.tag === 'button' && n.textContent === 'Sign in'));
 });
 
+test('a screen reader hears a server join the tray as one that waits for access', async () => {
+  await fresh();
+  const reason = 'neon needs a token.';
+  queue(PREVIEW, previewed('c1'), (sent) => ({ status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [], reason, refused: false } } }), previewed('c2'));
+  await addToTray(add('github'));
+  await settle();
+  await addToTray(add('neon'));
+  await settle();
+  assert.deepEqual(heard().slice(1), ['neon waits for a token. It stays in preview.']);
+});
+
 test('a refused line in the dock is amber, not the accent', () => {
   const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
   assert.match(css, /\.dock \.bar small\.bad \{ color: var\(--lamp-warn\); \}/);

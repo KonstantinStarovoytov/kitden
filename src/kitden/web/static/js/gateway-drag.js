@@ -51,8 +51,10 @@ export function movingOn() {
 }
 
 // The row of a dropped move is still being asked: in the tray without its part yet, while the tray
-// asks. After a refused preview it may have no part while nothing is asked.
-const asked = (key) => tray.phase === "asking" && tray.rows.some((row) => row.key === key && !row.part);
+// asks. After a refused preview it may have no part while nothing is asked; a row that waits for
+// access has none either, but it is answered (it lands as its waiting preview).
+export const rowAsked = (t, key) => t.phase === "asking" && t.rows.some((row) => row.key === key && !row.part && !row.waits);
+const asked = (key) => rowAsked(tray, key);
 // A dropped server or row (`onMap.moving`, `onMap.adding`) whose row the tray still asks.
 const stillAsked = (dropped) => Boolean(dropped && asked(dropped.key));
 
@@ -115,7 +117,7 @@ export const DRAGS = {
 // server's dropped move is asked, while a dropped row of the Add panel is asked, while another
 // project is read, or on anything else, does nothing here. `onStart()` runs when the drag starts,
 // before the map holds the block: the page lets go of its selection there.
-export function pressGrip(event, onStart = () => {}) {
+export function pressGrip(event, onStart = () => {}, onPickGone = () => {}) {
   if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || !onMap.model) return;
   const node = event.target.closest("button.block, button.block-count");
   const block = node && onMap.model.blocks.find((b) => [`block:${b.id}`, `count:${b.id}`].includes(node.dataset.focus));
@@ -125,7 +127,8 @@ export function pressGrip(event, onStart = () => {}) {
   // A press on a picked server drags the whole pick; a grip press on any other clears the pick.
   if (block.grip && pick.ids.has(block.id) && pick.ids.size > 1) startDrag(event, block, "group", onStart);
   else if (block.grip) {
-    clearPick();
+    // The pick goes, and the map draws it gone before the single drag starts.
+    if (clearPick()) onPickGone();
     startDrag(event, block, "in", onStart);
   }
   else if (leavesGateway(block)) startDrag(event, block, "out", onStart);

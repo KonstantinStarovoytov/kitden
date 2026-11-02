@@ -69,7 +69,7 @@ def sign_in(page, opened, id):
     started = page.post("/api/sign-in/start", json={"id": id}, headers=POST)
     assert started.status_code == 200, started.text
     back = come_back(page, opened)
-    assert back.status_code == 200 and "Signed in." in back.text
+    assert back.status_code == 200 and "Back in Kitden." in back.text
     waited = page.post("/api/sign-in/wait", json={"id": id}, headers=POST)
     assert waited.json() == {"state": "done"}
 
@@ -377,3 +377,15 @@ def test_a_kept_sign_in_that_ended_asks_again(home, fake):
     needs = again.json()["needs"]
     assert needs["reason"] == "signer needs sign-in."
     assert needs["sign_in"] != id
+
+
+def test_the_callback_page_does_not_claim_more_than_it_knows(home, fake):
+    """The browser comes back before Kitden swaps the code for tokens: it says only that."""
+    add_claude(home, "signer", {"type": "http", "url": fake.url})
+    opened = Opened()
+    with page_for(home, opened) as page:
+        id = batch_move(page, home, "signer").json()["needs"]["sign_in"]
+        page.post("/api/sign-in/start", json={"id": id}, headers=POST)
+        back = come_back(page, opened)
+    assert "Back in Kitden. You can close this tab." in back.text
+    assert "Signed in" not in back.text

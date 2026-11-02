@@ -1318,3 +1318,31 @@ def test_a_stale_apply_forgets_the_values(home):
     engine.apply(change.id)
     assert str(change.state) == "stale"
     assert [i.value for s in change.steps for i in s.keychain] == [""]
+
+
+def test_a_web_page_at_the_metadata_path_is_not_sign_in():
+    """A server that answers every address with its web page (200, HTML) does not sign in."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.send_response(401)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def do_GET(self):
+            page = b"<!doctype html><title>Home</title>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        assert access_needed(f"http://127.0.0.1:{server.server_port}/mcp", {}) == "token"
+    finally:
+        stop(server)

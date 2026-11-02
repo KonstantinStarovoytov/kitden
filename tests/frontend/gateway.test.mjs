@@ -2834,6 +2834,17 @@ test('no "Add a server" card before the gateway is set up or while it cannot be 
   assert.equal(gatewayTree(broken, { ...OPTS, addCard: true }).blocks.some((b) => b.kind === 'addslot'), false);
 });
 
+test('the Add a server card ends the Kitden gateway, before another gateway and its servers', () => {
+  const meta = { id: 'gw-2', kind: 'metamcp', url: 'http://127.0.0.1:12008/metamcp/local/mcp', movable: true, managed: true };
+  const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, meta], used: ['kitden', 'gw-2'],
+    connections: { ...MEDIUM_VIEW.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
+  const held = new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP', url: 'http://h/x' }] }]]);
+  const ids = gatewayTree(view, { ...OPTS, held, addCard: true }).blocks.map((b) => b.id);
+  assert.ok(ids.indexOf('addslot:servers') > ids.indexOf('held:kitden:files'));
+  assert.ok(ids.indexOf('addslot:servers') < ids.indexOf('gateway:gw-2'));
+  assert.ok(ids.indexOf('addslot:servers') < ids.indexOf('held:gw-2:x'));
+});
+
 test('the search never matches the "Add a server" card', () => {
   const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, addCard: true });
   assert.equal(findIn(tree, 'add').matches.has('addslot:servers'), false);
@@ -3106,4 +3117,13 @@ test('the map draws rows that wait in any phase but applied', () => {
   assert.deepEqual(rowsOnMap({ phase: 'waiting', rows }), rows);
   assert.deepEqual(rowsOnMap({ phase: 'ready', rows }), rows);
   assert.deepEqual(rowsOnMap({ phase: 'applied', rows }), []);
+});
+
+test('a row that waits for access is not one the tray still asks, so its block lands', async () => {
+  const { rowAsked } = await import('../../src/kitden/web/static/js/gateway-drag.js');
+  const t = (rows, phase = 'asking') => ({ phase, rows });
+  assert.equal(rowAsked(t([{ key: 'k', part: null, waits: null }]), 'k'), true);
+  assert.equal(rowAsked(t([{ key: 'k', part: null, waits: { server: 'neon' } }]), 'k'), false);
+  assert.equal(rowAsked(t([{ key: 'k', part: { id: 'p' }, waits: null }]), 'k'), false);
+  assert.equal(rowAsked(t([{ key: 'k', part: null, waits: null }], 'ready'), 'k'), false);
 });

@@ -324,7 +324,8 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
         const request = requestOf(null);
         await review(request);
         const found = tray.rows.find((each) => each.key === keyFor(request));
-        if (found && found.waits && found.waits.sign_in) openAccess(found, { start: true });
+        // It may ask for a token after all (the server changed): its panel then asks for that.
+        if (found && found.waits) openAccess(found, { start: Boolean(found.waits.sign_in) });
         else if (found) options.added?.(request);
       });
       body.append(go);

@@ -56,7 +56,7 @@ export function clearPick() {
 // page's map ({ view, model, layout }); `onPick()` runs after every change of the pick. A let go or
 // Escape fades the band out; the click that ends it clears nothing.
 export function pressBand(event, { map, onPick }) {
-  if (event.button !== 0) return;
+  if (event.button !== 0 || onScrollbar(event, map.view.box)) return;
   const from = { x: event.clientX, y: event.clientY };
   const before = new Set(pick.ids);
   let band = null;
@@ -80,11 +80,14 @@ export function pressBand(event, { map, onPick }) {
     pick.ids = new Set([...before, ...bandHits(map.model, map.layout, start, end)]);
     onPick();
   };
+  // The window losing focus (another app, a dialog) ends the band as a let go would.
+  const blur = () => done(null);
   const stop = () => {
     document.removeEventListener("pointermove", move);
     document.removeEventListener("pointerup", done);
     document.removeEventListener("pointercancel", done);
     document.removeEventListener("keydown", escape, true);
+    window.removeEventListener("blur", blur);
   };
   const done = (e) => {
     stop();
@@ -103,4 +106,12 @@ export function pressBand(event, { map, onPick }) {
   document.addEventListener("pointerup", done);
   document.addEventListener("pointercancel", done);
   document.addEventListener("keydown", escape, true);
+  window.addEventListener("blur", blur);
+}
+
+// A press on the map box's own scrollbar, past its content (clientWidth and clientHeight leave the
+// scrollbars out): it scrolls the map, and draws no band.
+function onScrollbar(event, box) {
+  if (!box || event.target !== box || typeof event.offsetX !== "number") return false;
+  return event.offsetX >= box.clientWidth || event.offsetY >= box.clientHeight;
 }

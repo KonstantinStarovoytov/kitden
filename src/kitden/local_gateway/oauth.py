@@ -22,7 +22,12 @@ from urllib.parse import parse_qs, urlsplit
 
 import anyio.to_thread
 import httpx2
-from mcp.client.auth import AuthorizationCodeResult, OAuthClientProvider, OAuthRegistrationError
+from mcp.client.auth import (
+    AuthorizationCodeResult,
+    OAuthClientProvider,
+    OAuthFlowError,
+    OAuthRegistrationError,
+)
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
 from mcp.shared.auth_utils import calculate_token_expiry
 
@@ -45,6 +50,10 @@ class CannotSignIn(Exception):
 
 class _Denied(Exception):
     """The browser came back without a code."""
+
+
+class _NoBrowser(Exception):
+    """The browser could not be opened."""
 
 
 class MemoryStorage:
@@ -107,14 +116,21 @@ def initialize_body() -> dict:
 
 async def start(record: SignIn, redirect_uri: str, open_browser) -> None:
     """Start the flow; return once the browser shows the sign-in page. Raises CannotSignIn, or
-    ValueError with the reason when it fails before the browser."""
+    ValueError with the reason when it fails before the browser. A second start while one runs
+    joins it, so one press opens one browser tab."""
+    if record.starting is not None and not record.starting.done():
+        return await asyncio.shield(record.starting)
+    record.starting = asyncio.ensure_future(_start(record, redirect_uri, open_browser))
+    return await asyncio.shield(record.starting)
+
+
+async def _start(record: SignIn, redirect_uri: str, open_browser) -> None:
     if record.task is not None and not record.task.done():
         record.cancelled = True
         record.task.cancel()
         await asyncio.wait({record.task})
     record.state, record.reason, record.cancelled = "new", None, False
     record.flow_state = None
-    record.ended = asyncio.Event()
     record.code = asyncio.get_running_loop().create_future()
     opened = asyncio.Event()
     record.task = asyncio.create_task(_run(record, redirect_uri, open_browser, opened))
@@ -135,8 +151,9 @@ async def _run(record: SignIn, redirect_uri: str, open_browser, opened: asyncio.
 
     async def redirect(url: str) -> None:
         record.flow_state = parse_qs(urlsplit(url).query).get("state", [""])[0]
+        if await asyncio.to_thread(open_browser, url) is False:
+            raise _NoBrowser()
         record.state = "waiting"
-        await asyncio.to_thread(open_browser, url)
         opened.set()
 
     async def callback() -> AuthorizationCodeResult:
@@ -169,17 +186,19 @@ async def _run(record: SignIn, redirect_uri: str, open_browser, opened: asyncio.
         fail = sign_in.TIMED_OUT if opened.is_set() else fail
     except asyncio.CancelledError:
         fail = sign_in.CANCELLED if record.cancelled else fail
-    except OAuthRegistrationError:
+    except _NoBrowser:
+        fail = sign_in.NO_BROWSER
+    except (OAuthRegistrationError, OAuthFlowError):
+        # Before the browser: Kitden cannot register, or the server's metadata is not what the
+        # spec asks. A token then, not a dead end. After it: the sign-in did not finish.
         from kitden.changes.actions import SIGN_IN_LATER
 
         if not opened.is_set():
             record.state, record.reason = "failed", SIGN_IN_LATER.format(name=record.name)
-            record.ended.set()
             return CannotSignIn(record.reason)
     except Exception:  # noqa: BLE001, S110 - its text may hold a token; the reason says it
         pass
     record.state, record.reason = "failed", fail
-    record.ended.set()
     return None
 
 

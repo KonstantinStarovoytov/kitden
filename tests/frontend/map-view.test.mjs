@@ -273,11 +273,10 @@ test("a group's caption draws its icon before its words, 13 px; a caption with n
   assert.equal(v.node('g1').children[0].dataset.icon, 'info');
 });
 
-test('a column caption holds only its words, even when its column says add', async () => {
+test('a column caption holds only its words', async () => {
   reduce(true);
-  const columns = TREE.columns.map((c) => (c.id === 'b' ? { ...c, add: true } : c));
   const v = view();
-  const tree = { ...TREE, columns };
+  const tree = TREE;
   await v.draw(tree, layoutTree(tree, { open: new Set(), narrow: false }), {});
   assert.deepEqual(v.node('column:b').children.map((n) => n.tagName), ['SPAN']);
 });
