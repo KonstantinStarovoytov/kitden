@@ -35,9 +35,8 @@ def find_command(name: str, home: Path) -> str | None:
 class CommandRunner:
     """Runs commands with HOME set to the home folder the page shows."""
 
-    def __init__(self, home: Path, timeout: float = TIMEOUT_SECONDS) -> None:
+    def __init__(self, home: Path) -> None:
         self.home = Path(home)
-        self.timeout = timeout
 
     def __call__(self, command: list[str], cwd: str | None) -> CommandResult:
         binary = find_command(command[0], self.home)
@@ -51,7 +50,7 @@ class CommandRunner:
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=self.timeout,
+                timeout=TIMEOUT_SECONDS,
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired) as error:
