@@ -127,7 +127,7 @@ export function renderGateway(main, { again = false } = {}) {
   const mode = viewMode(state, serverCount(view));
   gatewayShows.mode = mode;
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
-  head.append(headActions(addHeadButton("+ Add servers", "add:servers", pressAdd), seg));
+  head.append(headActions(addHeadButton("+ Add servers", "add:servers", (node) => openAdd({ from: node })), seg));
   const model = treeFor(view, mode);
   setHint(mode === "map" ? mapHint() : "");
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
@@ -873,11 +873,15 @@ function bringPages(model, { fresh = false, projectChanged = false } = {}) {
 }
 
 // Let go of a selection the map has but does not show now, before the draw that follows (so it
-// draws nothing again itself): its Details close, as letGoOnMap's do.
+// draws nothing again itself).
 function letGoHidden(model) {
   const { selected } = onMap;
   const known = selected && (model.blocks.some((b) => b.id === selected) || model.links.some((l) => linkKey(l) === selected));
-  if (!known || shownOnMap(model, selected)) return;
+  if (known && !shownOnMap(model, selected)) dropSelection();
+}
+
+// The map selects nothing, and Details close (letGoCloses) or the address forgets the selection.
+function dropSelection() {
   onMap.selected = null;
   if (isPanelOpen() && letGoCloses(panelState.current)) closePanel({ focus: false });
   else setState({ selected: null });
@@ -1228,9 +1232,7 @@ export function letGoCloses(current) {
 // Let go of the selection: the map shows none and Details close (letGoCloses). Focus stays where
 // it is.
 function letGoOnMap() {
-  onMap.selected = null;
-  if (isPanelOpen() && letGoCloses(panelState.current)) closePanel({ focus: false });
-  else setState({ selected: null });
+  dropSelection();
   drawAgain();
 }
 
@@ -1266,15 +1268,12 @@ function mapHint() {
   return pick.ids.size ? PICK_HINT(pick.ids.size) : MAP_HINT;
 }
 
-// "+ Add servers" in the page header opens the Add a server panel (gateway-add.js). Both its doors,
-// this and Details' More, let go of what is selected first.
+// The Add a server panel (gateway-add.js) lets go of what is selected first, from both its doors:
+// "+ Add servers" in the page header and Details' More.
 onOpenAdd(letGoIfSelected);
-function pressAdd(node) {
-  return openAdd({ from: node });
-}
 
 // A press on a block (a held server opened or folded first, by onOpen). "N more" turns its group's
-// page (turnOnMap). The Add a server card opens the add panel. A second press on the selected block lets go. The first run's slot adds the
+// page (turnOnMap). A second press on the selected block lets go. The first run's slot adds the
 // change that sets every client up; the slot of a drag does nothing. A preview block takes its row
 // out of the tray (D12), unless it waits for access: then it opens the access panel. Any other
 // block is selected.

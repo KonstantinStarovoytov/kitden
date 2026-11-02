@@ -282,7 +282,7 @@ export function technical(rows) {
 
 // The tray in Details --------------------------------------------------------------------------
 
-const IN_PREVIEW = "In preview";
+export const IN_PREVIEW = "In preview";
 // How each control whose change can wait in the tray shows whether it does: `look(waiting)`.
 const trayLooks = new WeakMap();
 
@@ -375,11 +375,14 @@ export function previewButton(label, body, { note = null, look = "btn", back = n
 // A button that says "In preview" in place of its `label` (in `words`) while the tray row `key`
 // waits, and takes no press then. Called again with another `key`, it follows that row instead.
 export function showInPreview(node, words, label, key) {
-  followTray(node, key, (waiting) => {
-    words.textContent = waiting ? IN_PREVIEW : label;
-    if (waiting) node.setAttribute("aria-disabled", "true");
-    else node.removeAttribute("aria-disabled");
-  });
+  followTray(node, key, (waiting) => previewLook(node, words, label, waiting));
+}
+
+// The look of such a button: while `waiting`, "In preview" and no press.
+export function previewLook(node, words, label, waiting) {
+  words.textContent = waiting ? IN_PREVIEW : label;
+  if (waiting) node.setAttribute("aria-disabled", "true");
+  else node.removeAttribute("aria-disabled");
 }
 
 // What a press in this panel comes back to (backToDetails): `draw()` draws the panel again from

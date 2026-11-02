@@ -6,6 +6,7 @@
 // adds a row to the tray; nothing is written before Apply. Paths stay under Technical details.
 import { getJson, query } from "./api.js";
 import { $, button, el, icon, joinWords, plural } from "./dom.js";
+import { IN_PREVIEW, previewLook } from "./details.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { initLibraryAdd } from "./library-add.js";
 import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
@@ -15,7 +16,6 @@ import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems,
 import { data, projectPath, state } from "./store.js";
 import { inTray, keyFor, trayRow } from "./tray.js";
 
-const IN_PREVIEW = "In preview";
 const OFF_ALL = "Turn off for all projects…";
 const OFF_SOME = "Turn off in some projects…";
 const OFF_HERE = "Turn off in this project…";
@@ -201,10 +201,7 @@ function rowsButton(label, bodies, look = "btn") {
   });
   followTray(node, keyFor(list()[0] || {}), () => {
     node.hidden = !list().length;
-    const now = waiting();
-    words.textContent = now ? IN_PREVIEW : label;
-    if (now) node.setAttribute("aria-disabled", "true");
-    else node.removeAttribute("aria-disabled");
+    previewLook(node, words, label, waiting());
   });
   return node;
 }

@@ -673,7 +673,7 @@ function watchDrawer() {
 function drawMap({ motion = "move", lightLater = false, swap = false } = {}) {
   const { view, model, selected } = onMap;
   if (!view) return Promise.resolve();
-  const layout = layoutTree(model, { open: onMap.open, pages: onMap.pages, narrow: false });
+  const layout = layoutNow();
   if (swap) layout.swap = TAB_FROM;
   onMap.layout = layout;
   const lit = litOf(model, selected);
@@ -695,6 +695,15 @@ function litOf(model, selected) {
   return lit;
 }
 
+// The map's layout as it is now: the plugin that is open and the pages turned, always wide.
+const layoutNow = () => layoutTree(onMap.model, { open: onMap.open, pages: onMap.pages, narrow: false });
+
+// Draw the map again; a selection the new layout hides is let go (which draws it).
+function drawOrLetGo() {
+  if (onMap.selected && !layoutNow().blocks.some((at) => at.id === onMap.selected)) letGo();
+  else drawMap();
+}
+
 // A press on a plugin card (map-view calls it before pressBlock): the selected open plugin folds;
 // any other opens in place of the one open.
 function openPlugin(id) {
@@ -709,12 +718,10 @@ function openPlugin(id) {
 // A selection the change hides is let go.
 function foldPlugin(id) {
   onMap.open = onMap.open.has(id) ? new Set() : new Set([id]);
-  const layout = layoutTree(onMap.model, { open: onMap.open, pages: onMap.pages, narrow: false });
-  if (onMap.selected && !layout.blocks.some((at) => at.id === onMap.selected)) letGo();
-  else drawMap();
+  drawOrLetGo();
 }
 
-// A press on a block. The Add a plugin card opens the add panel. "N more" turns its group's page. A press that folded a plugin, or a second
+// A press on a block. "N more" turns its group's page. A press that folded a plugin, or a second
 // press on the selected block, lets go. Any other block is selected: its path lights.
 function pressBlock(id) {
   // The Add a plugin card opens the add panel; focus comes back to the card.
@@ -750,9 +757,7 @@ function pressBlock(id) {
 function turnOnMap(id) {
   onMap.pages = turnPage(onMap.model, onMap.pages, id);
   say(turnWords(onMap.model, onMap.pages, id));
-  const layout = layoutTree(onMap.model, { open: onMap.open, pages: onMap.pages, narrow: false });
-  if (onMap.selected && !layout.blocks.some((at) => at.id === onMap.selected)) letGo();
-  else drawMap();
+  drawOrLetGo();
 }
 
 function letGo() {
