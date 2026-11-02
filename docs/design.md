@@ -23,8 +23,8 @@ The README hero (`docs/images/hero.svg`, `hero-dark.svg`) is the same gesture at
 
 **README presentation (2026-11-02).** The hero sits above the slogan and one line on what
 Kitden does. Three short looping animations of the real page follow, each with a heading of a
-few words and cropped to the part it is about: three servers dragged into the gateway
-together, tools turned off on the map, and a token that works. No captions and no invented UI states.
+few words and cropped to the part it is about: servers of three clients joined in the gateway,
+tools turned off on the map, and a token that works. No captions and no invented UI states.
 Each ends on its key moment and fades back to its start. Two commands and one line of
 guarantees close it; the rest lives in the guide. [README media](readme-media.md) records how
 to make them again.

@@ -17,12 +17,12 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
 </p>
 
-### Move many at once
+### Share servers across all agents
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.webp">
   <source srcset="docs/images/readme/pick-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.webp" width="450" alt="Three servers from three clients are picked with a band and dragged onto the lit Kitden gateway together.">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.webp" width="450" alt="memory from Claude Code, playwright from Codex and sequential-thinking from Cursor go into the Kitden gateway together, to be shared by all three.">
 </picture>
 
 ### Turn tools off
