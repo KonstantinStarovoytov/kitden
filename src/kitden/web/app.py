@@ -34,6 +34,7 @@ from kitden.changes.actions import (
     GATEWAY_REMOVE,
     GATEWAY_RULE,
     GATEWAY_RULES,
+    GATEWAY_SIGN_IN,
     GATEWAY_STRICT,
     GATEWAY_SWITCH,
     KITDEN_GATEWAY,
@@ -63,6 +64,7 @@ from kitden.changes.actions import (
     remove_plugin_steps,
     remove_steps,
     setup_server_steps,
+    sign_in_steps,
     skill_remove_steps,
     skill_rule_steps,
     skill_steps,
@@ -131,7 +133,7 @@ from kitden.local_gateway.views import (
 from kitden.marketplace_link import LinkError, read_marketplace
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind, Step
 from kitden.redact import masked_command, redact_text
-from kitden.sign_in import SignIn, SignIns
+from kitden.sign_in import SIGNED_OUT, SignIn, SignIns
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
 from kitden.views.changes_view import change_entries
@@ -724,6 +726,16 @@ def create_app(
         (await _oauth()).cancel(record)
         return JSONResponse({})
 
+    async def sign_in_offer(request: Request) -> JSONResponse:
+        """A sign-in id for a held server whose entry names a stored sign-in."""
+        if stand_ins:
+            return _error(stand_ins.NOT_IN_DEMO, 422)
+        name = str((await _body(request)).get("server", ""))
+        held = load_settings(home)["servers"].get(name) if home is not None else None
+        if not isinstance(held, dict) or not held.get("url") or "sign_in" not in held:
+            return _error("Unknown server.", 404)
+        return JSONResponse({"id": signins.offer(str(held["url"]), name)})
+
     async def sign_in_done(request: Request) -> HTMLResponse:
         """Where the browser comes back after sign-in. It needs no cookie (the redirect comes
         from another site); only a flow that waits for its `state` takes the code."""
@@ -997,6 +1009,10 @@ def create_app(
         if home is None:
             return None, None
         held = held_servers(load_settings(home), _chain(path), load_tools(home), _chains())
+        # A server whose sign-in ended (the last tool read said so) needs the person.
+        for server in held:
+            if tool_problems.get(server["name"]) == SIGNED_OUT.format(server=server["name"]):
+                server["needs"] = "sign-in"
         problem = UNREADABLE if settings_unreadable(home) else None
         return held, problem
 
@@ -1352,6 +1368,16 @@ def create_app(
             ]
         elif action == GATEWAY_KEYCHAIN:
             steps = keychain_steps(home, str(params.get("server", "")))
+        elif action == GATEWAY_SIGN_IN:
+            # It asks the server whether the new token works, so not on the event loop.
+            steps = await asyncio.to_thread(
+                sign_in_steps,
+                home,
+                str(params.get("server", "")),
+                _given_sign_in(params),
+                sign_in=sign_in,
+                keychain_run=keychain_run,
+            )
         elif action == SKILL_RULE:
             steps = skill_rule_steps(adapters, state.inventory, home, targets, params)
         elif action == MCP_ADD:
@@ -1791,6 +1817,7 @@ def create_app(
             Route("/api/changes/preview", preview, methods=["POST"]),
             Route("/api/batch/preview", batch_preview, methods=["POST"]),
             Route("/api/batch/check", batch_check, methods=["POST"]),
+            Route("/api/sign-in/offer", sign_in_offer, methods=["POST"]),
             Route("/api/sign-in/start", sign_in_start, methods=["POST"]),
             Route("/api/sign-in/wait", sign_in_wait, methods=["POST"]),
             Route("/api/sign-in/cancel", sign_in_cancel, methods=["POST"]),

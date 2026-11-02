@@ -3,6 +3,7 @@
 // that detailsCard draws, so a test reads it without a page), and a show… that opens it beside the
 // page. The forms to add a gateway and to connect clients live here too, with what each registered
 // gateway holds.
+import { signInAgain } from "./access-form.js";
 import { getJson, postJson, query } from "./api.js";
 import { $, busyWhile, button, el, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { ADD_SERVER, openAdd } from "./gateway-add.js";
@@ -845,6 +846,11 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
   const step = { server: name, tool: null, title: name, target, shared, rules: detail, readIn: picked, warning };
   const some = changedIn(projects, detail.projects, target, (p) => p.server).length ? stepAction(IN_SOME[target], () => projectsStep(step)) : null;
   const actions = clients.length ? [stepAction(MOVE_OUT, () => moveOutStep({ name, detail, readIn: picked, warning }))] : [];
+  // A server whose sign-in ended says so first and leads with signing in again.
+  if (server.needs === "sign-in") {
+    warning = `${name} needs sign-in again.`;
+    actions.unshift(stepAction("Sign in", () => signInAgain(name)));
+  }
   const more = [...heldMore(server, picked, detail, some), ...heldActions(name, clients, server.plain_secrets)];
   const id = `${server.kind === "remote" ? "Remote" : "Local"} · in the Kitden gateway`;
   return { kind: KIND.server, title: name, id, facts, list: heldList(name, detail, picked, folder), actions, more, warning };

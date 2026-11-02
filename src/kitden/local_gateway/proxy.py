@@ -59,6 +59,7 @@ from mcp_types import (
     Tool,
 )
 
+from kitden import sign_in
 from kitden.gateways import data_dir
 from kitden.local_gateway import oauth
 from kitden.local_gateway.keychain import KeychainError, is_reference, resolve_entry
@@ -135,8 +136,7 @@ class UpstreamError(Exception):
 
 # A remote server that answered 401 or 403: the library reports only the server's own words.
 REFUSED = "{server} turned down its access: its token is wrong or has ended."
-# A server whose stored browser sign-in no longer works, and could not be refreshed.
-SIGNED_OUT = "{server} needs sign-in again."
+SIGNED_OUT = sign_in.SIGNED_OUT
 
 
 def _turned_down(entry: dict) -> bool:

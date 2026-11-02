@@ -19,6 +19,8 @@ CANCELLED = "Sign-in was cancelled."
 NOT_FINISHED = "{name} did not finish sign-in."
 TIMED_OUT = "Sign-in did not finish in 5 minutes."
 GONE = "Sign in again: that sign-in is no longer here."
+# A held server whose stored sign-in no longer works and could not be refreshed.
+SIGNED_OUT = "{server} needs sign-in again."
 
 
 @dataclass

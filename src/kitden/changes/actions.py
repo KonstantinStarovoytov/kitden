@@ -490,6 +490,7 @@ GATEWAY_PUT_BACK = "gateway.put_back"  # a held server's entry written into a cl
 GATEWAY_MOVE_OUT = "gateway.move_out"  # a held server put back in one client and removed
 GATEWAY_KEYCHAIN = "gateway.keychain"  # a held server's plain secrets moved to the Keychain
 GATEWAY_ADD = "gateway.add"  # a server a marketplace plugin offers, added to the Kitden gateway
+GATEWAY_SIGN_IN = "gateway.sign_in"  # a held server signed in again: only its Keychain item
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.
 CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
@@ -1046,6 +1047,30 @@ def _server_step(
     step = settings_step(home, ("servers", name), entry, name)
     step.keychain = items
     return step
+
+
+def sign_in_steps(
+    home: Path,
+    server: str,
+    signed_in: SignIn | None,
+    *,
+    sign_in: Callable[[str, dict], str] | None = None,
+    keychain_run: Runner | None = None,
+) -> list[Step]:
+    """Sign a held server in again: one step with the same entry that carries the new
+    sign-in for Apply to store in its Keychain item. The new token is checked first."""
+    held = load_settings(home)["servers"].get(server)
+    if not isinstance(held, dict) or "url" not in held:
+        raise ValueError("Choose a server in the Kitden gateway.")
+    if signed_in is None:
+        raise ValueError(f"Sign in to {server} first.")
+    try:
+        values = resolve_entry(held, run=keychain_run or run_security)
+    except KeychainError as problem:
+        raise ValueError(str(problem)) from None
+    values.pop("sign_in", None)
+    check_access(server, values, sign_in, [TOKEN_FIELD], False, signed_in)
+    return [signed_in_server(home, server, values, held, signed_in, keychain_run)]
 
 
 def keychain_steps(home: Path, server: str) -> list[Step]:

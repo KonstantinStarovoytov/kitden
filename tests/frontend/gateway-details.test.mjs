@@ -600,6 +600,12 @@ async function withTray(nodes, run) {
   }
 }
 
+test('a held server whose sign-in ended says so first and offers Sign in', () => {
+  const card = held({ ...FILES_HELD, kind: 'remote', needs: 'sign-in' });
+  assert.equal(card.warning, 'files needs sign-in again.');
+  assert.equal(card.actions[0].label, 'Sign in');
+});
+
 test('the server panel lists its tools with a switch each and a Whole server row', () => {
   const card = held(FILES_HELD);
   assert.deepEqual([card.kind, card.title, card.id], ['Server', 'files', 'Local · in the Kitden gateway']);

@@ -5,7 +5,7 @@
 import { busyWhile, el, icon } from "./dom.js";
 import { closePanel, header, openPanel } from "./panel.js";
 import { animateTo, D, shake } from "./motion.js";
-import { giveAccess } from "./tray.js";
+import { addToTray, giveAccess, inTray, keyFor, tray } from "./tray.js";
 import { postJson } from "./api.js";
 
 // "Token works" shows a moment before the panel goes.
@@ -208,5 +208,27 @@ export function openAccess(row, { start = false } = {}) {
   if (waits.refused) form.refuse(waits.reason);
   if (form.focus) form.focus();
   if (start && form.start) form.start();
+  return form;
+}
+
+// A held server whose sign-in ended (Part 3b): Sign in again in its own panel. Once signed in,
+// a row joins the tray that writes the new sign-in to its Keychain item on Apply.
+export async function signInAgain(name) {
+  const offered = await postJson("/api/sign-in/offer", { server: name });
+  if (!offered.ok) throw new Error(offered.data?.detail || "Kitden could not start sign-in.");
+  const reason = `${name} needs sign-in again.`;
+  const waits = { server: name, kind: "sign-in", sign_in: offered.data.id, fields: [], reason };
+  const signed = async (id) => {
+    const body = { action: "gateway.sign_in", targets: [], params: { server: name, sign_in: id } };
+    await addToTray(body);
+    if (inTray(keyFor(body))) return true;
+    if (tray.refused) form.refuse(tray.refused.reason);
+    return false;
+  };
+  const form = signInForm(waits, signed);
+  const body = el("div", "body");
+  body.append(form.node);
+  openPanel([header("Needs sign-in", name, reason), body]);
+  form.start();
   return form;
 }

@@ -642,6 +642,8 @@ function kitdenServer(block, word, picked, waiting) {
   if (pending) block.projects = pendingProjects(pending);
   block.count = server.tools;
   block.lamp = (list.length ? server.on_count > 0 : block.state === "on") ? "on" : "off";
+  // Its sign-in ended and could not be refreshed: it needs the person (amber), not a count.
+  if (server.needs === "sign-in") Object.assign(block, { lamp: "warn", meta: "Needs sign-in", stateInMeta: true });
   block.ports = { left: true, right: typeof block.count === "number" };
   // Back from a move out taken out of the tray, it starts where its preview was.
   block.from = `preview-out:${server.name}`;

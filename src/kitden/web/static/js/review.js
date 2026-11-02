@@ -24,6 +24,7 @@ const DONE_WORDS = {
   "skill.install": "Added", "plugin.skills": "Added",
   "gateway.remove": "Removed", "gateway.put_back": "Put", "gateway.move_out": "Moved", "mcp.add": "Added",
   "gateway.keychain": "Moved", "gateway.add": "Added", "skill.rule": "Turned off",
+  "gateway.sign_in": "Signed in",
 };
 
 // Actions whose words say "from" a client.
@@ -115,6 +116,7 @@ export function changeWords(change, previewBody) {
     "gateway.put_back": `Put ${server} back in ${clients}`,
     "gateway.move_out": `Move ${server} out of the gateway into ${clients}`,
     "gateway.keychain": `Move the secrets of ${server} to the Keychain`,
+    "gateway.sign_in": `Sign in to ${server} again`,
     "gateway.add": `Add ${added} to the Kitden gateway`,
     "skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`,
   }[change.action] || change.action;
@@ -147,6 +149,8 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${server} into ${clients}`;
   } else if (change.action === "gateway.keychain") {
     what = `${verb} the secrets of ${server} to the Keychain`;
+  } else if (change.action === "gateway.sign_in") {
+    what = `${verb} to ${server} again`;
   } else if (change.action === "gateway.add") {
     what = `${verb} ${added} to the Kitden gateway`;
   } else if (change.action === "skill.rule") {

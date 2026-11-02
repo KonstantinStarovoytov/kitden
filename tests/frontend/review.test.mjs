@@ -142,6 +142,11 @@ const remove = { action: 'mcp.remove_direct', steps: [{ client: 'codex', name: '
 const add = { action: 'skill.install', steps: [{ client: 'codex', name: 'tidy', reaches: ['codex'] }] };
 const NOTE = 'Undo installs it again; its saved options are not brought back.';
 
+test('signing a held server in again says so', () => {
+  const change = { action: 'gateway.sign_in', steps: [{ client: 'kitden', name: 'neon' }], target: target('all') };
+  assert.deepEqual(changeWords(change, { params: { server: 'neon' } }), { title: 'Sign in to neon again', done: 'Signed in to neon again' });
+});
+
 test('the title names the scope the steps target', () => {
   assert.deepEqual(changeWords({ ...remove, target: target('project', '/Users/me/work/website', true) }), { title: 'Remove neon from Codex in website', done: 'Removed neon from Codex in website' });
   assert.equal(changeWords({ ...remove, target: target('all') }).title, 'Remove neon from Codex for all projects');

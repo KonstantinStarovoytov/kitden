@@ -24,8 +24,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Guided adding:** catalog rows show drag handles and a shared hint. Secondary actions
   stay in collapsible groups. MCP search tries separator variants; local search matches words.
   Declared required headers and environment values can be entered before Preview and
-  saved to Keychain by Apply. Remote access is checked with supplied headers; browser OAuth
-  remains unsupported and is explained in the form. A catalog server in preview shows on the
+  saved to Keychain by Apply. Remote access is checked with supplied headers. A catalog server in preview shows on the
   map in its group, and the catalog panel closes so it can be seen. The access check names
   itself, so servers behind Cloudflare are no longer mistaken for ones that need sign-in.
   A row whose token is entered can be dragged; a refused token is shown by its field.
@@ -38,7 +37,10 @@ What Kitden does today and what comes next. Ideas and bugs:
   Shift-click and dragged onto the gateway together, each becoming its own preview. A server
   that needs a token or sign-in no longer stops there: it waits in preview, amber, with "Add
   token"; the token is checked against the server before Apply, and Apply writes the other
-  changes while it waits.
+  changes while it waits. A server that signs in through the browser now has "Sign in": Kitden
+  opens its page, catches the redirect on its own page, checks the sign-in before Apply and keeps
+  the tokens in the Keychain only. The gateway refreshes them; when that fails the server shows
+  "Needs sign-in" with Sign in again.
 
 - **Catalog separation:** the MCP picker excludes the built-in plugin catalog.
   Personal GitHub sources still offer MCP servers there. Known unsupported entries
@@ -300,7 +302,9 @@ The add, group drag and sign-in design of 2026-11-01,
 [docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md](docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md),
 in order: the add button (done), selecting several servers and dragging them together (done), a token
 step checked before Apply (done: a server that needs access waits in preview, amber, with one token
-field checked against the server; Apply writes the rest), then browser sign-in.
+field checked against the server; Apply writes the rest), and browser sign-in (done: Sign in opens
+the server's page, the tokens are checked before Apply, kept in the Keychain and refreshed by the
+gateway).
 
 ## Next
 

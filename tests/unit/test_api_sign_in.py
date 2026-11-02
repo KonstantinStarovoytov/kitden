@@ -210,3 +210,68 @@ def test_removing_a_held_sign_in_server_keeps_its_item_for_undo(home, fake, fake
         applied = page.post(f"/api/changes/{removed.json()['id']}/apply", headers=POST)
         assert applied.json()["state"] == "verified", applied.json()
         assert "kitden signer/sign-in" in keychain_items(fake_keychain)
+
+
+# A held server whose sign-in ended ----------------------------------------------------------
+
+
+def held_signer(page, home, opened):
+    """Move the fake into the gateway with a sign-in, as the owner would."""
+    id = batch_move(page, home, "signer").json()["needs"]["sign_in"]
+    sign_in(page, opened, id)
+    change_id = batch_move(page, home, "signer", {"sign_in": id}).json()["id"]
+    applied = page.post(f"/api/changes/{change_id}/apply", headers=POST)
+    assert applied.json()["state"] == "verified", applied.json()
+
+
+def test_signed_out_server_shows_needs(home, fake, monkeypatch):
+    add_claude(home, "signer", {"type": "http", "url": fake.url})
+    opened = Opened()
+
+    async def signed_out(home, names=None):
+        return {"signer": "signer needs sign-in again."}
+
+    monkeypatch.setattr("kitden.web.app.refresh_tools", signed_out)
+    with page_for(home, opened) as page:
+        held_signer(page, home, opened)
+        page.post("/api/gateway/tools/refresh", headers=POST)
+        view = page.get("/api/gateway-view").json()
+    [kitden] = [g for g in view["gateways"] if g["kind"] == "kitden"]
+    [server] = [s for s in kitden["servers"] if s["name"] == "signer"]
+    assert server["needs"] == "sign-in"
+
+
+def test_sign_in_again_updates_the_item(home, fake, fake_keychain):
+    add_claude(home, "signer", {"type": "http", "url": fake.url})
+    opened = Opened()
+    with page_for(home, opened) as page:
+        held_signer(page, home, opened)
+        before = gateway_file(home).read_text()
+        [old] = fake.issued
+        offered = page.post("/api/sign-in/offer", json={"server": "signer"}, headers=POST)
+        assert offered.status_code == 200, offered.text
+        id = offered.json()["id"]
+        sign_in(page, opened, id)
+        body = {
+            "action": "gateway.sign_in",
+            "targets": [],
+            "params": {"server": "signer", "sign_in": id},
+        }
+        answer = page.post("/api/changes/preview", json=body, headers=POST)
+        assert answer.status_code == 200, answer.text
+        applied = page.post(f"/api/changes/{answer.json()['id']}/apply", headers=POST)
+        assert applied.json()["state"] == "verified", applied.json()
+        stored = json.loads(keychain_items(fake_keychain)["kitden signer/sign-in"])
+        assert stored["tokens"]["access_token"] not in (old,)
+        assert stored["tokens"]["access_token"] in fake.issued
+        assert gateway_file(home).read_text() == before
+        undone = page.post(f"/api/changes/{answer.json()['id']}/undo", headers=POST)
+        assert undone.status_code == 200, undone.text
+        # The old tokens no longer worked: the new ones stay.
+        assert "kitden signer/sign-in" in keychain_items(fake_keychain)
+
+
+def test_offer_needs_a_held_sign_in_server(home):
+    with page_for(home, Opened()) as page:
+        answer = page.post("/api/sign-in/offer", json={"server": "nope"}, headers=POST)
+    assert answer.status_code == 404
