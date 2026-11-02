@@ -9,8 +9,8 @@ def test_the_start_link_is_not_called_one_time():
     assert "one-time" not in text and "The link works while the page runs" in text
 
 
-def test_readme_says_where_secrets_go_and_what_the_agents_server_does():
-    readme = " ".join((ROOT / "README.md").read_text().split())
+def test_guide_says_where_secrets_go_and_what_the_agents_server_does():
+    readme = " ".join((ROOT / "docs/guide.md").read_text().split())
     assert (
         "Credentials go to the server they belong to, or to a gateway "
         "you move that server into."
@@ -20,22 +20,25 @@ def test_readme_says_where_secrets_go_and_what_the_agents_server_does():
     )
 
 
-def test_readme_promises_no_undo_it_cannot_keep():
+def test_docs_promise_no_undo_they_cannot_keep():
     # Undo can be blocked (a file changed after Apply), and backups stay for 30 days.
-    readme = " ".join((ROOT / "README.md").read_text().split())
-    assert "Look at each change first. Apply keeps a backup for Undo." in readme
-    assert "any time" not in readme
+    guide = " ".join((ROOT / "docs/guide.md").read_text().split())
+    assert "Look at each change first. Apply keeps a backup for Undo." in guide
+    for name in ("README.md", "docs/guide.md"):
+        assert "any time" not in (ROOT / name).read_text(), name
 
 
-def test_readme_is_short_and_names_the_page_words():
+def test_readme_is_short_and_the_guide_names_the_page_words():
     text = (ROOT / "README.md").read_text()
-    readme = " ".join(text.split())
-    # Keep it easy to scan, with requirements, a safe trial and Library actions (2026-10-28).
-    assert len(text.splitlines()) <= 180
+    # The README shows three scenes and two commands; the details live in the guide (2026-11-02).
+    assert len(text.splitlines()) <= 80
+    assert "docs/guide.md" in text
+    guide = " ".join((ROOT / "docs/guide.md").read_text().split())
     for words in ("Add missing plugins and skills…", "Show changes", "Redo…", "See it on the map"):
-        assert words in readme, words
+        assert words in guide, words
     # Obot and MetaMCP cannot be added from the page now.
-    assert "Obot" not in readme and "MetaMCP" not in readme
+    for words in (text, guide):
+        assert "Obot" not in words and "MetaMCP" not in words
 
 
 def test_the_check_before_a_release_names_the_management_actions():
@@ -49,10 +52,11 @@ def test_docs_name_the_demo_and_the_write_boundary():
     assert "kitden demo" in readme
     assert "uvx --python 3.13 kitden demo" in readme
     assert "uv tool install --python 3.13 kitden" in readme
+    guide = " ".join((ROOT / "docs/guide.md").read_text().split())
     assert (
         "Kitden writes to your home folder, its own data folder, known projects "
         "and detected client settings folders."
-    ) in readme
+    ) in guide
     development = (ROOT / "docs/development.md").read_text()
     assert "kitden demo" in development and "build_demo_home" in development
 
@@ -106,3 +110,13 @@ def test_the_readme_names_no_old_review():
     readme = " ".join((ROOT / "README.md").read_text().split())
     assert "Every change opens a review first" not in readme
     assert "review.jpg" not in readme
+
+
+def test_the_readme_shows_three_recorded_scenes_in_both_themes():
+    readme = (ROOT / "README.md").read_text()
+    for scene in ("find", "pick", "token"):
+        for theme in ("light", "dark"):
+            image = ROOT / f"docs/images/readme/{scene}-{theme}.webp"
+            assert f"docs/images/readme/{scene}-{theme}.webp" in readme, image.name
+            # Small enough for a phone on a slow line.
+            assert image.stat().st_size <= 3_000_000, image.name

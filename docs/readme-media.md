@@ -1,61 +1,51 @@
 # README media
 
-The README shows Library, a shared server and Undo, then offers a safe sample and installation.
-Requirements sit beside the first command; details follow the main story.
-The house stays the brand gesture. Product motion shows real states from the app.
+The README shows the logo, the slogan and three short recordings of the real page, then two
+commands. Steps, privacy and limits live in the [guide](guide.md). No captions on the scenes:
+the motion should explain itself.
 
-## Capture
+## Scenes
 
-Run `uv run python scripts/readme_demo.py`. It creates a temporary sample home with
-three clients, Superpowers, frontend-design and a direct Context7 connection in Claude Code.
-These are offline fixtures with real project names, not downloaded plugins or a live
-integration test. The script never reads or writes real client settings, starts an MCP server
-or uses the real Keychain. Ctrl+C deletes the sample.
+Each scene is an animated WebP in `docs/images/readme/`, in light and dark, about 11 seconds,
+under 3 MB. Each ends on the applied state and holds it before the loop starts again.
 
-Captures were taken on 2026-10-29 at 1280 × 720. Let every transition finish, including
-appearance changes, before taking a screenshot. Save both `-light.png` and `-dark.png`:
+- `find`: **+ Add servers**, search for context7, drag it onto the gateway, Apply.
+- `pick`: a band picks memory (Claude Code), playwright (Codex) and sequential-thinking
+  (Cursor); drag them onto the gateway together, Apply all.
+- `token`: drag Stripe onto the gateway; it waits for a token; paste it, it works, Apply.
 
-1. `library-start`: Library map before adding Superpowers to Codex.
-2. `library-preview`: drag Superpowers onto Codex; leave the connection in preview.
-3. `library-applied`: Apply, wait for verification and the toast to disappear.
-4. `start`: Gateway map before moving Context7.
-5. `preview`: Context7 Details → Move into gateway; close Details, leaving the preview open.
-6. `review`: open **Show changes**.
-7. `applied`: close the review and Apply. Wait for verification; the gateway holds one server
-   with two tools and connects to three clients.
-8. `history`: the applied Context7 row in Changes.
-9. `undone`: Undo the same change; wait for the row to say Undone.
+## Record
 
-Run `uv run --with pillow python scripts/make_readme_media.py --captures FOLDER`.
-The script stores relevant crops in `docs/images/readme/`, with no retouched UI.
-Rebuild from those crops with `uv run python scripts/make_readme_media.py`.
+Needs ffmpeg with libwebp (`brew install ffmpeg`).
+
+```bash
+uv run --with playwright==1.64.1 python scripts/record_readme.py
+```
+
+`--only pick-dark` records one scene; `--serve` only starts the page to look around.
+Each recording starts the real page on a fresh copy of the sample from
+`scripts/readme_demo.py`, in a temporary folder. Stand-ins keep it local: a fake Keychain,
+fake client commands, canned tool lists, and a local test server that takes one key in place
+of Stripe's. Only the catalog search goes online. Nothing of the real home folder is read or
+written. The key in the scene is a made-up test value.
+
+Look at every recording before you commit it: the scene shows its whole story and ends on
+the toast. Do not show success before verification or retouch the UI.
 
 ## Examples and sources
 
-Checked against official sources on **2026-10-29**:
+Checked against their official sources on **2026-11-02**:
 
-- [Superpowers](https://github.com/obra/superpowers): plugin `superpowers`, version 7.0.1,
-  marketplace `superpowers-dev`, 15 skill names from its `skills/` directory and plugin manifests.
-- [frontend-design](https://github.com/anthropics/skills/tree/main/skills/frontend-design):
-  the skill name from its SKILL.md.
-- [Context7](https://github.com/upstash/context7): remote endpoint `https://mcp.context7.com/mcp`.
-  Its two tools are `resolve-library-id` and `query-docs`, checked in
-  [tool-names.ts](https://github.com/upstash/context7/blob/master/packages/mcp/src/lib/tool-names.ts).
+- [Context7](https://github.com/upstash/context7): a remote server that needs no key; found in
+  the official MCP Registry under `upstash`.
+- [memory](https://github.com/modelcontextprotocol/servers/tree/main/src/memory) and
+  [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking):
+  local `npx` servers.
+- [Playwright MCP](https://github.com/microsoft/playwright-mcp): `npx @playwright/mcp@latest`.
+- [Stripe MCP](https://docs.stripe.com/mcp): `https://mcp.stripe.com`, which takes an API key.
 
-Names and tool counts are accurate for that date. The fixture bodies and all setup data are
-synthetic; no external tool is called. These examples do not imply endorsement.
-
-## Presentation
-
-- `compare.svg` and its dark variant show three Library map states in a 16-second loop.
-- `walkthrough.svg` and its dark variant show four Gateway states in a 20-second loop.
-- Both are edited sequences of actual still captures, not continuous recordings. The Gateway
-  review is a close-up. Each tour holds its result for about eight seconds.
-- `undo.svg` and its dark variant put the same history row before and after Undo together.
-- SVGs embed their PNGs and run no script. Tours show the applied state when animation is
-  unavailable or `prefers-reduced-motion` is set.
-- Do not show success before verification, imply that an open client session refreshed,
-  or add moving traffic to the map.
+The sample only shows these servers; it starts none of them and never calls Stripe. These
+examples do not imply endorsement.
 
 ## Release checklist
 
@@ -67,15 +57,12 @@ uv tool install --python 3.13 kitden
 ```
 
 Before promoting a release, verify both commands in temporary uv tool and cache folders.
-The screenshot fixture is not proof of the published package.
+The recording sample is not proof of the published package.
 uv [downloads Python if needed](https://docs.astral.sh/uv/guides/install-python/#automatic-python-downloads).
-Installation needs a connection; the demo itself uses offline stand-ins and deletes its sample
-on exit. uv keeps its download cache.
 
 Checked 2026-10-28: GitHub supports relative image sources inside
 [`picture`](https://github.blog/developer-skills/github/how-to-make-your-images-in-markdown-on-github-adjust-for-dark-mode-and-light-mode/).
 Relative sources follow the current branch. Fallback image URLs point to main. PyPI's
 [cleaner](https://github.com/pypa/readme_renderer/blob/main/readme_renderer/clean.py)
 keeps `img` and removes `source`, so its package page uses the light fallback.
-Merge the images and CONTRIBUTING.md before publishing. Badges link to checks on main,
-the latest release and the license.
+Merge the images before publishing.

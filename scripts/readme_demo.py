@@ -1,8 +1,8 @@
-"""Open the isolated sample used for README captures.
+"""Open the isolated sample the README scenes are recorded on.
 
 Run: uv run python scripts/readme_demo.py
 Fixtures are written before the page starts. UI changes use preview, Apply, verify and Undo.
-The sample never starts a real client or MCP server. See docs/readme-media.md for sources.
+The sample never starts a real client or MCP server. See docs/readme-media.md.
 """
 
 import json

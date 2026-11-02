@@ -7,6 +7,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not released yet
+
+- **Lean README:** the logo and slogan, then three short recordings of the real page in light
+  and dark: find a server and drop it in, move several at once, and one token for every agent.
+  Two commands and one line of guarantees follow. Steps, privacy and limits moved to
+  [the guide](docs/guide.md). `scripts/record_readme.py` records the scenes again.
+
 ### 0.4.0
 
 - **Add button and cards:** "+ Add servers" and "+ Add plugins" sit in the page header, and an
