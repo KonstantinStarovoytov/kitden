@@ -2028,9 +2028,9 @@ test("the gateway lights and the slot opens over the block's own group", async (
     const map = dragMap();
     map.press();
     map.move(map.home.x + 16, map.home.y + 10);
-    // It lights the block, the gateway and its dotted line, as a glance does, and the Add a server
-    // card, a place to drop too.
-    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['outside:move:github', 'gateway:kitden', 'addslot:servers', 'client:claude_code>outside:move:github']]);
+    // It lights the block, the gateway and its dotted line, as a glance does. Only the gateway is
+    // a target: the Add a server card stays dim, as everything else.
+    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['outside:move:github', 'gateway:kitden', 'client:claude_code>outside:move:github']]);
     assert.deepEqual(movingOn(), {}, 'no slot while the block is in its own group');
     // Its centre over the gateway's groups, in the Local group's place too: the slot opens in its
     // own group, Remote, and the gateway lights.
@@ -2916,7 +2916,7 @@ function groupMap(ids = ['outside:move:github', 'outside:move:docs']) {
 }
 const rowOf = (map, id) => block(map.tree, id).row;
 
-test('pressing a picked server drags the whole pick: one ghost with a count, the gateway and the card light', async (t) => {
+test('pressing a picked server drags the whole pick: one ghost with a count, and only the gateway lights', async (t) => {
   await freshTray();
   t.mock.timers.enable({ apis: ['setTimeout'] });
   Object.assign(data, { gateway: MEDIUM_VIEW });
@@ -2928,7 +2928,7 @@ test('pressing a picked server drags the whole pick: one ghost with a count, the
     assert.ok(ghost && ghost.names.has('stack'));
     assert.deepEqual(ghost.kids.map((k) => [k.className, k.textContent]), [['ghost-count', '2 servers']]);
     assert.ok(map.boxNames.has('lifting'));
-    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['gateway:kitden', 'addslot:servers']]);
+    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['gateway:kitden']]);
     // No slot opens for a pick.
     map.move(...middle(map, 'gateway:kitden'));
     assert.deepEqual(movingOn(), {});

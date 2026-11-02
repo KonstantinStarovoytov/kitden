@@ -203,7 +203,8 @@ export function pointOf(drag) {
 }
 
 // A server from outside the gateway: the block, the gateway and its dotted lines light, as a glance
-// does; the Outside caption's top is where the gateway's room ends.
+// does; only the gateway is a target, so the Add a server card stays dim with the rest. The
+// Outside caption's top is where the gateway's room ends.
 function beginIn(drag) {
   const { model, layout, view } = onMap;
   const caption = layout.blocks.find((b) => b.id === "group:outside");
@@ -212,12 +213,7 @@ function beginIn(drag) {
   const kitden = model.blocks.find((b) => b.kind === "gateway" && b.gateway.kind === "kitden");
   drag.gateway = kitden ? kitden.id : null;
   const lines = model.links.filter((l) => l.to === drag.id).map(linkKey);
-  view.glance(new Set([drag.id, ...(drag.gateway ? [drag.gateway, ...addCard(model)] : []), ...lines]));
-}
-
-// The Add a server card lights with the gateway while a server is dragged in: a place to drop too.
-function addCard(model) {
-  return model.blocks.filter((b) => b.kind === "addslot").map((b) => b.id);
+  view.glance(new Set([drag.id, ...(drag.gateway ? [drag.gateway] : []), ...lines]));
 }
 
 // Its centre over the gateway (inZone), and not over Details or the dock: the gateway lights and the
@@ -392,7 +388,7 @@ function beginAdd(drag) {
   const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
   const kitden = kitdenGateway();
   Object.assign(drag, { ghost, box, line: caption ? caption.y : Infinity, group: kind === "local" ? "local" : "remote", gateway: kitden ? kitden.id : null });
-  if (kitden) onMap.view.glance(new Set([kitden.id, ...addCard(onMap.model)]));
+  if (kitden) onMap.view.glance(new Set([kitden.id]));
 }
 
 // The ghost keeps the spot of the press under the pointer. With the pointer in the zone (inAddZone)
@@ -450,7 +446,7 @@ function dropAdd(drag, at) {
 
 // A pick of servers outside the gateway (gateway-pick.js) lifts as one ghost of the pressed block,
 // stacked and with its count; the picked blocks fade (`.lifting` on the map) and stay where they
-// are. The gateway and the Add a server card light. No slot opens: each server's preview grows in
+// are. Only the gateway lights. No slot opens: each server's preview grows in
 // its own group as its row answers.
 function beginGroup(drag) {
   const node = onMap.view.node(drag.id);
@@ -467,7 +463,7 @@ function beginGroup(drag) {
   const kitden = kitdenGateway();
   Object.assign(drag, { ghost, box, block: { ...drag.block, node }, line: caption ? caption.y : Infinity, gateway: kitden ? kitden.id : null, ids: [...pick.ids] });
   onMap.view.box.classList.toggle("lifting", true);
-  if (kitden) onMap.view.glance(new Set([kitden.id, ...addCard(onMap.model)]));
+  if (kitden) onMap.view.glance(new Set([kitden.id]));
 }
 
 // As a panel row: the ghost follows the pointer, and over the gateway's room (inAddZone) it takes
