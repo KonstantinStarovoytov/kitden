@@ -1350,11 +1350,12 @@ test('the bar says who waits and Apply counts only ready rows', () => {
 test('a waiting dock row offers Add token, and it opens the token field', async () => {
   await fresh();
   const reason = 'neon needs a token.';
-  queue(PREVIEW, previewed('c1'), (sent) => ({ status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [{ field: 'headers', name: 'Authorization', label: 'Access token', prefix: 'Bearer ' }], reason, refused: false } } }));
+  queue(PREVIEW, previewed('c1'), (sent) => ({ status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [{ field: 'headers', name: 'Authorization', label: 'Access token', prefix: 'Bearer ' }], reason, refused: false } } }), previewed('c2'));
   await addToTray(add('github'));
   await addToTray(add('neon'));
   const items = named(bar(), 'tray-list')[0].children;
   assert.equal(items.length, 2);
+  assert.equal(tray.phase, 'ready');
   const waiting = items[1];
   assert.ok(named(waiting, 'lamp').some((n) => n.classList.contains('warn')));
   assert.equal(waiting.children[1].children[1].textContent, 'Needs token');
@@ -1384,10 +1385,10 @@ test('a refused line in the dock is amber, not the accent', () => {
 test('a partial apply toasts only what it wrote and keeps the waiting row in the bar', async () => {
   await fresh();
   const reason = 'neon needs a token.';
-  queue(PREVIEW, previewed('c1'), (sent) => ({ status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [], reason, refused: false } } }));
+  queue(PREVIEW, previewed('c1'), (sent) => ({ status: 422, json: { detail: reason, row: sent.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [], reason, refused: false } } }), previewed('c2'));
   await addToTray(add('github'));
   await addToTray(add('neon'));
-  queue('/api/changes/c1/apply', verified('c1'));
+  queue('/api/changes/c2/apply', verified('c2'));
   await button(bar(), 'Apply').click();
   await settle();
   assert.deepEqual(toastParts().map(([, text]) => text), ['', 'Added github to Codex for all projects', 'Undo']);

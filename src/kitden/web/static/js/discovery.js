@@ -327,8 +327,11 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
       const form = accessForm(waits, async (access) => {
         const request = requestOf(access);
         const before = tray.refused;
+        const prior = tray.rows.find((each) => each.key === keyFor(request));
         await review(request);
-        const queued = tray.rows.find((each) => each.key === keyFor(request));
+        // A row that is still the one from before means this ask did not join.
+        const found = tray.rows.find((each) => each.key === keyFor(request));
+        const queued = found !== prior ? found : null;
         if (queued && !queued.waits) {
           if (access) form.works();
           onResolved({ access, refused: false });

@@ -190,19 +190,21 @@ def server_setup(server: dict) -> tuple[dict | None, str | None, list[dict]]:
                 ):
                     error = "This server needs a configuration Kitden cannot build yet."
                     break
-                fields.append(
-                    {
-                        "field": field,
-                        "name": definition["name"],
-                        "label": str(definition.get("description") or definition["name"])[:200],
-                        # Registry entries often declare Authorization with no template
-                        # (7 of 7 seen 2026-10-31); those take a Bearer token too.
-                        "prefix": "Bearer "
-                        if template.startswith("Bearer ")
-                        or (not template and definition["name"].lower() == "authorization")
-                        else "",
-                    }
-                )
+                made = {
+                    "field": field,
+                    "name": definition["name"],
+                    "label": str(definition.get("description") or definition["name"])[:200],
+                    # Registry entries often declare Authorization with no template
+                    # (7 of 7 seen 2026-10-31); those take a Bearer token too.
+                    "prefix": "Bearer "
+                    if template.startswith("Bearer ")
+                    or (not template and definition["name"].lower() == "authorization")
+                    else "",
+                }
+                # A local server cannot be asked before it runs: Apply's verify checks it.
+                if field == "env":
+                    made["later"] = True
+                fields.append(made)
             if error:
                 continue
             return entry, None, fields

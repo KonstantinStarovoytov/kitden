@@ -774,3 +774,36 @@ test('the catalog hint has no final period', async () => {
     assert.equal(hint.textContent, 'Click to review · drag onto the gateway');
   } finally { page.restore(); }
 });
+
+test('a new token refused for another reason does not say Token works for the old row', async () => {
+  let answers = 0;
+  const page = await catalog((body) => {
+    answers += 1;
+    if (answers === 1) return okAnswer(body);
+    return { ok: false, status: 422, json: async () => ({ detail: 'Kitden could not reach neon.', row: body.requests.at(-1).id }) };
+  });
+  try {
+    await press(neonRow());
+    await flush();
+    const submit = () => fire(find((n) => n.tagName === 'FORM' && n.className.includes('access-form'))[0], 'submit');
+    find((n) => n.tagName === 'INPUT' && n.type === 'password')[0].value = 'first';
+    submit();
+    await flush();
+    find((n) => n.tagName === 'INPUT' && n.type === 'password')[0].value = 'second';
+    submit();
+    await flush();
+    const works = find((n) => n.className.split(' ').includes('access-works'))[0];
+    const why = find((n) => n.className.split(' ').includes('access-why'))[0];
+    assert.equal(works.hidden, true);
+    assert.equal(text(why), 'Kitden could not reach neon.');
+  } finally { page.restore(); await cancelTray(); }
+});
+
+test('values a local server takes are not called checked before it runs', () => {
+  const env = { field: 'env', name: 'NEON_KEY', label: 'Neon API key', prefix: '', later: true };
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [env] }, () => {});
+  form.works();
+  const done = inside(form.node).find((n) => n.className.split(' ').includes('access-works'));
+  assert.equal(text(done), 'Saved on Apply. Checked when the gateway starts it');
+  assert.equal(inside(done).some((n) => n.className === 'lamp on'), false);
+});

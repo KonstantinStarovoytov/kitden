@@ -234,13 +234,28 @@ function startWaiting(row, needs) {
   Object.assign(row, { waits: { ...needs, checking: false }, works: false, title: needs.server, detail: needs.reason, part: null, status: "" });
 }
 
+// Ask for `rows` as one change. A row the answer says needs access starts to wait, and the rest
+// are asked for again, until a change, a refusal, or no row left ({ none: true }).
+async function askAll(rows) {
+  let left = rows;
+  for (;;) {
+    const answer = await ask(left);
+    const found = answer.needs && left.find((row) => row.id === answer.row);
+    if (!found) return answer;
+    startWaiting(found, answer.needs);
+    left = left.filter((row) => row !== found);
+    if (!left.length) return { none: true };
+  }
+}
+
 // Ask again for the rows as they are, after a take-out, Try again, or a refused add that
 // dropped an ask for the others.
 async function repreview(refused = null) {
   if (!readyRows().length) return noChange();
-  const answer = await ask();
+  const answer = await askAll(readyRows());
   if (answer.dropped) return;
-  if (answer.change) accept(answer.change, refused);
+  if (answer.none) noChange();
+  else if (answer.change) accept(answer.change, refused);
   else refuseRows(answer.reason);
 }
 
@@ -261,23 +276,20 @@ export async function addToTray(body, { key = keyFor(body), note = null, icon = 
   const old = before.find((row) => row.key === key) || { title: "", detail: "", project: null, part: null };
   const row = { id: `r${++rowCount}`, key, body, note, icon, picked, title: old.title, detail: old.detail, project: old.project, part: old.part, status: "", waits: null, works: false };
   tray.rows = [...before.filter((other) => other.key !== key), row];
-  const answer = await ask();
+  // A row that needs access joins as waiting; the others are then asked for again.
+  const answer = await askAll(readyRows());
   if (answer.dropped) return tray.rows.includes(row);
+  if (answer.none) {
+    noChange();
+    return true;
+  }
   if (answer.change) {
     accept(answer.change);
     return true;
   }
-  if (answer.needs && answer.row === row.id) {
-    // It joins as waiting. The change still covers the other rows, unless this one replaced a
-    // row it covered or an ask for them was dropped: then they are asked for again.
-    startWaiting(row, answer.needs);
-    const replaced = before.some((other) => other.key === key && !other.waits);
-    if (was === "asking" || replaced) await repreview();
-    else if (!tray.change) noChange();
-    else {
-      tray.phase = was;
-      notify();
-    }
+  if (row.waits) {
+    // It waits, and the rows asked with it were refused: they stay, with the reason.
+    refuseRows(answer.reason);
     return true;
   }
   tray.rows = before;
@@ -299,41 +311,49 @@ export async function takeOut(keys) {
   const rows = tray.rows.filter((row) => !gone.includes(row.key));
   if (rows.length === tray.rows.length) return;
   if (!rows.length) return cancelTray();
-  // Rows that wait are in no change: taking only those out asks nothing.
+  // Rows that wait are in no change: taking only those out asks nothing, unless an ask is out
+  // (a token check holds the row): then the rest are asked for again, and that answer dropped.
   const changed = tray.rows.some((row) => gone.includes(row.key) && !row.waits);
   tray.rows = rows;
-  if (changed) return repreview();
+  if (changed || tray.phase === "asking") return repreview();
   notify();
 }
 
 // A token (or other values, `{ headers?, env? }`) for a row that waits: the change is asked
-// again with that row in it, which is the check. True when it joined. Refused, the row waits
-// as before with the reason, and the change and the phase stay as they were.
+// again with that row in it, which is the check. True when it joined; false when refused (the
+// row waits as before, with the reason, and the others are asked for again); null when another
+// ask dropped the check, which then said nothing.
 export async function giveAccess(key, values) {
   const row = tray.rows.find((each) => each.key === key);
   if (!row || !row.waits || row.waits.checking || tray.phase === "applying" || tray.phase === "applied" || busy.change) return false;
   const { body } = row;
-  const was = tray.phase;
   row.body = { ...body, params: { ...(body.params || {}), ...values } };
-  row.waits = { ...row.waits, checking: true };
-  const answer = await ask(tray.rows.filter((each) => !each.waits || each === row));
+  // While it is checked the row still waits (its `checking` shows); a needs answer for it gives
+  // it new `waits`.
+  const checked = { ...row.waits, checking: true };
+  row.waits = checked;
+  const answer = await askAll(tray.rows.filter((each) => !each.waits || each === row));
+  const again = row.waits !== checked;
   if (answer.dropped) {
-    if (row.waits) Object.assign(row, { body, waits: { ...row.waits, checking: false } });
-    return false;
+    if (!again) Object.assign(row, { body, waits: { ...checked, checking: false } });
+    return null;
   }
-  if (answer.change) {
-    Object.assign(row, { waits: null, works: true });
+  if (answer.change && !again) {
+    row.waits = null;
+    row.works = true;
     accept(answer.change);
     return true;
   }
   row.body = body;
-  if (answer.needs && answer.row === row.id) startWaiting(row, answer.needs);
-  else Object.assign(row, { waits: { ...row.waits, reason: answer.reason, refused: true, checking: false }, detail: answer.reason });
-  if (was === "asking") await repreview();
-  else {
-    tray.phase = was;
-    notify();
+  if (!again) {
+    // Refused for another reason: said by the row when it names this row (or no row).
+    const own = !answer.row || answer.row === row.id;
+    const reason = own ? answer.reason : checked.reason;
+    Object.assign(row, { waits: { ...checked, reason, refused: own, checking: false }, detail: reason });
   }
+  if (answer.change) accept(answer.change);
+  else if (answer.none) noChange();
+  else await repreview();
   return false;
 }
 

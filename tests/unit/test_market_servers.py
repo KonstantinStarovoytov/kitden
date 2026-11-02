@@ -388,3 +388,28 @@ def test_an_add_with_no_client_on_the_gateway_says_so(home):
     nobody = SimpleNamespace(clients=[], items=[])
     words = after_words(Change(action="gateway.add", steps=[step]), nobody, home=home)
     assert words == [{"note": "No client uses the Kitden gateway yet."}]
+
+
+def test_a_token_typed_for_a_marketplace_server_is_checked_and_kept_out_of_the_answer(
+    home, monkeypatch
+):
+    def answers(url, headers):
+        return "open" if headers.get("Authorization") == "Bearer SENTINEL_SECRET_MK" else "token"
+
+    monkeypatch.setattr(kitden.demo, "no_sign_in", answers)
+    body = {
+        "action": "gateway.add",
+        "targets": [],
+        "params": {
+            "server": TEST_STATUS,
+            "headers": {"Authorization": "Bearer SENTINEL_SECRET_MK"},
+        },
+    }
+    with _page(home) as page:
+        good = page.post("/api/changes/preview", json=body, headers=POST)
+        assert good.status_code == 200, good.text
+        assert "SENTINEL_SECRET_MK" not in good.text
+        body["params"]["headers"] = {"Authorization": "Bearer SENTINEL_SECRET_BAD"}
+        bad = page.post("/api/changes/preview", json=body, headers=POST)
+        assert bad.status_code == 422
+        assert bad.json() == {"detail": "test-status did not accept this token."}

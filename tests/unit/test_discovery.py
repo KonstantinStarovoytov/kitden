@@ -557,3 +557,28 @@ def test_a_generic_registry_name_takes_the_publishers_name():
     assert short_name("com.neon/mcp") == "neon"
     assert short_name("io.github.acme/mcp-server") == "acme"
     assert short_name("ac.tandem/docs-mcp") == "docs-mcp"
+
+
+def test_a_local_value_is_checked_when_the_gateway_starts_it():
+    from kitden.discovery import server_setup
+
+    package = {
+        "registryType": "npm",
+        "identifier": "neon-mcp",
+        "version": "1.0.0",
+        "transport": {"type": "stdio"},
+        "environmentVariables": [
+            {"name": "NEON_API_KEY", "isRequired": True, "description": "Neon API key"}
+        ],
+    }
+    entry, refusal, fields = server_setup({"packages": [package]})
+    assert refusal is None and entry["command"] == "npx"
+    assert fields == [
+        {
+            "field": "env",
+            "name": "NEON_API_KEY",
+            "label": "Neon API key",
+            "prefix": "",
+            "later": True,
+        }
+    ]

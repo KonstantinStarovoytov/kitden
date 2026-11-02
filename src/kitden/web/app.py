@@ -1251,6 +1251,9 @@ def create_app(
                 sign_in=sign_in,
                 keychain_run=keychain_run,
                 fields=fields,
+                # A catalog row's values come in through configured_entry; a marketplace
+                # server's typed token comes here.
+                headers=None if discovered else _given_headers(params),
             )
         elif action == GATEWAY_RULE:
             projects = {p["id"]: p["path"] for p in state.data["projects"]}

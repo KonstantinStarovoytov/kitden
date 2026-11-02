@@ -71,9 +71,16 @@ export function accessForm(waits, onCheck) {
     const back = () => { submit.textContent = label; };
     return busyWhile(submit, Promise.resolve(work).finally(back));
   };
-  // Token works: the green lamp, and a check drawn in 320 ms.
+  // Token works: the green lamp, and a check drawn in 320 ms. Values only a running server can
+  // check (a local server's) are not called checked: Apply's verify checks them.
+  const unchecked = waits.fields.length > 0 && waits.fields.every((f) => f.later);
   const works = () => {
     why.hidden = true;
+    if (unchecked) {
+      done.replaceChildren("Saved on Apply. Checked when the gateway starts it");
+      done.hidden = false;
+      return;
+    }
     const mark = icon("check", 14, "ic access-check");
     done.replaceChildren(el("span", "lamp on"), mark, "Token works");
     done.hidden = false;
@@ -112,7 +119,7 @@ export function openAccess(row) {
     if (joined) {
       form.works();
       setTimeout(() => { if (form.node.isConnected) closePanel(); }, D(WORKS_MS));
-    } else if (row.waits) form.refuse(row.waits.reason);
+    } else if (joined === false && row.waits) form.refuse(row.waits.reason);
   });
   const body = el("div", "body");
   body.append(form.node);

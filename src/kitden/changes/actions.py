@@ -1028,6 +1028,7 @@ def gateway_add_steps(
     sign_in: Callable[[str, dict], str] | None = None,
     keychain_run: Runner | None = None,
     fields: list[dict] | None = None,
+    headers: dict | None = None,
 ) -> list[Step]:
     """Add one server a marketplace plugin offers (`server_id`, its row in market_servers) to
     the Kitden gateway, in one change: its entry in the gateway settings, with its secrets as
@@ -1036,8 +1037,9 @@ def gateway_add_steps(
 
     A server the gateway cannot take is refused first, with the list's reason. A remote one is
     asked once what access it needs, as a move asks; `fields` are the access values its
-    catalog row declares (else the one token field). `sign_in` and `keychain_run` are as in
-    local_move_steps.
+    catalog row declares (else the one token field). `headers` is a token typed for a
+    marketplace server (only `Authorization`), as local_move_steps takes it. `sign_in` and
+    `keychain_run` are as in local_move_steps.
     """
     name = server_id.partition("/")[2]
     if discovered is None:
@@ -1049,6 +1051,12 @@ def gateway_add_steps(
     if refusal is not None:
         raise ValueError(refusal)
     server = gateway_entry(entry)
+    if headers:
+        if set(headers) != {"Authorization"}:
+            raise ValueError("Only the server's declared access fields can be set.")
+        if "url" not in server:
+            raise ValueError("A token goes with one remote server.")
+        server = {**server, "headers": {**(server.get("headers") or {}), **headers}}
     if "url" in server:
         given = bool(server.get("headers"))
         check_access(name, server, sign_in, fields or [TOKEN_FIELD], refused=given)
