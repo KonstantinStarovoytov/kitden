@@ -164,7 +164,7 @@ from kitden.views.inventory import (
     keep_last_good,
 )
 from kitden.views.library import KINDS, LIST_SHOWS, LIST_TABS, SHOWS, library, library_list
-from kitden.views.library_map import library_map
+from kitden.views.library_map import cursor_imports, library_map
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.review import change_target, mark_reach, undo_note
@@ -1116,6 +1116,10 @@ def create_app(
     def _item(item_id: str):
         return next((i for i in state.inventory.items if i.id == item_id), None)
 
+    def _cursor_imports() -> bool:
+        """Cursor and Claude Code are both here, and Cursor loads Claude Code's plugins."""
+        return cursor_imports(adapters, list(_found_clients()))
+
     def _found_cursor():
         """The Cursor adapter when Cursor is on this computer, else None."""
         return adapters.get("cursor") if "cursor" in _found_clients() else None
@@ -1480,8 +1484,7 @@ def create_app(
         steps go (`change.target`)."""
         # Only an added or removed plugin reaches Cursor through Claude Code.
         plugins = (PLUGIN_INSTALL, PLUGIN_REMOVE, PROJECT_ALIGN)
-        cursor = _found_cursor() if change.action in plugins else None
-        imports = bool(cursor and cursor.imports_claude_plugins())
+        imports = change.action in plugins and _cursor_imports()
         switches = (PLUGIN_REMOVE, PLUGIN_ENABLE, PLUGIN_DISABLE)
         switched = built.items[0] if change.action in switches else None
         mark_reach(change, state.inventory, switched, imports)
@@ -1732,7 +1735,7 @@ def create_app(
         """Whether Cursor loads Claude Code's plugins and the skills in its folder."""
         cursor = _found_cursor()
         return {
-            "plugin": bool(cursor and cursor.imports_claude_plugins()),
+            "plugin": _cursor_imports(),
             "skill": bool(cursor and cursor.reads_other_clients()),
         }
 

@@ -1377,3 +1377,25 @@ def test_the_account_row_says_why_and_goes_with_its_hidden_column(tmp_path):
     # Only Claude Code has it: with Claude Code hidden it is left out, and so is its group.
     hidden = _list(home, hidden=frozenset({"claude_code"}))
     assert "other" not in [g["key"] for g in hidden["groups"]]
+
+
+def test_cursor_gets_nothing_through_claude_code_when_claude_code_is_not_found(home):
+    """Cursor loads Claude Code's plugins only when Claude Code is on this computer: without it
+    the Library offers nothing "Via Claude Code", as the maps do."""
+    import dataclasses
+
+    from kitden.model import ClientStatus
+
+    inventory = build_inventory(home)
+    inventory.clients = [
+        dataclasses.replace(c, status=ClientStatus.NOT_FOUND) if c.id == "claude_code" else c
+        for c in inventory.clients
+    ]
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library(inventory, adapters, None, gateway_registered=False, kind="plugin", show="new")
+    listed = library_list(
+        inventory, adapters, None, gateway_registered=False, tab="plugin", show="new"
+    )
+    assert "Via Claude Code" not in json.dumps(answer)
+    assert "loads Claude Code's plugins" not in json.dumps(answer)
+    assert "Via Claude Code" not in json.dumps(listed)

@@ -23,7 +23,7 @@ from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Item, ItemKind, Sc
 from kitden.views.catalog import catalog, search
 from kitden.views.findings import group_of
 from kitden.views.instructions_map import instructions_map
-from kitden.views.library_map import OTHER, library_map
+from kitden.views.library_map import OTHER, cursor_imports, library_map
 from kitden.views.load_map import MARKS, Row, load_map
 from kitden.views.match import Copies, catalog_keys, plugin_copies, plugin_keys, source_keys
 from kitden.views.skills import project_skills, skill_catalog
@@ -800,8 +800,7 @@ def _tables(
         hidden = frozenset()
     visible = [c for c in found if c not in hidden]
     homes = list({a.home for a in adapters.values()})
-    cursor = adapters.get("cursor") if "cursor" in found else None
-    cursor_imports = bool(cursor and cursor.imports_claude_plugins())
+    imports = cursor_imports(adapters, found)
 
     map_rows = load_map(inventory, project, gateway_registered=gateway_registered)
     offers = catalog(inventory, adapters)
@@ -815,14 +814,14 @@ def _tables(
             _server_add(found, inventory.items),
         ),
         "plugin": _plugin_rows(
-            map_rows, offers, skills, found, cursor_imports, in_project=project is not None
+            map_rows, offers, skills, found, imports, in_project=project is not None
         ),
         "skill": _skill_rows(
             map_rows,
             offers,
             skills,
             found,
-            cursor_imports,
+            imports,
             {i.id: i for i in inventory.items},
             plugin_copies(inventory),
             _no_skill_place(adapters, project),

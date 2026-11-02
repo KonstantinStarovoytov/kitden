@@ -275,3 +275,26 @@ def test_a_codex_only_marketplace_is_refused_for_claude_code(client, tmp_path):
     answer = _marketplace(client, str(tmp_path / "codex-only"), ["claude_code"])
     assert answer.status_code == 422
     assert "Claude Code reads only" in answer.json()["detail"]
+
+
+def test_without_claude_code_cursor_inherits_no_plugins(tmp_path):
+    """Cursor loads Claude Code's plugins only when Claude Code is on this computer."""
+    import dataclasses
+
+    from kitden.model import ClientStatus
+
+    home = add_marketplaces(make_home(tmp_path, "claude_code/2.1.283", "cursor/3.21.16"))
+    write_cursor_fixture_state(home, {REACTIVE_KEY: {}})
+
+    def build():
+        inventory = build_inventory(home)
+        inventory.clients = [
+            dataclasses.replace(c, status=ClientStatus.NOT_FOUND) if c.id == "claude_code" else c
+            for c in inventory.clients
+        ]
+        return inventory
+
+    app = create_app(build, token="tok", port=47800, home=home)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as client:
+        client.get("/?token=tok")
+        assert _inherits(client)["plugin"] is False
