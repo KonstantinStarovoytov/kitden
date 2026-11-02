@@ -17,12 +17,20 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
 </p>
 
+### See what each agent loads
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/library-dark.png">
+  <source srcset="docs/images/readme/library-light.png">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/library-light.png" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin, Codex and Cursor load the frontend-design skill.">
+</picture>
+
 ### Share servers across all agents
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.webp">
   <source srcset="docs/images/readme/pick-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.webp" width="450" alt="memory from Claude Code, playwright from Codex and sequential-thinking from Cursor go into the Kitden gateway together, to be shared by all three.">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.webp" width="450" alt="Context7 from Cursor, memory from Claude Code and playwright from Codex go into the Kitden gateway together, to be shared by all three.">
 </picture>
 
 ### Turn tools off
@@ -33,17 +41,11 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
   <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/tools-light.webp" width="860" alt="memory in the Kitden gateway shows its nine tools; its three delete tools are turned off on the map and applied for every agent.">
 </picture>
 
-### One token, every agent
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/token-dark.webp">
-  <source srcset="docs/images/readme/token-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/token-light.webp" width="880" alt="A token is typed for Stripe in the gateway and works at once; it is kept in the macOS Keychain on Apply.">
-</picture>
-
 ## Get started
 
-Needs macOS and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+Needs **macOS**, [uv](https://docs.astral.sh/uv/getting-started/installation/) and at least
+one of **Claude Code, Codex or Cursor**.
+
 Try it on a sample first. Your own settings are not read or changed:
 
 <!-- Release checklist: docs/readme-media.md -->
@@ -51,15 +53,20 @@ Try it on a sample first. Your own settings are not read or changed:
 uvx --python 3.13 kitden demo
 ```
 
-Then install it for your own setup and open it:
+Install it and open it for your own setup:
 
 ```bash
 uv tool install --python 3.13 kitden && kitden
 ```
 
-Every change shows a preview first, keeps a backup for Undo, and stays on your Mac.
-Secrets live in the macOS Keychain. Add only servers and plugins you trust: they run with
-your permissions.
+Update later with `uv tool upgrade kitden`.
+
+## Good to know
+
+- Every change shows a preview first. Apply keeps a backup, and Undo puts it back.
+- Everything stays on your Mac: no account, no telemetry.
+- Tokens are checked before Apply and kept in the macOS Keychain only.
+- Add only servers and plugins you trust: they run with your permissions.
 
 [Guide](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md) ·
 [Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) ·

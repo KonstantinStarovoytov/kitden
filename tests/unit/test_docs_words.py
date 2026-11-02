@@ -30,7 +30,8 @@ def test_docs_promise_no_undo_they_cannot_keep():
 
 def test_readme_is_short_and_the_guide_names_the_page_words():
     text = (ROOT / "README.md").read_text()
-    # The README shows three scenes and two commands; the details live in the guide (2026-11-02).
+    # The README shows three scenes, two commands and four facts; the details live in the guide
+    # (2026-11-02).
     assert len(text.splitlines()) <= 80
     assert "docs/guide.md" in text
     guide = " ".join((ROOT / "docs/guide.md").read_text().split())
@@ -114,9 +115,10 @@ def test_the_readme_names_no_old_review():
 
 def test_the_readme_shows_three_scenes_in_both_themes():
     readme = (ROOT / "README.md").read_text()
-    for scene in ("pick", "tools", "token"):
+    # One still, then two animations: the scenes differ in look as in subject.
+    for scene, kind in (("library", "png"), ("pick", "webp"), ("tools", "webp")):
         for theme in ("light", "dark"):
-            image = ROOT / f"docs/images/readme/{scene}-{theme}.webp"
-            assert f"docs/images/readme/{scene}-{theme}.webp" in readme, image.name
+            image = ROOT / f"docs/images/readme/{scene}-{theme}.{kind}"
+            assert f"docs/images/readme/{scene}-{theme}.{kind}" in readme, image.name
             # Small enough for a phone on a slow line.
             assert image.stat().st_size <= 1_600_000, image.name

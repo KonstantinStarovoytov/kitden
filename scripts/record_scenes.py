@@ -1,10 +1,11 @@
-"""The README's three short animations, played on the real page with Playwright.
+"""The README's pictures, played on the real page with Playwright: one still and two short
+animations.
 
-Used by scripts/record_readme.py, which starts a fresh page for each one. Each scene is set up
-first, then filmed: the page runs on a paused clock that moves one frame at a time, and the part
-of the page the scene is about is saved after each step. So the motion is as even as on a real
-screen, however long a frame takes to save. img2webp joins the frames into one looping WebP. A
-drawn cursor shows the pointer, since a headless browser shows none.
+Used by scripts/record_readme.py, which starts a fresh page for each one. An animated scene is
+set up first, then filmed: the page runs on a paused clock that moves one frame at a time, and
+the part of the page the scene is about is saved after each step. So the motion is as even as
+on a real screen, however long a frame takes to save. img2webp joins the frames into one looping
+WebP. A drawn cursor shows the pointer, since a headless browser shows none.
 """
 
 import math
@@ -108,6 +109,10 @@ class Film:
             shutil.copy(last, self.folder / f"{self.frames:05d}.png")
             self.frames += 1
 
+    def still(self) -> None:
+        """One picture instead of frames: the scene is a still."""
+        self.page.screenshot(path=self.folder / "still.png", clip=self.clip)
+
     def loop(self, seconds: float = 0.4) -> None:
         """Fade the last frame into the first, so the loop starts again without a jump."""
         last = self.folder / f"{self.frames - 1:05d}.png"
@@ -186,13 +191,6 @@ class Pointer:
         self.glide(x, y, seconds)
 
 
-def type_text(film: Film, page: Page, text: str) -> None:
-    """Types as a person does, about 20 keys a second."""
-    for index, key in enumerate(text):
-        page.keyboard.type(key)
-        film.hold(2 / FPS if index % 2 else 1 / FPS)
-
-
 def center(page: Page, selector: str) -> tuple[float, float]:
     box = page.locator(selector).first.bounding_box()
     return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
@@ -213,9 +211,9 @@ def open_gateway(page: Page, link: str) -> None:
 
 def scene_pick(page: Page, film: Film, pointer: Pointer) -> None:
     """Three servers are picked with a band and dragged onto the gateway together."""
-    first = page.locator('[data-focus="block:outside:local:memory"]').bounding_box()
-    last = page.locator('[data-focus="block:outside:local:sequential-thinking"]').bounding_box()
-    # From just above memory, below stripe, so the band takes only the local servers.
+    first = page.locator('[data-focus="block:outside:move:context7"]').bounding_box()
+    last = page.locator('[data-focus="block:outside:local:playwright"]').bounding_box()
+    # From just above context7, the first outside, so the band takes all three.
     pointer.jump(first["x"] + first["width"] + 26, first["y"] - 3)
     film.start()
     film.hold(0.5)
@@ -271,36 +269,26 @@ def scene_tools(page: Page, film: Film, pointer: Pointer) -> None:
     film.loop()
 
 
-def scene_token(page: Page, film: Film, pointer: Pointer) -> None:
-    """Stripe waits in the gateway for a token; one is typed and works for every agent."""
-    stripe = page.locator('[data-focus="block:outside:move:stripe"]').bounding_box()
-    page.mouse.move(stripe["x"] + stripe["width"] * 0.25, stripe["y"] + stripe["height"] / 2)
-    page.mouse.down()
-    page.mouse.move(*center(page, '[data-focus="block:gateway:kitden"]'), steps=12)
-    page.mouse.up()
-    page.locator("#dock button:has-text('Add token')").click(timeout=20000)
-    field = page.locator("#drawer input[type=password]").first
-    field.wait_for()
-    time.sleep(1.0)
-    box = field.bounding_box()
-    pointer.jump(box["x"] + box["width"] * 0.7, box["y"] + box["height"] + 70)
-    film.start()
-    film.hold(0.4)
-    pointer.click("#drawer input[type=password]", 0.5)
-    type_text(film, page, "sk_test_51ReadmeSampleKey")
-    film.hold(0.25)
-    pointer.click("#drawer button:has-text('Add token')", 0.5)
-    film.until("#drawer .access-works")
-    film.hold(0.45)  # the panel closes on its own soon after
-    film.freeze(1.3)
-    film.loop()
+def open_library(page: Page, link: str) -> None:
+    page.goto(link)
+    page.goto(link.split("/?")[0] + "/#library")
+    page.locator('[data-focus="block:client:codex"]').wait_for()
+    time.sleep(1.2)  # the map has landed
+
+
+def scene_library(page: Page, film: Film, pointer: Pointer) -> None:
+    """One still picture: the Library map, which agent loads which plugin and skill. The pointer
+    stays out of it."""
+    pointer.jump(1100, 700)
+    time.sleep(0.4)
+    film.still()
 
 
 # The part of the page each animation shows, in CSS pixels: x, y, width, height.
 SCENES = (
+    ("library", scene_library, (180, 255, 470, 370)),  # the clients and their plugins, a still
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
     ("tools", scene_tools, (180, 235, 860, 500)),  # memory, its tools and the changes waiting
-    ("token", scene_token, (360, 240, 885, 300)),  # the gateway, Stripe and the token panel
 )
 
 
@@ -341,17 +329,23 @@ def record_all(fresh_page, out: Path, only: str = "") -> None:
                 context.add_init_script(CURSOR)
                 page = context.new_page()
                 page.clock.install()
-                target = out / f"{name}-{theme}.webp"
                 clip = {"x": x, "y": y, "width": w, "height": h}
                 with tempfile.TemporaryDirectory() as frames:
                     try:
-                        open_gateway(page, link)
+                        (open_library if name == "library" else open_gateway)(page, link)
                         film = Film(page, clip, Path(frames))
                         play(page, film, Pointer(page, film))
                     finally:
                         context.close()
                         server.should_exit = True
-                    encode(Path(frames), target)
-                seconds = film.frames / FPS
-                print(f"{target.name}: {seconds:.1f} s, {target.stat().st_size // 1024} KB")
+                    still = Path(frames) / "still.png"
+                    if still.exists():
+                        target = out / f"{name}-{theme}.png"
+                        shutil.copy(still, target)
+                        length = "a still"
+                    else:
+                        target = out / f"{name}-{theme}.webp"
+                        encode(Path(frames), target)
+                        length = f"{film.frames / FPS:.1f} s"
+                print(f"{target.name}: {length}, {target.stat().st_size // 1024} KB")
         browser.close()
