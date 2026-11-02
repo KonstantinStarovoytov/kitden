@@ -89,8 +89,8 @@ def delete(ref: dict, run: Runner = run_security) -> None:
 
 
 def references_in(entry: dict) -> list[dict]:
-    """The references among an entry's env values and header values."""
-    found = []
+    """The references among an entry's env values and header values, and its sign-in's."""
+    found = [entry["sign_in"]] if is_reference(entry.get("sign_in")) else []
     for field in ("env", "headers"):
         values = entry.get(field)
         if isinstance(values, dict):

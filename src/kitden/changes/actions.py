@@ -47,6 +47,8 @@ from kitden.model import (
     Step,
 )
 from kitden.redact import redact
+from kitden.sign_in import GONE, SignIn
+from kitden.sign_in import KEY as SIGN_IN_KEY
 from kitden.views.catalog import known_refusal, market_entry
 from kitden.views.setup_server import is_own_entry
 from kitden.views.words import (
@@ -519,14 +521,26 @@ SIGN_IN_LATER = "{name} does not let Kitden sign in yet. It may take an API key;
 class NeedsAccess(ValueError):
     """A server that needs access before it can join the preview: the kind ("token" or
     "sign-in"), the fields to ask for, and whether a value given was refused. Its words are
-    the reason the page shows; no value given is ever in them."""
+    the reason the page shows; no value given is ever in them. `url` is the server's address,
+    which the page never gets: it hands out a sign-in id for it instead."""
 
-    def __init__(self, server: str, kind: str, fields: list[dict], refused: bool = False):
+    def __init__(
+        self,
+        server: str,
+        kind: str,
+        fields: list[dict],
+        refused: bool = False,
+        url: str | None = None,
+        reason: str | None = None,
+    ):
         self.server, self.kind, self.fields, self.refused = server, kind, fields, refused
-        if refused:
+        self.url = url
+        if reason is not None:
+            words = reason
+        elif refused:
             words = f"{server} did not accept this token."
         elif kind == "sign-in":
-            words = SIGN_IN_LATER.format(name=server)
+            words = f"{server} needs sign-in."
         else:
             words = f"{server} needs a token."
         super().__init__(words)
@@ -618,16 +632,40 @@ def check_access(
     sign_in: Callable[[str, dict], str] | None,
     fields: list[dict],
     refused: bool,
+    signed_in: SignIn | None = None,
 ) -> None:
     """Ask a remote server once what access it needs, with its headers: NeedsAccess unless it
     answers as open (`refused`: the headers hold a value typed for it), and the words that it
-    could not be reached when it does not answer."""
+    could not be reached when it does not answer. With `signed_in`, the server is asked with
+    that sign-in's token: it must be a finished sign-in for this address."""
+    headers = server.get("headers") or {}
+    if signed_in is not None:
+        if signed_in.state != "done" or signed_in.url != server["url"]:
+            raise NeedsAccess(name, "sign-in", fields, url=server["url"], reason=GONE)
+        headers = {**headers, "Authorization": f"Bearer {signed_in.access_token}"}
     try:
-        kind = (sign_in or access_needed)(server["url"], server.get("headers") or {})
+        kind = (sign_in or access_needed)(server["url"], headers)
     except OSError:
         raise ValueError(f"Kitden could not reach {name}.") from None
     if kind != "open":
-        raise NeedsAccess(name, kind, fields, refused=refused)
+        reason = f"{name} did not accept this sign-in." if signed_in is not None else None
+        raise NeedsAccess(
+            name, kind, fields, refused=refused or bool(reason), url=server["url"], reason=reason
+        )
+
+
+def signed_in_server(
+    home: Path, name: str, server: dict, old: Any, signed_in: SignIn, run: Runner | None
+) -> Step:
+    """The gateway settings step for a server that signed in: its entry names the Keychain item
+    `<name>/sign-in`, and the step carries the sign-in's JSON for Apply to store."""
+    item = KeychainItem(name, SIGN_IN_KEY, signed_in.secret or "")
+    entry = {**server, "sign_in": item.ref}
+    step = _server_step(home, name, entry, old, run)
+    if step is None:  # the same entry: only the Keychain item changes
+        step = settings_step(home, ("servers", name), secrets_out(name, entry)[0], name)
+    step.keychain = [*step.keychain, item]
+    return step
 
 
 def access_needed(url: str, headers: dict) -> str:
@@ -852,6 +890,7 @@ def local_move_steps(
     sign_in: Callable[[str, dict], str] | None = None,
     keychain_run: Runner | None = None,
     headers: dict | None = None,
+    signed_in: SignIn | None = None,
 ) -> list[Step]:
     """Move direct entries into the Kitden gateway, in one change.
 
@@ -868,7 +907,8 @@ def local_move_steps(
     `sign_in` asks a remote server what access it needs, and `keychain_run` reads the
     Keychain; None is `access_needed` and the real Keychain (the demo passes its stand-ins).
     A remote server that needs access raises NeedsAccess. `headers` is the token typed for
-    it (only `Authorization`, for a single remote server), checked before any step.
+    it (only `Authorization`, for a single remote server), checked before any step; `signed_in`
+    is a browser sign-in for a single remote server, checked the same way.
     """
     if not items:
         raise ValueError("Choose a server to move.")
@@ -906,15 +946,19 @@ def local_move_steps(
         name = next(iter(servers))
         given = {**(servers[name].get("headers") or {}), **headers}
         servers[name] = {**servers[name], "headers": given}
+    if signed_in is not None and (len(servers) != 1 or "url" not in next(iter(servers.values()))):
+        raise ValueError("A sign-in goes with one remote server.")
     for name, server in servers.items():
         if "url" in server:
-            check_access(name, server, sign_in, [TOKEN_FIELD], refused=bool(headers))
+            given = bool(headers)
+            check_access(name, server, sign_in, [TOKEN_FIELD], given, signed_in)
 
-    steps = [
-        step
-        for n, s in servers.items()
-        if (step := _server_step(home, n, s, held.get(n), keychain_run)) is not None
-    ]
+    def server_step(name: str, server: dict) -> Step | None:
+        if signed_in is not None:
+            return signed_in_server(home, name, server, held.get(name), signed_in, keychain_run)
+        return _server_step(home, name, server, held.get(name), keychain_run)
+
+    steps = [step for n, s in servers.items() if (step := server_step(n, s)) is not None]
     path = os.environ.get("PATH")
     if steps and path and not settings.get("path"):  # with a server entry written
         steps.append(settings_step(home, ("path",), path, "PATH"))
@@ -1029,6 +1073,7 @@ def gateway_add_steps(
     keychain_run: Runner | None = None,
     fields: list[dict] | None = None,
     headers: dict | None = None,
+    signed_in: SignIn | None = None,
 ) -> list[Step]:
     """Add one server a marketplace plugin offers (`server_id`, its row in market_servers) to
     the Kitden gateway, in one change: its entry in the gateway settings, with its secrets as
@@ -1038,8 +1083,8 @@ def gateway_add_steps(
     A server the gateway cannot take is refused first, with the list's reason. A remote one is
     asked once what access it needs, as a move asks; `fields` are the access values its
     catalog row declares (else the one token field). `headers` is a token typed for a
-    marketplace server (only `Authorization`), as local_move_steps takes it. `sign_in` and
-    `keychain_run` are as in local_move_steps.
+    marketplace server (only `Authorization`), as local_move_steps takes it, and so is
+    `signed_in`. `sign_in` and `keychain_run` are as in local_move_steps.
     """
     name = server_id.partition("/")[2]
     if discovered is None:
@@ -1057,10 +1102,15 @@ def gateway_add_steps(
         if "url" not in server:
             raise ValueError("A token goes with one remote server.")
         server = {**server, "headers": {**(server.get("headers") or {}), **headers}}
+    if signed_in is not None and "url" not in server:
+        raise ValueError("A sign-in goes with one remote server.")
     if "url" in server:
         given = bool(server.get("headers"))
-        check_access(name, server, sign_in, fields or [TOKEN_FIELD], refused=given)
-    step = _server_step(home, name, server, None, keychain_run)
+        check_access(name, server, sign_in, fields or [TOKEN_FIELD], given, signed_in)
+    if signed_in is not None:
+        step = signed_in_server(home, name, server, None, signed_in, keychain_run)
+    else:
+        step = _server_step(home, name, server, None, keychain_run)
     assert step is not None  # a new server always has its step
     steps = [step]
     path = os.environ.get("PATH")

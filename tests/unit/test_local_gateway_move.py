@@ -388,7 +388,6 @@ def waits(home, wanted, **options):
     return error.value
 
 
-SIGN_IN_LATER = "{} does not let Kitden sign in yet. It may take an API key; see its docs."
 
 
 def test_access_needed_tells_sign_in_token_and_open(home):
@@ -414,7 +413,7 @@ def test_a_server_that_needs_access_waits_after_a_401(home):
             "server": "linear",
             "kind": "sign-in",
             "fields": [TOKEN_FIELD],
-            "reason": SIGN_IN_LATER.format("linear"),
+            "reason": "linear needs sign-in.",
             "refused": False,
         }
         assert json.loads(oauth.got[0]["body"])["method"] == "initialize"
@@ -545,7 +544,8 @@ def test_batch_preview_answers_needs_for_the_row(home):
         assert answer.status_code == 422
         body = answer.json()
         assert body["row"] == "r1" and body["needs"]["kind"] == "sign-in"
-        assert body["detail"] == body["needs"]["reason"] == SIGN_IN_LATER.format("keyed")
+        assert body["detail"] == body["needs"]["reason"] == "keyed needs sign-in."
+        assert body["needs"]["sign_in"]
     finally:
         stop(remote)
 

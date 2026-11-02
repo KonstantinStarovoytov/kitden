@@ -2,8 +2,11 @@
 
 import asyncio
 import contextlib
+import html
+import importlib
 import json
 import sys
+import webbrowser
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -14,7 +17,7 @@ from typing import Any
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, StreamingResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
@@ -128,6 +131,7 @@ from kitden.local_gateway.views import (
 from kitden.marketplace_link import LinkError, read_marketplace
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind, Step
 from kitden.redact import masked_command, redact_text
+from kitden.sign_in import SignIn, SignIns
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
 from kitden.views.changes_view import change_entries
@@ -544,6 +548,10 @@ def refusal_words(error: ValueError) -> str:
     return str(error)
 
 
+# The page the browser shows back from a server's sign-in page.
+SIGNED_IN_PAGE = "Signed in. You can close this tab."
+NOT_SIGNED_IN_PAGE = "Sign-in did not finish. You can close this tab and try again in Kitden."
+
 # The API calls that answer before the first scan is done.
 NO_WAIT = ("/api/events", "/api/progress", "/api/about")
 
@@ -582,6 +590,7 @@ def create_app(
     quick_first: bool = False,
     version_refresh: Callable[[], dict[str, str | None]] | None = None,
     demo: bool = False,
+    open_browser: Callable[[str], Any] = webbrowser.open,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown).
     `version_refresh` reads the clients' versions after the first scan; by default the ones
@@ -589,6 +598,7 @@ def create_app(
 
     With `demo`, `home` is the sample's, and stand-ins keep everything inside it: no client
     command, Keychain, MCP server, version read or network. What would go online is refused.
+    `open_browser` shows a server's sign-in page; tests pass a stand-in.
     """
     events = Broadcaster()
     watcher_ref: list[Watcher] = []
@@ -664,6 +674,65 @@ def create_app(
             keychain_run=keychain_run,
         )
     write_lock = asyncio.Lock()
+    # Browser sign-ins (Part 3b): the tokens wait here, in memory, until Apply.
+    signins = SignIns()
+    redirect_uri = f"http://127.0.0.1:{port}/sign-in/done"
+
+    def _given_sign_in(params: dict) -> SignIn | None:
+        """The sign-in a row names (`params.sign_in`), or None. An id Kitden no longer has is
+        a sign-in that cannot be used: the check says to sign in again."""
+        given = params.get("sign_in")
+        if given is None:
+            return None
+        return signins.get(str(given)) or SignIn(id=str(given), url="", name="", state="failed")
+
+    async def _oauth():
+        """The sign-in flow's module. It loads the MCP SDK, so it is imported in a thread."""
+        return await asyncio.to_thread(importlib.import_module, "kitden.local_gateway.oauth")
+
+    async def _sign_in_record(request: Request) -> SignIn | JSONResponse:
+        if stand_ins:
+            return _error(stand_ins.NOT_IN_DEMO, 422)
+        record = signins.get(str((await _body(request)).get("id", "")))
+        return record if record is not None else _error("Unknown sign-in.", 404)
+
+    async def sign_in_start(request: Request) -> JSONResponse:
+        """Open the server's sign-in page in the browser; answers once it shows."""
+        record = await _sign_in_record(request)
+        if isinstance(record, JSONResponse):
+            return record
+        oauth = await _oauth()
+        try:
+            await oauth.start(record, redirect_uri, open_browser)
+        except oauth.CannotSignIn as error:
+            return JSONResponse({"detail": str(error), "cannot": True}, status_code=422)
+        except ValueError as error:
+            return _error(str(error), 422)
+        return JSONResponse({})
+
+    async def sign_in_wait(request: Request) -> JSONResponse:
+        """When the sign-in ends: done, failed or cancelled, with the reason."""
+        record = await _sign_in_record(request)
+        if isinstance(record, JSONResponse):
+            return record
+        return JSONResponse(await (await _oauth()).wait(record))
+
+    async def sign_in_cancel(request: Request) -> JSONResponse:
+        record = await _sign_in_record(request)
+        if isinstance(record, JSONResponse):
+            return record
+        (await _oauth()).cancel(record)
+        return JSONResponse({})
+
+    async def sign_in_done(request: Request) -> HTMLResponse:
+        """Where the browser comes back after sign-in. It needs no cookie (the redirect comes
+        from another site); only a flow that waits for its `state` takes the code."""
+        query = dict(request.query_params)
+        took = bool(query.get("state")) and (await _oauth()).finish(signins, query)
+        words = SIGNED_IN_PAGE if took and query.get("code") else NOT_SIGNED_IN_PAGE
+        page = f"<!doctype html><title>Kitden</title><p>{html.escape(words)}</p>"
+        return HTMLResponse(page)  # the middleware adds no-store
+
     # The Kitden gateway's tool lists: a refresh runs in the background, one at a time. A server
     # that did not answer keeps its old list; the sentence that says why waits for Details.
     tool_problems: dict[str, str] = {}
@@ -1227,6 +1296,7 @@ def create_app(
                 sign_in=sign_in,
                 keychain_run=keychain_run,
                 headers=_given_headers(params),
+                signed_in=_given_sign_in(params),
             )
         elif action == GATEWAY_ADD:
             # It may ask a remote server whether it signs in, so not on the event loop.
@@ -1254,6 +1324,7 @@ def create_app(
                 # A catalog row's values come in through configured_entry; a marketplace
                 # server's typed token comes here.
                 headers=None if discovered else _given_headers(params),
+                signed_in=_given_sign_in(params),
             )
         elif action == GATEWAY_RULE:
             projects = {p["id"]: p["path"] for p in state.data["projects"]}
@@ -1421,7 +1492,10 @@ def create_app(
             try:
                 made = await _steps_for(request["kind"], request["targets"], request["params"])
             except NeedsAccess as error:
-                raise _RowRefused(str(error), request["id"], error.answer()) from None
+                needs = error.answer()
+                if error.kind == "sign-in" and error.url and not stand_ins:
+                    needs["sign_in"] = signins.offer(error.url, error.server)
+                raise _RowRefused(str(error), request["id"], needs) from None
             except ValueError as error:
                 raise _RowRefused(refusal_words(error), request["id"]) from None
             if not made.steps:
@@ -1717,6 +1791,10 @@ def create_app(
             Route("/api/changes/preview", preview, methods=["POST"]),
             Route("/api/batch/preview", batch_preview, methods=["POST"]),
             Route("/api/batch/check", batch_check, methods=["POST"]),
+            Route("/api/sign-in/start", sign_in_start, methods=["POST"]),
+            Route("/api/sign-in/wait", sign_in_wait, methods=["POST"]),
+            Route("/api/sign-in/cancel", sign_in_cancel, methods=["POST"]),
+            Route("/sign-in/done", sign_in_done),
             Route("/api/changes/{change_id}", change_view),
             Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
             Route("/api/commands", commands),
