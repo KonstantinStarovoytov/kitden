@@ -11,12 +11,10 @@
 // it took the drop; `at` is a map point, null for Escape, a lost pointer, a blur of the window or a
 // point over Details or the dock). The engine holds the block with the pointer, unless the kind is
 // `still` (the block stays where it is, as a client's wire does).
-import { animateTo } from "./motion.js";
+import { animateTo, CALM } from "./motion.js";
 
 // How far a pointer moves on a block before the drag starts: less is a click.
 export const DRAG_START = 5;
-// A block let go where nothing took it glides home.
-export const HOME_MS = 220;
 // What a drop never lands on: the floating Details and the dock.
 const COVERS = ["#drawer.open", "#dock"];
 // A block dragged onto a client: what its tip says until it is over one, and where a client takes
@@ -160,7 +158,7 @@ export function goHome(map) {
   const { view, home } = map;
   map.home = null;
   if (map.onHome) map.onHome(home);
-  view.homeIn(home, HOME_MS);
+  view.homeIn(home);
 }
 
 // The client block a map point is near: the first in order whose box, widened by NEAR_CLIENT,
@@ -200,9 +198,11 @@ export function moveGhost(drag) {
 }
 
 // A panel row's ghost flies from where it is onto `to` (a page box), shrinking to its width and
-// fading as it lands, or back onto its row, then goes, and the row comes back to full strength.
-// Only transform and opacity move. Under reduced motion, and on a hidden page, it lands at once.
-export function flyGhost({ ghost, box, block }, to, { dur, ease }) {
+// fading as it lands, or back onto its row, then goes, and the row comes back to full strength
+// (in 180 ms CALM unless said). Only transform and opacity move. Under reduced motion, and on a
+// hidden page, it lands at once.
+const BACK_HOME = { dur: 180, ease: CALM };
+export function flyGhost({ ghost, box, block }, to, { dur, ease } = BACK_HOME) {
   const end = to
     ? { transform: `translate(${to.left - box.left}px, ${to.top - box.top}px) scale(${to.width / box.width})`, opacity: 0 }
     : { transform: "none", opacity: 1 };

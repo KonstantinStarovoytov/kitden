@@ -11,7 +11,7 @@ import { clientAt, covered, flyGhost, follow, liftGhost, mapArea, moveGhost, ON_
 import { drawChip, glidePill } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
 import { mapView } from "./map-view.js";
-import { afterOldPage, CALM, rise, riseHead, shake } from "./motion.js";
+import { afterOldPage, rise, riseHead, shake } from "./motion.js";
 import { banner, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
 import { busy, current, currentError, projectPath, render, retry, setState, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
@@ -858,9 +858,6 @@ function dropItem(drag, at) {
   return false;
 }
 
-// A row of the add panel goes back onto its row after any let go.
-const BACK_HOME = { dur: 180, ease: CALM };
-
 // A press on a free row of the add panel (library-add.js gives its `item`, as the map's blocks
 // have it, and its `node`) starts a drag onto a client, while the map shows. The same waits as a
 // press on the map hold it back.
@@ -911,6 +908,6 @@ function dropRow(drag, at) {
     const node = view.node(client.id);
     if (node) shake(node);
   } else if (client) addToTray(addBody(drag.block.item, client.client)).catch(reportError);
-  flyGhost(drag, null, BACK_HOME);
+  flyGhost(drag, null);
   return false;
 }

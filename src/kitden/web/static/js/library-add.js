@@ -9,7 +9,7 @@ import { getJson } from "./api.js";
 import { button, plural, reportError } from "./dom.js";
 import { addsOf, learnOffers, letGoLibraryMap, onLibraryAdd, pressRow } from "./library-map.js";
 import { marketplaceForm } from "./offer.js";
-import { CLIENT_ORDER } from "./parts.js";
+import { byClientOrder } from "./parts.js";
 import { busy, onBusy } from "./store.js";
 import { addToTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
@@ -28,7 +28,7 @@ const ADD_KEY = "add:plugins";
 // The clients a row adds to: those that can take it and lack it, in column order.
 function lacking(row) {
   const has = new Set(row.installed || []);
-  return Object.keys(row.routes || {}).filter((client) => !has.has(client)).sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+  return Object.keys(row.routes || {}).filter((client) => !has.has(client)).sort(byClientOrder);
 }
 
 // A row as the map's blocks have their item, for its drag and for the adds in the tray: the

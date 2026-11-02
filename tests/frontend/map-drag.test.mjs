@@ -16,7 +16,7 @@ globalThis.document = {
   querySelector: (selector) => (covers[selector] ? { getBoundingClientRect: () => covers[selector] } : null),
   hidden: false,
 };
-const { HOME_MS, startDrag } = await import('../../src/kitden/web/static/js/map-drag.js');
+const { startDrag } = await import('../../src/kitden/web/static/js/map-drag.js');
 // The Gateway's drags go through the same engine.
 const gateway = await import('../../src/kitden/web/static/js/gateway-drag.js');
 
@@ -27,7 +27,7 @@ function fakeMap() {
   const view = {
     node: () => node,
     hold: (id, at, how) => asked.push(['hold', id, at, how]),
-    homeIn: (id, ms) => asked.push(['homeIn', id, ms]),
+    homeIn: (id) => asked.push(['homeIn', id]),
     tip() {}, untip: () => asked.push(['untip']), unlightTarget() {}, glance: (set) => asked.push(['glance', set]),
     box: { isConnected: true },
     area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
@@ -55,8 +55,7 @@ test("the engine runs a page's own hooks on its own map", () => {
   fire('pointerup', { type: 'pointerup', clientX: 140, clientY: 70 });
   // The drop hears a map point; one it does not take sends the block home, the page first.
   assert.deepEqual(seen.at(-1), ['drop', { x: 140, y: 70 }]);
-  assert.deepEqual(one.asked.slice(-2), [['onHome', 'a'], ['homeIn', 'a', HOME_MS]]);
-  assert.equal(HOME_MS, 220);
+  assert.deepEqual(one.asked.slice(-2), [['onHome', 'a'], ['homeIn', 'a']]);
   assert.deepEqual([one.map.drag, one.map.home, other.asked], [null, null, []]);
   assert.deepEqual(heard.pointermove, []);
 });

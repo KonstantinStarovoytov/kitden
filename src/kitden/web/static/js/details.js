@@ -4,7 +4,7 @@
 import { $, $$, button, el, joinWords, reportError, shortPath, withFocusKey } from "./dom.js";
 import { fold } from "./motion.js";
 import { header, isPanelOpen, isQuiet, openInfo, panelState } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, gatewayName, ROUTE_WORDS } from "./parts.js";
+import { ALL_PROJECTS, byClientOrder, callout, CLIENT_NAMES, folderName, gatewayName, ROUTE_WORDS, WRITABLE } from "./parts.js";
 import { review } from "./review.js";
 import { data, projectPath } from "./store.js";
 import { inTray, keyFor, takeOut } from "./tray.js";
@@ -12,7 +12,6 @@ import { inTray, keyFor, takeOut } from "./tray.js";
 export const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
 };
-const WRITABLE = ["claude_code", "codex", "cursor"];
 // A switch names its own client; a Remove names every client it reaches (offerLabel).
 const ACTION_BUTTONS = {
   "plugin.disable": (client) => `Turn off in ${client}…`,
@@ -203,17 +202,23 @@ function ownerName(def) {
   return owner && owner !== def.client && WRITABLE.includes(owner) ? clientName(owner) : null;
 }
 
-// Where a definition applies, in the words the cells use: the picked project is "This project".
-export function scopeWords(def, picked = projectPath()) {
-  const project = folderName(def.project);
-  const words = {
-    user: ALL_PROJECTS,
-    project: def.project && def.project === picked ? "This project" : `Project ${project}`,
-    local: project ? `Only on this Mac · ${project}` : "Only on this Mac",
+// A definition's scope in words, given the words for a user and a project scope.
+function scopeIn(def, user, project) {
+  const folder = folderName(def.project);
+  return {
+    user,
+    project,
+    local: folder ? `Only on this Mac · ${folder}` : "Only on this Mac",
     plugin: "From a plugin",
     account: "Claude account",
     managed: "Managed by your organization",
   }[def.scope] || def.scope;
+}
+
+// Where a definition applies, in the words the cells use: the picked project is "This project".
+export function scopeWords(def, picked = projectPath()) {
+  const project = def.project && def.project === picked ? "This project" : `Project ${folderName(def.project)}`;
+  const words = scopeIn(def, ALL_PROJECTS, project);
   const owner = ownerName(def);
   return owner ? `${words} · ${ROUTE_WORDS.folder.replace("{}", owner)}` : words;
 }
@@ -221,20 +226,12 @@ export function scopeWords(def, picked = projectPath()) {
 // Where a definition's file sits, in file words. Only the technical details say these: spec
 // 2.1 keeps "global settings" there.
 export function fileScopeWords(def) {
-  const project = folderName(def.project);
-  const words = {
-    user: "Global settings",
-    project: `Project ${project}`,
-    local: project ? `Only on this Mac · ${project}` : "Only on this Mac",
-    plugin: "From a plugin",
-    account: "Claude account",
-    managed: "Managed by your organization",
-  }[def.scope] || def.scope;
+  const words = scopeIn(def, "Global settings", `Project ${folderName(def.project)}`);
   const owner = ownerName(def);
   return owner ? `${words} · via ${owner}` : words;
 }
 
-const inClientOrder = (definitions) => [...definitions].sort((a, b) => CLIENT_ORDER.indexOf(a.client) - CLIENT_ORDER.indexOf(b.client));
+const inClientOrder = (definitions) => [...definitions].sort((a, b) => byClientOrder(a.client, b.client));
 const clientsOf = (definitions) => [...new Set(definitions.map((d) => clientName(d.client)))];
 
 // The evidence under "Technical details", in client order: one row per file, file key,

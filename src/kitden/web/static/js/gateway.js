@@ -11,13 +11,12 @@ import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNo
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
+import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote, WRITABLE } from "./parts.js";
 import { arrival, busy, current, currentError, data, gatewayShows, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { openAccess } from "./access-form.js";
 import { inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray, undone, writing } from "./tray.js";
 
-const WRITABLE = ["claude_code", "codex", "cursor"];
 // The group of servers outside the gateway: the List's words, and the map's, which asks for a drag.
 const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
 const OUTSIDE_MAP = "Outside the gateway · drag one in";

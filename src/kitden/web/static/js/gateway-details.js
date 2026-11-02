@@ -11,11 +11,10 @@ import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { callsText, closePanel, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, showInPreview, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, kitdenHouse, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, kitdenHouse, mark, menuItems, originText, STATE_WORDS, versionsOpen, WRITABLE } from "./parts.js";
 import { arrival, current, data, freshness, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, TAKE_OUT, takeOut, tray, trayRow } from "./tray.js";
 
-const WRITABLE = ["claude_code", "codex", "cursor"];
 // The kitden entry is the same one that lets agents read this setup.
 export const SETUP_NOTE = "The kitden entry shows your setup to agents and offers the tools in the Kitden gateway.";
 // What Disconnect takes from a client, as the review's after line says it (views/after.py).

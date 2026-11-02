@@ -11,7 +11,7 @@ import { initLibraryAdd } from "./library-add.js";
 import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
 import { copyBodies, offBodies, onBodies, removeBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, review, stepTo, swapContent, technical } from "./panel.js";
-import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
+import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
 import { inTray, keyFor, trayRow } from "./tray.js";
 
@@ -65,7 +65,7 @@ const COPY = "Copy";
 const COPIED = "Copied";
 const NOT_COPIED = "Could not copy";
 
-const inOrder = (clients) => [...clients].sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+const inOrder = (clients) => [...clients].sort(byClientOrder);
 const names = (clients) => inOrder(clients).map((client) => CLIENT_NAMES[client] || client);
 const clientsBy = (item, look) => Object.entries(item.by || {}).filter(([, state]) => state === look).map(([client]) => client);
 const verb = (clients, one, more) => (clients.length > 1 ? more : one);

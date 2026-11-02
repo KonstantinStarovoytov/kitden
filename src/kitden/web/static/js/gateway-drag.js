@@ -31,7 +31,6 @@ const MISS = { ms: 180, ease: CALM };
 // Outside caption. Its ghost flies onto the slot, or back onto its row.
 const ADD_ZONE = { left: 16, right: 194, top: 20, above: 4 };
 const ONTO_SLOT = { dur: 200, ease: CALM };
-const BACK_HOME = { dur: 180, ease: CALM };
 
 // The map as gateway.js drew it last, as it gives it (placeMoved): its view (map-view.js), the tree,
 // the layout and how to draw the map again in place (`redraw`). A drag on the map (`drag`), the
@@ -443,7 +442,7 @@ function dropAdd(drag, at) {
     }
     onMap.adding = null;
   }
-  flyGhost(drag, null, BACK_HOME);
+  flyGhost(drag, null);
   return false;
 }
 
@@ -491,7 +490,7 @@ function dropGroup(drag, at) {
   const rows = drag.ids.map((id) => onMap.model.blocks.find((b) => b.id === id)).filter(Boolean).map((b) => b.row);
   const bodies = view ? rows.map((row) => dropBody(row, view)).filter(Boolean) : [];
   if (!drag.open || !at || !bodies.length || busy.change || ["applying", "applied"].includes(tray.phase)) {
-    flyGhost(drag, null, BACK_HOME);
+    flyGhost(drag, null);
     return false;
   }
   const gateway = onMap.layout.blocks.find((b) => b.id === drag.gateway);
