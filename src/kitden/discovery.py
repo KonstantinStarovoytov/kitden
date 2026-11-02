@@ -549,7 +549,7 @@ class Discovery:
             choices.append(self.public(candidate))
         return choices
 
-    def details(self, key: str, found: set[str]) -> dict:
+    def details(self, key: str) -> dict:
         row = self.get(key)
         if row["kind"] == "skill" and row.get("path") is None:
             choices = self.skill_choices(row)

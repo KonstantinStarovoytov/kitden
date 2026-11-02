@@ -21,8 +21,6 @@ from urllib.parse import quote, urlsplit
 from kitden.model import Gateway
 
 TIMEOUT_SECONDS = 5.0
-NAME = re.compile(r"[A-Za-z0-9_-]+")
-VERSION_CHECKED = "MetaMCP 2.4.22"
 OBOT_VERSION_CHECKED = "Obot v0.26.3"
 # Obot's own controller updates a connection's status right after every change, so a quick next
 # write can meet "the object has been modified" (409). Read again and retry this many times
@@ -438,3 +436,8 @@ def _json(raw: bytes) -> Any:
 
 def _list(value: Any) -> list:
     return value if isinstance(value, list) else []
+
+
+def client_for(gateway: Gateway) -> MetaMcpClient | ObotClient:
+    """The client that speaks this gateway's API. Use it as `with client_for(g) as client:`."""
+    return ObotClient(gateway) if gateway.kind == "obot" else MetaMcpClient(gateway)

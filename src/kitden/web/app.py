@@ -107,8 +107,8 @@ from kitden.clients.base import (
     SKILL_REMOVE,
 )
 from kitden.command import installed_command
-from kitden.discovery import Discovery, short_name
-from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
+from kitden.discovery import Discovery, configured_entry, short_name
+from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient, client_for
 from kitden.gateways import add_gateway, data_dir, load_gateways
 from kitden.local_gateway.project import project_chain, project_chains
 from kitden.local_gateway.settings import CLIENT as KITDEN
@@ -666,10 +666,10 @@ def create_app(
                 watcher_ref[0].expect(Path(path), sha)
 
         def gateway_client(edit: GatewayEdit) -> MetaMcpClient | ObotClient:
-            found = next((g for g in _registered() if g.id == edit.gateway_id), None)
+            found = _gateway(edit.gateway_id)
             if found is None:
                 raise GatewayError("This gateway is no longer registered")
-            return ObotClient(found) if found.kind == "obot" else MetaMcpClient(found)
+            return client_for(found)
 
         engine = Engine(
             ChangeStore(data_dir(home)),
@@ -865,7 +865,7 @@ def create_app(
 
     async def project_view(request: Request) -> JSONResponse:
         wanted = request.path_params["project_id"]
-        found = next((p for p in state.data["projects"] if p["id"] == wanted), None)
+        found = _project_by_id(wanted)
         if found is None:
             return JSONResponse({"detail": "Unknown project."}, status_code=404)
         views = [
@@ -896,7 +896,7 @@ def create_app(
         wanted = request.query_params.get("project") or ""
         if not wanted:
             return None
-        found = next((p for p in state.data["projects"] if p["id"] == wanted), None)
+        found = _project_by_id(wanted)
         if found is None:
             raise _UnknownProject
         return found
@@ -906,13 +906,13 @@ def create_app(
         finds them for a session there (see `project_chain`); empty for all projects."""
         if path is None or home is None:
             return []
-        return project_chain(path, home, [p.path for p in state.inventory.projects])
+        return project_chain(path, home, _known_paths())
 
     def _chains() -> dict[str, list[str]]:
         """Each known project's `_chain`, found in one pass."""
         if home is None:
             return {}
-        return project_chains(home, [p.path for p in state.inventory.projects])
+        return project_chains(home, _known_paths())
 
     def _read_model(make):
         async def endpoint(request: Request) -> JSONResponse:
@@ -1094,18 +1094,13 @@ def create_app(
 
     async def gateway_servers(request: Request) -> JSONResponse:
         """What the gateway holds, read live; an error never blocks the page (FR-008)."""
-        gateway = next(
-            (g for g in _registered() if g.id == request.path_params["gateway_id"]), None
-        )
+        gateway = _gateway(request.path_params["gateway_id"])
         if gateway is None:
             return _error("Unknown gateway.", 404)
 
         def read() -> list[dict]:
-            if gateway.kind == "obot":
-                held = ObotClient(gateway).held()
-            else:
-                with MetaMcpClient(gateway) as client:
-                    held = client.held()
+            with client_for(gateway) as client:
+                held = client.held()
             return [{"name": s["name"], "type": s["type"], "url": s["url"]} for s in held]
 
         try:
@@ -1119,9 +1114,7 @@ def create_app(
 
     def _found_cursor():
         """The Cursor adapter when Cursor is on this computer, else None."""
-        clients = state.data["clients"]
-        found = any(c["id"] == "cursor" and c["status"] == "found" for c in clients)
-        return adapters.get("cursor") if found else None
+        return adapters.get("cursor") if "cursor" in _found_clients() else None
 
     async def _read_tools(name: str, server: dict) -> list[dict] | None:
         """The server's tools, asked as the gateway asks; None when it does not answer."""
@@ -1139,10 +1132,62 @@ def create_app(
         wanted = params.get("project")
         if not wanted:
             return None
-        paths = {p["id"]: p["path"] for p in state.data["projects"]}
+        paths = _project_paths()
         if str(wanted) not in paths:
             raise ValueError("Unknown project.")
         return paths[str(wanted)]
+
+    def _clients(targets: list) -> list[str]:
+        """The clients a request targets."""
+        return [str(t.get("client")) for t in targets if isinstance(t, dict)]
+
+    def _items(targets: list) -> list:
+        """The inventory items a request targets; None for one Kitden does not know."""
+        return [_item(str(t.get("item"))) for t in targets if isinstance(t, dict)]
+
+    def _known_servers(targets: list) -> list:
+        items = _items(targets)
+        if not items or any(i is None for i in items):
+            raise ValueError("Choose a known server.")
+        return items
+
+    def _gateway(gateway_id: object) -> Gateway | None:
+        return next((g for g in _registered() if g.id == gateway_id), None)
+
+    def _registered_gateway(params: dict) -> Gateway:
+        gateway = _gateway(params.get("gateway"))
+        if gateway is None:
+            raise ValueError("Register the gateway first.")
+        return gateway
+
+    def _kitden_command(needed: bool = True) -> str | None:
+        """The installed kitden command; refused when it is needed and not installed."""
+        command = (setup_command or installed_command)()
+        if command is None and needed:
+            raise ValueError("Install the tool first: uv tool install <this folder>")
+        return command
+
+    def _online_row(params: dict, kind: str, words: str) -> dict:
+        """The online catalog row a request names, of this kind; never in the demo."""
+        if stand_ins:
+            raise ValueError(stand_ins.NOT_IN_DEMO)
+        row = discovery.get(str(params["discovery"]))
+        if row["kind"] != kind:
+            raise ValueError(words)
+        return row
+
+    def _found_clients() -> set[str]:
+        return {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+
+    def _project_by_id(wanted: str) -> dict | None:
+        return next((p for p in state.data["projects"] if p["id"] == wanted), None)
+
+    def _project_paths() -> dict[str, str]:
+        """The known projects' folders, by id."""
+        return {p["id"]: p["path"] for p in state.data["projects"]}
+
+    def _known_paths() -> list[str]:
+        return [p.path for p in state.inventory.projects]
 
     async def _steps_for(action: str, targets: list, params: dict) -> Built:
         """The steps one request makes, from that action's own builder. Raises ValueError with
@@ -1159,19 +1204,13 @@ def create_app(
         if kept is not None:
             raise ValueError(kept_refusal(kept))
         if action == GATEWAY_CONNECT:
-            gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
-            if gateway is None:
-                raise ValueError("Register the gateway first.")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            gateway = _registered_gateway(params)
+            clients = _clients(targets)
             steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
         elif action == PLUGIN_INSTALL:
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             if params.get("discovery"):
-                if stand_ins:
-                    raise ValueError(stand_ins.NOT_IN_DEMO)
-                row = discovery.get(str(params["discovery"]))
-                if row["kind"] != "plugin":
-                    raise ValueError("Choose a plugin.")
+                row = _online_row(params, "plugin", "Choose a plugin.")
                 source = await asyncio.to_thread(discovery.plugin, row)
                 for client in clients:
                     adapter = adapters.get(client)
@@ -1200,13 +1239,9 @@ def create_app(
         elif action == SKILL_INSTALL:
             wanted = str(params.get("skill", ""))
             project = _project_param(params)
-            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            found = _found_clients()
             if params.get("discovery"):
-                if stand_ins:
-                    raise ValueError(stand_ins.NOT_IN_DEMO)
-                row = discovery.get(str(params["discovery"]))
-                if row["kind"] != "skill":
-                    raise ValueError("Choose a skill.")
+                row = _online_row(params, "skill", "Choose a skill.")
                 skill = await asyncio.to_thread(discovery.skill, row, found)
                 skill["installed"] = {
                     i.client: "Installed"
@@ -1226,7 +1261,7 @@ def create_app(
                 skill = next((s for s in listed if s["id"] == wanted), None)
                 if skill is None:
                     raise ValueError("This skill is not on this computer.")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             steps = skill_steps(adapters, skill, clients, found, project)
             copied = [skill]
         elif action == PLUGIN_SKILLS:
@@ -1237,7 +1272,7 @@ def create_app(
             skills = skill_catalog(state.inventory, adapters)
             if not any(s["plugin"] == plugin_id for s in skills):
                 raise ValueError("This plugin has no skills on this computer.")
-            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            found = _found_clients()
             steps = plugin_skill_steps(adapters, plugin_id, skills, client, found)
             left_out = plugin_skills_left_out(plugin_id, skills, client)
             copied = [s for s in skills if s["plugin"] == plugin_id]
@@ -1245,40 +1280,31 @@ def create_app(
             if stand_ins:
                 raise ValueError(stand_ins.NOT_IN_DEMO)
             try:
-                found = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
+                market = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
             except LinkError as error:
                 raise ValueError(str(error)) from None
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-            steps = marketplace_steps(adapters, found, clients)
+            clients = _clients(targets)
+            steps = marketplace_steps(adapters, market, clients)
         elif action == GATEWAY_SWITCH:
-            gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
-            if gateway is None:
-                raise ValueError("Register the gateway first.")
+            gateway = _registered_gateway(params)
             mcp = [i for i in state.inventory.items if i.kind is ItemKind.MCP_SERVER]
             steps = switch_steps(adapters, mcp, gateway, str(params.get("name", "")))
         elif action == SETUP_SERVER:
-            command = (setup_command or installed_command)()
-            if command is None:
-                raise ValueError("Install the tool first: uv tool install <this folder>")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            command = _kitden_command()
+            clients = _clients(targets)
             provided = _states_in(state.inventory, "plugin")
             if any(c in provided for c in clients):
                 raise ValueError("The kitden plugin already provides this server there.")
             steps = setup_server_steps(adapters, clients, command)
         elif action == SETUP_SERVER_UPDATE:
-            ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
-            items = [_item(i) for i in ids]
+            items = _items(targets)
             if not items or any(i is None or not is_old_entry(i) for i in items):
                 raise ValueError("Choose an old Kitden entry.")
             added = _states_in(state.inventory, "added", "plugin")
-            command = None
-            if any(i.client not in added for i in items):
-                command = (setup_command or installed_command)()
-                if command is None:
-                    raise ValueError("Install the tool first: uv tool install <this folder>")
+            command = _kitden_command() if any(i.client not in added for i in items) else None
             steps = update_steps(adapters, items, added, command)
         elif action == SETUP_SERVER_ENABLE:
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             entries = setup_server_state(state.inventory)
             entry = next((e for e in entries if [e["client"]] == clients), None)
             # Only the client's own entry, turned off: a plugin's is the plugin's switch.
@@ -1286,18 +1312,13 @@ def create_app(
                 raise ValueError("The kitden entry there is not turned off.")
             steps = enable_steps(adapters, clients[0])
         elif action == CLIENT_DISCONNECT:
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             steps = disconnect_steps(adapters, state.inventory, clients)
         elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
-            ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
-            items = [_item(i) for i in ids]
-            if not items or any(i is None for i in items):
-                raise ValueError("Choose a known server.")
-            known = [p.path for p in state.inventory.projects]
+            items = _known_servers(targets)
+            known = _known_paths()
             added = _states_in(state.inventory, "added", "plugin")
-            command = (setup_command or installed_command)()
-            if command is None and {i.client for i in items} - added:
-                raise ValueError("Install the tool first: uv tool install <this folder>")
+            command = _kitden_command(needed=bool({i.client for i in items} - added))
             # A Codex entry that keeps only some tools on: Kitden needs the whole list.
             wanted = await asyncio.to_thread(tools_to_read, adapters, items, home, known)
             for name, server in wanted.items():
@@ -1325,13 +1346,10 @@ def create_app(
             # It may ask a remote server whether it signs in, so not on the event loop.
             discovered, fields = None, None
             if params.get("discovery"):
-                if stand_ins:
-                    raise ValueError(stand_ins.NOT_IN_DEMO)
-                row = discovery.get(str(params["discovery"]))
-                if row["kind"] != "mcp" or not row.get("entry"):
-                    raise ValueError("This server needs configuration before it can be added.")
-                from kitden.discovery import configured_entry
-
+                needs_setup = "This server needs configuration before it can be added."
+                row = _online_row(params, "mcp", needs_setup)
+                if not row.get("entry"):
+                    raise ValueError(needs_setup)
                 fields = row.get("setup") or None
                 discovered = (short_name(row["name"]), configured_entry(row, params))
             steps = await asyncio.to_thread(
@@ -1350,21 +1368,19 @@ def create_app(
                 signed_in=_given_sign_in(params),
             )
         elif action == GATEWAY_RULE:
-            projects = {p["id"]: p["path"] for p in state.data["projects"]}
-            steps = rule_steps(home, params, projects)
+            steps = rule_steps(home, params, _project_paths())
         elif action == GATEWAY_RULES:
-            projects = {p["id"]: p["path"] for p in state.data["projects"]}
-            steps = rules_steps(home, params, projects)
+            steps = rules_steps(home, params, _project_paths())
         elif action == GATEWAY_STRICT:
             steps = strict_steps(home, params, load_tools(home))
         elif action == GATEWAY_REMOVE:
             steps = remove_server_steps(home, str(params.get("server", "")))
         elif action == GATEWAY_PUT_BACK:
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             server = str(params.get("server", ""))
             steps = put_back_steps(adapters, home, server, clients, keychain_run)
         elif action == GATEWAY_MOVE_OUT:
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             if len(clients) != 1:
                 raise ValueError("Pick one client to move it into.")
             server = str(params.get("server", ""))
@@ -1406,11 +1422,11 @@ def create_app(
             item = _item(str(params.get("item", "")))
             if item is None:
                 raise ValueError("Choose a known server.")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            clients = _clients(targets)
             steps = add_server_steps(adapters, item, clients)
         elif action == PROJECT_ALIGN:
             folder = _project_param(params)  # None: All projects, plugins and skills only
-            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            found = _found_clients()
             wanted = params.get("chosen")
             chosen = [str(k) for k in wanted] if isinstance(wanted, list) else None
             steps, align = await asyncio.to_thread(
@@ -1420,25 +1436,17 @@ def create_app(
                 return Built(steps=[], align=align)
             copied = skill_catalog(state.inventory, adapters)
         elif action == GATEWAY_MOVE:
-            gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
-            if gateway is None:
-                raise ValueError("Register the gateway first.")
-            ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
-            items = [_item(i) for i in ids]
-            if not items or any(i is None for i in items):
-                raise ValueError("Choose a known server.")
-            steps = move_steps(adapters, items, gateway)
+            gateway = _registered_gateway(params)
+            steps = move_steps(adapters, _known_servers(targets), gateway)
         elif action == SKILL_REMOVE:
-            ids = [t.get("item") for t in targets if isinstance(t, dict)]
-            items = [_item(str(i)) for i in ids]
+            items = _items(targets)
             if len(items) != 1 or items[0] is None:
                 raise ValueError("Choose one known item.")
             readers = skill_readers(state.inventory, items[0])
             keeps = skill_keepers(state.inventory, items[0], readers)
             steps = skill_remove_steps(adapters, items[0], readers, keeps)
         elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE, PLUGIN_REMOVE):
-            ids = [t.get("item") for t in targets if isinstance(t, dict)]
-            items = [_item(str(i)) for i in ids]
+            items = _items(targets)
             # A direct entry may go from several clients at once; a plugin is one item.
             one = len(items) == 1 or action == REMOVE_DIRECT
             if not items or any(i is None for i in items) or not one:
@@ -1460,8 +1468,7 @@ def create_app(
 
     def _picked(body: dict) -> str | None:
         """The folder of the project picked at the top of the page, if any."""
-        paths = {p["id"]: p["path"] for p in state.data["projects"]}
-        return paths.get(str(body.get("picked") or ""))
+        return _project_paths().get(str(body.get("picked") or ""))
 
     def _review(change: Change, built: Built, picked: str | None) -> dict:
         """The review's words for a previewed change: what each client shows after it and what
@@ -1480,8 +1487,7 @@ def create_app(
         # The review's first sentence: where the steps go (also for the project picked at the
         # top, which may have its own definition of what changes), and what Undo cannot bring
         # back.
-        known = [p.path for p in state.inventory.projects]
-        change.target = change_target(change, known, state.inventory, picked, built.items)
+        change.target = change_target(change, _known_paths(), state.inventory, picked, built.items)
         words = {"after": after, "undo_note": undo_note(change)}
         if built.left_out is not None:
             words["left_out"] = built.left_out
@@ -1635,9 +1641,8 @@ def create_app(
         # The record keeps the rows and the request with secrets hidden, as the log does.
         change.rows = hidden(rows)
         change.request = kept_request(requests)
-        known = [p.path for p in state.inventory.projects]
         items = [i for made in built for i in made.items]
-        change.target = change_target(change, known, state.inventory, picked, items)
+        change.target = change_target(change, _known_paths(), state.inventory, picked, items)
         events.publish("change_state")
         notes = list(dict.fromkeys(a["undo_note"] for a in answers if a["undo_note"]))
         answer = {**change_dict(change), "rows": answers, "undo_note": " ".join(notes) or None}
@@ -1759,9 +1764,8 @@ def create_app(
         if discovery is None or stand_ins:
             return _error("Online sources are unavailable in the offline demo.", 400)
         try:
-            body = await request.json()
-            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
-            row = await asyncio.to_thread(discovery.details, str(body.get("id", "")), found)
+            body = await _body(request)
+            row = await asyncio.to_thread(discovery.details, str(body.get("id", "")))
             return JSONResponse(row)
         except (ValueError, OSError, KeyError, TypeError) as error:
             return _error(
@@ -1775,19 +1779,17 @@ def create_app(
         if discovery is None or stand_ins:
             return _error("Online sources are unavailable in the offline demo.", 400)
         try:
-            body = await request.json()
+            body = await _body(request)
             kind = str(body.get("kind", "all"))
             if kind not in ("all", "skill", "plugin", "mcp"):
                 raise ValueError("Choose skills, plugins or MCP servers.")
             rows = await asyncio.to_thread(
                 discovery.search, str(body.get("source", "")), str(body.get("query", "")), kind
             )
+            held = set(load_settings(home)["servers"])
             for row in rows:
                 item_kind = "mcp_server" if row["kind"] == "mcp" else row["kind"]
-                row["held"] = (
-                    row["kind"] == "mcp"
-                    and short_name(row["name"]) in load_settings(home)["servers"]
-                )
+                row["held"] = row["kind"] == "mcp" and short_name(row["name"]) in held
                 row["installed"] = sorted(
                     {
                         i.client
@@ -1815,7 +1817,7 @@ def create_app(
             return JSONResponse({"commands": [c.__dict__ for c in listed]})
         if home is None or action != "gateway.login" or not item.via_gateway:
             return _error("No command for this item and action.", 404)
-        gateway = next((g for g in _registered() if g.id == item.via_gateway), None)
+        gateway = _gateway(item.via_gateway)
         adapter = adapters.get(item.client)
         if gateway is None or adapter is None or gateway.auth is not GatewayAuth.OAUTH:
             return _error("No login is needed.", 404)

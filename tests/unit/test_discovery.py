@@ -327,7 +327,7 @@ def test_ambiguous_or_renamed_skill_offers_pinned_choices(tmp_path, monkeypatch,
     row = source.search("skills.sh", "tidy", "skill")[0]
     source.results[row["id"]]["name"] = name
     source.trees["acme/skills"] = (SHA, ["one/tidy/SKILL.md", "two/tidy/SKILL.md"])
-    choices = source.details(row["id"], {"codex"})["choices"]
+    choices = source.details(row["id"])["choices"]
     assert [c["path"] for c in choices] == ["one/tidy", "two/tidy"]
     assert all(c["commit"] == SHA for c in choices)
     reopened = Discovery(tmp_path)
@@ -343,20 +343,20 @@ def test_missing_skill_does_not_claim_multiple_matches(tmp_path, monkeypatch):
     row = source.search("skills.sh", "tidy", "skill")[0]
     source.trees["acme/skills"] = (SHA, ["README.md"])
     with pytest.raises(ValueError, match="no longer contains"):
-        source.details(row["id"], {"codex"})
+        source.details(row["id"])
 
 
 def test_details_pin_exact_folder_and_can_read_after_restart(tmp_path, monkeypatch):
     skill_source(monkeypatch)
     source = Discovery(tmp_path)
     row = source.search("skills.sh", "tidy", "skill")[0]
-    detail = source.details(row["id"], {"codex"})
+    detail = source.details(row["id"])
     assert detail["path"] == "skills/tidy"
     assert detail["commit"] == SHA
     assert detail["description"] == "Tidy files."
     reopened = Discovery(tmp_path)
     monkeypatch.setattr(reopened, "tree", lambda _: pytest.fail("must use pinned choice"))
-    assert reopened.details(detail["id"], {"codex"})["content"] == detail["content"]
+    assert reopened.details(detail["id"])["content"] == detail["content"]
 
 
 def test_root_skill_opens_and_previews_without_folder_choice(tmp_path, monkeypatch):
@@ -379,7 +379,7 @@ def test_root_skill_opens_and_previews_without_folder_choice(tmp_path, monkeypat
         return content
 
     monkeypatch.setattr(discovery, "download", fetch)
-    detail = source.details(row["id"], {"codex"})
+    detail = source.details(row["id"])
     assert "choices" not in detail
     assert detail["path"] == "."
     # A direct drag of the original search result resolves the same single folder.
@@ -595,7 +595,7 @@ def test_details_say_up_front_when_kitden_cannot_sign_in(tmp_path):
         found = Discovery(tmp_path)
         row = {"id": "a" * 24, "kind": "mcp", "name": "io.x/zoom", "entry": {"url": fake.url}}
         found.results[row["id"]] = row
-        out = found.details(row["id"], set())
+        out = found.details(row["id"])
     finally:
         fake.stop()
     assert out["access_kind"] == "sign-in-later" and out["access_required"] is True

@@ -24,6 +24,14 @@ def data_dir(home: Path) -> Path:
     return Path(home) / DATA_DIR
 
 
+def private_data_dir(home: Path) -> Path:
+    """The data folder, made when missing, readable only by its owner."""
+    folder = data_dir(home)
+    folder.mkdir(parents=True, exist_ok=True)
+    folder.chmod(0o700)
+    return folder
+
+
 COPIED = ".copied-from-agentsetup"  # written last; without it the copy is not finished
 
 
@@ -136,8 +144,6 @@ def add_gateway(home: Path, gateway: Gateway) -> Gateway:
         }
         for g in [*kept, gateway]
     ]
-    folder = data_dir(home)
-    folder.mkdir(parents=True, exist_ok=True)
-    folder.chmod(0o700)
+    private_data_dir(home)
     write_atomic(Path(home) / SETTINGS, json.dumps(settings, indent=2).encode())
     return gateway
