@@ -8,7 +8,7 @@ import hashlib
 import json
 from typing import Any
 
-from kitden.local_gateway.settings import PLACEHOLDERS
+from kitden.local_gateway.settings import fill_placeholders
 
 # Keys whose values come from the shell or from another program (checked 2026-10-21): Cursor
 # `envFile`; Codex `env_vars`, `bearer_token_env_var`, `env_http_headers` and
@@ -58,11 +58,7 @@ def reads_elsewhere(entry: dict, server: dict) -> bool:
     the arguments is fine: the gateway fills it in."""
     if any(key in entry for key in FROM_ELSEWHERE):
         return True
-    args = []
-    for arg in _strings(server.get("args")):
-        for placeholder in PLACEHOLDERS:
-            arg = arg.replace(placeholder, "")
-        args.append(arg)
+    args = [fill_placeholders(arg, "") for arg in _strings(server.get("args"))]
     return any("${" in s for s in _strings({**server, "args": args}))
 
 

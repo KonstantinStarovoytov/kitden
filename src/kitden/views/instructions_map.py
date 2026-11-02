@@ -11,13 +11,14 @@ files; paths are only under `technical`, and imports reach the page only, never 
 import os
 from pathlib import Path
 
-from kitden.clients.base import is_home
-from kitden.model import ClientStatus, ItemKind, _hash
+from kitden.clients.base import found_columns, is_home
+from kitden.model import CLIENTS, ClientStatus, ItemKind, _hash
 from kitden.redact import redact_line
+from kitden.views.effective import client_order
 from kitden.views.explain import PREVIEW_READ, head
 from kitden.views.imports import imports, read_text
-from kitden.views.library_map import _clients
-from kitden.views.load_map import COLUMNS, category
+from kitden.views.library_map import cursor_imports, map_clients
+from kitden.views.load_map import category
 
 ALL = {"key": "all", "name": "All projects"}
 PROJECT = "Only this project · {}"
@@ -81,7 +82,7 @@ def _blocks(inventory, project: str | None) -> dict[str, dict]:
     """The file blocks by path, from the instruction files each client lists."""
     blocks: dict[str, dict] = {}
     for item in inventory.items:
-        if item.client not in COLUMNS or item.kind is not ItemKind.INSTRUCTIONS:
+        if item.client not in CLIENTS or item.kind is not ItemKind.INSTRUCTIONS:
             continue
         kind = KINDS.get(category(item) or "")
         if (category(item) != "instructions" and not kind) or not item.source.path:
@@ -126,10 +127,7 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
     every file it brings in, nested ones too. An imported file is
     `{id, name, by_files, outside, missing, technical: {path?}}`; a missing one has no path."""
     home = next((a.home for a in adapters.values()), None)
-    status = {c.id: c.status for c in inventory.clients}
-    cursor = adapters.get("cursor") if status.get("cursor") is ClientStatus.FOUND else None
-    found_claude = status.get("claude_code") is ClientStatus.FOUND
-    cursor_imports = bool(cursor and cursor.imports_claude_plugins() and found_claude)
+    imports_plugins = cursor_imports(adapters, found_columns(inventory))
     blocks = _blocks(inventory, project)
     through: set[str] = set()
     if project is not None and home is not None and _reads_agents(inventory, project, home):
@@ -157,7 +155,7 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
         entry = {
             "id": file_id,
             "name": block["name"],
-            "by": {c: True for c in COLUMNS if c in block["by"]},
+            "by": {c: True for c in CLIENTS if c in block["by"]},
             "names": block["names"],
             "imports": [],
             "technical": {"path": path},
@@ -204,10 +202,8 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
                 entry["imports"].append(import_id)
         groups[block["group"]].append(entry)
 
-    order = {c: i for i, c in enumerate(COLUMNS)}
-
     def key(entry: dict) -> tuple:
-        first = min(order[c] for c in entry["by"])
+        first = min(client_order(c) for c in entry["by"])
         return (first, entry["name"].lower(), entry["technical"]["path"])
 
     out = [{**ALL, "files": sorted(groups[ALL["key"]], key=key)}]
@@ -217,7 +213,7 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
     if groups[COMMANDS["key"]]:
         out.append({**COMMANDS, "files": sorted(groups[COMMANDS["key"]], key=key)})
     return {
-        "clients": _clients(inventory, cursor_imports),
+        "clients": map_clients(inventory, imports_plugins),
         "groups": out,
         "imports": list(imported.values()),
     }

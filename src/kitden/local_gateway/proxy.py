@@ -64,11 +64,11 @@ from kitden.local_gateway import oauth
 from kitden.local_gateway.keychain import KeychainError, is_reference, resolve_entry
 from kitden.local_gateway.project import project_chain, session_folder
 from kitden.local_gateway.settings import (
-    PLACEHOLDERS,
     SETTINGS_FILE,
     START_TIME,
     allowed_tools,
     count_call,
+    fill_placeholders,
     is_allowed,
     load_settings,
     load_tools,
@@ -133,7 +133,6 @@ class UpstreamError(Exception):
 
 # A remote server that answered 401 or 403: the library reports only the server's own words.
 REFUSED = "{server} turned down its access: its token is wrong or has ended."
-SIGNED_OUT = sign_in.SIGNED_OUT
 
 
 def _turned_down(entry: dict) -> bool:
@@ -160,12 +159,6 @@ def _error(text: str) -> CallToolResult:
     return _answer(text)
 
 
-def _fill(arg: str, folder: str) -> str:
-    for placeholder in PLACEHOLDERS:
-        arg = arg.replace(placeholder, folder)
-    return arg
-
-
 class Upstreams:
     """The servers in the gateway, for one gateway process or one listing on the page.
 
@@ -177,10 +170,10 @@ class Upstreams:
     UpstreamError inside the block.
     """
 
-    def __init__(self, home: Path, settings: dict, folder: str | None = None) -> None:
+    def __init__(self, home: Path, settings: dict) -> None:
         self.home = home
         self.settings = settings
-        self.folder = folder
+        self.folder: str | None = None
         self._clients: dict[str, Client] = {}
         self._auths: dict[str, oauth.StoredSignIn] = {}  # the stored sign-in of each running one
         self._locks: dict[str, anyio.Lock] = {}
@@ -261,7 +254,7 @@ class Upstreams:
         """Why a call failed: a sign-in that ended while the server ran, or plainly."""
         auth = self._auths.get(server)
         if auth is not None and auth.signed_out:
-            return SIGNED_OUT.format(server=server)
+            return sign_in.SIGNED_OUT.format(server=server)
         return f"The call to {server} failed."
 
     def _start_time(self, server: str) -> float:
@@ -305,7 +298,7 @@ class Upstreams:
         for attempt in (1, 2):
             auth = None
             if entry.get("url") and is_reference(entry.get("sign_in")):
-                auth = oauth.stored_auth(server, str(entry["url"]), entry["sign_in"])
+                auth = oauth.StoredSignIn(server, str(entry["url"]), entry["sign_in"])
             ready = False
             try:
                 async with AsyncExitStack() as stack:
@@ -324,7 +317,7 @@ class Upstreams:
                     if auth is not None and auth.signed_out:
                         if attempt == 1 and await self._refreshed_elsewhere(auth):
                             continue
-                        raise UpstreamError(SIGNED_OUT.format(server=server)) from None
+                        raise UpstreamError(sign_in.SIGNED_OUT.format(server=server)) from None
                     if entry.get("url") and await anyio.to_thread.run_sync(_turned_down, entry):
                         raise UpstreamError(REFUSED.format(server=server)) from None
                     raise
@@ -358,7 +351,7 @@ class Upstreams:
         folder = self.folder or str(self.home)
         return StdioServerParameters(
             command=entry["command"],
-            args=[_fill(str(arg), folder) for arg in entry.get("args") or []],
+            args=[fill_placeholders(str(arg), folder) for arg in entry.get("args") or []],
             env=self._env(entry),
             cwd=folder,
         )
@@ -456,7 +449,7 @@ class _Gateway:
         except MCPError:
             raise
         except Exception as exc:  # as MCPServer answers for its own tools
-            return CallToolResult(content=[TextContent(type="text", text=str(exc))], is_error=True)
+            return _answer(str(exc))
 
     async def _count(self, server: str, tool: str) -> None:
         """Count a call that went to the server. A count that cannot be written is only said."""

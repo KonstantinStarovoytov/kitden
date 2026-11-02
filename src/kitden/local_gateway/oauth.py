@@ -110,8 +110,7 @@ async def start(record: SignIn, redirect_uri: str, open_browser) -> None:
 
 async def _start(record: SignIn, redirect_uri: str, open_browser) -> None:
     if record.task is not None and not record.task.done():
-        record.cancelled = True
-        record.task.cancel()
+        cancel(record)
         await asyncio.wait({record.task})
     record.state, record.reason, record.cancelled = "new", None, False
     record.flow_state = None
@@ -305,8 +304,3 @@ class StoredSignIn(OAuthClientProvider):
         # instead of refreshing first. test_expiry_restored_on_load pins this.
         await super()._initialize()
         self.context.token_expiry_time = self.storage.expires_at
-
-
-def stored_auth(name: str, url: str, ref: dict, run: keychain.Runner | None = None) -> StoredSignIn:
-    """The httpx auth for a server whose entry names a sign-in in the Keychain."""
-    return StoredSignIn(name, url, ref, run)

@@ -7,10 +7,11 @@ not load, and parts of a Claude Code plugin load only when that plugin loads.
 
 from dataclasses import dataclass, field, replace
 
-from kitden.model import Enabled, Item, ItemKind, Scope
+from kitden.clients.base import found_clients
+from kitden.clients.claude_code import DESKTOP
+from kitden.model import CLIENTS, Enabled, Item, ItemKind, Scope
 from kitden.views.match import plugin_of
 
-DESKTOP = "claude_desktop_code_tab"
 DESKTOP_RANK = 99  # claude_desktop_config.json wins on a name clash
 
 # Higher number wins. Kinds without a table never shadow each other (for example hooks, which
@@ -60,6 +61,16 @@ def _ranked(item: Item, base: str) -> int | None:
     return RANKS.get(base, {}).get(item.kind, {}).get(item.scope)
 
 
+def column_of(client: str) -> str:
+    """The client whose column shows this one: the Desktop Code tab shows as Claude Code."""
+    return "claude_code" if client == DESKTOP else client
+
+
+def client_order(client: str) -> int:
+    """A client's place in CLIENTS order; any other comes last."""
+    return CLIENTS.index(client) if client in CLIENTS else len(CLIENTS)
+
+
 def in_project(item: Item, project: str | None) -> Item:
     """A user skill as this project's own settings leave it (see `Item.project_rules`)."""
     for path, enabled, scope in item.project_rules:
@@ -69,7 +80,7 @@ def in_project(item: Item, project: str | None) -> Item:
 
 
 def effective_view(inventory, client: str, project: str | None) -> EffectiveView:
-    base = "claude_code" if client == DESKTOP else client
+    base = column_of(client)
     clients = {base, DESKTOP} if client == DESKTOP else {base}
     candidates = [
         in_project(i, project)
@@ -113,8 +124,11 @@ def effective_view(inventory, client: str, project: str | None) -> EffectiveView
     return view
 
 
-def found_clients(inventory) -> list[str]:
-    return [c.id for c in inventory.clients if str(c.status) == "found"]
+def overrides(view: EffectiveView) -> set[str]:
+    """The ids of the project items that win over an all-projects definition of their name."""
+    return {
+        w.id for w, loser, _ in view.shadowed if w.project is not None and loser.project is None
+    }
 
 
 def project_views(inventory, project: str | None) -> list[EffectiveView]:

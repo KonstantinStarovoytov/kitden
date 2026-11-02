@@ -926,11 +926,11 @@ async def test_token_refreshed_elsewhere_is_picked_up(home, fake_keychain, monke
 
 
 async def test_expiry_restored_on_load(fake_keychain, fake_sign_in):
-    from kitden.local_gateway.oauth import stored_auth
+    from kitden.local_gateway.oauth import StoredSignIn
 
     when = time.time() + 1234
     stored_sign_in(fake_keychain, fake_sign_in, expires_at=when)
-    auth = stored_auth("signer", fake_sign_in.url, {"keychain": "signer/sign-in"})
+    auth = StoredSignIn("signer", fake_sign_in.url, {"keychain": "signer/sign-in"})
     await auth._initialize()
     assert auth.context.token_expiry_time == when
     assert auth.context.current_tokens.access_token in fake_sign_in.issued
