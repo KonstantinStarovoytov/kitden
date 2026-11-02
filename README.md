@@ -17,20 +17,20 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
 </p>
 
-### Find it, drop it in
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/find-dark.webp">
-  <source srcset="docs/images/readme/find-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/find-light.webp" width="880" alt="context7, found in the catalog, is dragged onto the Kitden gateway, which lights up to take it.">
-</picture>
-
 ### Move many at once
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.webp">
   <source srcset="docs/images/readme/pick-light.webp">
   <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.webp" width="450" alt="Three servers from three clients are picked with a band and dragged onto the lit Kitden gateway together.">
+</picture>
+
+### Turn tools off
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/tools-dark.webp">
+  <source srcset="docs/images/readme/tools-light.webp">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/tools-light.webp" width="860" alt="memory in the Kitden gateway shows its nine tools; its three delete tools are turned off on the map and applied for every agent.">
 </picture>
 
 ### One token, every agent

@@ -7,12 +7,13 @@ animations.
 ## Animations
 
 Each animation is a looping WebP in `docs/images/readme/`, in light and dark, cropped to the
-part of the page it is about, filmed at 1.5 pixels per CSS pixel and shown at its CSS size (880
-or 450 px wide).
+part of the page it is about, filmed at 1.5 pixels per CSS pixel and shown at its CSS size (450 to 880
+px wide).
 
-- `find`: context7, found in the catalog, is dragged onto the gateway, which lights up.
 - `pick`: memory (Claude Code), playwright (Codex) and sequential-thinking (Cursor) are picked
   with a band and dragged onto the lit gateway together.
+- `tools`: memory is in the gateway with its nine tools. The three that delete are turned off
+  on the map (each link's ×) and applied for every agent.
 - `token`: a token is typed for Stripe in the gateway, and it works.
 
 Each one ends on its key moment, holds it, and fades back to its start.
@@ -36,8 +37,7 @@ uv run --with playwright==1.64.1 python scripts/record_readme.py
 Each animation starts the real page on a fresh copy of the sample from
 `scripts/readme_demo.py`, in a temporary folder. Stand-ins keep it local: a fake Keychain,
 fake client commands, canned tool lists, and a local test server that takes one key in place
-of Stripe's. Only the catalog search goes online. Nothing of the real home folder is read or
-written. The key in the scene is a made-up test value. `scripts/record_scenes.py` plays each
+of Stripe's. Nothing goes online, and nothing of the real home folder is read or written. The key in the scene is a made-up test value. `scripts/record_scenes.py` plays each
 scene and films it.
 
 Watch every animation before you commit it, and do not retouch the UI.
@@ -46,11 +46,10 @@ Watch every animation before you commit it, and do not retouch the UI.
 
 Checked against their official sources on **2026-11-02**:
 
-- [Context7](https://github.com/upstash/context7): a remote server that needs no key; found in
-  the official MCP Registry under `upstash`.
 - [memory](https://github.com/modelcontextprotocol/servers/tree/main/src/memory) and
   [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking):
-  local `npx` servers.
+  local `npx` servers. memory's nine tools and their read-only and destructive hints come from
+  its `src/memory/index.ts`.
 - [Playwright MCP](https://github.com/microsoft/playwright-mcp): `npx @playwright/mcp@latest`.
 - [Stripe MCP](https://docs.stripe.com/mcp): `https://mcp.stripe.com`, which takes an API key.
 

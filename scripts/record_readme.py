@@ -6,8 +6,8 @@ Each animation starts the real page on a fresh copy of the README sample (script
 in a temporary folder: three local servers that need no access (memory in Claude Code,
 playwright in Codex, sequential-thinking in Cursor) and Stripe in Claude Code, which takes an
 API key. Stand-ins keep it local: a fake Keychain, fake client commands, canned tool lists, and a
-local test server that takes one key in place of Stripe's. Only the catalog search goes online
-(Context7, whose remote server needs no key). Nothing of the real home folder is read or
+local test server that takes one key in place of Stripe's. Nothing goes online, and nothing of
+the real home folder is read or
 written.
 
 Each scene is filmed in light and dark, with a drawn cursor, and the part of the page it is
@@ -37,6 +37,7 @@ import kitden.clients.base as base  # noqa: E402
 import kitden.web.app as web  # noqa: E402
 from conftest import install_fake_security  # noqa: E402
 from kitden.demo import DemoRunner, canned_refresh, demo_command  # noqa: E402
+from kitden.local_gateway.settings import save_tools  # noqa: E402
 from kitden.views.inventory import build_inventory  # noqa: E402
 
 PORT, TOKEN = 47930, "readme"
@@ -49,6 +50,31 @@ MEMORY = {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-memory"
 PLAYWRIGHT = ["npx", "@playwright/mcp@latest"]
 THINKING = {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]}
 STRIPE = "https://mcp.stripe.com"
+# memory's tools, as its source lists them (src/memory/index.ts, checked 2026-11-02): the
+# gateway knows these once memory is in it.
+READS = {"readOnlyHint": True, "destructiveHint": False}
+WRITES = {"readOnlyHint": False, "destructiveHint": False}
+DELETES = {"readOnlyHint": False, "destructiveHint": True}
+MEMORY_TOOLS = [
+    {
+        "name": name,
+        "title": title,
+        "description": f"{title}.",
+        "inputSchema": {"type": "object"},
+        "annotations": hints,
+    }
+    for name, title, hints in (
+        ("create_entities", "Create Entities", WRITES),
+        ("create_relations", "Create Relations", WRITES),
+        ("add_observations", "Add Observations", WRITES),
+        ("delete_entities", "Delete Entities", DELETES),
+        ("delete_observations", "Delete Observations", DELETES),
+        ("delete_relations", "Delete Relations", DELETES),
+        ("read_graph", "Read Graph", READS),
+        ("search_nodes", "Search Nodes", READS),
+        ("open_nodes", "Open Nodes", READS),
+    )
+]
 
 
 def token_server() -> None:
@@ -83,7 +109,7 @@ def token_server() -> None:
 
 
 def sample(root: Path) -> Path:
-    """The README sample with the servers above; Context7 is left to the catalog scene."""
+    """The README sample with the servers above, and memory's tools; no Context7."""
     home = build_sample(root)
     claude_path = home / ".claude.json"
     claude = json.loads(claude_path.read_text())
@@ -99,11 +125,12 @@ def sample(root: Path) -> Path:
     cursor = json.loads(cursor_path.read_text())
     cursor["mcpServers"]["sequential-thinking"] = THINKING
     write_json(cursor_path, cursor)
+    save_tools(home, "memory", MEMORY_TOOLS)
     return home
 
 
 def stand_ins(root: Path) -> None:
-    """Everything but the catalog search stays on this computer, once per run."""
+    """Everything stays on this computer, once per run."""
     install_fake_security(root / "keychain")
     os.environ["KITDEN_SECURITY"] = str(root / "keychain/bin/security")
     base.read_command_version = lambda command: None  # no real client runs

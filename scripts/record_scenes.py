@@ -127,11 +127,12 @@ class Film:
             )
             self.frames += 1
 
-    def until(self, selector: str, seconds: float = 20) -> None:
-        """Let page time pass without filming until the selector shows: waiting is cut out."""
+    def until(self, selector: str, seconds: float = 20, gone: bool = False) -> None:
+        """Let page time pass without filming until the selector shows (or is `gone`): waiting
+        is cut out."""
         node = self.page.locator(selector).first
         end = time.monotonic() + seconds
-        while not node.is_visible():
+        while node.is_visible() == gone:
             if time.monotonic() > end:
                 raise TimeoutError(selector)
             self.step(keep=False)
@@ -210,26 +211,6 @@ def open_gateway(page: Page, link: str) -> None:
     time.sleep(1.2)  # the map has landed
 
 
-def scene_find(page: Page, film: Film, pointer: Pointer) -> None:
-    """Context7, found in the catalog, is dragged onto the gateway, which lights up to take it."""
-    page.locator("button:has-text('+ Add servers')").click()
-    page.locator("#drawer .res").first.wait_for(timeout=20000)
-    page.locator("#drawer input[type=search]").fill("context7")
-    page.keyboard.press("Enter")
-    row = page.locator("#drawer .res.drags", has_text="upstash").first
-    row.wait_for(timeout=20000)
-    time.sleep(1.0)
-    box = row.bounding_box()
-    pointer.jump(box["x"] + 160, box["y"] + box["height"] + 60)
-    film.start()
-    film.hold(0.5)
-    pointer.glide(box["x"] + 40, box["y"] + box["height"] / 2, 0.6)
-    film.hold(0.15)
-    pointer.drag(*low_on_gateway(page), 1.1)
-    film.hold(1.6)  # held over the lit gateway
-    film.loop()
-
-
 def scene_pick(page: Page, film: Film, pointer: Pointer) -> None:
     """Three servers are picked with a band and dragged onto the gateway together."""
     first = page.locator('[data-focus="block:outside:local:memory"]').bounding_box()
@@ -246,6 +227,47 @@ def scene_pick(page: Page, film: Film, pointer: Pointer) -> None:
     film.hold(0.15)
     pointer.drag(*low_on_gateway(page), 1.1)
     film.hold(1.6)  # held over the lit gateway
+    film.loop()
+
+
+def link_point(page: Page, tool: str, share: float = 0.75) -> tuple[float, float]:
+    """A point on the map's link from memory to one of its tools, `share` of the way along."""
+    return page.locator(f'[data-focus="link:held:kitden:memory>tool:memory/{tool}"]').evaluate(
+        """(path, share) => {
+          const at = path.getPointAtLength(path.getTotalLength() * share);
+          const p = new DOMPoint(at.x, at.y).matrixTransform(path.getScreenCTM());
+          return [p.x, p.y];
+        }""",
+        share,
+    )
+
+
+def scene_tools(page: Page, film: Film, pointer: Pointer) -> None:
+    """memory is in the gateway with its tools. The three that delete are turned off on the map
+    and applied for every agent."""
+    memory = page.locator('[data-focus="block:outside:local:memory"]').bounding_box()
+    page.mouse.move(memory["x"] + 40, memory["y"] + memory["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(*center(page, '[data-focus="block:gateway:kitden"]'), steps=12)
+    page.mouse.up()
+    page.locator("#dock button:has-text('Apply')").first.click()
+    held = page.locator('[data-focus="block:held:kitden:memory"]')
+    held.wait_for()
+    held.click()
+    page.locator("#drawer button:has-text('Close')").first.click()
+    time.sleep(0.5)
+    pointer.jump(*link_point(page, "read_graph", 0.6))
+    film.start()
+    film.until("text=Moved memory into", 60, gone=True)  # its note leaves in 9 s
+    film.hold(0.3)
+    for tool in ("delete_entities", "delete_observations", "delete_relations"):
+        pointer.glide(*link_point(page, tool), 0.55)
+        film.hold(0.3)  # the link lights and shows its ×
+        pointer.click(f"[aria-label='Turn off {tool}']", 0.35)
+        film.hold(0.35)
+    film.hold(0.3)
+    pointer.click("#dock button:has-text('Apply')", 0.6)
+    film.hold(1.6)
     film.loop()
 
 
@@ -276,8 +298,8 @@ def scene_token(page: Page, film: Film, pointer: Pointer) -> None:
 
 # The part of the page each animation shows, in CSS pixels: x, y, width, height.
 SCENES = (
-    ("find", scene_find, (360, 240, 885, 372)),  # the gateway and the catalog's results
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
+    ("tools", scene_tools, (180, 235, 860, 500)),  # memory, its tools and the changes waiting
     ("token", scene_token, (360, 240, 885, 300)),  # the gateway, Stripe and the token panel
 )
 
