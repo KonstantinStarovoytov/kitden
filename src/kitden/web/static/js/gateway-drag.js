@@ -6,8 +6,8 @@ import { el, pageWaits, plural, reportError } from "./dom.js";
 import { foundClients } from "./gateway-details.js";
 import { clearPick, pick } from "./gateway-pick.js";
 import { linkKey } from "./map.js";
-import { areaPoint, clientAt, covered, DRAG_START, flyGhost, follow, goHome, heldAt, liftGhost, mapArea, moveGhost, ON_CLIENT, pageBox, pointOf as pointIn, startDrag as runDrag } from "./map-drag.js";
-import { animateTo, CALM, shake } from "./motion.js";
+import { aimClient, aimWords, areaPoint, covered, DRAG_START, dropOnClient, flyGhost, follow, goHome, heldAt, liftGhost, mapArea, moveGhost, pageBox, pointOf as pointIn, startDrag as runDrag } from "./map-drag.js";
+import { animateTo, CALM } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { CLIENT_NAMES } from "./parts.js";
 import { busy, current, data, state } from "./store.js";
@@ -290,27 +290,13 @@ function beginOut(drag) {
 // lights, and a wire runs from it to the block and follows it; one that cannot stays as it is and
 // the tip says why. Off a client the light goes and the wire fades.
 function overOut(drag) {
-  const { view } = onMap;
-  const point = covered(drag.at) ? null : pointOf(drag);
-  const client = point ? clientAt(onMap, point) : null;
-  if ((client && client.id) !== (drag.target && drag.target.id)) {
-    drag.target = client;
-    drag.why = client ? whyNot(drag.name, client.client) : null;
-    view.unlightTarget();
-    view.unwire();
-    if (client && !drag.why) {
-      view.lightTarget(client.id);
-      view.wire(client.id, drag.id);
-    }
-  }
+  aimClient(onMap, drag, covered(drag.at) ? null : pointOf(drag), (client) => whyNot(drag.name, client));
   tipOut(drag);
 }
 
 // What a drop does there: nothing yet, the reason a client cannot take it (plain), or the move.
 function tipOut(drag) {
-  const client = drag.target;
-  const words = client ? drag.why || `Move into ${CLIENT_NAMES[client.client]}` : ON_CLIENT;
-  onMap.view.tip(words, { on: Boolean(client && !drag.why) });
+  onMap.view.tip(aimWords(drag, (client) => `Move into ${CLIENT_NAMES[client.client]}`), { on: Boolean(drag.target && !drag.why) });
 }
 
 // A drop on a client that can take the server adds its move out to the tray, the same change as
@@ -319,15 +305,8 @@ function tipOut(drag) {
 // there into the Outside list. A drop on a client that cannot take it shakes the client, and the
 // block goes home. The wire fades on any let go.
 function dropOut(drag, at) {
-  const { view } = onMap;
-  view.unwire();
-  const client = at && drag.target;
+  const client = dropOnClient(onMap.view, drag, at);
   if (!client) return false;
-  if (drag.why) {
-    const node = view.node(client.id);
-    if (node) shake(node);
-    return false;
-  }
   const held = heldAt(onMap, drag);
   const body = { action: "gateway.move_out", targets: [{ client: client.client }], params: { server: drag.name } };
   onMap.moving = { id: drag.id, name: drag.name, key: keyFor(body), at: held && held.at };

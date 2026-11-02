@@ -7,11 +7,11 @@
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
 import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, shownFound, turnPage, turnWords } from "./map.js";
-import { clientAt, covered, flyGhost, follow, liftGhost, mapArea, moveGhost, ON_CLIENT, pointOf, startDrag } from "./map-drag.js";
+import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
 import { drawChip, glidePill } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
 import { mapView } from "./map-view.js";
-import { afterOldPage, rise, riseHead, shake } from "./motion.js";
+import { afterOldPage, rise, riseHead } from "./motion.js";
 import { banner, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
 import { busy, current, currentError, projectPath, render, retry, setState, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
@@ -809,26 +809,13 @@ function beginItem(drag) {
 // lights, and a dashed wire runs from it to the block; one that cannot stays as it is and the tip
 // says why. Off a client the light goes and the wire fades.
 function overItem(drag) {
-  const { view } = onMap;
-  const point = covered(drag.at) ? null : pointOf(onMap, drag);
-  const client = point ? clientAt(onMap, point) : null;
-  if ((client && client.id) !== (drag.target && drag.target.id)) {
-    drag.target = client;
-    drag.why = client ? whyNot(drag.block.item, client.client) : null;
-    view.unlightTarget();
-    view.unwire();
-    if (client && !drag.why) {
-      view.lightTarget(client.id);
-      view.wire(client.id, drag.id);
-    }
-  }
+  aimClient(onMap, drag, covered(drag.at) ? null : pointOf(onMap, drag), (client) => whyNot(drag.block.item, client));
   tipItem(drag);
 }
 
+const addTo = (client) => `Add to ${CLIENT_NAMES[client.client]}`;
 function tipItem(drag) {
-  const client = drag.target;
-  const words = client ? drag.why || `Add to ${CLIENT_NAMES[client.client]}` : ON_CLIENT;
-  onMap.view.tip(words, { on: Boolean(client && !drag.why) });
+  onMap.view.tip(aimWords(drag, addTo), { on: Boolean(drag.target && !drag.why) });
 }
 
 // Why `client` cannot take the item, first match wins; null when it can (the server may still
@@ -848,13 +835,8 @@ function whyNot(item, client) {
 // only); a drop on one that cannot shakes it. The block always comes home, so the drop is never
 // taken.
 function dropItem(drag, at) {
-  const { view } = onMap;
-  view.unwire();
-  const client = at && drag.target;
-  if (client && drag.why) {
-    const node = view.node(client.id);
-    if (node) shake(node);
-  } else if (client) addToTray(addBody(drag.block.item, client.client)).catch(reportError);
+  const client = dropOnClient(onMap.view, drag, at);
+  if (client) addToTray(addBody(drag.block.item, client.client)).catch(reportError);
   return false;
 }
 
@@ -879,13 +861,7 @@ function overRow(drag) {
   const { view } = onMap;
   moveGhost(drag);
   const point = covered(drag.at) ? null : pointOf(onMap, drag);
-  const client = point ? clientAt(onMap, point) : null;
-  if ((client && client.id) !== (drag.target && drag.target.id)) {
-    drag.target = client;
-    drag.why = client ? whyNot(drag.block.item, client.client) : null;
-    view.unlightTarget();
-    if (client && !drag.why) view.lightTarget(client.id);
-  }
+  const client = aimClient(onMap, drag, point, (id) => whyNot(drag.block.item, id), { wire: false });
   const on = Boolean(client && !drag.why);
   drag.ghost.classList.toggle("over", on);
   if (on) view.wire(client.id, point);
@@ -894,20 +870,13 @@ function overRow(drag) {
     view.untip();
     return;
   }
-  const words = client ? drag.why || `Add to ${CLIENT_NAMES[client.client]}` : ON_CLIENT;
-  view.tip(words, { on, at: point });
+  view.tip(aimWords(drag, addTo), { on, at: point });
 }
 
 // A drop on a client that can take the item adds it there for all projects (one row, that client
 // only); one on a client that cannot shakes it. The ghost always flies back onto its row.
 function dropRow(drag, at) {
-  const { view } = onMap;
-  view.unwire();
-  const client = at && drag.target;
-  if (client && drag.why) {
-    const node = view.node(client.id);
-    if (node) shake(node);
-  } else if (client) addToTray(addBody(drag.block.item, client.client)).catch(reportError);
+  dropItem(drag, at);
   flyGhost(drag, null);
   return false;
 }

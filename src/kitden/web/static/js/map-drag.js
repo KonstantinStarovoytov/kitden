@@ -11,7 +11,7 @@
 // it took the drop; `at` is a map point, null for Escape, a lost pointer, a blur of the window or a
 // point over Details or the dock). The engine holds the block with the pointer, unless the kind is
 // `still` (the block stays where it is, as a client's wire does).
-import { animateTo, CALM } from "./motion.js";
+import { animateTo, CALM, shake } from "./motion.js";
 
 // How far a pointer moves on a block before the drag starts: less is a click.
 export const DRAG_START = 5;
@@ -19,7 +19,7 @@ export const DRAG_START = 5;
 const COVERS = ["#drawer.open", "#dock"];
 // A block dragged onto a client: what its tip says until it is over one, and where a client takes
 // it: the pointer in the client's box, widened 24 px left, 40 right, 16 up and down.
-export const ON_CLIENT = "Drop on a client";
+const ON_CLIENT = "Drop on a client";
 const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };
 
 const onCount = (node) => Boolean(node.dataset && node.dataset.focus && node.dataset.focus.startsWith("count:"));
@@ -163,10 +163,45 @@ export function goHome(map) {
 
 // The client block a map point is near: the first in order whose box, widened by NEAR_CLIENT,
 // holds it; null for none.
-export function clientAt(map, point) {
+function clientAt(map, point) {
   const { model, layout } = map;
   const near = (place) => Boolean(place) && point.x > place.x - NEAR_CLIENT.left && point.x < place.x + place.w + NEAR_CLIENT.right && point.y > place.y - NEAR_CLIENT.up && point.y < place.y + place.h + NEAR_CLIENT.down;
   return model.blocks.find((b) => b.kind === "client" && near(layout.blocks.find((place) => place.id === b.id))) || null;
+}
+
+// A drag onto a client, at map point `point` (null: over Details or the dock): `drag.target` is the
+// client there, or null, and `drag.why` why it cannot take the drag (`whyNot(client id)`), null when
+// it can. When the client changes, one that can take it lights and, with `wire`, a wire runs from it
+// to the block; the old light and wire go. Gives the client.
+export function aimClient(map, drag, point, whyNot, { wire = true } = {}) {
+  const { view } = map;
+  const client = point ? clientAt(map, point) : null;
+  if ((client && client.id) === (drag.target && drag.target.id)) return client;
+  drag.target = client;
+  drag.why = client ? whyNot(client.client) : null;
+  view.unlightTarget();
+  if (wire) view.unwire();
+  if (client && !drag.why) {
+    view.lightTarget(client.id);
+    if (wire) view.wire(client.id, drag.id);
+  }
+  return client;
+}
+
+// The tip of a drag onto a client: off one it asks for one; over one it says why that one cannot
+// take it, or what a drop does there (`says(client)`).
+export const aimWords = (drag, says) => (drag.target ? drag.why || says(drag.target) : ON_CLIENT);
+
+// A let go of a drag onto a client: the wire fades, and a client that cannot take the drag shakes.
+// Gives the client that takes it, or null.
+export function dropOnClient(view, drag, at) {
+  view.unwire();
+  const client = at && drag.target;
+  if (!client) return null;
+  if (!drag.why) return client;
+  const node = view.node(client.id);
+  if (node) shake(node);
+  return null;
 }
 
 // A box of the map (x, y, w, h) on the page.

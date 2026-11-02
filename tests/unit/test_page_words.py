@@ -2316,7 +2316,7 @@ def test_a_server_drags_onto_a_client():
     # gateway-notes 6.2: the tip asks for a client, then says where a drop moves the server; a
     # client that cannot take it says why before the drop, in the tip's plain look.
     drag = script("gateway-drag.js")
-    assert 'export const ON_CLIENT = "Drop on a client";' in script("map-drag.js")
+    assert 'const ON_CLIENT = "Drop on a client";' in script("map-drag.js") and "aimWords(drag," in drag
     for words in (
         "`Move into ${CLIENT_NAMES[client.client]}`",
         "`${who} already has ${name}.`",
