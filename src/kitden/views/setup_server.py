@@ -11,10 +11,8 @@ import json
 from pathlib import Path
 
 from kitden.clients.base import SETUP_NAME, ClientAdapter
-from kitden.model import Enabled, Item, ItemKind, Scope, Step
+from kitden.model import CLIENT_WORDS, CLIENTS, Enabled, Item, ItemKind, Scope, Step
 
-CLIENTS = ("claude_code", "codex", "cursor")
-CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 OLD_NAME = "agentsetup"
 
 

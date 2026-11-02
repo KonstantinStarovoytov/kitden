@@ -12,12 +12,12 @@ import os
 from pathlib import Path
 
 from kitden.clients.base import is_home
-from kitden.model import ClientStatus, ItemKind, _hash
+from kitden.model import CLIENTS, ClientStatus, ItemKind, _hash
 from kitden.redact import redact_line
 from kitden.views.explain import PREVIEW_READ, head
 from kitden.views.imports import imports, read_text
 from kitden.views.library_map import _clients
-from kitden.views.load_map import COLUMNS, category
+from kitden.views.load_map import category
 
 ALL = {"key": "all", "name": "All projects"}
 PROJECT = "Only this project · {}"
@@ -81,7 +81,7 @@ def _blocks(inventory, project: str | None) -> dict[str, dict]:
     """The file blocks by path, from the instruction files each client lists."""
     blocks: dict[str, dict] = {}
     for item in inventory.items:
-        if item.client not in COLUMNS or item.kind is not ItemKind.INSTRUCTIONS:
+        if item.client not in CLIENTS or item.kind is not ItemKind.INSTRUCTIONS:
             continue
         kind = KINDS.get(category(item) or "")
         if (category(item) != "instructions" and not kind) or not item.source.path:
@@ -157,7 +157,7 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
         entry = {
             "id": file_id,
             "name": block["name"],
-            "by": {c: True for c in COLUMNS if c in block["by"]},
+            "by": {c: True for c in CLIENTS if c in block["by"]},
             "names": block["names"],
             "imports": [],
             "technical": {"path": path},
@@ -204,7 +204,7 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
                 entry["imports"].append(import_id)
         groups[block["group"]].append(entry)
 
-    order = {c: i for i, c in enumerate(COLUMNS)}
+    order = {c: i for i, c in enumerate(CLIENTS)}
 
     def key(entry: dict) -> tuple:
         first = min(order[c] for c in entry["by"])

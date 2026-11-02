@@ -7,6 +7,7 @@ import pytest
 
 from kitden.demo import build_demo_home
 from kitden.model import (
+    CLIENTS,
     Client,
     ClientStatus,
     Gateway,
@@ -19,7 +20,7 @@ from kitden.model import (
 from kitden.views.explain import explain
 from kitden.views.findings import mark_gateways
 from kitden.views.inventory import Inventory, build_inventory
-from kitden.views.load_map import COLUMNS, load_map, map_dict
+from kitden.views.load_map import load_map, map_dict
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_local_gateway_move import add_claude, add_cursor
 
@@ -52,7 +53,7 @@ def test_rows_group_by_kind_and_name_with_one_plugin_row_per_marketplace(home):
     official = superpowers[0]
     assert official.cells["codex"].state == "none"
     assert official.cells["claude_code"].state == "on"
-    assert set(official.cells) == set(COLUMNS)
+    assert set(official.cells) == set(CLIENTS)
     assert superpowers[1].cells["claude_code"].state == "none"
 
 
@@ -180,7 +181,7 @@ def test_mcp_and_plugin_with_the_same_name_stay_separate():
         source = Source(kind=SourceKind.FILE, path=f"/h/{client}", owner_client=client)
         return Item(client=client, kind=kind, name=name, source=source, scope=Scope.USER)
 
-    clients = [Client(id=c, display_name=c, status=ClientStatus.FOUND) for c in COLUMNS]
+    clients = [Client(id=c, display_name=c, status=ClientStatus.FOUND) for c in CLIENTS]
     inventory = Inventory(
         clients=clients,
         items=[
@@ -341,7 +342,7 @@ def test_the_two_that_agree_stay_and_the_odd_one_needs_review(home):
         home, "neon", {"url": "https://mcp.neon.tech/mcp"}
     )  # loads: not turned off in Cursor
     neon = rows_by(load_map(build_inventory(home), None), "mcp_server", "neon")
-    assert {c: neon.cells[c].state for c in COLUMNS} == {
+    assert {c: neon.cells[c].state for c in CLIENTS} == {
         "claude_code": "review",
         "codex": "on",
         "cursor": "on",

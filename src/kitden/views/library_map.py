@@ -8,14 +8,14 @@ and follow the plugin, so the map never says "N of M on". Paths are only under `
 
 from pathlib import Path
 
-from kitden.changes.actions import CLIENT_WORDS, skill_rules_in
+from kitden.changes.actions import skill_rules_in
 from kitden.changes.engine import writable, writable_roots
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE, SKILL_REMOVE
 from kitden.clients.claude_code import _holds, local_files, rule_file
-from kitden.model import ClientStatus, Enabled, Item, ItemKind, Scope
+from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Enabled, Item, ItemKind, Scope
 from kitden.views.catalog import catalog, installed_inside
 from kitden.views.effective import in_project
-from kitden.views.load_map import COLUMNS, Row, load_map, row_key
+from kitden.views.load_map import Row, load_map, row_key
 from kitden.views.setup_server import kitden_on, setup_server_state
 from kitden.views.skills import skill_catalog
 from kitden.views.words import ORIGIN_WORDS, STATE_WORDS
@@ -43,7 +43,7 @@ def _clients(inventory, cursor_imports: bool) -> list[dict]:
     status = {c.id: c.status for c in inventory.clients}
     setup = {e["client"]: e for e in setup_server_state(inventory)}
     out = []
-    for client in COLUMNS:
+    for client in CLIENTS:
         read, entry = status.get(client), setup[client]
         if read is ClientStatus.UNREADABLE:
             state, words = "unreadable", STATE_WORDS["unread"]
@@ -65,7 +65,7 @@ def _present(inventory, project: str | None) -> dict[str, list[Item]]:
     kept in the account, not here."""
     out: dict[str, list[Item]] = {}
     for item in inventory.items:
-        if item.client not in COLUMNS or item.kind not in KINDS or item.scope is Scope.ACCOUNT:
+        if item.client not in CLIENTS or item.kind not in KINDS or item.scope is Scope.ACCOUNT:
             continue
         if item.project is None or item.project == project:
             out.setdefault(row_key(item), []).append(item)
@@ -105,7 +105,7 @@ def _links(row: Row, own: set[str], by_id: dict[str, Item], via: bool):
     first; and the items that decide, by client. A client without the item, or one Kitden could
     not read that has no item kept, has no entry."""
     by, through, ids, deciding = {}, {}, {}, {}
-    for client in COLUMNS:
+    for client in CLIENTS:
         cell = row.cells[client]
         items = [by_id[i] for i in cell.items if i in own]
         if cell.state == "none" and client == "cursor" and via:
@@ -115,7 +115,7 @@ def _links(row: Row, own: set[str], by_id: dict[str, Item], via: bool):
         by[client] = {"off": "off", "unk": "unknown"}.get(cell.state, "on")
         ids[client] = [i.id for i in items]
         owner = items[0].source.owner_client
-        if by[client] == "on" and owner in COLUMNS and owner != client:
+        if by[client] == "on" and owner in CLIENTS and owner != client:
             through[client] = owner
         deciding[client] = items[:1] if cell.state == "off" else items
     return by, through, ids, deciding
@@ -196,7 +196,7 @@ def _can(
         }
     if row.kind is ItemKind.SKILL:
         routes = offer["routes"] if offer else {}
-        add = [c for c in COLUMNS if c in found and c in routes]
+        add = [c for c in CLIENTS if c in found and c in routes]
         copy = [
             c
             for c in ("codex",)
@@ -291,7 +291,7 @@ def _rule_outside(inventory, adapters, project: str | None) -> bool:
 def _plugin_folders(adapters) -> dict[str, str]:
     """Plugin id -> its installed folder, the first client's that has it (as installed_inside)."""
     out: dict[str, str] = {}
-    for client in COLUMNS:
+    for client in CLIENTS:
         if client in adapters:
             for plugin_id, folder in adapters[client].plugin_folders().items():
                 out.setdefault(plugin_id, str(folder))
@@ -302,7 +302,7 @@ def _marketplace_sources(inventory) -> dict[str, str]:
     """Marketplace name -> where it comes from, as its item says it (a folder, or host/path with
     no credentials)."""
     out: dict[str, str] = {}
-    for client in COLUMNS:
+    for client in CLIENTS:
         for item in inventory.items:
             if item.client == client and item.kind is ItemKind.MARKETPLACE:
                 source = dict(item.summary).get("source")
@@ -329,7 +329,7 @@ def _marketplace_entries(inventory) -> dict[str, dict[str, str]]:
     """Marketplace name -> each client's marketplace item id, for its "Commands…"."""
     out: dict[str, dict[str, str]] = {}
     for item in inventory.items:
-        if item.client in COLUMNS and item.kind is ItemKind.MARKETPLACE:
+        if item.client in CLIENTS and item.kind is ItemKind.MARKETPLACE:
             out.setdefault(item.name, {}).setdefault(item.client, item.id)
     return out
 
@@ -345,7 +345,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     root, not the project itself. A marketplace group's
     `entries` are each client's marketplace item id, which `/api/commands` takes."""
     status = {c.id: c.status for c in inventory.clients}
-    found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
+    found = [c for c in CLIENTS if status.get(c) is ClientStatus.FOUND]
     cursor = adapters.get("cursor") if "cursor" in found else None
     cursor_imports = bool(cursor and cursor.imports_claude_plugins() and "claude_code" in found)
     by_id = {i.id: i for i in inventory.items}

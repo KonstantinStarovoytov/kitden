@@ -13,9 +13,8 @@ from kitden.changes.batch import kitden_server
 from kitden.changes.engine import PUT_BACK
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.views import rule_of
-from kitden.model import Change, ItemKind
+from kitden.model import CLIENTS, Change, ItemKind
 from kitden.redact import masked_command, redact_text
-from kitden.views.load_map import COLUMNS
 
 # Steps whose client is not one the person uses: a registered gateway and Kitden's own settings.
 NOT_CLIENTS = {"gateway", KITDEN}
@@ -27,7 +26,7 @@ TITLE_STEP = ("client", "name", "scope", "reaches", "keeps")
 
 
 def _order(client: str) -> int:
-    return COLUMNS.index(client) if client in COLUMNS else len(COLUMNS)
+    return CLIENTS.index(client) if client in CLIENTS else len(CLIENTS)
 
 
 def _made(change_id: str) -> str | None:

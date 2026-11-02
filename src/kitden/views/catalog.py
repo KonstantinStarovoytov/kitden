@@ -14,9 +14,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 from kitden.clients.base import ClientAdapter
 from kitden.clients.entries import entry_refusal, gateway_entry
-from kitden.model import ItemKind, Scope, SourceKind
+from kitden.model import CLIENT_WORDS, CLIENTS, ItemKind, Scope, SourceKind
 from kitden.redact import redact
-from kitden.views.setup_server import CLIENT_WORDS
 
 # Clients whose command line installs plugins (Cursor keeps its plugins in the account).
 INSTALLERS = ("claude_code", "codex")
@@ -148,7 +147,7 @@ def installed_inside(adapters: dict[str, ClientAdapter]) -> dict[str, dict]:
     server names. Read from the installed folder of Claude Code, Codex and Cursor; the first
     client that has the plugin answers. Nothing is read again until a plugin file changes."""
     out: dict[str, dict] = {}
-    for client in ("claude_code", "codex", "cursor"):
+    for client in CLIENTS:
         if client not in adapters:
             continue
         for plugin_id, folder in adapters[client].plugin_folders().items():

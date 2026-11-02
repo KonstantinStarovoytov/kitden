@@ -23,7 +23,7 @@ from pathlib import Path
 from kitden.changes.actions import folder_readers
 from kitden.changes.copy_folder import CopyRefusedError, digest, list_files
 from kitden.clients.base import ClientAdapter
-from kitden.model import ClientStatus, Enabled, ItemKind, Scope
+from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Enabled, ItemKind, Scope
 from kitden.views.catalog import (
     INSTALLERS,
     MARKETPLACE_FILES,
@@ -34,8 +34,6 @@ from kitden.views.catalog import (
     held_count,
 )
 
-CLIENTS = ("claude_code", "codex", "cursor")
-CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 NEEDS_PLUGIN = "This skill needs the rest of its plugin. Add the plugin instead."
 # Why the Library's add panel cannot offer a plugin: no client found here can take it.
 NO_CLIENT = "No client here can get {name}."

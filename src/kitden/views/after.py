@@ -37,10 +37,10 @@ from kitden.local_gateway.settings import (
     rule_parts,
     state_in,
 )
-from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
+from kitden.model import CLIENT_WORDS, CLIENTS, GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
 from kitden.redact import redact
 from kitden.views.effective import effective_view
-from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
+from kitden.views.setup_server import kitden_on, setup_server_state
 from kitden.views.words import (
     AFTER_WORDS,
     FOLLOWS_SHARED,
@@ -55,8 +55,6 @@ from kitden.views.words import (
     STATE_WORDS,
 )
 
-SKILL_CLIENTS = ("claude_code", "codex", "cursor")
-CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 CURSOR_IMPORT = {
     "client": "cursor",
     "state": "on",
@@ -144,7 +142,7 @@ def _skill_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
             copies = loads.setdefault(client, {})
             copies[step.name] = copies.get(step.name, 0) + 1
     out = []
-    for client in SKILL_CLIENTS:
+    for client in CLIENTS:
         if not loads.get(client):
             continue
         entry = {"client": client, "state": "on", "word": STATE_WORDS["on"]}
@@ -169,7 +167,7 @@ def _skill_remove_words(change: Change) -> list[dict]:
     removal = step.removal
     assert removal is not None
     out = []
-    for client in SKILL_CLIENTS:
+    for client in CLIENTS:
         if client not in removal.readers:
             continue
         if client in removal.keeps:
@@ -696,7 +694,7 @@ def _align_words(
         reached.add("cursor")
         notes.setdefault("cursor", []).append(CURSOR_IMPORT["note"])
     out = []
-    for client in SKILL_CLIENTS:
+    for client in CLIENTS:
         if client not in reached:
             continue
         entry = dict(

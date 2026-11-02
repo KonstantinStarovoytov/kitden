@@ -13,10 +13,10 @@ from pathlib import Path
 from kitden.changes.atomic import write_atomic
 from kitden.clients.versions import parse_version, version_command
 from kitden.gateways import data_dir
+from kitden.model import CLIENTS as CLIENTS  # cli.py and web/app.py read it here
 
 VERSIONS_FILE = "versions.json"
 VERSION_TIMEOUT_SECONDS = 20  # Cursor starts Electron to print its version
-CLIENTS = ("claude_code", "codex", "cursor")
 
 
 def run_version_command(client: str) -> str | None:

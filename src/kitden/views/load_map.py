@@ -17,6 +17,8 @@ from datetime import datetime
 
 from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.model import (
+    CLIENT_WORDS,
+    CLIENTS,
     ClientStatus,
     Enabled,
     FindingType,
@@ -30,9 +32,7 @@ from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_fi
 from kitden.views.match import Copies, is_compared, odd_sources, plugin_copies, plugin_of
 from kitden.views.words import CLIENT_UNREAD, NOT_SAME, ORIGIN_WORDS, ROUTE_WORDS, STALE
 
-COLUMNS = ("claude_code", "codex", "cursor")
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
-NAMES = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 
 
 @dataclass
@@ -83,8 +83,8 @@ def _route(item: Item, column: str) -> str | None:
     if item.via_gateway == KITDEN_GATEWAY:
         return ROUTE_WORDS["kitden"]
     owner = item.source.owner_client
-    if owner in NAMES and owner != column:
-        return ROUTE_WORDS["folder"].format(NAMES[owner])
+    if owner in CLIENTS and owner != column:
+        return ROUTE_WORDS["folder"].format(CLIENT_WORDS[owner])
     if item.scope is Scope.PLUGIN:
         return ROUTE_WORDS["plugin"]
     return None
@@ -112,7 +112,8 @@ def _deciding_first(item: Item, winners: set[str]) -> tuple[bool, bool]:
 
 
 def _own_first(item: Item, column: str) -> tuple[bool, str]:
-    return (item.source.owner_client in NAMES and item.source.owner_client != column, item.name)
+    owner = item.source.owner_client
+    return (owner in CLIENTS and owner != column, item.name)
 
 
 def _clock(at: str) -> str:
@@ -169,7 +170,7 @@ def _review(row: Row, items: dict[str, Item], copies: Copies) -> None:
         return
     compared = {
         c: [items[i] for i in row.cells[c].items if i in items and is_compared(items[i])]
-        for c in COLUMNS
+        for c in CLIENTS
         if row.cells[c].state == "on"
     }
     for column in odd_sources({c: group for c, group in compared.items() if group}, copies):
@@ -197,7 +198,7 @@ def _warning(text: str, client: str, fix: str, fix_action: str | None) -> dict:
 
 def _cross_client_fix(client: str, via: str, kind: ItemKind) -> str:
     """One copy is the client's own, the other is loaded from another client's folder."""
-    own, other = NAMES.get(client, client), NAMES.get(via, via)
+    own, other = CLIENT_WORDS.get(client, client), CLIENT_WORDS.get(via, via)
     if client == "cursor" and kind is ItemKind.PLUGIN:
         return (
             f"Two copies load in {own}: its own and {other}'s. To keep one: remove it in Cursor "
@@ -213,7 +214,7 @@ def _cross_client_fix(client: str, via: str, kind: ItemKind) -> str:
 def _flag(finding, item: Item, gateway_registered: bool, copies: list[Item]) -> dict | None:
     """A short flag for the row; warnings also carry the fix in words and the action."""
     if finding.type is FindingType.DUPLICATE_IN_CLIENT:
-        text = f"{NAMES.get(finding.client, finding.client)} loads it twice"
+        text = f"{CLIENT_WORDS.get(finding.client, finding.client)} loads it twice"
         others = sorted(
             {c.source.owner_client for c in copies if c.source.owner_client != finding.client}
         )
@@ -237,7 +238,7 @@ def _flag(finding, item: Item, gateway_registered: bool, copies: list[Item]) -> 
 
 def load_map(inventory, project: str | None, gateway_registered: bool = False) -> list[Row]:
     status = {c.id: c.status for c in inventory.clients}
-    views = {c: effective_view(inventory, c, project) for c in COLUMNS}
+    views = {c: effective_view(inventory, c, project) for c in CLIENTS}
     desktop = effective_view(inventory, DESKTOP, project) if status.get(DESKTOP) else None
     loaded: dict[str, list[Item]] = {c: list(v.items) for c, v in views.items()}
     if desktop:
@@ -270,7 +271,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     # Everywhere means user-level items only; a project adds its own items.
     applies = [i for i in inventory.items if i.project is None or i.project == project]
     for item in applies:
-        if item.client in COLUMNS or item.client == DESKTOP:
+        if item.client in CLIENTS or item.client == DESKTOP:
             row_for(item)
 
     by_row_loaded: dict[tuple[str, str], list[Item]] = {}
@@ -280,7 +281,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     by_row_present: dict[tuple[str, str], list[Item]] = {}
     for item in applies:
         column = "claude_code" if item.client == DESKTOP else item.client
-        if column in COLUMNS and (item.project is None or item.project == project):
+        if column in CLIENTS and (item.project is None or item.project == project):
             by_row_present.setdefault((row_for(item).key, column), []).append(item)
 
     # The plugin item that decides in each column, by plugin id: its parts follow it.
@@ -293,7 +294,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     items_by_id = {i.id: i for i in inventory.items}
     copies = plugin_copies(inventory)
     for row in rows.values():
-        for column in COLUMNS:
+        for column in CLIENTS:
             read = status.get(column)
             if read not in (ClientStatus.FOUND, ClientStatus.UNREADABLE):
                 row.cells[column] = Cell("missing")
@@ -309,7 +310,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             )
             # A client Kitden could not read may have it: Unknown, never "—".
             if read is ClientStatus.UNREADABLE and cell.state == "none":
-                cell = Cell("unk", reason=CLIENT_UNREAD.format(NAMES[column]))
+                cell = Cell("unk", reason=CLIENT_UNREAD.format(CLIENT_WORDS[column]))
             row.cells[column] = cell
         _review(row, items_by_id, copies)
         # Kept from the last good read: the row's first flag says when.
@@ -337,8 +338,13 @@ def map_dict(inventory, rows: list[Row]) -> dict:
     status = {c.id: str(c.status) for c in inventory.clients}
     return {
         "columns": [
-            {"id": c, "name": NAMES[c], "mark": MARKS[c], "status": status.get(c, "not_found")}
-            for c in COLUMNS
+            {
+                "id": c,
+                "name": CLIENT_WORDS[c],
+                "mark": MARKS[c],
+                "status": status.get(c, "not_found"),
+            }
+            for c in CLIENTS
         ],
         "rows": [
             {

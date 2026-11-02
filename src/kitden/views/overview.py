@@ -16,11 +16,20 @@ from kitden.changes.actions import (
 from kitden.clients.base import SETUP_SERVER
 from kitden.clients.versions import MINIMUM_VERSIONS
 from kitden.local_gateway.settings import SETTINGS_FILE
-from kitden.model import Finding, FindingType, Gateway, ItemKind, Severity, UnknownReason, _hash
+from kitden.model import (
+    CLIENT_WORDS,
+    CLIENTS,
+    Finding,
+    FindingType,
+    Gateway,
+    ItemKind,
+    Severity,
+    UnknownReason,
+    _hash,
+)
 from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.library_map import library_map
-from kitden.views.load_map import COLUMNS, NAMES
 from kitden.views.setup_server import ENABLE_KEYS, kitden_on, setup_server_state
 
 READ_PROBLEMS = {
@@ -45,7 +54,7 @@ def _join(words: list[str]) -> str:
 
 
 def _client_order(client: str) -> int:
-    return COLUMNS.index(client) if client in COLUMNS else len(COLUMNS)
+    return CLIENTS.index(client) if client in CLIENTS else len(CLIENTS)
 
 
 def _card(id, group, icon, name, line, clients, action, block) -> dict:
@@ -66,12 +75,12 @@ def _card(id, group, icon, name, line, clients, action, block) -> dict:
 def _unreadable(inventory) -> list[dict]:
     cards = []
     for problem in inventory.problems:
-        where = problem.path or NAMES.get(problem.owner_client, problem.owner_client)
+        where = problem.path or CLIENT_WORDS.get(problem.owner_client, problem.owner_client)
         why = READ_PROBLEMS.get(problem.unknown_reason, "It could not be read")
-        client = NAMES.get(problem.owner_client, problem.owner_client)
+        client = CLIENT_WORDS.get(problem.owner_client, problem.owner_client)
         title = f"Could not read {Path(where).name}"
         text = f"{why}, so items from {client} may be missing or wrong."
-        clients = [problem.owner_client] if problem.owner_client in COLUMNS else []
+        clients = [problem.owner_client] if problem.owner_client in CLIENTS else []
         card_id = _hash("unreadable", where)
         cards.append(_card(card_id, "attention", "file-text", title, text, clients, None, None))
     return cards
@@ -142,7 +151,7 @@ def _old_entries(inventory) -> list[dict]:
     if not old:
         return []
     ids = [s["client"] for s in old]
-    where = _join([NAMES[c] for c in ids])
+    where = _join([CLIENT_WORDS[c] for c in ids])
     one = len(ids) == 1
     it = "it" if one else "them"
     title = f"Old Kitden {'entry' if one else 'entries'} in {where}"
@@ -214,7 +223,7 @@ def _connects(inventory) -> list[dict]:
         else:
             continue
         action = {"label": "Connect…", "body": body}
-        name, icon, card_id = NAMES[client], {"client": client}, _hash("connect", client)
+        name, icon, card_id = CLIENT_WORDS[client], {"client": client}, _hash("connect", client)
         card = _card(card_id, "improve", icon, name, NOT_CONNECTED, [client], action, "gateway")
         cards.append(card)
     return cards
@@ -245,7 +254,7 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
     servers and tools, the Library's plugins and skills, which client reaches which, and how
     many projects have rules of their own (for the gateway, or for a plugin or skill). While
     the gateway settings cannot be read (`unread`) its counts are not known (None)."""
-    clients = [c for c in inventory.clients if c.id in COLUMNS]
+    clients = [c for c in inventory.clients if c.id in CLIENTS]
     found = [c for c in clients if str(c.status) == "found"]
     shown = library_map(inventory, adapters, project)
     items = [i for g in shown["groups"] for i in g["items"]]

@@ -6,9 +6,9 @@ plugins (the After chips' Cursor line). A reader that keeps another copy of its 
 as the review leaves it out (`skill_keepers`, `cursor_keeps`).
 """
 
-from kitden.model import Item, ItemKind, Scope
+from kitden.model import CLIENT_WORDS, CLIENTS, Item, ItemKind, Scope
 from kitden.views.after import cursor_keeps
-from kitden.views.skills import CLIENT_WORDS, CLIENTS, skill_keepers, skill_readers
+from kitden.views.skills import skill_keepers, skill_readers
 from kitden.views.words import LOADS_PLUGINS, READS_FOLDER
 
 

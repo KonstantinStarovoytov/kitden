@@ -5,11 +5,10 @@ from pathlib import Path
 from kitden.changes.actions import KITDEN_GATEWAY, set_up_differently
 from kitden.clients.base import REMOVE_DIRECT
 from kitden.clients.entries import IN_PROJECT_FILES
-from kitden.model import Enabled, Gateway, Item, ItemKind, Scope
+from kitden.model import CLIENTS, Enabled, Gateway, Item, ItemKind, Scope
 from kitden.views.effective import DESKTOP, effective_view
 from kitden.views.explain import summary_line
 from kitden.views.findings import bypass_kind
-from kitden.views.load_map import COLUMNS
 from kitden.views.setup_server import is_own_entry
 from kitden.views.words import KEPT_UNREAD
 
@@ -47,7 +46,7 @@ def loaded_mcp(inventory, project: str | None) -> tuple[list[Item], set[str]]:
     found = {c.id for c in inventory.clients if str(c.status) == "found"}
     items: list[Item] = []
     overrides: set[str] = set()
-    for client in [*COLUMNS, DESKTOP]:
+    for client in [*CLIENTS, DESKTOP]:
         if client in found:
             view = effective_view(inventory, client, project)
             items += [
@@ -103,7 +102,7 @@ def gateway_view(
     set up differently are a reason it refuses."""
     ids = ([KITDEN_GATEWAY] if kitden is not None else []) + [g.id for g in gateways]
     # Per gateway and client: the servers that load in this scope and go through that gateway.
-    connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in COLUMNS} for g in ids}
+    connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in CLIENTS} for g in ids}
     # One row per server name, with the clients that have it and the entries that can go.
     groups: dict[str, dict[str, dict]] = {"move": {}, "local": {}, "plugin": {}}
     movable = {
@@ -152,7 +151,7 @@ def gateway_view(
     for rows in groups.values():
         for row in rows.values():
             loads = {"claude_code" if c == DESKTOP else c for c in row["clients"]}
-            row["columns"] = [c for c in COLUMNS if c in loads]
+            row["columns"] = [c for c in CLIENTS if c in loads]
     return {
         "gateways": (
             [{**KITDEN, "servers": kitden, **({"problem": problem} if problem else {})}]
