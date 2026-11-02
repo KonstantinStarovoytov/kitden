@@ -101,11 +101,9 @@ class _Redactor:
             return f"{m.group(1)}: {SECRET}"
         if value.startswith(("http://", "https://")):
             return self._url(value)
-        for shape in _TOKEN_SHAPES:  # a token inside a longer string
-            value, count = shape.subn(SECRET, value)
-            if count:
-                self.found = True
-        return value
+        hidden = redact_text(value)  # a token inside a longer string
+        self.found = self.found or hidden != value
+        return hidden
 
     def _url(self, url: str) -> str:
         parts = urlsplit(url)

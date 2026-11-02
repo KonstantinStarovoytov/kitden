@@ -55,7 +55,8 @@ async def test_sign_in_finishes(fake):
     query = await asyncio.to_thread(opened.back)
     assert oauth().finish(signins, query) is True
     assert await oauth().wait(record) == {"state": "done"}
-    done = signins.signed(record.id, fake.url)
+    done = signins.get(record.id)
+    assert done.state == "done" and done.url == fake.url
     assert done.access_token in fake.issued
     stored = json.loads(done.secret)
     assert stored["tokens"]["access_token"] == done.access_token
@@ -67,7 +68,7 @@ async def test_offer_gives_one_id_per_address(fake):
     signins = SignIns()
     assert signins.offer(fake.url, "neon") == signins.offer(fake.url, "neon")
     assert signins.offer(fake.url, "neon") != signins.offer(fake.base + "/other", "neon")
-    assert signins.signed(signins.offer(fake.url, "neon"), fake.url) is None
+    assert signins.get(signins.offer(fake.url, "neon")).state == "new"
 
 
 async def test_no_registration_cannot_sign_in():
@@ -120,8 +121,10 @@ async def test_two_flows_get_their_own_callbacks(fake):
         assert oauth().finish(signins, await asyncio.to_thread(first.back))
         assert await oauth().wait(one) == {"state": "done"}
         assert await oauth().wait(two) == {"state": "done"}
-        assert signins.signed(one.id, fake.url).access_token in fake.issued
-        assert signins.signed(two.id, other.url).access_token in other.issued
+        assert (one.state, one.url) == ("done", fake.url)
+        assert (two.state, two.url) == ("done", other.url)
+        assert one.access_token in fake.issued
+        assert two.access_token in other.issued
     finally:
         other.stop()
 

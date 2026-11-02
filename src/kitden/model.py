@@ -113,7 +113,6 @@ class Client:
     version: str | None = None
     version_supported: bool = False
     config_roots: tuple[str, ...] = ()
-    write_capabilities: frozenset[str] = frozenset()
     app_url: str | None = None  # `claude://` when the client's Mac app is installed (apps.py)
 
 
@@ -126,7 +125,6 @@ class Source:
     read_status: ReadStatus = ReadStatus.OK
     unknown_reason: UnknownReason | None = None
     link_path: str | None = None
-    content_hash: str | None = None
 
     def __post_init__(self) -> None:
         if (self.read_status is ReadStatus.UNKNOWN) != (self.unknown_reason is not None):
@@ -241,7 +239,7 @@ class GatewayEdit:
     gateway_id: str
     url: str  # the gateway's endpoint address: the step's place on the Changes page
     name: str  # the server's name in the gateway
-    server: dict  # type, url, headers, as MetaMCP takes them
+    server: dict  # type, url, headers, as the gateway takes them
     server_uuid: str | None = None  # known after apply; undo removes it
     masked_diff: str = ""
 
