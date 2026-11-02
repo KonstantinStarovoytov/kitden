@@ -10,7 +10,7 @@ globalThis.window = {
   addEventListener: (type, fn) => { (windowHeard[type] ||= []).push(fn); },
   removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
 };
-const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, letGoCloses, linkRemoval, linkTip, linksWait, listRows, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, letGoCloses, linkRemoval, linkTip, listRows, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, pressRow, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { heldServer, offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -18,7 +18,7 @@ const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass,
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, setBusy, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
-const { addToTray, applyTray, cancelTray, endApplied, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, applyTray, cancelTray, endApplied, keyFor, linksWait, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
 // A stand-in server for the tray: each address answers from its own queue (a reply, or a function
 // of the request body that gives one); an address with nothing queued answers 200 with no body.

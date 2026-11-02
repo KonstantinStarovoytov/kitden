@@ -5,7 +5,7 @@
 // plugin or a skill drags onto a client (map-drag.js), which only adds a row to the tray. Its
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
-import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
+import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
 import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, shownFound, turnPage, turnWords } from "./map.js";
 import { clientAt, covered, flyGhost, follow, liftGhost, mapArea, moveGhost, ON_CLIENT, pointOf, startDrag } from "./map-drag.js";
 import { drawChip, glidePill } from "./map-page.js";
@@ -15,7 +15,7 @@ import { afterOldPage, CALM, rise, riseHead, shake } from "./motion.js";
 import { banner, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
 import { busy, current, currentError, projectPath, render, retry, setState, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
-import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
+import { addToTray, inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray } from "./tray.js";
 
 export const LEDE = "Follow the source. Connect only what you need.";
 const MAP_HINT = "Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details";
@@ -80,9 +80,6 @@ const WAITS_ALREADY = "Already in preview";
 // the card ends in "…", so its title says it whole.
 const CLICK_OUT = "Click to take it out.";
 const ALL_PROJECTS = "all projects";
-// What the × of a link that the tray draws says, and the × while a change is written.
-const TAKE_OUT = "Take it out of the preview";
-const OWN_WAITS = "Your change is being written.";
 
 // How many blocks the Plugins and skills column holds: plugins, skills and hooks.
 const itemCount = (answer) => answer.groups.reduce((n, group) => n + group.items.length, 0);
@@ -629,11 +626,6 @@ function linkTip(link) {
   return inTray(keyFor(change.body)) ? TAKE_OUT : change.tip;
 }
 
-// The × waits while a change is written, and says why.
-function linksWait() {
-  return tray.phase === "applying" || tray.phase === "applied" ? OWN_WAITS : busy.change && WAITS;
-}
-
 // The × of a link, or Delete on it: a row it draws, or its own change already in the tray, is taken
 // out; any other change is added to the tray.
 function removeLink(link) {
@@ -642,7 +634,7 @@ function removeLink(link) {
   const change = row ? null : changeOf(link);
   let done = null;
   if (row) done = takeOut(row);
-  else if (change) done = inTray(keyFor(change.body)) ? takeOut(keyFor(change.body)) : addToTray(change.body);
+  else if (change) done = toggleInTray(change.body);
   if (done) done.catch(reportError);
 }
 

@@ -1307,7 +1307,8 @@ def test_buttons_show_progress_and_the_scan_line_no_longer_blinks():
 def test_while_a_change_is_written_the_tray_offers_nothing_to_stop_it():
     dock = script("dock.js")
     # Cancel and every × are off while the change is written: it cannot stop halfway.
-    assert 'shown.cancel.disabled = t.phase === "applying" || t.phase === "applied";' in dock
+    assert "shown.cancel.disabled = writing(t);" in dock
+    assert 'export const writing = (t = tray) => t.phase === "applying" || t.phase === "applied";' in script("tray.js")
     assert "item.out.disabled = working;" in dock
     # The line says what is written, and Apply takes no press until it ends.
     assert "line: writingLine(t.change.steps)" in dock and "applyWaits: true" in dock
@@ -1893,7 +1894,7 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
         '"Kitden\'s gateway file"',
         '"In place"',
         '"This link is a change in preview. Nothing is written until you Apply."',
-        '"Take it out of the preview"',
+        "TAKE_OUT",
         "`Disconnect ${",
         "· outside the gateway`",
         '"Set up in"',
@@ -2205,9 +2206,12 @@ def test_the_map_previews_are_tray_rows():
     review = script("review.js")
     assert "setMapReview" not in review and "mapReview" not in review
     text = gw()
+    assert 'export const TAKE_OUT = "Take it out of the preview";' in script("tray.js")
+    # A link's × takes its row out of the tray, or adds it (tray.js toggleInTray).
+    assert "return inTray(key) ? takeOut(key) : addToTray(body, opts);" in script("tray.js")
     for words in (
-        'const TAKE_OUT = "Take it out of the preview";',
-        "addToTray(removal.body, { icon: removalIcon(removal.body) })",
+        "TAKE_OUT",
+        "toggleInTray(removal.body, { icon: removalIcon(removal.body) })",
         '(body.action === "client.disconnect" ? iconFor(body) : "x")',
         "addToTray(body)",
         "takeOut(",
@@ -2343,7 +2347,7 @@ def test_the_tray_bar_sits_in_the_dock_and_says_its_words():
         "changes in preview",
         "Nothing is written until you Apply.",
         "Click one on the map to take it out.",
-        "Take it out of the preview",
+        'iconButton("x", TAKE_OUT, "x",',
         "Show changes",
         "Cancel all",
         "Apply all",
@@ -2577,7 +2581,8 @@ def test_a_control_that_waits_for_another_change_says_why():
     assert '.dock .btn[aria-disabled="true"] { cursor: progress; }' in CSS
     assert 'div.map .link-x[aria-disabled="true"] { cursor: progress; }' in CSS
     # During the tray's own Apply a link's × says the change is the person's own.
-    assert 'export const OWN_WAITS = "Your change is being written.";' in script("gateway.js")
+    assert 'const OWN_WAITS = "Your change is being written.";' in script("tray.js")
+    assert "linksWait" in script("gateway.js") and "linksWait" in script("library-map.js")
 
 
 def test_a_gateway_kitden_cannot_reach_says_a_short_state_and_no_block_words_run_out():
@@ -2837,8 +2842,7 @@ def test_a_library_link_x_removes_or_turns_off():
     assert 'if (client === "cursor") {' in rules
     text = script("library-map.js")
     for words in (
-        'const TAKE_OUT = "Take it out of the preview";',
-        'const OWN_WAITS = "Your change is being written.";',
+        "TAKE_OUT",
         "const LINKS = { canHit: () => true, tip: linkTip, waits: linksWait, onClick: pressLink, "
         "onRemove: removeLink };",
         "inTray(keyFor(change.body)) ? TAKE_OUT : change.tip",

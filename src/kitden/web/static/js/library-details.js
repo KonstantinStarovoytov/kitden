@@ -13,7 +13,7 @@ import { copyBodies, offBodies, onBodies, removeBodies, skillOffBodies, skillRul
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
-import { inTray, keyFor, tray } from "./tray.js";
+import { inTray, keyFor, trayRow } from "./tray.js";
 
 const IN_PREVIEW = "In preview";
 const OFF_ALL = "Turn off for all projects…";
@@ -212,7 +212,8 @@ function rowsButton(label, bodies, look = "btn") {
 // The tray holds this very row: its key, and the same `off` (a skill rule's on and off share a key).
 function queued(body) {
   const off = (body.params || {}).off;
-  return tray.rows.some((row) => row.key === keyFor(body) && (row.body.params || {}).off === off);
+  const row = trayRow(keyFor(body));
+  return Boolean(row) && (row.body.params || {}).off === off;
 }
 
 // Words in a quiet line that show while `when()` holds, after every change of the tray.

@@ -13,7 +13,7 @@ import { projectNote } from "./offer.js";
 import { callsText, closePanel, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, showInPreview, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, kitdenHouse, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
 import { arrival, current, data, freshness, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
-import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
+import { addToTray, iconFor, inTray, keyFor, TAKE_OUT, takeOut, tray, trayRow } from "./tray.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 // The kitden entry is the same one that lets agents read this setup.
@@ -413,7 +413,7 @@ function serverCounts(servers, outside) {
 // (gateway.js rowsOnMap): not once it is applied.
 function movesOutNow(name) {
   const key = keyFor({ action: "gateway.move_out", params: { server: name } });
-  return tray.phase !== "applied" && tray.rows.some((row) => row.key === key && row.part);
+  return tray.phase !== "applied" && Boolean(trayRow(key)?.part);
 }
 
 // The Kitden gateway, as the mockup's gateway panel (gateway-notes 3.6): the house, where it runs;
@@ -945,8 +945,6 @@ function heldList(name, detail, picked, folder) {
 
 // Links on the map -------------------------------------------------------------------------------
 
-// What a press on a link the tray draws does, and the panel's button while a link's change waits.
-export const TAKE_OUT = "Take it out of the preview";
 const IN_PREVIEW_SAY = "This link is a change in preview. Nothing is written until you Apply.";
 // Under a link's title: what it is, by what it joins (linkKind).
 const LINK_SUBS = { client: "Route through the gateway", held: "Held by the gateway", tool: "Tool on", direct: "Direct route", change: "Change in preview" };
@@ -1141,7 +1139,7 @@ function moveOutNodes(name, clients, linked, back) {
 
 // The client a server moves out to while its row waits in the tray, or null.
 function movingTo(name) {
-  const row = tray.rows.find((r) => r.key === keyFor({ action: "gateway.move_out", params: { server: name } }));
+  const row = trayRow(keyFor({ action: "gateway.move_out", params: { server: name } }));
   return row ? row.body.targets[0].client : null;
 }
 
@@ -1267,7 +1265,7 @@ function followLine(p, rows, ownOf, ticks) {
 // Whether the rule `body` waits in the tray as it is: a row for that project with another state
 // (a "Use the shared rule…") is not this tick.
 function ticked(body) {
-  const row = tray.rows.find((r) => r.key === keyFor(body));
+  const row = trayRow(keyFor(body));
   return Boolean(row) && row.body.params.state === body.params.state;
 }
 

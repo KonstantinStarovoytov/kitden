@@ -2,6 +2,7 @@
 // Apply all and Undo all write everything or nothing. This module holds the state and talks to
 // the server; the dock draws it.
 import { getJson, postJson } from "./api.js";
+import { WAITS } from "./dom.js";
 import { CLIENT_ORDER } from "./parts.js";
 import { busy, setBusy, state } from "./store.js";
 
@@ -58,6 +59,17 @@ export async function changeOutcome(id, verb, body) {
 // { state, error } of an Apply that was not verified, `state` null when its end is not known.
 // `stale`: the files changed since the preview.
 export const tray = { rows: [], change: null, phase: "idle", refused: null, failure: null, done: 0, total: 0, stale: false };
+
+// The tray's change is being written or has just been: nothing can be added to it or taken out
+// of it now.
+export const writing = (t = tray) => t.phase === "applying" || t.phase === "applied";
+
+// What the × of a row or link in preview says, and a link's × while the tray's own change is
+// written. While any change is written (the tray's, or an Undo) a link's × waits and says why
+// (map-view.js); false while nothing is written.
+export const TAKE_OUT = "Take it out of the preview";
+const OWN_WAITS = "Your change is being written.";
+export const linksWait = () => (writing() ? OWN_WAITS : busy.change && WAITS);
 
 // The title a row is sent with until its first answer gives it words.
 export const PENDING_TITLE = "New change";
@@ -142,8 +154,14 @@ export function iconFor(body) {
 export function readyRows(t = tray) { return t.rows.filter((row) => !row.waits); }
 export function waitingRows(t = tray) { return t.rows.filter((row) => row.waits); }
 
-export function inTray(key) {
-  return tray.rows.some((row) => row.key === key);
+// The row with this key, if it is in the tray. Keys are unique there.
+export const trayRow = (key) => tray.rows.find((row) => row.key === key);
+export const inTray = (key) => Boolean(trayRow(key));
+
+// The row of `body` leaves the tray if it is there, else joins it (addToTray's `opts`).
+export function toggleInTray(body, opts) {
+  const key = keyFor(body);
+  return inTray(key) ? takeOut(key) : addToTray(body, opts);
 }
 
 // One row of the combined change as a change of its own kind: only its steps, and the words the
@@ -272,7 +290,7 @@ function empty() {
 // cannot join now: a change is being written, or has just been applied. `picked` is the project
 // it is asked in: the one picked now, or the old row's when a row's own review asks again.
 export async function addToTray(body, { key = keyFor(body), note = null, icon = iconFor(body), picked = state.project || null } = {}) {
-  if (tray.phase === "applying" || tray.phase === "applied" || busy.change) return false;
+  if (writing() || busy.change) return false;
   const before = tray.rows;
   const was = tray.phase;
   const old = before.find((row) => row.key === key) || { title: "", detail: "", project: null, part: null };
@@ -308,7 +326,7 @@ export async function addToTray(body, { key = keyFor(body), note = null, icon = 
 // A row leaves (`keys`: its key, or the keys of several); the rest are previewed again, in one
 // ask. The last one leaving cancels the change.
 export async function takeOut(keys) {
-  if (tray.phase === "applying" || tray.phase === "applied") return;
+  if (writing()) return;
   const gone = [].concat(keys);
   const rows = tray.rows.filter((row) => !gone.includes(row.key));
   if (rows.length === tray.rows.length) return;

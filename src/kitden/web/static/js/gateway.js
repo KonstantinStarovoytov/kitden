@@ -1,9 +1,9 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
-import { $, button, byKeys, el, gridKey, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
+import { $, button, byKeys, el, gridKey, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
-import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
+import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
@@ -12,10 +12,10 @@ import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
-import { arrival, busy, current, currentError, data, gatewayShows, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { arrival, busy, current, currentError, data, gatewayShows, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { openAccess } from "./access-form.js";
-import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
+import { inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray, undone, writing } from "./tray.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 // The group of servers outside the gateway: the List's words, and the map's, which asks for a drag.
@@ -940,16 +940,6 @@ function rowsOfLink(model, link) {
   return shown && shown.row ? shown.rows || [shown.row] : [];
 }
 
-// The tray's change is being written or has just been: as in the bar, nothing can be added to it
-// or taken out of it now.
-const writing = () => tray.phase === "applying" || tray.phase === "applied";
-
-// While a change is written (the tray's, or an Undo) every link keeps its hit, and so its focus,
-// and its × waits (map-view.js): it says why and removes nothing. Its words: the tray's own Apply
-// is "your change", an Undo or another change is "another change". False while nothing is written.
-export const OWN_WAITS = "Your change is being written.";
-export const linksWait = () => (writing() ? OWN_WAITS : busy.change && WAITS);
-
 // What the × of a link does, in words: a link the tray draws, or whose removal waits in the tray,
 // is taken out of it, and the map acts on the others as linkRemoval says. "" where it does not act
 // on the link: the link then has no ×.
@@ -968,8 +958,7 @@ export function removeLink(model, link, picked) {
   if (drawn.length) return takeOutHere(model, drawn);
   const removal = linkRemoval(model, link, picked);
   if (!removal) return null;
-  const key = keyFor(removal.body);
-  return inTray(key) ? takeOut(key) : addToTray(removal.body, { icon: removalIcon(removal.body) });
+  return toggleInTray(removal.body, { icon: removalIcon(removal.body) });
 }
 
 // A press on a link: a second press on the link picked, while its panel is open, lets go of it,

@@ -9,7 +9,7 @@ import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, pan
 import { allPutBack, baseNames, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, data, gatewayShows, reload, render, setBusy, state } from "./store.js";
 import { projectLabel } from "./tools.js";
-import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone } from "./tray.js";
+import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone, writing } from "./tray.js";
 
 
 const DONE_WORDS = {
@@ -471,7 +471,6 @@ function followRow(row, part) {
 // hands focus on to the bar). While the tray is written it is off and does nothing, as the bar's ×:
 // a change cannot stop halfway. It follows the tray while it is on the page.
 function takeOutButton(row) {
-  const writing = () => tray.phase === "applying" || tray.phase === "applied";
   const node = button("Take it out", () => {
     if (writing()) return null;
     const taken = takeOut(row.key);
