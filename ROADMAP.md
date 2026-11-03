@@ -18,6 +18,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   replacing the file.
 - **Preview refuses, never fails:** a file or folder that a change would read but cannot (no
   access, a folder in place of a file) gives "Kitden could not read …" instead of an error 500.
+- **Client commands end cleanly:** a client's own command runs with no input and in a process
+  group of its own; when it takes longer than 60 seconds, the whole group is stopped, so no
+  helper it started keeps the pipes or the write lock.
 
 ### 0.5.0
 
@@ -425,8 +428,6 @@ Ask before starting each one.
 - Undo removes gateway servers last, not first; an Undo that was blocked can be tried again.
 - A crash in the middle of Apply leaves no record: save the record as Applying before the first
   change and look for such records at start.
-- A client command that times out can leave a child process holding the pipes and the write
-  lock: start it with no stdin, in its own process group, and stop the whole group.
 - Secrets typed for a preview that is cancelled stay in memory.
 - Server details from a third-party `.mcp.json` follow the same local-address rule as the
   sign-in checks.
