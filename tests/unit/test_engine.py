@@ -1216,6 +1216,30 @@ def test_a_cancelled_change_forgets_the_secrets_typed_for_it(tmp_path, config):
     assert typed not in json.dumps(dataclasses.asdict(change), default=str)
 
 
+def test_a_crash_during_apply_leaves_a_record_that_says_so(tmp_path, config):
+    class Crash(BaseException):  # as the process dying: no handler of Apply sees it
+        pass
+
+    engine = make_engine(tmp_path)
+    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+
+    def die(path, data):
+        raise Crash
+
+    engine._write = die
+    with pytest.raises(Crash):
+        engine.apply(change.id)
+
+    after_restart = make_engine(tmp_path).changes[change.id]
+    assert after_restart.state is ChangeState.RESTORED
+    assert after_restart.error.startswith("Kitden stopped during Apply")
+    assert str(config) in after_restart.error
+    logged = make_engine(tmp_path).store.entries()[0]
+    assert logged["id"] == change.id and logged["state"] == "restored"
+    # Found once: a second start does not log it again.
+    assert len(make_engine(tmp_path).store.entries()) == 1
+
+
 # The client writes its file during Apply (review 2026-11-03) --------------------------------
 
 

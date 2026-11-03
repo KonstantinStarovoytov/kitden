@@ -29,6 +29,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Undo in a safe order, and again:** Undo takes servers out of a gateway last, once the
   client files read back as before, so a server is never in neither place. An Undo that stopped
   keeps its Undo button and can be pressed again; what is back already is skipped.
+- **A crash during Apply is found:** the change is saved as Applying before its first write.
+  At the next start such a record says "Kitden stopped during Apply" and names the files to
+  compare with their backups; nothing is put back on its own.
 
 ### 0.5.0
 
@@ -433,5 +436,3 @@ Left for later in the alignment plan's phase notes:
 
 Ask before starting each one.
 
-- A crash in the middle of Apply leaves no record: save the record as Applying before the first
-  change and look for such records at start.

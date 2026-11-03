@@ -462,6 +462,8 @@ class Engine:
             except (KeyError, ValueError):
                 continue
             self.changes[change.id] = change
+            if change.state is ChangeState.APPLYING:
+                self._interrupted(change)
 
     # Preview -----------------------------------------------------------------------------
 
@@ -747,6 +749,9 @@ class Engine:
         self._back_up(change.id, file_steps, current)
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
+        # Saved before the first change, so a crash leaves a record that says so at the next
+        # start, next to the backups.
+        self.store.save(change.id, _record(change))
         tick = self._counter(change)
         ran: list[Step] = []
         copied: list[Step] = []
@@ -1172,6 +1177,22 @@ class Engine:
             change.error = " ".join(notes)
         self._finish(change)
         return change
+
+    def _interrupted(self, change: Change) -> None:
+        """A record still Applying: Kitden stopped in the middle of that Apply. Nothing is put
+        back on its own; the change says so, with the files to compare with their backups."""
+        places = [s.edit.path for s in change.steps if s.edit is not None]
+        places += [s.copy.target for s in change.steps if s.copy is not None]
+        places += [s.removal.path for s in change.steps if s.removal is not None]
+        if any(s.gateway is not None for s in change.steps):
+            places.append("the gateway")
+        listed = ", ".join(dict.fromkeys(places)) or "the setup"
+        change.move_to(ChangeState.RESTORED)
+        change.error = (
+            "Kitden stopped during Apply, so this change was not checked. "
+            f"Compare {listed} with the backups by hand."
+        )
+        self._finish(change)
 
     def _blocked(self, change: Change, reason: str) -> Change:
         """Undo stops here, with the reason."""
