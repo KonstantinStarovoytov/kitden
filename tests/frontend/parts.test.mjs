@@ -978,3 +978,23 @@ test('the project button reads the same wherever the page draws it', () => {
   // projectMenu's own button is this one.
   assert.deepEqual(classes(menuOn('m').trigger), classes(button));
 });
+
+const { secretsWord, setSecretsWord, shortPath, shortPaths } = await import('../../src/kitden/web/static/js/dom.js');
+
+test('the page names the Keychain until the server says the keyring', () => {
+  assert.equal(secretsWord(), 'Keychain');
+  setSecretsWord('keyring');
+  try {
+    assert.equal(secretsWord(), 'keyring');
+    const keychain = { action: 'gateway.keychain', steps: [{ client: 'kitden', name: 'files' }] };
+    assert.equal(changeTitle(keychain), 'Moved the secrets of files to the keyring');
+  } finally {
+    setSecretsWord('Keychain');
+  }
+});
+
+test('a Linux home folder shows as ~', () => {
+  assert.equal(shortPath('/home/me/.config/Claude/x.json'), '~/.config/Claude/x.json');
+  assert.equal(shortPaths('Could not write /home/me/.codex/config.toml.'), 'Could not write ~/.codex/config.toml.');
+  assert.equal(shortPath('/Users/me/.claude.json'), '~/.claude.json');
+});

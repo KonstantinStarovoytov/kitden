@@ -24,6 +24,7 @@ from kitden.demo import (
 from kitden.gateways import add_gateway, data_dir
 from kitden.local_gateway.settings import load_settings
 from kitden.model import Gateway
+from kitden.system import secret_store_name
 from kitden.views import inventory as inventory_module
 from kitden.views.inventory import Inventory, build_inventory
 from kitden.web import app as page_app
@@ -66,12 +67,16 @@ def preview(page, action, targets, params):
 
 def test_about_says_the_version_and_whether_it_is_a_demo(tmp_path):
     with demo_page(tmp_path / "demo") as page:
-        assert page.get("/api/about").json() == {"version": kitden.__version__, "demo": True}
+        assert page.get("/api/about").json() == {
+            "version": kitden.__version__,
+            "demo": True,
+            "secrets": secret_store_name(),
+        }
     home = make_home(tmp_path, "claude_code/2.1.283")
     app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
     with TestClient(app, base_url=ORIGIN) as page:
         page.get("/?token=tok")
-        assert page.get("/api/about").json() == {"version": kitden.__version__, "demo": False}
+        assert page.get("/api/about").json()["demo"] is False
 
 
 def test_about_answers_before_the_first_scan(tmp_path):
@@ -245,3 +250,9 @@ def test_move_all_on_the_kitden_gateway_previews_the_medium_sample(tmp_path):
     leaving = [s for s in change["steps"] if s["client"] not in ("gateway", "kitden")]
     moved = {s["name"] for s in leaving if s["name"] != "kitden"}
     assert moved == {"analytics", "browser-tools", "files", "github", "n8n"}
+
+
+def test_about_names_the_keyring_on_linux(tmp_path, system):
+    system("linux")
+    with demo_page(tmp_path / "demo") as page:
+        assert page.get("/api/about").json()["secrets"] == "keyring"

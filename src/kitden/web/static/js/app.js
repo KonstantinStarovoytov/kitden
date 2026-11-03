@@ -1,6 +1,6 @@
 // Entry point: the shell (rail, top bar), routing, theme, rescan and live updates.
 import { getJson, postJson } from "./api.js";
-import { $, $$, busyWhile, el, focusKey, icon, reportError } from "./dom.js";
+import { $, $$, busyWhile, el, focusKey, icon, reportError, setSecretsWord } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
@@ -389,6 +389,7 @@ function start() {
   // Once per start: whether this is the demo. It answers before the first scan.
   getJson("/api/about")
     .then((about) => {
+      setSecretsWord(about.secrets);
       const tag = demoTag(about);
       if (tag) $(".brand").append(tag);
     })

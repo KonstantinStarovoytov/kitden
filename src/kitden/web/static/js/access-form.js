@@ -2,7 +2,7 @@
 // 2026-11-01 design): one field per value the server declares, labelled with its own words. A
 // plain token is the token alone; Kitden adds "Bearer ". The header or variable name shows only
 // under Details. The catalog details, the map and the dock all use it.
-import { busyWhile, el, icon } from "./dom.js";
+import { busyWhile, el, icon, secretsWord } from "./dom.js";
 import { closePanel, header, openPanel } from "./panel.js";
 import { animateTo, D, shake } from "./motion.js";
 import { addToTray, giveAccess, inTray, keyFor, tray } from "./tray.js";
@@ -79,7 +79,7 @@ export function accessForm(waits, onCheck) {
   const label = required.length ? "Add token" : "Preview";
   const submit = el("button", "btn primary", label);
   submit.type = "submit";
-  form.append(rows, why, done, el("p", "muted", "Saved in macOS Keychain on Apply."), names, submit);
+  form.append(rows, why, done, el("p", "muted", `Saved in your ${secretsWord()} on Apply.`), names, submit);
 
   // The values typed, as the change's params ({ headers?, env? }), or null while a required one
   // is empty. A pasted "Bearer …" keeps one prefix.
@@ -148,7 +148,7 @@ export function signInForm(waits, onSigned, onToken = null) {
   row.append(go, cancel);
   const { why, done, refused, worked } = statusLines();
   const token = el("div", "sign-in-token");
-  node.append(row, why, done, el("p", "muted", "Saved in macOS Keychain on Apply."), token);
+  node.append(row, why, done, el("p", "muted", `Saved in your ${secretsWord()} on Apply.`), token);
 
   const refuse = (reason) => {
     refused(reason);

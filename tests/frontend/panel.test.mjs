@@ -1500,3 +1500,15 @@ test("panel.js re-exports the dock's toast", async () => {
   assert.equal(panel.toast, dock.toast);
   assert.equal(panel.hideToast, dock.hideToast);
 });
+
+test('on Linux the held server offers to move its secrets to the keyring', async () => {
+  const { setSecretsWord } = await import('../../src/kitden/web/static/js/dom.js');
+  setSecretsWord('keyring');
+  try {
+    assert.equal(heldActions('files', ['codex'], true)[2].label, 'Move secrets to the keyring…');
+    const change = { action: 'gateway.keychain', steps: [{ client: 'kitden', name: 'files' }] };
+    assert.deepEqual(changeWords(change, { params: { server: 'files' } }), { title: 'Move the secrets of files to the keyring', done: 'Moved the secrets of files to the keyring' });
+  } finally {
+    setSecretsWord('Keychain');
+  }
+});

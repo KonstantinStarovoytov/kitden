@@ -1,7 +1,7 @@
 // The parts every Details card shares: the card itself (detailsCard), its facts, buttons and More,
 // Technical details, the buttons and switches that follow the tray, and the way back from a step
 // (keepFrom, backToDetails). Gateway and Library Details are drawn from them.
-import { $, $$, button, el, joinWords, reportError, shortPath, withFocusKey } from "./dom.js";
+import { $, $$, button, el, joinWords, reportError, secretsWord, shortPath, withFocusKey } from "./dom.js";
 import { fold } from "./motion.js";
 import { header, isPanelOpen, isQuiet, openInfo, panelState } from "./panel.js";
 import { ALL_PROJECTS, byClientOrder, callout, CLIENT_NAMES, folderName, gatewayName, ROUTE_WORDS, WRITABLE } from "./parts.js";
@@ -64,7 +64,7 @@ export function heldActions(server, clients, plain = false) {
       label: `Put back in ${CLIENT_NAMES[client]}…`,
       body: { action: "gateway.put_back", targets: [{ client }], params: { server } },
     })),
-    ...(plain ? [{ label: "Move secrets to the Keychain…", body: { action: "gateway.keychain", targets: [], params: { server } } }] : []),
+    ...(plain ? [{ label: `Move secrets to the ${secretsWord()}…`, body: { action: "gateway.keychain", targets: [], params: { server } } }] : []),
   ];
 }
 

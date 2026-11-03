@@ -1991,7 +1991,7 @@ def test_a_held_server_can_be_removed_or_put_back():
 
 
 def test_a_held_server_can_move_its_secrets_to_the_keychain():
-    assert '"Move secrets to the Keychain…"' in panel()
+    assert "label: `Move secrets to the ${secretsWord()}…`" in panel()
     assert "server.plain_secrets" in gw()
 
 

@@ -5,7 +5,7 @@
 // gateway holds.
 import { replaceAccess, signInAgain } from "./access-form.js";
 import { getJson, postJson, query } from "./api.js";
-import { $, busyWhile, button, el, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
+import { $, busyWhile, button, el, icon, joinWords, plural, reportError, secretsWord, withFocusKey } from "./dom.js";
 import { ADD_SERVER, openAdd } from "./gateway-add.js";
 import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
@@ -869,7 +869,7 @@ export function accessBlock(server, rows, { now = Date.now() / 1000 } = {}) {
   for (const row of rows) {
     const line = el("div", "access-row");
     const what = el("div", "access-what");
-    let small = row.stored === "missing" ? "Not in the Keychain" : row.masked || "••••";
+    let small = row.stored === "missing" ? `Not in the ${secretsWord()}` : row.masked || "••••";
     if (row.field === "sign_in" && row.stored !== "missing") small += ` · ${endsWords(row, now)}`;
     what.append(el("strong", null, row.name), el("small", "muted", small));
     const acts = el("div", "access-acts");
