@@ -3,9 +3,13 @@
 | What | macOS, under ~/Library/Application Support | Linux |
 | --- | --- | --- |
 | Kitden's data | kitden | ~/.local/share/kitden |
-| Cursor's state | Cursor/User | $XDG_CONFIG_HOME/Cursor/User (~/.config) |
-| Claude Desktop | Claude | $XDG_CONFIG_HOME/Claude (~/.config) |
+| Cursor's state | Cursor/User | ~/.config/Cursor/User |
+| Claude Desktop | Claude | ~/.config/Claude |
 | Secrets | the Keychain (`security`) | the keyring (`secret-tool`) |
+
+Every Linux folder hangs off the home folder Kitden is given, never off XDG_DATA_HOME or
+XDG_CONFIG_HOME: a gateway that a client starts may not get those variables (Codex passes a
+short list), and a sample or test home must never reach the person's own folders.
 
 `KITDEN_SYSTEM` (`mac` or `linux`) overrides the detected system, for tests and the demo only.
 """
@@ -29,10 +33,6 @@ def supported() -> bool:
     return SYSTEM in ("mac", "linux")
 
 
-def _xdg(name: str, home: Path, default: str) -> Path:
-    return Path(os.environ.get(name) or Path(home) / default)
-
-
 def data_dir(home: Path) -> Path:
     """Not moved by XDG_DATA_HOME: the gateway a client starts may not get that variable (Codex
     passes only a short list), and the page and the gateway must find the same folder."""
@@ -44,13 +44,13 @@ def data_dir(home: Path) -> Path:
 def cursor_state_dir(home: Path) -> Path:
     if SYSTEM == "mac":
         return Path(home) / MAC_SUPPORT / "Cursor/User"
-    return _xdg("XDG_CONFIG_HOME", home, ".config") / "Cursor/User"
+    return Path(home) / ".config/Cursor/User"
 
 
 def claude_desktop_dir(home: Path) -> Path:
     if SYSTEM == "mac":
         return Path(home) / MAC_SUPPORT / "Claude"
-    return _xdg("XDG_CONFIG_HOME", home, ".config") / "Claude"
+    return Path(home) / ".config/Claude"
 
 
 def watched(home: Path) -> list[Path]:

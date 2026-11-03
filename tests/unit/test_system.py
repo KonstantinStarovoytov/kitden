@@ -41,9 +41,11 @@ def test_cursor_and_claude_desktop_folders(system, tmp_path, monkeypatch):
     system("linux")
     assert cursor_state_dir(tmp_path) == tmp_path / ".config/Cursor/User"
     assert claude_desktop_dir(tmp_path) == tmp_path / ".config/Claude"
+    # A sample or test home never reaches the person's own XDG_CONFIG_HOME (the demo wrote
+    # Cursor's state into the real ~/.config on a CI runner that sets it).
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "conf"))
-    assert cursor_state_dir(tmp_path) == tmp_path / "conf/Cursor/User"
-    assert claude_desktop_dir(tmp_path) == tmp_path / "conf/Claude"
+    assert cursor_state_dir(tmp_path) == tmp_path / ".config/Cursor/User"
+    assert claude_desktop_dir(tmp_path) == tmp_path / ".config/Claude"
 
 
 def test_app_roots_and_commands_are_empty_on_linux(system, tmp_path):

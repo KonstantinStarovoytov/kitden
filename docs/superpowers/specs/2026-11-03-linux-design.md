@@ -64,11 +64,12 @@ A new module `kitden/system.py` answers "where does this system keep things" and
   and everything that builds on `DATA_DIR` goes through it. The one-time copy from the old
   `agentsetup` folder stays macOS-only; on Linux there is nothing to copy.
 - `cursor_state_dir(home)`: macOS `Library/Application Support/Cursor/User`; Linux
-  `$XDG_CONFIG_HOME/Cursor/User`, by default `~/.config/Cursor/User`. Cursor is a VS Code
+  `~/.config/Cursor/User` under the given home, not moved by `XDG_CONFIG_HOME` (changed while
+  building, 2026-11-03: on a CI runner that sets it, the demo wrote into the real `~/.config`). Cursor is a VS Code
   build and keeps its state where VS Code does (to check on a real Linux install before
   release; write the date in `cursor.py`).
 - `claude_desktop_dir(home)`: macOS `Library/Application Support/Claude`; Linux
-  `$XDG_CONFIG_HOME/Claude`, by default `~/.config/Claude`. Claude Desktop has a Linux beta
+  `~/.config/Claude` under the given home, for the same reason. Claude Desktop has a Linux beta
   for Ubuntu 22.04+ and Debian 12+ (checked 2026-11-03, support.claude.com "Install Claude
   Desktop"); the page does not name its config path, so the builder checks that folder and
   whether the Linux app bundles Claude Code on a real install, and writes the date beside it.
