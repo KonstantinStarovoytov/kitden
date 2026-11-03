@@ -745,71 +745,22 @@ class Engine:
             expected: dict[str, bytes | None] = {}
             for step in file_steps:
                 path = step.edit.path
+                ran.append(step)  # first: a command that fails halfway is taken back too
                 result = self._apply_step(step, working[path])
-                ran.append(step)
                 working[path] = result if result is not None else _read(path)
                 expected[path] = result
                 tick(step)
             for step in file_steps:
                 self._verify(step, step.edit.after, expected[step.edit.path])
-        except (
-            _ApplyError,
-            CopyRefusedError,
-            GatewayError,
-            OSError,
-            RefusedWriteError,
-            UnrecognizedFormatError,
-            KeychainError,
-        ) as error:
-            # A step with an inverse command is taken back by that command (an install leaves
-            # more than the file behind); then every other file gets its original bytes.
-            by_command = _command_paths(file_steps)
-            lost = []
-            for step in reversed(ran):
-                if not _by_command(step):
-                    continue
-                if self.run(step.undo_command, step.cwd).returncode != 0:
-                    shown = _shown(step.undo_command)
-                    lost.append(f"`{shown}` failed; {step.name} was not put back.")
-                    continue
-                if step.edit.path not in by_command:
-                    continue
-                # A failure here must not stop the rest of the restore.
-                try:
-                    self._put_entry_back(step)
-                except (OSError, RefusedWriteError, UnicodeDecodeError, UnrecognizedFormatError):
-                    lost.append(f"{step.name} could not be set as it was in {step.edit.path}.")
-            for path, data in current.items():
-                if path not in by_command and _read(path) != data:
-                    self._write(path, data)
-            # A removed folder comes back from its backup. What a removal that stopped halfway
-            # left is part of that backup, so it goes first.
-            for step in reversed(removed):
-                if not self._put_folder_back(step.removal):
-                    lost.append(
-                        f"{step.name} could not be put back; its backup is in "
-                        f"{step.removal.backup_path}."
-                    )
-            for step in reversed(copied):
-                with contextlib.suppress(OSError):
-                    remove_folder(step.copy.target)
-            self._remove_from_gateway(gateway_steps, best_effort=True)
-            for item in reversed(stored):
-                if item.existed:
-                    # Its old value is recorded nowhere.
-                    where = f"{item.server}/{item.key} in your {secret_store_name()}"
-                    lost.append(f"{where} keeps the new value.")
-                    continue
-                try:
-                    keychain.delete(item.ref, run=self._security())
-                except KeychainError:
-                    lost.append(f"{item.server}/{item.key} stays in your {secret_store_name()}.")
-            self._mark_secret(change, file_steps)
+        except Exception as error:  # noqa: BLE001 - any error must be taken back
+            lost = self._roll_back(current, ran, copied, removed, stored, gateway_steps)
+            try:
+                self._mark_secret(change, file_steps)
+            except Exception:  # noqa: BLE001 - when unsure, the backups count as secret
+                change.holds_secret = True
             change.move_to(ChangeState.RESTORED)
-            if lost:
-                change.error = f"{error} {' '.join(lost)}"
-            else:
-                change.error = f"{error} {PUT_BACK}"
+            said = str(error) or type(error).__name__
+            change.error = f"{said} {' '.join(lost) if lost else PUT_BACK}"
             self._finish(change)
             return change
 
@@ -819,6 +770,93 @@ class Engine:
         change.move_to(ChangeState.VERIFIED)
         self._finish(change)
         return change
+
+    def _roll_back(
+        self,
+        current: dict[str, bytes | None],
+        ran: list[Step],
+        copied: list[Step],
+        removed: list[Step],
+        stored: list[KeychainItem],
+        gateway_steps: list[Step],
+    ) -> list[str]:
+        """Take back what a failed Apply did. Returns a sentence for each thing that could not
+        be put back; a failure of one action never stops the others."""
+        lost: list[str] = []
+        # A step with an inverse command is taken back by that command (an install leaves
+        # more than the file behind); then every other file gets its original bytes.
+        by_command = _command_paths(ran)
+        for step in reversed(ran):
+            if _by_command(step):
+                try:
+                    lost += self._run_back(step, by_command)
+                except Exception:  # noqa: BLE001
+                    lost.append(f"{step.name} could not be set as it was in {step.edit.path}.")
+        for path, data in current.items():
+            if path in by_command:
+                continue
+            # A write that fails is named by the check at the end.
+            with contextlib.suppress(Exception):
+                if _read(path) != data:
+                    self._write(path, data)
+        # A removed folder comes back from its backup. What a removal that stopped halfway
+        # left is part of that backup, so it goes first.
+        for step in reversed(removed):
+            if not self._put_folder_back(step.removal):
+                lost.append(
+                    f"{step.name} could not be put back; its backup is in "
+                    f"{step.removal.backup_path}."
+                )
+        for step in reversed(copied):
+            try:
+                remove_folder(step.copy.target)
+            except Exception:  # noqa: BLE001
+                lost.append(f"{step.copy.target} could not be removed.")
+        try:
+            self._remove_from_gateway(gateway_steps, best_effort=True)
+        except Exception:  # noqa: BLE001
+            names = ", ".join(s.gateway.name for s in gateway_steps if s.gateway.server_uuid)
+            lost.append(f"{names} may still be in the gateway.")
+        store = secret_store_name()
+        for item in reversed(stored):
+            if item.existed:
+                # Its old value is recorded nowhere.
+                lost.append(f"{item.server}/{item.key} in your {store} keeps the new value.")
+                continue
+            try:
+                keychain.delete(item.ref, run=self._security())
+            except Exception:  # noqa: BLE001
+                lost.append(f"{item.server}/{item.key} stays in your {store}.")
+        # Say "restored" only for files that read back as they were.
+        for path in current:
+            if not self._as_before(path, current[path], ran, by_command):
+                lost.append(f"{path} is not as it was before.")
+        return lost
+
+    def _run_back(self, step: Step, by_command: set[str]) -> list[str]:
+        """Run a step's inverse command after a failed Apply; what could not be put back.
+        An entry that is still as before needs no command: the step may have failed first."""
+        edit = step.edit
+        with contextlib.suppress(Exception):
+            if _value(edit, _read(edit.path)) == edit.before:
+                return []
+        if self.run(step.undo_command, step.cwd).returncode != 0:
+            return [f"`{_shown(step.undo_command)}` failed; {step.name} was not put back."]
+        if edit.path in by_command:
+            self._put_entry_back(step)
+        return []
+
+    @staticmethod
+    def _as_before(path: str, data: bytes | None, ran: list[Step], by_command: set[str]) -> bool:
+        """The file reads back as before the Apply: the same bytes, or for a file only inverse
+        commands take back, each entry as before."""
+        try:
+            now = _read(path)
+            if path not in by_command:
+                return now == data
+            return all(_value(s.edit, now) == s.edit.before for s in ran if s.edit.path == path)
+        except Exception:  # noqa: BLE001
+            return False
 
     def _mark_secret(self, change: Change, file_steps: list[Step]) -> None:
         """Once every backup exists: whether a backup, or an entry the record keeps (an old

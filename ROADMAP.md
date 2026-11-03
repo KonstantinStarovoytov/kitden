@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-11-02
+Last updated: 2026-11-03
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -24,6 +24,10 @@ What Kitden does today and what comes next. Ideas and bugs:
   Animations are filmed one frame at a time, so the motion is even. Then the other features
   as benefits, why it is safe to use, what it needs, two commands and one line to update. Steps, privacy and limits moved to
   [the guide](docs/guide.md). `scripts/record_readme.py` makes the pictures again.
+- **Safer Apply** (review of 2026-11-03): any error during Apply now puts everything back,
+  and one restore action that fails no longer stops the others. A client command that fails
+  halfway is taken back too. "The original settings were restored" is said only when every
+  file reads back as it was; otherwise the error names each file that is not.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 

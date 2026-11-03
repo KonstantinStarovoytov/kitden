@@ -1030,3 +1030,115 @@ def test_undo_stops_plainly_when_the_entry_cannot_be_set_back(tmp_path, settings
     assert change.error == (
         f"lint@tools is back, but {settings} could not be set as it was before. Check it by hand."
     )
+
+
+# A failed Apply puts everything back, or says what it could not (review 2026-11-03) ---------
+
+
+def keychain_engine(tmp_path, run=None):
+    """An engine whose Keychain is the demo stand-in, a JSON file in tmp_path."""
+    from kitden.demo.keychain import DemoKeychain
+
+    items = tmp_path / "keychain.json"
+    engine = Engine(
+        ChangeStore(tmp_path / "data"),
+        run=run or FakeClaude(None),
+        keychain_run=DemoKeychain(items),
+    )
+    return engine, items
+
+
+def test_any_error_during_apply_restores_files_and_keychain(tmp_path, config):
+    from kitden.model import KeychainItem
+
+    engine, items = keychain_engine(tmp_path)
+    second = tmp_path / "second.toml"
+    second.write_text('model = "o3"\n')
+    first = toml_step(config, ("mcp_servers", "gw"), GATEWAY)
+    first.keychain = [KeychainItem("gw", "GW_KEY", "SENTINEL_SECRET_NEW")]
+    steps = [first, toml_step(second, ("mcp_servers", "gw"), GATEWAY)]
+    change = engine.preview("gateway.connect", steps)
+    real = engine._apply_step
+
+    def apply_step(step, data):
+        if step is steps[1]:
+            raise ValueError("bad gateway reply")
+        return real(step, data)
+
+    engine._apply_step = apply_step
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED
+    assert config.read_text() == CONFIG and second.read_text() == 'model = "o3"\n'
+    assert json.loads(items.read_text()) == {}
+    assert change.error == "bad gateway reply The original settings were restored."
+
+
+def test_a_restore_write_that_fails_does_not_stop_the_rest(tmp_path, config):
+    engine = make_engine(tmp_path)
+    second = tmp_path / "second.toml"
+    second.write_text('model = "o3"\n')
+    folder = tidy_folder(tmp_path)
+    before = digest(folder)
+    steps = [
+        removal_step(folder),
+        toml_step(config, ("mcp_servers", "gw"), GATEWAY),
+        toml_step(second, ("mcp_servers", "gw"), GATEWAY),
+    ]
+    change = engine.preview("align", steps)
+    writes = []
+    real = engine._write
+
+    def write(path, data):
+        writes.append(path)
+        if len(writes) == 3:  # the first write of the restore
+            raise OSError("disk full")
+        real(path, data)
+
+    def verify(step, expected, exact=None):
+        raise RuntimeError("the entry did not read back")
+
+    engine._write = write
+    engine._verify = verify
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED
+    assert second.read_text() == 'model = "o3"\n'
+    assert digest(folder) == before
+    assert f"{config} is not as it was before." in change.error
+    assert "restored" not in change.error
+
+
+def test_a_command_that_fails_after_writing_is_taken_back(tmp_path, settings):
+    settings.write_text(json.dumps({"theme": "dark"}))
+    cli = FakePluginCli(settings)
+    undone = []
+
+    def run(command, cwd):  # the install writes its entry, then exits 1
+        result = cli(command, cwd)
+        if command[1:3] == ["plugin", "install"]:
+            return CommandResult(returncode=1, output="half done")
+        undone.append(command)
+        return result
+
+    engine = make_engine(tmp_path, run=run)
+    change = engine.preview("plugin.install", plugin_steps(settings)[1:])
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED
+    assert undone and undone[0][1:3] == ["plugin", "uninstall"]
+    assert json.loads(settings.read_text()).get("enabledPlugins") == {}
+    assert change.error.endswith("The original settings were restored.")
+
+    # An inverse command that does nothing: the file still differs, so no restore is claimed.
+    settings.write_text(json.dumps({"theme": "dark"}))
+
+    def run_no_undo(command, cwd):
+        if "install" not in command:
+            return CommandResult(returncode=0, output="")
+        cli(command, cwd)
+        return CommandResult(returncode=1, output="half done")
+
+    engine = make_engine(tmp_path, run=run_no_undo)
+    change = engine.preview("plugin.install", plugin_steps(settings)[1:])
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED
+    assert f"{settings} is not as it was before." in change.error
+    assert "restored" not in change.error
