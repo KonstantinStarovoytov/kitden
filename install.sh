@@ -1,17 +1,16 @@
 #!/bin/sh
-# Installs Kitden on macOS: uv when it is missing, then Kitden as a uv tool, then opens the page.
+# Installs Kitden on macOS or Linux: uv when it is missing, then Kitden as a uv tool, then opens the page.
 # One line:  curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh | sh
 # It never changes anything in Claude Code, Codex or Cursor. Running it again updates Kitden
 # when a newer release is named below.
 set -eu
 
-KITDEN_REF="v0.4.0"
-KITDEN_SOURCE="git+https://github.com/KonstantinStarovoytov/kitden@$KITDEN_REF"
-FOLLOW_UP="https://github.com/KonstantinStarovoytov/kitden#linux-and-windows"
+KITDEN_VERSION="0.4.0"
 
-# 1. Only macOS for now.
-if [ "$(uname -s)" != "Darwin" ]; then
-  echo "Kitden runs on macOS today. Linux and Windows are coming: $FOLLOW_UP. Nothing was installed." >&2
+# 1. macOS and Linux only.
+system="$(uname -s)"
+if [ "$system" != "Darwin" ] && [ "$system" != "Linux" ]; then
+  echo "Kitden runs on macOS and Linux. Nothing was installed." >&2
   exit 1
 fi
 
@@ -31,14 +30,9 @@ else
   fi
 fi
 
-# 3. Install or update Kitden in its own environment. Until Kitden is on PyPI, uv fetches it from
-#    the repository and needs git, which comes with the macOS command line tools.
-if ! xcode-select -p >/dev/null 2>&1; then
-  echo "Kitden needs git until it is on PyPI. Run: xcode-select --install, then run this line again." >&2
-  exit 3
-fi
+# 3. Install or update Kitden in its own environment, from PyPI.
 echo "Installing Kitden..."
-if ! "$uv" tool install "$KITDEN_SOURCE"; then
+if ! "$uv" tool install --python 3.13 "kitden==$KITDEN_VERSION"; then
   echo "Could not install Kitden. See the uv output above." >&2
   exit 3
 fi
@@ -54,3 +48,8 @@ case ":$PATH:" in
   *":$bin:"*) ;;
   *) echo "To use the kitden command from any terminal, run: $uv tool update-shell, then open a new terminal." ;;
 esac
+
+# 6. On Linux, server secrets go to the desktop keyring through secret-tool.
+if [ "$system" = "Linux" ] && [ ! -x "${KITDEN_SECRET_TOOL:-/usr/bin/secret-tool}" ]; then
+  echo "To store server secrets, install libsecret-tools (Debian, Ubuntu) or libsecret (Fedora, Arch)."
+fi

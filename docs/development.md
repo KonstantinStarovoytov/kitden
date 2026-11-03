@@ -178,8 +178,8 @@ Not run yet for step 24: Part 4 was tested with sandbox files only.
 ## Release
 
 1. `uv version X.Y.Z`, and the same number in `src/kitden/__init__.py`,
-   `plugins/kitden/.claude-plugin/plugin.json`, `plugins/kitden/plugin.json` and `KITDEN_REF` in
-   `install.sh` and `install.ps1` (a test checks they match).
+   `plugins/kitden/.claude-plugin/plugin.json`, `plugins/kitden/plugin.json` and the version in
+   `install.sh` and `install.ps1` (`KITDEN_VERSION`, `$KitdenVersion`; a test checks they match).
 2. Write `docs/releases/vX.Y.Z.md`: plain notes for users about everything since the last tag
    (`git log vA.B.C..HEAD`), grouped as New, Better and Fixed.
 3. Update `ROADMAP.md`: rename "### Not released yet" to the version, move anything else that
