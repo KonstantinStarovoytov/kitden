@@ -637,6 +637,8 @@ function kitdenServer(block, word, picked, waiting) {
   block.lamp = (list.length ? server.on_count > 0 : block.state === "on") ? "on" : "off";
   // Its sign-in ended and could not be refreshed: it needs the person (amber), not a count.
   if (server.needs === "sign-in") Object.assign(block, { lamp: "warn", meta: "Needs sign-in", stateInMeta: true });
+  // It turned down a call through the gateway: it needs a token, or a new one.
+  if (server.needs === "token") Object.assign(block, { lamp: "warn", meta: "Needs token", stateInMeta: true });
   block.ports = { left: true, right: typeof block.count === "number" };
   // Back from a move out taken out of the tray, it starts where its preview was.
   block.from = `preview-out:${server.name}`;

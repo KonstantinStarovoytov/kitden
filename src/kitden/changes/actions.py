@@ -122,6 +122,22 @@ TOKEN_FIELD = {
     "prefix": "Bearer ",
 }
 SIGN_IN_LATER = "{name} does not let Kitden sign in yet. It may take an API key; see its docs."
+# A server that answers without the value typed for it: Apply cannot know whether it works.
+UNCHECKED = "{server} answers without it, so its first call checks it."
+# Names a new access value may have; the HTTP client and the MCP library set these headers.
+HEADER_NAME = re.compile(r"[A-Za-z0-9-]+")
+ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+OWN_HEADERS = {
+    "accept",
+    "connection",
+    "content-length",
+    "content-type",
+    "host",
+    "mcp-protocol-version",
+    "mcp-session-id",
+    "transfer-encoding",
+    "user-agent",
+}
 
 
 def _check_entry_name(name: str) -> None:
@@ -1218,16 +1234,44 @@ def access_steps(
         if values:
             entry[field] = values
         return [_entry_step(home, server, entry)]
+    if name not in values:
+        _check_new_name(server, field, name, "url" in held)
     value = value.strip()
     if not value or "\n" in value or "\r" in value:
         raise ValueError("Enter a valid access value again.")
+    note = None
     if field == "headers" and "url" in held:
         resolved = _resolved(held, keychain_run)
         resolved.pop("sign_in", None)
-        given = {**resolved, "headers": {**(resolved.get("headers") or {}), name: value}}
-        check_access(server, given, sign_in, [TOKEN_FIELD], True)
+        others = {k: v for k, v in (resolved.get("headers") or {}).items() if k != name}
+        try:
+            before = (sign_in or access_needed)(held["url"], others)
+        except OSError:
+            raise ValueError(f"Kitden could not reach {server}.") from None
+        if before == "open":
+            note = UNCHECKED.format(server=server)
+        else:
+            given = {**resolved, "headers": {**others, name: value}}
+            check_access(server, given, sign_in, [TOKEN_FIELD], True)
     item = KeychainItem(server, name, value)
-    return [_entry_step(home, server, {**held, field: {**values, name: item.ref}}, [item])]
+    [step] = [_entry_step(home, server, {**held, field: {**values, name: item.ref}}, [item])]
+    step.check_note = note
+    return [step]
+
+
+def _check_new_name(server: str, field: str, name: str, remote: bool) -> None:
+    """A new header for a remote server, or a new variable for a local one, by a name it can
+    have."""
+    if field == "env" and remote:
+        raise ValueError(f"{server} is a remote server: it takes a header, not a variable.")
+    if field == "headers" and not remote:
+        raise ValueError(f"{server} is a local server: it takes a variable, not a header.")
+    if field == "headers" and not HEADER_NAME.fullmatch(name):
+        raise ValueError("Use a header name of letters, digits and '-' only.")
+    if field == "headers" and name.lower() in OWN_HEADERS:
+        raise ValueError(f"Kitden sets the {name} header itself.")
+    if field == "env" and not ENV_NAME.fullmatch(name):
+        raise ValueError("Use a variable name of letters, digits and '_' only.")
 
 
 def keychain_steps(home: Path, server: str) -> list[Step]:

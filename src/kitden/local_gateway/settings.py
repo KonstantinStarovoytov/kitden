@@ -25,6 +25,8 @@ TOOLS_FILE = "gateway-tools.json"
 CALLS_FILE = "gateway-calls.json"
 # Which server each bare tool name belongs to, so a server added later cannot take it.
 NAMES_FILE = "gateway-names.json"
+# The remote servers that turned down a call (HTTP 401 or 403), with the time: they need a token.
+REFUSED_FILE = "gateway-refused.json"
 CLIENT = "kitden"
 STATES = ("on", "off")
 # A Codex entry's own start time; the move carries it and the gateway waits that long.
@@ -148,6 +150,28 @@ def count_call(home: Path, server: str, tool: str, now: datetime | None = None) 
         write_atomic(folder / CALLS_FILE, json.dumps(calls, indent=2).encode())
     except RefusedWriteError as refused:
         raise OSError(str(refused)) from refused
+
+
+def load_refused(home: Path) -> dict[str, str]:
+    """The remote servers that turned down the last call, each with its UTC minute."""
+    data = read_object(data_dir(home) / REFUSED_FILE)
+    return {server: when for server, when in data.items() if isinstance(when, str)}
+
+
+def mark_refused(home: Path, server: str, refused: bool, now: datetime | None = None) -> None:
+    """Note that a server turned down a call (`refused`), or that it answered again. Nothing is
+    written when the note is already right. Raises OSError only."""
+    marks = load_refused(home)
+    if refused == (server in marks):
+        return
+    if refused:
+        marks[server] = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%MZ")
+    else:
+        marks.pop(server)
+    try:
+        write_atomic(private_data_dir(home) / REFUSED_FILE, json.dumps(marks, indent=2).encode())
+    except RefusedWriteError as refused_write:
+        raise OSError(str(refused_write)) from refused_write
 
 
 def own_state(rules: Any, server: str, tool: str | None) -> str | None:

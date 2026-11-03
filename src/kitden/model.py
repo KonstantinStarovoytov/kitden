@@ -338,6 +338,9 @@ class Step:
     reaches: list[str] | None = None
     # Secrets Apply writes to the Keychain before any file; the edit holds their references.
     keychain: list[KeychainItem] = field(default_factory=list)
+    # A new access value Kitden could not check before Apply, and why. Only the form's words
+    # use it.
+    check_note: str | None = None
 
 
 @dataclass
