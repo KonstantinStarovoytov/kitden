@@ -6,11 +6,17 @@ import { el, plural } from "./dom.js";
 import { areaPoint, DRAG_START, listenPointer, swallowClick } from "./map-drag.js";
 import { animateTo } from "./motion.js";
 
-// The ids picked now, in the order they were picked.
-export const pick = { ids: new Set() };
+// The ids picked now, in the order they were picked, and how many servers the last band met that
+// cannot move in (`stuck`).
+export const pick = { ids: new Set(), stuck: 0 };
 
-// The hint line while something is picked.
-export const PICK_HINT = (n) => `${plural(n, "server", "servers")} picked · drag one onto the gateway · Esc clears`;
+// The hint line while something is picked, or while the band left servers out: those have no grip,
+// and their Details say why.
+export function PICK_HINT(n, stuck = 0) {
+  if (!n) return `${plural(stuck, "server", "servers")} can't move into the gateway · ${stuck === 1 ? "its Details say" : "their Details say"} why · Esc clears`;
+  const left = stuck ? ` · ${stuck} can't move in, see their Details` : "";
+  return `${plural(n, "server", "servers")} picked${left} · drag one onto the gateway · Esc clears`;
+}
 
 // The band fades out in 120 ms when it is let go.
 const BAND_OUT = { dur: 120, ease: "ease-in" };
@@ -20,15 +26,22 @@ export function pickable(block) {
   return Boolean(block) && block.kind === "outside" && Boolean(block.grip);
 }
 
-// The pickable blocks whose place meets the box from map point `a` to map point `b`, in map order.
-export function bandHits(model, layout, a, b) {
+// The blocks for which `which(block)` holds whose place meets the box from map point `a` to map
+// point `b`, in map order.
+function met(model, layout, a, b, which) {
   const [left, right] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
   const [top, bottom] = [Math.min(a.y, b.y), Math.max(a.y, b.y)];
-  const can = new Set(model.blocks.filter(pickable).map((block) => block.id));
+  const ids = new Set(model.blocks.filter(which).map((block) => block.id));
   return layout.blocks
-    .filter((p) => can.has(p.id) && p.x < right && p.x + p.w > left && p.y < bottom && p.y + p.h > top)
+    .filter((p) => ids.has(p.id) && p.x < right && p.x + p.w > left && p.y < bottom && p.y + p.h > top)
     .map((p) => p.id);
 }
+
+// The pickable blocks the band meets.
+export const bandHits = (model, layout, a, b) => met(model, layout, a, b, pickable);
+
+// How many servers outside the gateway the band meets that cannot move in (no grip).
+export const bandStuck = (model, layout, a, b) => met(model, layout, a, b, (block) => block.kind === "outside" && !block.grip).length;
 
 // Pick or unpick one block; false for a block that cannot be picked.
 export function togglePick(model, id) {
@@ -46,8 +59,9 @@ export function keepPickable(model) {
 
 // Clear the pick; true when it held anything.
 export function clearPick() {
-  const had = pick.ids.size > 0;
+  const had = pick.ids.size > 0 || pick.stuck > 0;
   pick.ids = new Set();
+  pick.stuck = 0;
   return had;
 }
 
@@ -78,6 +92,7 @@ export function pressBand(event, { map, onPick }) {
     band.style.width = `${Math.abs(end.x - start.x)}px`;
     band.style.height = `${Math.abs(end.y - start.y)}px`;
     pick.ids = new Set([...before, ...bandHits(map.model, map.layout, start, end)]);
+    pick.stuck = bandStuck(map.model, map.layout, start, end);
     onPick();
   };
   // A let go, Escape or the window losing focus (another app, a dialog) ends the band.

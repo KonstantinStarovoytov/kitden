@@ -9,6 +9,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **Python servers from the catalog:** an Official MCP Registry server published only on PyPI
+  runs with `uvx name==version`, with its required values asked for as for npm. Without uv the
+  row says to install it. A server Kitden cannot add says why: "Only a Docker image",
+  "Only an .mcpb bundle" or "Only an SSE address".
+- **The band says what it left out:** on the Gateway map, servers outside the gateway that
+  cannot move in are counted in the hint, which points to their Details.
 - **Linux:** Kitden runs on a Linux desktop as on a Mac. Secrets go to the desktop keyring
   through `secret-tool` (libsecret-tools); the page says "keyring" there and "this computer"
   in place of "this Mac" on both systems. `install.sh` accepts Linux and installs Kitden from

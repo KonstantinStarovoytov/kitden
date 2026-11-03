@@ -2861,7 +2861,7 @@ test('the Add a server card is a grey dashed place, never the preview look; it t
 });
 
 // Picking several outside servers (gateway-pick.js, Part 2 of the 2026-11-01 design).
-const { bandHits, clearPick, keepPickable, pick, pickable, PICK_HINT, togglePick } = await import('../../src/kitden/web/static/js/gateway-pick.js');
+const { bandHits, bandStuck, clearPick, keepPickable, pick, pickable, PICK_HINT, togglePick } = await import('../../src/kitden/web/static/js/gateway-pick.js');
 
 test('the band picks only outside servers with a grip, whatever way it is drawn', () => {
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);
@@ -2902,6 +2902,31 @@ test('a pick drops servers that are no longer outside, and clearing says whether
 test('the hint counts what is picked', () => {
   assert.equal(PICK_HINT(3), '3 servers picked · drag one onto the gateway · Esc clears');
   assert.equal(PICK_HINT(1), '1 server picked · drag one onto the gateway · Esc clears');
+});
+
+// A server outside the gateway without a grip cannot move in (its Details say why): the band
+// passes over it, and the hint says how many it left out.
+test('the band counts the outside servers it meets that cannot move in', () => {
+  // A plugin's server cannot move into the gateway, so it has no grip.
+  const plugin = { name: 'figma', clients: ['claude_code'], columns: ['claude_code'], items: ['f'], client_items: { claude_code: ['f'] }, stays: null };
+  const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, plugin: [plugin] } }, OPTS);
+  const layout = layoutTree(tree, { open: new Set(), narrow: false });
+  const stuck = tree.blocks.filter((b) => b.kind === 'outside' && !b.grip);
+  assert.ok(stuck.length >= 1);
+  const placed = layout.blocks.filter((b) => b.id.startsWith('outside:'));
+  const [top, bottom] = [placed[0], placed.at(-1)];
+  const shown = new Set(placed.map((b) => b.id));
+  assert.equal(bandStuck(tree, layout, { x: 0, y: top.y }, { x: 2000, y: bottom.y + bottom.h }), stuck.filter((b) => shown.has(b.id)).length);
+  assert.equal(bandStuck(tree, layout, { x: 0, y: 0 }, { x: 10, y: 10 }), 0);
+});
+
+test('the hint says how many servers the band left out', () => {
+  assert.equal(PICK_HINT(1, 4), "1 server picked · 4 can't move in, see their Details · drag one onto the gateway · Esc clears");
+  assert.equal(PICK_HINT(0, 1), "1 server can't move into the gateway · its Details say why · Esc clears");
+  assert.equal(PICK_HINT(0, 3), "3 servers can't move into the gateway · their Details say why · Esc clears");
+  pick.stuck = 2;
+  clearPick();
+  assert.equal(pick.stuck, 0);
 });
 
 // A pick dragged onto the gateway (gateway-drag.js `group`). The map's block node can lift a ghost,
