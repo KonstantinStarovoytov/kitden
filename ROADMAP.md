@@ -31,6 +31,10 @@ What Kitden does today and what comes next. Ideas and bugs:
   A secret that was already in the Keychain gets its old value back.
   Each file is read again just before it is written, so a client that rewrites its file
   during Apply (Claude Code does) keeps its change; if the entry itself changed, Apply stops.
+- **Sign-in checks stay outside:** when a server on the internet names an address on this
+  computer or a private network in its sign-in answers, Kitden does not fetch it. Such
+  addresses are found after the name is looked up, in every spelling (`127.1`, `0x7f.0.0.1`,
+  a name that points at `10.x`). A server added at a local address is still checked there.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 

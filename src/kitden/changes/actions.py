@@ -5,6 +5,7 @@ import ipaddress
 import json
 import os
 import re
+import socket
 import tomllib
 import urllib.error
 import urllib.request
@@ -103,6 +104,8 @@ SKILL_RULE = "skill.rule"  # a skill, or a plugin in one project, turned off by 
 NEEDS_COMMAND = "The setup server needs the absolute path of the kitden command"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 LOCAL_HOSTS = {"localhost", "host.docker.internal"}
+# Shared address space (RFC 6598): carrier NAT and Tailscale; Python does not call it private.
+SHARED_RANGE = ipaddress.ip_network("100.64.0.0/10")
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.
 CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
@@ -458,16 +461,43 @@ def _gateway_server(name: str, entry: dict) -> dict:
 
 
 def is_local_address(url: str) -> bool:
-    """True for an address on this computer or a private network: localhost, 127/8, ::1,
-    RFC 1918, link-local and unique-local ranges, and Docker's name for the host."""
-    host = (urlsplit(url).hostname or "").lower()
-    if host in LOCAL_HOSTS or host.endswith(".localhost"):
+    """True for an address on this computer or a private network: localhost, loopback,
+    private, link-local, unspecified and shared (100.64/10) ranges, and Docker's name for the
+    host. The name is looked up, so `127.1`, `2130706433`, `0x7f.0.0.1`, `localhost.` and a
+    name that points at a private address count too; a name that does not resolve counts as
+    local, as it cannot be checked."""
+    try:
+        host = (urlsplit(url).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return True
+    if not host or host in LOCAL_HOSTS or host.endswith(".localhost"):
         return True
     try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return address.is_loopback or address.is_private or address.is_link_local
+        found = socket.getaddrinfo(host, None)
+        addresses = [ipaddress.ip_address(info[4][0].partition("%")[0]) for info in found]
+    except (OSError, UnicodeError, ValueError):
+        return True
+    return not addresses or any(_local_ip(address) for address in addresses)
+
+
+def _local_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    return (
+        address.is_loopback
+        or address.is_private
+        or address.is_link_local
+        or address.is_unspecified
+        or address in SHARED_RANGE
+    )
+
+
+def _reaches_inside(url: str, server: str) -> bool:
+    """`url`, named in an answer of the server at `server`, points at this computer or a
+    private network while the server itself is not there. Kitden never fetches such an address:
+    a server must not make it read what only this computer can reach. A server the user added
+    at a local address may still be checked there."""
+    return is_local_address(url) and not is_local_address(server)
 
 
 def move_steps(
@@ -629,7 +659,7 @@ def _has_sign_in_metadata(url: str) -> bool:
     entry, within 5 seconds, that answers a JSON document naming its authorization servers
     (RFC 9728), so a web page every address answers does not count."""
     parts = urlsplit(url)
-    found = _get_json(f"{parts.scheme}://{parts.netloc}{SIGN_IN_METADATA}")
+    found = _get_json(f"{parts.scheme}://{parts.netloc}{SIGN_IN_METADATA}", url)
     return bool(found) and isinstance(found.get("authorization_servers"), list)
 
 
@@ -728,10 +758,11 @@ def access_needed(url: str, headers: dict) -> str:
     return "token"
 
 
-def _get_json(url: str) -> dict | None:
+def _get_json(url: str, server: str) -> dict | None:
     """One GET of a JSON document, with no header of the entry, within 5 seconds; None when
-    there is no such document."""
-    if urlsplit(url).scheme not in ("http", "https"):
+    there is no such document, or when `url` points inside while `server`, the address the
+    user gave, does not (see `_reaches_inside`)."""
+    if urlsplit(url).scheme not in ("http", "https") or _reaches_inside(url, server):
         return None
     request = urllib.request.Request(url, headers={"User-Agent": "kitden"})  # noqa: S310
     try:
@@ -758,7 +789,7 @@ def _can_register(url: str, challenge: str) -> bool | None:
     places = [named.group(1)] if named else []
     path = parts.path.rstrip("/")
     places += [f"{origin}{SIGN_IN_METADATA}{path}", f"{origin}{SIGN_IN_METADATA}"]
-    resource = next((m for m in map(_get_json, dict.fromkeys(places)) if m), None)
+    resource = next((m for p in dict.fromkeys(places) if (m := _get_json(p, url))), None)
     servers = resource.get("authorization_servers") if resource else None
     if not isinstance(servers, list) or not servers or not isinstance(servers[0], str):
         return None
@@ -769,7 +800,7 @@ def _can_register(url: str, challenge: str) -> bool | None:
         f"{root}/.well-known/openid-configuration{tail}",
         f"{root}{tail}/.well-known/openid-configuration",
     ):
-        metadata = _get_json(place)
+        metadata = _get_json(place, url)
         if metadata:
             return bool(metadata.get("registration_endpoint"))
     return None

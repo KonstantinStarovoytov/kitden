@@ -228,3 +228,68 @@ def test_folder_readers_is_shared_with_the_views():
     # The Library and Add missing ask the same question; Cursor reads Codex's .agents/skills.
     assert folder_readers("codex", {"cursor": object()}, {"codex", "cursor"}) == ["codex", "cursor"]
     assert folder_readers("cursor", {}, {"cursor"}) == ["cursor"]
+
+
+# Sign-in checks never reach inside (review 2026-11-03) ---------------------------------------
+
+
+@pytest.fixture
+def lookups(monkeypatch):
+    """Names under .example resolve from this table only; numbers and localhost as usual."""
+    import socket
+
+    table = {"public.example": "93.184.216.34", "inside.example": "10.0.0.5"}
+    real = socket.getaddrinfo
+
+    def getaddrinfo(host, port, *rest, **options):
+        if not host.endswith(".example"):
+            return real(host, port, *rest, **options)
+        if host not in table:
+            raise socket.gaierror("not found")
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (table[host], 0))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+
+
+def test_local_addresses_are_found_in_every_spelling(lookups):
+    from kitden.changes.actions import is_local_address
+
+    for url in (
+        "http://127.1/mcp",
+        "http://2130706433/mcp",
+        "http://0x7f.0.0.1/mcp",
+        "http://localhost./mcp",
+        "http://169.254.169.254/latest",
+        "http://10.1.2.3/",
+        "http://192.168.0.1/",
+        "http://100.64.0.1/",
+        "http://[::1]/",
+        "http://[::ffff:127.0.0.1]/",
+        "http://0.0.0.0/",
+        "https://inside.example/mcp",
+        "https://unknown.example/mcp",  # does not resolve
+    ):
+        assert is_local_address(url), url
+    assert not is_local_address("https://public.example/mcp")
+
+
+def test_a_public_server_cannot_send_the_check_to_a_local_address(lookups, monkeypatch):
+    from kitden.changes import actions
+
+    asked = []
+
+    class Opener:
+        def open(self, request, timeout):
+            asked.append(request.full_url)
+            raise OSError("no network in tests")
+
+    monkeypatch.setattr(actions, "_opener", Opener)
+    challenge = 'Bearer resource_metadata="http://127.0.0.1:9/.well-known/oauth-protected-resource"'
+    assert actions._can_register("https://public.example/mcp", challenge) is None
+    assert asked and not any("127.0.0.1" in url for url in asked)
+
+
+def test_a_server_added_at_a_local_address_is_still_checked_there():
+    from kitden.changes.actions import _reaches_inside
+
+    assert not _reaches_inside("http://127.0.0.1:9/meta", "http://localhost:8080/mcp")
