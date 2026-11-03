@@ -240,6 +240,16 @@ def test_hard_linked_file_is_refused(tmp_path, config):
         )
 
 
+def test_a_target_that_cannot_be_read_is_refused_not_an_error(tmp_path):
+    # The page answers a refusal with its words; any other error would be a 500.
+    folder = tmp_path / "config.toml"
+    folder.mkdir()
+    with pytest.raises(ChangeRefusedError, match="could not read"):
+        make_engine(tmp_path).preview(
+            "gateway.connect", [toml_step(folder, ("mcp_servers", "gw"), GATEWAY)]
+        )
+
+
 def test_nothing_to_change_is_refused(tmp_path, config):
     with pytest.raises(ChangeRefusedError, match="nothing to change"):
         make_engine(tmp_path).preview(

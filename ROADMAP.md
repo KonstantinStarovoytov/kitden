@@ -16,6 +16,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Gateway settings kept:** adding a gateway when Kitden's own `settings.json` cannot be read
   is refused with "Kitden could not read its settings, so it saved nothing." instead of
   replacing the file.
+- **Preview refuses, never fails:** a file or folder that a change would read but cannot (no
+  access, a folder in place of a file) gives "Kitden could not read …" instead of an error 500.
 
 ### 0.5.0
 
@@ -425,7 +427,6 @@ Ask before starting each one.
   change and look for such records at start.
 - A client command that times out can leave a child process holding the pipes and the write
   lock: start it with no stdin, in its own process group, and stop the whole group.
-- Some file errors in Preview answer 500 instead of a plain refusal.
 - Secrets typed for a preview that is cancelled stay in memory.
 - Server details from a third-party `.mcp.json` follow the same local-address rule as the
   sign-in checks.

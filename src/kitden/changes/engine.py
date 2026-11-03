@@ -461,8 +461,16 @@ class Engine:
         """Read each target, fill in the before state and a masked diff. Writes nothing.
 
         Several steps may edit one file (research R2 of feature 002), but never the same entry
-        or an entry inside another one.
+        or an entry inside another one. A target that cannot be read (no access, a folder in
+        place of a file) refuses the change, so the page shows why instead of an error.
         """
+        try:
+            return self._preview(action, steps)
+        except OSError as error:
+            place = error.filename or "a file this change reads"
+            raise ChangeRefusedError(f"Kitden could not read {place}.") from None
+
+    def _preview(self, action: str, steps: list[Step]) -> Change:
         if not steps:
             raise ChangeRefusedError("Nothing to change.")
         for step in steps:
