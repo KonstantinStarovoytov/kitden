@@ -47,6 +47,18 @@ def endpoint_name(url: str) -> str:
     raise GatewayError("The gateway address is not a MetaMCP endpoint (…/metamcp/<name>/mcp)")
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect, so headers and keys reach the address given only."""
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+def direct_opener() -> urllib.request.OpenerDirector:
+    """No redirect followed and no proxy used, so a request goes to the address given only."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+
+
 def _send(
     base: str,
     method: str,
@@ -58,7 +70,8 @@ def _send(
 ) -> tuple[int, Any, Mapping[str, str]]:
     """One JSON request to a gateway: its status, its JSON body (None when it is not JSON, and
     for an error answer when `read_errors` is off) and its headers. An error answer is an
-    answer; no answer at all is a GatewayError."""
+    answer; no answer at all, or a redirect, is a GatewayError. A redirect is never followed:
+    the key or the sign-in cookie would go to the address it names."""
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(base + path, data=data, method=method)  # noqa: S310 - http(s) checked
     request.add_header("Accept", "application/json")
@@ -67,9 +80,14 @@ def _send(
     for name, value in headers.items():
         request.add_header(name, value)
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+        with direct_opener().open(request, timeout=timeout) as response:
             return response.status, _json(response.read()), response.headers
     except urllib.error.HTTPError as error:
+        if 300 <= error.code < 400:
+            error.close()
+            raise GatewayError(
+                f"The gateway at {base} sent Kitden to another address; Kitden does not follow it."
+            ) from None
         return error.code, _json(error.read()) if read_errors else None, {}
     except (urllib.error.URLError, OSError, TimeoutError) as error:
         reason = getattr(error, "reason", error)

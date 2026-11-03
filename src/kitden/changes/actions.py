@@ -29,7 +29,7 @@ from kitden.clients.base import (
 )
 from kitden.clients.claude_code import rule_file
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
-from kitden.gateway_api import gateway_name
+from kitden.gateway_api import direct_opener, gateway_name
 from kitden.local_gateway.keychain import (
     SECRET_FIELDS,
     KeychainError,
@@ -549,13 +549,6 @@ def move_steps(
     return [*gateway_steps.values(), *file_steps]
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Never follow a redirect, so the headers reach the server's own address only."""
-
-    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
-        return None
-
-
 class NeedsAccess(ValueError):
     """A server that needs access before it can join the preview: the kind ("token" or
     "sign-in"), the fields to ask for, and whether a value given was refused. Its words are
@@ -591,11 +584,6 @@ class NeedsAccess(ValueError):
             "reason": str(self),
             "refused": self.refused,
         }
-
-
-def _opener() -> urllib.request.OpenerDirector:
-    """No redirect followed and no proxy used, so a request goes to the server's own address."""
-    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
 
 
 def initialize_body() -> dict:
@@ -635,7 +623,7 @@ def _initialize(url: str, headers: dict) -> tuple[int, str]:
         },
     )
     try:
-        with _opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
+        with direct_opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
             return answer.status, ""
     except urllib.error.HTTPError as answer:
         challenge = answer.headers.get("WWW-Authenticate", "") if answer.headers else ""
@@ -766,7 +754,7 @@ def _get_json(url: str, server: str) -> dict | None:
         return None
     request = urllib.request.Request(url, headers={"User-Agent": "kitden"})  # noqa: S310
     try:
-        with _opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
+        with direct_opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
             data = json.loads(answer.read(1_000_000))
     except (OSError, ValueError, http.client.HTTPException):
         return None

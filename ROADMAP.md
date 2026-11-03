@@ -35,6 +35,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   computer or a private network in its sign-in answers, Kitden does not fetch it. Such
   addresses are found after the name is looked up, in every spelling (`127.1`, `0x7f.0.0.1`,
   a name that points at `10.x`). A server added at a local address is still checked there.
+- **Gateway key stays put:** Kitden no longer follows a redirect or a proxy when it talks to
+  a gateway, so the Obot key and the MetaMCP sign-in go to the gateway's own address only.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 

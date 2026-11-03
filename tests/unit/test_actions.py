@@ -283,7 +283,7 @@ def test_a_public_server_cannot_send_the_check_to_a_local_address(lookups, monke
             asked.append(request.full_url)
             raise OSError("no network in tests")
 
-    monkeypatch.setattr(actions, "_opener", Opener)
+    monkeypatch.setattr(actions, "direct_opener", Opener)
     challenge = 'Bearer resource_metadata="http://127.0.0.1:9/.well-known/oauth-protected-resource"'
     assert actions._can_register("https://public.example/mcp", challenge) is None
     assert asked and not any("127.0.0.1" in url for url in asked)
