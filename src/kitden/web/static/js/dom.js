@@ -195,11 +195,23 @@ export function focusTreeRow(nodes, id, controls) {
 }
 
 export function shortPath(path) {
-  return path ? String(path).replace(/^\/Users\/[^/]+/, "~") : "";
+  return path ? String(path).replace(/^\/(?:Users|home)\/[^/]+/, "~") : "";
 }
 
 export function shortPaths(text) {
-  return String(text || "").replace(/\/Users\/[^/\s]+/g, "~");
+  return String(text || "").replace(/\/(?:Users|home)\/[^/\s]+/g, "~");
+}
+
+// Where secrets live, as the server names it in /api/about: "Keychain" on macOS, "keyring" on
+// Linux. Until it answers, the macOS word.
+let secretsName = "Keychain";
+
+export function secretsWord() {
+  return secretsName;
+}
+
+export function setSecretsWord(word) {
+  if (word) secretsName = word;
 }
 
 // A name cut to `max` characters with "…"; the whole name goes in the hover text and the label.

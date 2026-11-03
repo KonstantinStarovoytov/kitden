@@ -15,7 +15,7 @@ from collections import Counter
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from kitden import __version__, page
+from kitden import __version__, page, system
 from kitden.clients.version_cache import refresh_versions
 from kitden.model import CLIENTS
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
@@ -27,8 +27,7 @@ DEMO_PORT = 47900
 EXIT_NO_PORT = 2
 EXIT_UNREADABLE = 3
 EXIT_NOT_STARTED = 4
-# Folders whose setup files trigger a rescan; the home folder itself is watched without subfolders.
-WATCHED = (".claude", ".codex", ".cursor", ".agents", "Library/Application Support/Claude")
+EXIT_UNSUPPORTED = 5
 
 
 def pick_port(start: int, tries: int = 20) -> int | None:
@@ -174,7 +173,7 @@ def _page(create_app: Callable, build: Callable, home: Path, start: int, **more)
         build,
         token=token,
         port=port,
-        watch_folders=[home / name for name in WATCHED],
+        watch_folders=system.watched(home),  # the home folder itself: flat, below
         flat_folders=[home],
         home=home,
         first_scan_later=True,  # listen first; the page shows its skeleton while it scans
@@ -279,6 +278,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.version:
         print(f"kitden {__version__}")
         return 0
+    if not system.supported():
+        print("Kitden runs on macOS and Linux.", file=sys.stderr)
+        return EXIT_UNSUPPORTED
     if args.command == "demo":
         return _demo(args)
     from kitden.gateways import ensure_data_folder

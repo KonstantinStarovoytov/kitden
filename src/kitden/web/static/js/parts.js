@@ -1,5 +1,5 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
-import { $, button, byKeys, el, icon, joinWords, plural, shortPath } from "./dom.js";
+import { $, button, byKeys, el, icon, joinWords, plural, secretsWord, shortPath } from "./dom.js";
 import { animateTo, D, reducedMotion, rise, rollTo } from "./motion.js";
 
 // The shared baseline: the picker's first choice, and the scope of what is set for every project.
@@ -714,7 +714,7 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.rules") return `${ACTION_WORDS[entry.action]} ${entry.steps.map((s) => s.name).join(", ")} · Kitden gateway`;
   if (entry.action === "gateway.move_out" && entry.steps.length) return moveOutTitle(entry);
   if (entry.action === "gateway.remove" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} from the Kitden gateway`;
-  if (entry.action === "gateway.keychain" && entry.steps.length) return `Moved the secrets of ${entry.steps[0].name} to the Keychain`;
+  if (entry.action === "gateway.keychain" && entry.steps.length) return `Moved the secrets of ${entry.steps[0].name} to the ${secretsWord()}`;
   if (entry.action === "gateway.sign_in" && entry.steps.length) return `Signed in to ${entry.steps[0].name} again`;
   if (entry.action === "gateway.access" && entry.steps.length) return `Changed the access of ${entry.steps[0].name}`;
   // An add's first step is the server's entry; a PATH step and Codex's timeouts may follow.

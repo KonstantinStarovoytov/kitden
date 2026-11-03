@@ -40,6 +40,7 @@ from kitden.local_gateway.settings import (
 )
 from kitden.model import CLIENT_WORDS, CLIENTS, GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
 from kitden.redact import redact
+from kitden.system import secret_store_name
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import kitden_on, setup_server_state
 from kitden.views.words import (
@@ -72,8 +73,8 @@ CURSOR_REMOVE = {
 }
 CURSOR_KEEPS = LOADS_PLUGINS + ", so it loses this copy and keeps {}."
 CURSOR_SWITCHES = "Cursor's own switches for these tools do not carry over."
-TO_KEYCHAIN = "The token goes to your Keychain; the settings file keeps a reference."
-MOVE_SECRETS = "The secrets of {server} go to your Keychain; the settings file keeps references."
+TO_KEYCHAIN = "The token goes to your {store}; the settings file keeps a reference."
+MOVE_SECRETS = "The secrets of {server} go to your {store}; the settings file keeps references."
 # Strict mode only hides tools; the server's own token decides what it can do.
 GUARANTEE = "For a real guarantee, give {server} a token that can only read."
 
@@ -386,7 +387,7 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
     items = [i for s in change.steps for i in s.keychain]
     line += _replaced(items)
     if items:
-        line.append(TO_KEYCHAIN)
+        line.append(TO_KEYCHAIN.format(store=secret_store_name()))
     line.append("Applies to new sessions.")
     out[0]["note"] = " ".join(line)
     # Each client whose own switches for the servers do not carry over says so.
@@ -582,7 +583,7 @@ def _gateway_remove_words(change: Change, inventory, into: str | None = None) ->
     entries = [s.edit.before for s in change.steps if s.edit and s.edit.key[0] == "servers"]
     held = entries[0] if entries else None
     if isinstance(held, dict) and references_in(held):
-        first += " Its secrets stay in your Keychain under kitden."
+        first += f" Its secrets stay in your {secret_store_name()} under kitden."
     clients = _offering_clients(inventory, but=into)
     if not clients:
         return [{"note": f"{first} Undo brings it back."}]
@@ -592,9 +593,10 @@ def _gateway_remove_words(change: Change, inventory, into: str | None = None) ->
 
 
 def _replaced(items) -> list[str]:
-    """A line for each Keychain item that is there already."""
+    """A line for each secret store item that is there already."""
+    store = secret_store_name()
     return [
-        f"{i.server}/{i.key} is already in your Keychain; its value will be replaced."
+        f"{i.server}/{i.key} is already in your {store}; its value will be replaced."
         for i in items
         if i.existed
     ]
@@ -603,7 +605,8 @@ def _replaced(items) -> list[str]:
 def _keychain_words(change: Change) -> list[dict]:
     """A held server's secrets go to the Keychain. The clients see no change."""
     items = [i for s in change.steps for i in s.keychain]
-    lines = [*_replaced(items), MOVE_SECRETS.format(server=change.steps[0].name)]
+    moved = MOVE_SECRETS.format(server=change.steps[0].name, store=secret_store_name())
+    lines = [*_replaced(items), moved]
     return [{"note": " ".join(lines)}]
 
 

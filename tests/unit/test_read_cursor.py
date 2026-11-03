@@ -1,8 +1,8 @@
 from kitden.clients.cursor import INSTALLED_PREFIX, REACTIVE_KEY, CursorAdapter
 from kitden.model import ItemKind, Scope, SourceKind, UnknownReason
 from tests.conftest import (
-    CURSOR_DB,
     all_text,
+    cursor_db,
     cursor_state_rows,
     make_home,
     rows,
@@ -66,7 +66,7 @@ def test_project_installs_may_be_stale(tmp_path, no_version):
 def test_user_installs_fall_back_to_project_rows_without_a_no_workspace_row(tmp_path, no_version):
     home = make_home(tmp_path, FIXTURE)
     write_cursor_fixture_state(home)
-    (home / CURSOR_DB).unlink()
+    (cursor_db(home)).unlink()
     state = cursor_state_rows(home)
     write_cursor_state(home, {k: v for k, v in state.items() if "no-workspace" not in k})
     scan = CursorAdapter(home, read_version=no_version).scan()
@@ -157,7 +157,7 @@ def test_secret_rows_and_values_never_appear(tmp_path, no_version):
 
 def test_broken_state_database_is_reported_and_cache_still_read(tmp_path, no_version):
     home = make_home(tmp_path, FIXTURE)
-    db = home / CURSOR_DB
+    db = cursor_db(home)
     db.parent.mkdir(parents=True)
     db.write_bytes(b"this is not a database")
     scan = CursorAdapter(home, read_version=no_version).scan()
@@ -216,3 +216,12 @@ def test_the_home_folder_as_a_cursor_project_skips_only_the_user_rules(tmp_path,
     in_home = {i[1] for i in _instructions(scan) if i[3] == str(home)}
     assert in_home == {"AGENTS.md", ".cursorrules"}
     assert (Scope.USER, "mine") in {(i[0], i[1]) for i in _instructions(scan)}
+
+
+def test_cursor_state_is_read_from_the_linux_config_folder(system, tmp_path, no_version):
+    system("linux")
+    home, scan = _scan(tmp_path, no_version)
+    assert cursor_db(home) == home / ".config/Cursor/User/globalStorage/state.vscdb"
+    assert cursor_db(home).exists()
+    assert not (home / "Library").exists()
+    assert rows(scan.items, home) >= OWN

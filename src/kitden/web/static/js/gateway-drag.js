@@ -178,14 +178,14 @@ function sayWhy(event, block) {
 // A server the Kitden gateway holds can move out to a client, unless a change takes it out.
 const leavesGateway = (block) => block.kind === "held" && block.gateway.kind === "kitden" && !block.leaving;
 
-// Why `client` cannot take the server `name`, when the page knows: the client is not on this Mac
+// Why `client` cannot take the server `name`, when the page knows: the client is not on this computer
 // (or its settings cannot be read, as its panel says), or it sets up a server of that name on its
 // own. Null when it can (the server may still refuse).
 function whyNot(name, client) {
   const who = CLIENT_NAMES[client];
   if (data.clients && !foundClients().includes(client)) {
     const unreadable = data.clients.some((c) => c.id === client && c.status === "unreadable");
-    return unreadable ? `${who}'s settings are not readable.` : `${who} is not on this Mac.`;
+    return unreadable ? `${who}'s settings are not readable.` : `${who} is not on this computer.`;
   }
   const view = current("gateway");
   const rows = Object.values((view && view.groups) || {}).flat();

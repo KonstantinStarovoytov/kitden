@@ -1,5 +1,6 @@
 """Shared test helpers: fake home folders built from tests/fixtures."""
 
+import contextlib
 import json
 import os
 import shlex
@@ -16,12 +17,29 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.fixture(autouse=True)
 def _never_the_real_home(tmp_path_factory, monkeypatch):
-    """Tests never read or write the developer's real home folder, even by accident."""
+    """Tests never read or write the developer's real home folder, even by accident. The XDG
+    folders would point Linux paths outside the sandbox home, so they go too."""
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("real-home")))
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+
+@pytest.fixture
+def system(monkeypatch):
+    """`system("linux")` makes this test, and the commands it starts, run as that system."""
+    import kitden.system
+
+    def use(name: str) -> None:
+        monkeypatch.setenv("KITDEN_SYSTEM", name)
+        monkeypatch.setattr(kitden.system, "SYSTEM", name)
+
+    return use
 
 
 CLIENT_BINARIES = {"claude", "codex", "cursor"}  # compared in lower case, so "Cursor" too
-KEYCHAIN_BINARIES = {"security"}  # macOS's Keychain command
+# Only the Ubuntu CI job sets KITDEN_REAL_KEYRING, for tests/unit/test_real_keyring.py.
+REAL_KEYRING = os.environ.get("KITDEN_REAL_KEYRING") == "1"
+KEYCHAIN_BINARIES = {"security", "secret-tool"}  # the Keychain on macOS, the keyring on Linux
 WRAPPERS = {"env", "sh", "bash", "zsh", "dash"}
 
 
@@ -60,7 +78,7 @@ def _no_client_commands(tmp_path_factory, monkeypatch):
                     continue
                 if path.name.lower() in CLIENT_BINARIES:
                     raise AssertionError(f"a test tried to run a real client: {word}")
-                if path.name.lower() in KEYCHAIN_BINARIES:
+                if path.name.lower() in KEYCHAIN_BINARIES and not REAL_KEYRING:
                     raise AssertionError(f"a test tried to run the real Keychain: {word}")
             super().__init__(args, *rest, **options)
 
@@ -76,34 +94,64 @@ def _never_the_real_keychain(tmp_path_factory, monkeypatch):
 
     missing = tmp_path_factory.getbasetemp().resolve() / "no-security"
     monkeypatch.setenv("KITDEN_SECURITY", str(missing))
-    inherited = [*stdio.DEFAULT_INHERITED_ENV_VARS, "KITDEN_SECURITY"]
+    monkeypatch.setenv("KITDEN_SECRET_TOOL", str(missing))
+    inherited = [
+        *stdio.DEFAULT_INHERITED_ENV_VARS,
+        "KITDEN_SECURITY",
+        "KITDEN_SECRET_TOOL",
+        "KITDEN_SYSTEM",
+    ]
     monkeypatch.setattr(stdio, "DEFAULT_INHERITED_ENV_VARS", inherited)
 
 
 def install_fake_security(folder: Path) -> Path:
-    """Put a `security` stand-in in folder/bin and return the JSON file that holds its items."""
+    """Put `security` and `secret-tool` stand-ins in folder/bin, sharing one JSON file of items,
+    and return that file."""
     items = folder / "fake-keychain.json"
-    binary = folder / "bin" / "security"
-    binary.parent.mkdir(parents=True, exist_ok=True)
-    script = FIXTURES / "fake_security.py"
-    binary.write_text(
-        f'#!/bin/sh\nexec {shlex.join([sys.executable, str(script), str(items)])} "$@"\n'
-    )
-    binary.chmod(0o755)
+    for name, script in (("security", "fake_security.py"), ("secret-tool", "fake_secret_tool.py")):
+        binary = folder / "bin" / name
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        command = shlex.join([sys.executable, str(FIXTURES / script), str(items)])
+        binary.write_text(f'#!/bin/sh\nexec {command} "$@"\n')
+        binary.chmod(0o755)
     return items
 
 
 @pytest.fixture
 def fake_keychain(tmp_path, monkeypatch) -> Path:
-    """Kitden's Keychain calls, in this process and its children, go to the stand-in.
-    Returns the JSON file of its items."""
+    """Kitden's Keychain and keyring calls, in this process and its children, go to the
+    stand-ins. Returns the JSON file of their items."""
     items = install_fake_security(tmp_path / "keychain")
     monkeypatch.setenv("KITDEN_SECURITY", str(tmp_path / "keychain/bin/security"))
+    monkeypatch.setenv("KITDEN_SECRET_TOOL", str(tmp_path / "keychain/bin/secret-tool"))
     return items
 
 
-CURSOR_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
-CURSOR_WORKSPACES = "Library/Application Support/Cursor/User/workspaceStorage"
+@pytest.fixture
+def as_mac(system):
+    """For a test module about macOS's words and `security` command lines:
+    `pytestmark = pytest.mark.usefixtures("as_mac")`."""
+    system("mac")
+
+
+def cursor_db(home: Path) -> Path:
+    """Cursor's global state database in this system's folder."""
+    from kitden.system import cursor_state_dir
+
+    return cursor_state_dir(home) / "globalStorage/state.vscdb"
+
+
+def cursor_workspaces(home: Path) -> Path:
+    from kitden.system import cursor_state_dir
+
+    return cursor_state_dir(home) / "workspaceStorage"
+
+
+# Fixture homes keep macOS's Library folders; on Linux they move to that system's places.
+MAC_FOLDERS = {
+    "Library/Application Support/Claude": "claude_desktop_dir",
+    "Library/Application Support/Cursor/User": "cursor_state_dir",
+}
 
 
 def make_home(tmp_path: Path, *fixtures: str) -> Path:
@@ -116,12 +164,24 @@ def make_home(tmp_path: Path, *fixtures: str) -> Path:
             text = path.read_text()
             if "{HOME}" in text:
                 path.write_text(text.replace("{HOME}", str(home)))
+    import kitden.system
+
+    if kitden.system.SYSTEM != "mac":
+        for mac, helper in MAC_FOLDERS.items():
+            if (home / mac).is_dir():
+                target = getattr(kitden.system, helper)(home)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(home / mac, target)
+        shutil.rmtree(home / "Library/Application Support", ignore_errors=True)
+        with contextlib.suppress(OSError):
+            (home / "Library").rmdir()
     return home
 
 
-def write_cursor_state(home: Path, rows: dict, db_path: str = CURSOR_DB) -> Path:
-    """Create a Cursor state database with the given key → value rows."""
-    db = home / db_path
+def write_cursor_state(home: Path, rows: dict, db: Path | None = None) -> Path:
+    """Create a Cursor state database with the given key → value rows (the global one by
+    default)."""
+    db = db or cursor_db(home)
     db.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(db)) as con, con:
         con.execute("CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)")
@@ -146,7 +206,7 @@ def write_cursor_fixture_state(home: Path, extra_rows: dict | None = None) -> No
     """Write the fixture's global and per-workspace Cursor state databases."""
     write_cursor_state(home, {**cursor_state_rows(home), **(extra_rows or {})})
     for workspace, rows in _cursor_fixture(home, "cursor-workspace-state.json").items():
-        write_cursor_state(home, rows, f"{CURSOR_WORKSPACES}/{workspace}/state.vscdb")
+        write_cursor_state(home, rows, cursor_workspaces(home) / workspace / "state.vscdb")
 
 
 def rows(items, home: Path) -> set[tuple]:

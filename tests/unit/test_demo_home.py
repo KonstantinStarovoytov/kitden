@@ -217,3 +217,11 @@ def test_the_demo_marketplace_has_two_servers_the_gateway_can_add(tmp_path):
     rows = market_servers(inventory, adapters, set())
     free = {(r["name"], r["kind"]) for r in rows if r["refusal"] is None}
     assert free == {("db-query", "local"), ("test-status", "remote")}
+
+
+def test_the_linux_sample_stays_inside_its_folder(tmp_path, system, monkeypatch):
+    system("linux")
+    outside = tmp_path / "outside"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(outside))
+    build_demo_home(tmp_path / "demo", "medium")  # medium has Cursor
+    assert not outside.exists()

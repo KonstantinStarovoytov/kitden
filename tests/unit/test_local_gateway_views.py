@@ -164,7 +164,7 @@ def test_the_kitden_gateway_is_listed_and_local_servers_can_move(home):
         "id": "kitden",
         "kind": "kitden",
         "name": "Kitden gateway",
-        "where": "On this Mac",
+        "where": "On this computer",
         "movable": True,
         "servers": [
             {

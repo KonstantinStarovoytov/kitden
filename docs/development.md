@@ -156,6 +156,10 @@ project, with a server that has a token:
 Not run yet for steps 17 to 22: Part 5 was built and tested with a fake `security` only, and
 step 22 with a fake `claude`.
 
+On Linux, check steps 17 to 19 once by hand too, on an Ubuntu desktop: the item shows in
+`secret-tool lookup service kitden account <server>/<key>`. With `libsecret-tools` removed, the
+same move waits in the review with "Kitden could not reach the keyring." and changes nothing.
+
 Before a release that touches Details or the preview tray, also check this once by hand, on the
 same test project, with a Claude Code plugin that is on:
 
@@ -178,13 +182,17 @@ Not run yet for step 24: Part 4 was tested with sandbox files only.
 ## Release
 
 1. `uv version X.Y.Z`, and the same number in `src/kitden/__init__.py`,
-   `plugins/kitden/.claude-plugin/plugin.json`, `plugins/kitden/plugin.json` and `KITDEN_REF` in
-   `install.sh` and `install.ps1` (a test checks they match).
+   `plugins/kitden/.claude-plugin/plugin.json`, `plugins/kitden/plugin.json` and the version in
+   `install.sh` and `install.ps1` (`KITDEN_VERSION`, `$KitdenVersion`; a test checks they match).
 2. Write `docs/releases/vX.Y.Z.md`: plain notes for users about everything since the last tag
    (`git log vA.B.C..HEAD`), grouped as New, Better and Fixed.
 3. Update `ROADMAP.md`: rename "### Not released yet" to the version, move anything else that
    shipped under Done, and change the "Last updated" date.
 4. Commit, then `git tag vX.Y.Z` and `git push origin main vX.Y.Z`.
+5. The Homebrew tap, [KonstantinStarovoytov/homebrew-tap](https://github.com/KonstantinStarovoytov/homebrew-tap),
+   checks PyPI once a day and opens a pull request with the new version and its Python
+   resources (`brew bump` in its workflow). Merge it. To do it at once: `brew bump-formula-pr
+   --version X.Y.Z konstantinstarovoytov/tap/kitden`.
 
 On every push and pull request the workflow runs ruff, the Python tests with a 94% coverage
 floor, the page's tests (`node --test tests/frontend/*.test.mjs`), the start-time budget
@@ -197,16 +205,18 @@ with trusted publishing and creates the GitHub release with the notes file as it
 
 ## Gateways
 
-- **Kitden gateway** — three files in `~/Library/Application Support/kitden` (mode 700):
-  `gateway.json` (mode 600) holds the servers and rules, `gateway-tools.json` the tool lists, and
+- **Kitden gateway** — four files in `~/Library/Application Support/kitden` (mode 700):
+  `gateway.json` (mode 600) holds the servers and rules, `gateway-tools.json` the tool lists,
   `gateway-calls.json` the count and last time (UTC) of each tool's forwarded calls, never what
-  was sent. Only `gateway.json` changes through review and Undo; the other two are found data that
-  the gateway and Rescan write. The gateway reads `gateway.json` again on each call, so a tool
+  was sent, and `gateway-names.json` which server each bare tool name belongs to, so a server
+  added later cannot take it. Only `gateway.json` changes through review and Undo; the other
+  three are found data that the gateway and Rescan write. The gateway reads `gateway.json` again on each call, so a tool
   turned off is refused at once; if the file cannot be read, the rules it started with apply. It
   keeps references, not secrets: each non-empty env value or header that would be hidden is a Keychain item
   (service `kitden`, account `<server>/<key>`), and `gateway.json` holds `{"keychain": "<server>/<key>"}`.
   The gateway reads the items when it starts a server. Kitden calls `/usr/bin/security`; the
-  env variable `KITDEN_SECURITY` replaces that path, as a test hook only. `kitden mcp` finds the project once, at start: the `CLAUDE_PROJECT_DIR` variable, then
+  env variables `KITDEN_SECURITY` and `KITDEN_SECRET_TOOL` replace the paths only when Kitden
+  runs from a source checkout (tests); a release, installed in site-packages, ignores them. `kitden mcp` finds the project once, at start: the `CLAUDE_PROJECT_DIR` variable, then
   the client's roots, then `WORKSPACE_FOLDER_PATHS`, then its start folder. Codex keeps a tool
   list for up to 30 minutes and ignores "list changed" (checked 2026-10-21), so the offered list
   is fixed for a session; a tool turned off is still refused at once.
@@ -223,4 +233,11 @@ with trusted publishing and creates the GitHub release with the notes file as it
 
 ## Linux and Windows
 
-Not supported yet: the install scripts stop with a message, and the page looks for macOS paths.
+Linux runs as macOS does; `kitden/system.py` is the one place that knows where each system keeps
+things, and secrets go to the keyring through `secret-tool`. To run the suite as Linux on a Mac:
+`KITDEN_SYSTEM=linux uv run pytest -q`. The Ubuntu job in CI is the real check: it runs every
+test there and one real keyring round trip (`tests/unit/test_real_keyring.py`). Tests that are
+about macOS words or `security` command lines say so with `pytestmark =
+pytest.mark.usefixtures("as_mac")`.
+
+Windows is not supported yet: `install.ps1` stops with a message.

@@ -1263,9 +1263,9 @@ function pickChanged() {
   drawAgain();
 }
 
-// The map's hint: the pick's count while something is picked.
+// The map's hint: the pick's count while something is picked, or what the band left out.
 function mapHint() {
-  return pick.ids.size ? PICK_HINT(pick.ids.size) : MAP_HINT;
+  return pick.ids.size || pick.stuck ? PICK_HINT(pick.ids.size, pick.stuck) : MAP_HINT;
 }
 
 // The Add a server panel (gateway-add.js) lets go of what is selected first, from both its doors:

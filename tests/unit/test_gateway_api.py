@@ -196,16 +196,18 @@ def test_obot_error_body_is_never_read(monkeypatch):
     raw error: Kitden never reads them."""
     import io
     import urllib.error
-    import urllib.request
+
+    from kitden import gateway_api
 
     class Broken(io.BytesIO):
         def read(self, *args):
             raise TimeoutError("read timed out")
 
-    def refuse(request, timeout):
-        raise urllib.error.HTTPError(request.full_url, 500, "boom", {}, Broken())
+    class Refuse:
+        def open(self, request, timeout):
+            raise urllib.error.HTTPError(request.full_url, 500, "boom", {}, Broken())
 
-    monkeypatch.setattr(urllib.request, "urlopen", refuse)
+    monkeypatch.setattr(gateway_api, "direct_opener", Refuse)
     gateway = Gateway(url="http://127.0.0.1:9/mcp-connect/v1", key_env_var="OBOT_KEY")
     with pytest.raises(GatewayError, match="Obot answered 500"):
         ObotClient(gateway, {"OBOT_KEY": "k"}).held()
@@ -306,3 +308,48 @@ def test_obot_error_text_never_carries_the_key_or_a_header_value(obot):
             {"type": "STREAMABLE_HTTP", "url": "https://x.example/mcp", "headers": {"A": SECRET}},
         )
     assert SECRET not in str(error.value) and obot.key not in str(error.value)
+
+
+def test_a_redirect_is_refused_and_the_key_goes_nowhere_else():
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    seen = []
+
+    class Other(BaseHTTPRequestHandler):
+        def do_GET(self):
+            seen.append(self.headers.get("Authorization"))
+            self.send_response(200)
+            self.end_headers()
+
+        do_POST = do_GET
+
+        def log_message(self, *args):
+            pass
+
+    other = HTTPServer(("127.0.0.1", 0), Other)
+
+    class Moved(Other):
+        def do_GET(self):
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{other.server_port}/steal")
+            self.end_headers()
+
+        do_POST = do_GET
+
+    moved = HTTPServer(("127.0.0.1", 0), Moved)
+    for server in (other, moved):
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        gateway = Gateway(
+            url=f"http://127.0.0.1:{moved.server_port}/mcp-connect/ms1abc",
+            auth="oauth",
+            key_env_var="OBOT_KEY",
+        )
+        with pytest.raises(GatewayError, match="does not follow"):
+            ObotClient(gateway, {"OBOT_KEY": "SENTINEL_SECRET_OBOT"}).held()
+    finally:
+        for server in (other, moved):
+            server.shutdown()
+            server.server_close()
+    assert seen == []

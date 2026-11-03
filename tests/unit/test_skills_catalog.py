@@ -12,7 +12,7 @@ from kitden.demo import build_demo_home
 from kitden.views.catalog import search
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.skills import front_matter, project_skills, read_skill, skill_catalog
-from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
+from tests.conftest import cursor_db, make_home, write_cursor_fixture_state
 
 PLUGIN = "toolbox@claude-plugins-official"
 
@@ -210,7 +210,7 @@ def add_cursor_plugin(home: Path) -> Path:
 def install_in_cursor(home: Path, plugin_id: str) -> None:
     """Add a user plugin to Cursor's install records."""
     key = "cursor.plugins.installedIds.123|no-workspace"
-    with closing(sqlite3.connect(home / CURSOR_DB)) as con, con:
+    with closing(sqlite3.connect(cursor_db(home))) as con, con:
         (value,) = con.execute("SELECT value FROM ItemTable WHERE key = ?", (key,)).fetchone()
         records = [*json.loads(value), {"id": plugin_id, "sources": ["user"]}]
         con.execute("INSERT INTO ItemTable VALUES (?, ?)", (key, json.dumps(records)))

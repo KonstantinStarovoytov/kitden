@@ -48,6 +48,7 @@ from kitden.model import (
     Step,
     UnknownReason,
 )
+from kitden.system import cursor_state_dir
 
 CLIENT = "cursor"
 RESTART = "Restart Cursor for this to take effect."
@@ -61,8 +62,11 @@ IMPORT_HINT = (
     "Cursor loads this Claude Code plugin. Turn it off in Claude Code, or turn off "
     "Include Third-Party Plugins in Cursor Settings."
 )
-STATE_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
-WORKSPACE_STATE = "Library/Application Support/Cursor/User/workspaceStorage"
+# In kitden.system's Cursor state folder. On Linux Cursor, a VS Code build, is assumed to keep
+# it where VS Code does, ~/.config/Cursor/User (checked 2026-11-03 against VS Code's own
+# layout); to confirm on a real install before release.
+STATE_DB = "globalStorage/state.vscdb"
+WORKSPACE_STATE = "workspaceStorage"
 SNAPSHOT_PREFIX = "workbench.customize.primitiveSourceSnapshot."
 REACTIVE_KEY = (
     "src.vs.platform.reactivestorage.browser.reactiveStorageServiceImpl"
@@ -181,7 +185,7 @@ class CursorAdapter(ClientAdapter):
 
     def _state(self, read: Reader) -> tuple[dict[str, list], dict]:
         """Installed-plugin rows by key, and the reactive-storage switches (S5)."""
-        db = self.home / STATE_DB
+        db = cursor_state_dir(self.home) / STATE_DB
         if not db.is_file():
             return {}, {}
         query = "SELECT key, value FROM ItemTable WHERE key LIKE ? OR key = ?"
@@ -241,7 +245,7 @@ class CursorAdapter(ClientAdapter):
                     found.setdefault((plugin_id, place), key)
 
         names = self._plugin_names()
-        db = str(self.home / STATE_DB)
+        db = str(cursor_state_dir(self.home) / STATE_DB)
         items = []
         for (plugin_id, place), key in found.items():
             if "@" in plugin_id:
@@ -280,7 +284,7 @@ class CursorAdapter(ClientAdapter):
         """
         cache = self.home / ".cursor/plugins/cache"
         names: dict[str, str] = {}
-        for db in sorted((self.home / WORKSPACE_STATE).glob("*/state.vscdb")):
+        for db in sorted((cursor_state_dir(self.home) / WORKSPACE_STATE).glob("*/state.vscdb")):
             try:
                 with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
                     query = "SELECT value FROM ItemTable WHERE key LIKE ?"

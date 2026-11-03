@@ -117,8 +117,10 @@ def test_server_stops_quickly_even_with_an_open_page(monkeypatch):
     assert calls[0].timeout_graceful_shutdown <= 3
 
 
-def test_every_command_copies_the_old_data_folder_once(tmp_path, capsys):
+def test_every_command_copies_the_old_data_folder_once(tmp_path, capsys, system):
     from kitden.gateways import OLD_DATA_DIR, data_dir
+
+    system("mac")  # the old folder is macOS's only
 
     (tmp_path / OLD_DATA_DIR).mkdir(parents=True)
     (tmp_path / OLD_DATA_DIR / "settings.json").write_text('{"gateways": []}')
@@ -523,3 +525,22 @@ def test_a_stopped_demo_exits_cleanly_and_deletes_its_folder(tmp_path, signal_na
     assert process.returncode == 0, err
     assert "Traceback" not in err
     assert list(tmp_path.iterdir()) == []
+
+
+def test_an_unsupported_system_stops_with_one_sentence(monkeypatch, capsys):
+    monkeypatch.setattr(cli.system, "SYSTEM", "plan9")
+    assert main(["open"]) == 5
+    assert capsys.readouterr().err.strip() == "Kitden runs on macOS and Linux."
+    assert not (Path.home() / ".local/share/kitden").exists()
+
+
+def test_the_watched_folders_follow_the_system(system, tmp_path):
+    system("linux")
+    seen = {}
+
+    def create_app(build, **options):
+        seen.update(options)
+
+    cli._page(create_app, lambda: None, tmp_path, 47950)
+    assert tmp_path / ".config/Claude" in seen["watch_folders"]
+    assert not any("Library" in str(p) for p in seen["watch_folders"])

@@ -10,7 +10,8 @@ def test_checks_run_on_pushes_pull_requests_and_tags():
     text = WORKFLOW.read_text()
     assert "pull_request:" in text
     assert 'tags: ["v*"]' in text
-    assert "runs-on: macos-latest" in text
+    # Every check runs on macOS and on Ubuntu (Linux spec, part 4).
+    assert "os: [macos-latest, ubuntu-latest]" in text and "runs-on: ${{ matrix.os }}" in text
     for step in ("uv run ruff check .", "uv run pytest -q", "uv build"):
         assert step in text
 
@@ -59,7 +60,7 @@ def test_a_tag_without_notes_stops_before_pypi():
     """The build job checks the notes file; publish needs build, so nothing reaches PyPI first."""
     steps = [s for s in _build_steps() if 'docs/releases/$GITHUB_REF_NAME.md"' in s]
     assert len(steps) == 1
-    assert "if: startsWith(github.ref, 'refs/tags/')" in steps[0]
+    assert "if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/')" in steps[0]
     assert 'test -s "docs/releases/$GITHUB_REF_NAME.md"' in steps[0]
     assert "exit 1" in steps[0]
     publish = WORKFLOW.read_text().split("  publish:")[1].split("  release:")[0]
@@ -79,3 +80,17 @@ def test_the_build_runs_every_check_the_project_has():
     # Pinned to a commit, as the other actions are.
     node = next(s for s in steps if "actions/setup-node@" in s)
     assert len(node.split("@")[1].split()[0]) == 40
+
+
+def test_only_the_macos_job_builds_and_uploads_the_package():
+    """publish and release take one dist artifact, so the Ubuntu job builds nothing."""
+    steps = _build_steps()
+    for marker in ("uv build", "scripts/check-dist.sh dist", "actions/upload-artifact@"):
+        (step,) = [s for s in steps if marker in s]
+        assert "if: runner.os == 'macOS'" in step
+
+
+def test_ubuntu_runs_one_real_keyring_round_trip():
+    (step,) = [s for s in _build_steps() if "test_real_keyring.py" in s]
+    assert "if: runner.os == 'Linux'" in step
+    assert "KITDEN_REAL_KEYRING=1" in step and "gnome-keyring-daemon --unlock" in step

@@ -2,6 +2,7 @@ import json
 
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.model import ClientStatus, Enabled, ItemKind, Scope, UnknownReason
+from kitden.system import claude_desktop_dir
 from kitden.views.inventory import build_inventory
 from tests.conftest import all_text, make_home, rows
 
@@ -111,7 +112,7 @@ def test_detect_reports_version_and_support(tmp_path):
 
 def test_desktop_code_tab_is_its_own_client_with_its_bundled_version(tmp_path, no_version):
     home = make_home(tmp_path, FIXTURE)
-    bundled = home / "Library/Application Support/Claude/claude-code"
+    bundled = claude_desktop_dir(home) / "claude-code"
     for version in ("2.1.295", "2.1.299", "latest"):
         (bundled / version).mkdir(parents=True)
     (desktop,) = ClaudeCodeAdapter(home, read_version=no_version).extra_clients()
@@ -125,7 +126,7 @@ def test_desktop_code_tab_is_its_own_client_with_its_bundled_version(tmp_path, n
 
 def test_no_desktop_client_without_claude_desktop(tmp_path, no_version):
     home = make_home(tmp_path, FIXTURE)
-    (home / "Library/Application Support/Claude/claude_desktop_config.json").unlink()
+    (claude_desktop_dir(home) / "claude_desktop_config.json").unlink()
     assert ClaudeCodeAdapter(home, read_version=no_version).extra_clients() == []
 
 
@@ -136,7 +137,7 @@ def test_detect_without_files_or_command_is_not_found(tmp_path, no_version):
 
 def test_the_desktop_tab_keeps_its_folder_version_in_a_scan(tmp_path):
     home = make_home(tmp_path, FIXTURE)
-    (home / "Library/Application Support/Claude/claude-code/2.1.299").mkdir(parents=True)
+    (claude_desktop_dir(home) / "claude-code/2.1.299").mkdir(parents=True)
     clients = {c.id: c for c in build_inventory(home).clients}
     assert clients["claude_desktop_code_tab"].version == "2.1.299"
     assert clients["claude_code"].version is None
@@ -217,3 +218,71 @@ def test_the_home_folder_as_a_project_keeps_only_its_root_files(tmp_path, no_ver
     (home / ".claude.json").write_text(json.dumps(state))
     in_home = {(i[1], i[2]) for i in _instructions(home, no_version) if i[3] == str(home)}
     assert in_home == {("CLAUDE.md", "instructions"), ("CLAUDE.local.md", "instructions")}
+
+
+def test_claude_desktop_config_is_read_from_the_linux_config_folder(system, tmp_path, no_version):
+    system("linux")
+    home = make_home(tmp_path, FIXTURE)
+    assert (home / ".config/Claude/claude_desktop_config.json").is_file()
+    assert not (home / "Library").exists()
+    (desktop,) = ClaudeCodeAdapter(home, read_version=no_version).extra_clients()
+    assert desktop.id == "claude_desktop_code_tab"
+
+
+def _scan_with_bad_project_file(tmp_path, no_version, make_bad, problem=True):
+    """Scan with the project's .mcp.json made bad. The scan runs in a thread that must finish
+    within 10 seconds. With `problem`, the bad file must be a problem of its own."""
+    import os
+    import threading
+
+    home = make_home(tmp_path, FIXTURE)
+    bad = home / "work/website/.mcp.json"
+    bad.unlink()
+    make_bad(bad)
+    done = {}
+
+    def scan():
+        done["scan"] = ClaudeCodeAdapter(home, read_version=no_version).scan()
+
+    worker = threading.Thread(target=scan, daemon=True)
+    worker.start()
+    worker.join(10)
+    if worker.is_alive():  # let a stuck reader go before failing
+        os.close(os.open(bad, os.O_WRONLY | os.O_NONBLOCK))
+    assert "scan" in done, "the scan did not finish"
+    problems = [(p.path, p.unknown_reason) for p in done["scan"].problems]
+    if problem:
+        assert (str(bad), UnknownReason.PARSE_ERROR) in problems
+    found = rows(done["scan"].items, home)
+    assert ("claude_code", "skill", "brandkit", "user", "on", None) in found
+    assert ("claude_code", "mcp_server", "local-db", "local", "on", "work/website") in found
+
+
+def test_a_project_file_that_is_not_utf8_is_a_problem_of_its_own(tmp_path, no_version):
+    _scan_with_bad_project_file(tmp_path, no_version, lambda p: p.write_bytes(b'{"a": "\xff"}'))
+
+
+def test_a_fifo_named_like_a_project_file_does_not_stop_the_scan(tmp_path, no_version):
+    import os
+
+    _scan_with_bad_project_file(tmp_path, no_version, os.mkfifo)
+
+
+def test_a_deeply_nested_project_file_does_not_stop_the_scan(tmp_path, no_version):
+    # Whether Python parses this depends on the stack it has, so only the scan is checked.
+    deep = "[" * 100_000 + "]" * 100_000
+    _scan_with_bad_project_file(tmp_path, no_version, lambda p: p.write_text(deep), False)
+
+
+def test_a_file_too_deep_for_the_parser_is_a_problem_of_its_own(tmp_path, no_version, monkeypatch):
+    import json
+
+    real = json.loads
+
+    def loads(text, *args, **kwargs):
+        if text.startswith("[[["):
+            raise RecursionError
+        return real(text, *args, **kwargs)
+
+    monkeypatch.setattr(json, "loads", loads)
+    _scan_with_bad_project_file(tmp_path, no_version, lambda p: p.write_text("[[[]]]"))

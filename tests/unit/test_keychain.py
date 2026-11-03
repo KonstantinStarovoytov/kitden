@@ -18,6 +18,9 @@ from kitden.local_gateway.keychain import (
     store,
 )
 
+# macOS words and `security` command lines; Linux has its own tests.
+pytestmark = pytest.mark.usefixtures("as_mac")
+
 REACH = "Kitden could not reach the Keychain."
 
 
@@ -86,7 +89,7 @@ def test_is_reference():
 
 def test_a_failing_security_never_shows_the_value():
     def broken(args, stdin=None):
-        return 1, "boom"
+        return 1, "boom", ""
 
     with pytest.raises(KeychainError) as error:
         store("s", "k", "SENTINEL_SECRET_V", run=broken)
@@ -103,7 +106,7 @@ def test_the_value_goes_on_stdin_as_hex_and_is_read_back():
 
     def recording(args, stdin=None):
         calls.append((args, stdin))
-        return (0, "SENTINEL_SECRET_V\n") if args[0] == "find-generic-password" else (0, "")
+        return (0, "SENTINEL_SECRET_V\n", "") if args[0] == "find-generic-password" else (0, "", "")
 
     store("srv", "KEY", "SENTINEL_SECRET_V", run=recording)
     hex_value = b"SENTINEL_SECRET_V".hex()
@@ -118,7 +121,7 @@ def test_the_value_goes_on_stdin_as_hex_and_is_read_back():
 def test_a_write_that_does_not_read_back_fails():
     # `security -i` exits with 0 even when its line fails, so store reads the item back.
     def lost(args, stdin=None):
-        return (44, "") if args[0] == "find-generic-password" else (0, "")
+        return (44, "", "") if args[0] == "find-generic-password" else (0, "", "")
 
     with pytest.raises(KeychainError, match=REACH):
         store("s", "k", "SENTINEL_SECRET_V", run=lost)
@@ -142,3 +145,21 @@ def test_without_security_the_keychain_cannot_be_reached():
 def test_security_is_run_by_its_full_path(monkeypatch):
     monkeypatch.delenv("KITDEN_SECURITY")
     assert keychain.security_path() == "/usr/bin/security"
+
+
+def test_the_runner_returns_stderr_too(fake_keychain):
+    code, out, err = keychain.run_security(
+        ["find-generic-password", "-s", "kitden", "-a", "x/y", "-w"]
+    )
+    assert (code, out) == (44, "")
+    assert "could not be found" in err
+
+
+def test_a_release_ignores_the_stand_in_variables(monkeypatch):
+    # Whoever sets the gateway's environment must not choose the program that gets the secrets.
+    monkeypatch.setenv("KITDEN_SECURITY", "/tmp/x")
+    monkeypatch.setenv("KITDEN_SECRET_TOOL", "/tmp/x")
+    assert keychain.security_path() == "/tmp/x"  # a source checkout: the tests' stand-in
+    monkeypatch.setattr(keychain, "from_source", lambda: False)
+    assert keychain.security_path() == "/usr/bin/security"
+    assert keychain.secret_tool_path() == "/usr/bin/secret-tool"

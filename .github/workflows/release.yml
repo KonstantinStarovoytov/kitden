@@ -13,8 +13,13 @@ permissions:
   contents: read
 
 jobs:
+  # The checks run on macOS and on Ubuntu; only the macOS job builds the package.
   build:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -26,9 +31,32 @@ jobs:
         with:
           node-version: "25"
       - run: uv sync --locked
+      # Linux keeps server secrets in the desktop keyring through secret-tool.
+      - name: A keyring on the session bus (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq libsecret-tools gnome-keyring dbus
       - run: uv run ruff check .
       # The Python tests, with a floor on how much of the package they run.
       - run: uv run pytest -q --cov=kitden --cov-fail-under=94 --cov-report=term:skip-covered
+      # One real round trip through secret-tool, with the bus where a desktop session has it
+      # ($XDG_RUNTIME_DIR/bus). The keyring is unlocked with a throwaway password; secret-tool
+      # runs once by itself first, so a broken keyring shows its own error, not Kitden's.
+      - name: The real keyring (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          dbus-daemon --session --address="$DBUS_SESSION_BUS_ADDRESS" --fork
+          printf 'kitden-ci' | gnome-keyring-daemon --unlock --components=secrets
+          sleep 1
+          dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus.ListNames | grep -q org.freedesktop.secrets
+          printf 'ci' | secret-tool store --label=ci service kitden-ci account smoke
+          test "$(secret-tool lookup service kitden-ci account smoke)" = ci
+          secret-tool clear service kitden-ci account smoke
+          KITDEN_REAL_KEYRING=1 uv run pytest -q tests/unit/test_real_keyring.py -rs
       # The page's own tests, in Node with a stand-in DOM.
       - run: node --test tests/frontend/*.test.mjs
       # The page opens within its time budgets (docs/development.md, Speed).
@@ -36,21 +64,25 @@ jobs:
       # No dependency with a known vulnerability.
       - run: uv run --with pip-audit==2.10.1 pip-audit --progress-spinner off --skip-editable
       - name: The tag names the package version
-        if: startsWith(github.ref, 'refs/tags/')
+        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/')
         run: test "$GITHUB_REF_NAME" = "v$(uv version --short)"
       - name: The tag has release notes
-        if: startsWith(github.ref, 'refs/tags/')
+        if: runner.os == 'macOS' && startsWith(github.ref, 'refs/tags/')
         run: |
           test -s "docs/releases/$GITHUB_REF_NAME.md" || {
             echo "::error::Write docs/releases/$GITHUB_REF_NAME.md before you tag"
             exit 1
           }
       - run: uv build
+        if: runner.os == 'macOS'
       - name: The built files hold the package and nothing else
+        if: runner.os == 'macOS'
         run: scripts/check-dist.sh dist
       - name: The wheel runs outside the checkout
+        if: runner.os == 'macOS'
         run: uv run --isolated --no-project --with dist/*.whl -- kitden --version
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: runner.os == 'macOS'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: dist/

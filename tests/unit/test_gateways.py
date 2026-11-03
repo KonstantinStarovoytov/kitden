@@ -2,7 +2,7 @@ import stat
 
 import pytest
 
-from kitden.gateways import SETTINGS, add_gateway, load_gateways
+from kitden.gateways import SETTINGS_FILE, add_gateway, data_dir, load_gateways
 from kitden.model import Gateway, GatewayAuth
 
 URL = "http://127.0.0.1:12008/metamcp/dev/mcp"
@@ -14,8 +14,8 @@ def test_gateways_are_saved_privately_and_read_back(tmp_path):
     )
     add_gateway(tmp_path, gateway)
     assert load_gateways(tmp_path) == [gateway]
-    assert stat.S_IMODE((tmp_path / SETTINGS).stat().st_mode) == 0o600
-    assert stat.S_IMODE((tmp_path / SETTINGS).parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE((data_dir(tmp_path) / SETTINGS_FILE).stat().st_mode) == 0o600
+    assert stat.S_IMODE((data_dir(tmp_path) / SETTINGS_FILE).parent.stat().st_mode) == 0o700
 
 
 def test_the_same_url_replaces_the_old_entry(tmp_path):
@@ -60,7 +60,7 @@ def test_sign_in_details_keep_the_email_and_the_variable_name(tmp_path):
     assert load_gateways(tmp_path) == [gateway]
     assert gateway.managed
     assert not Gateway(url=URL).managed
-    assert "METAMCP_PW" in (tmp_path / SETTINGS).read_text()
+    assert "METAMCP_PW" in (data_dir(tmp_path) / SETTINGS_FILE).read_text()
 
 
 @pytest.mark.parametrize(

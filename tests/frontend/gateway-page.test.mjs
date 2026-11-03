@@ -119,7 +119,7 @@ const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js
 // gateway, github outside it.
 const tool = (name, state) => ({ name, title: null, state, effective: state, hint: 'reads', origin: 'default', origin_from: null });
 const VIEW = {
-  gateways: [{ id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this Mac', movable: true, servers: [
+  gateways: [{ id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this computer', movable: true, servers: [
     { name: 'files', kind: 'local', state: 'on', differs: false, origin: 'default', tools: 1, on_count: 1, on_in: 0, projects: 0, tool_list: [tool('read_file', 'on')] },
     { name: 'tracker', kind: 'remote', state: 'on', differs: false, origin: 'default', tools: 1, on_count: 1, on_in: 0, projects: 0, tool_list: [tool('list_issues', 'on')] },
   ] }],
@@ -1455,7 +1455,7 @@ test('the More door and the Add a server card let go of the selection, as + Add 
     else if (door === 'card') press(box, 'block:addslot:servers');
     else press(pages['#main'], 'add:servers');
     await done();
-    const local = walk(pages['#drawer']).find((n) => n.tagName === 'BUTTON' && n.textContent === 'On this Mac');
+    const local = walk(pages['#drawer']).find((n) => n.tagName === 'BUTTON' && n.textContent === 'On this computer');
     local.listeners.click[0]();
     await done();
     settle();

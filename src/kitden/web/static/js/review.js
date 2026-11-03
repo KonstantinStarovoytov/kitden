@@ -2,7 +2,7 @@
 // list before its row is added), what the page does after Apply all, and Undo.
 import { postJson } from "./api.js";
 import { backToDetails, clientName, KIND_WORDS } from "./details.js";
-import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPaths } from "./dom.js";
+import { $, $$, button, el, joinWords, plural, reportError, secretsWord, shortPath, shortPaths } from "./dom.js";
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
@@ -119,7 +119,7 @@ export function changeWords(change, previewBody) {
     "gateway.remove": `Remove ${server} from the Kitden gateway`,
     "gateway.put_back": `Put ${server} back in ${clients}`,
     "gateway.move_out": `Move ${server} out of the gateway into ${clients}`,
-    "gateway.keychain": `Move the secrets of ${server} to the Keychain`,
+    "gateway.keychain": `Move the secrets of ${server} to the ${secretsWord()}`,
     "gateway.sign_in": `Sign in to ${server} again`,
     "gateway.add": `Add ${added} to the Kitden gateway`,
     "skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`,
@@ -152,7 +152,7 @@ export function changeWords(change, previewBody) {
   } else if (change.action === "gateway.move_out") {
     what = `${verb} ${server} into ${clients}`;
   } else if (change.action === "gateway.keychain") {
-    what = `${verb} the secrets of ${server} to the Keychain`;
+    what = `${verb} the secrets of ${server} to the ${secretsWord()}`;
   } else if (change.action === "gateway.sign_in") {
     what = `${verb} to ${server} again`;
   } else if (change.action === "gateway.add") {

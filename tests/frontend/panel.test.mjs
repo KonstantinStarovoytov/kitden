@@ -23,7 +23,7 @@ const model = (gateways, local = []) => ({ gateways, groups: { move: [direct], l
 
 test('the Kitden gateway is offered first, a registered gateway second, never in its place', () => {
   assert.deepEqual(moveTargets(model([kitden, other, obot]), 'move'), [kitden, obot]);
-  // A local server starts a program on this Mac: only the Kitden gateway can hold it.
+  // A local server starts a program on this computer: only the Kitden gateway can hold it.
   assert.deepEqual(moveTargets(model([kitden, obot]), 'local'), [kitden]);
   assert.deepEqual(moveTargets(model([kitden, obot]), 'plugin'), []);
   assert.deepEqual(moveTargets(null, 'move'), []);
@@ -1499,4 +1499,16 @@ test("panel.js re-exports the dock's toast", async () => {
   const panel = await import('../../src/kitden/web/static/js/panel.js');
   assert.equal(panel.toast, dock.toast);
   assert.equal(panel.hideToast, dock.hideToast);
+});
+
+test('on Linux the held server offers to move its secrets to the keyring', async () => {
+  const { setSecretsWord } = await import('../../src/kitden/web/static/js/dom.js');
+  setSecretsWord('keyring');
+  try {
+    assert.equal(heldActions('files', ['codex'], true)[2].label, 'Move secrets to the keyring…');
+    const change = { action: 'gateway.keychain', steps: [{ client: 'kitden', name: 'files' }] };
+    assert.deepEqual(changeWords(change, { params: { server: 'files' } }), { title: 'Move the secrets of files to the keyring', done: 'Moved the secrets of files to the keyring' });
+  } finally {
+    setSecretsWord('Keychain');
+  }
 });

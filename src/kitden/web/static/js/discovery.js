@@ -54,7 +54,7 @@ function progress(label) {
 export function addModes(active, online, local) {
   const group = el("div", "discovery-modes");
   group.setAttribute("role", "group"); group.setAttribute("aria-label", "Find items");
-  for (const [id, label, action] of [["online", "Catalogs", online], ["local", "On this Mac", local]]) {
+  for (const [id, label, action] of [["online", "Catalogs", online], ["local", "On this computer", local]]) {
     const choice = button(label, action, "btn");
     choice.setAttribute("aria-pressed", String(active === id)); group.append(choice);
   }
@@ -76,7 +76,7 @@ export async function openDiscovery(kind = "all", options = {}) {
   if (!body.isConnected) return;
   loading.remove();
   if (data.offline) {
-    body.append(el("p", "muted", "This sample stays offline. Choose On this Mac to browse its items."));
+    body.append(el("p", "muted", "This sample stays offline. Choose On this computer to browse its items."));
     return;
   }
   const saved = sessions.get(kind);

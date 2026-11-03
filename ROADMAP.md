@@ -1,20 +1,57 @@
 # Kitden roadmap
 
-Last updated: 2026-11-02
+Last updated: 2026-11-03
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not released yet
+### 0.5.0
 
+- **Python servers from the catalog:** an Official MCP Registry server published only on PyPI
+  runs with `uvx name==version`, with its required values asked for as for npm. Without uv the
+  row says to install it. A server Kitden cannot add says why: "Only a Docker image",
+  "Only an .mcpb bundle" or "Only an SSE address".
+- **The band says what it left out:** on the Gateway map, servers outside the gateway that
+  cannot move in are counted in the hint, which points to their Details.
+- **Linux:** Kitden runs on a Linux desktop as on a Mac. Secrets go to the desktop keyring
+  through `secret-tool` (libsecret-tools); the page says "keyring" there and "this computer"
+  in place of "this Mac" on both systems. `install.sh` accepts Linux and installs Kitden from
+  PyPI by version, so git is no longer needed. CI runs every check on macOS and Ubuntu, with
+  one real keyring round trip.
+- **Homebrew:** `brew install konstantinstarovoytov/tap/kitden` installs Kitden without uv,
+  from a tap that follows PyPI releases on its own. The same formula can go to homebrew-core
+  once the repository passes its notability bar (225 stars for a submission by the author,
+  75 if someone else submits; checked 2026-11-03).
 - **Lean README:** the logo and slogan, then three scenes of the real page in light and dark,
   each with a line on what it shows, cropped to the part it is about and different in look: a still of what each agent
   loads, then two short animations, sharing servers across all agents and turning tools off.
   Animations are filmed one frame at a time, so the motion is even. Then the other features
   as benefits, why it is safe to use, what it needs, two commands and one line to update. Steps, privacy and limits moved to
   [the guide](docs/guide.md). `scripts/record_readme.py` makes the pictures again.
+- **Safer Apply** (review of 2026-11-03): any error during Apply now puts everything back,
+  and one restore action that fails no longer stops the others. A client command that fails
+  halfway is taken back too. "The original settings were restored" is said only when every
+  file reads back as it was; otherwise the error names each file that is not.
+  A secret that was already in the Keychain gets its old value back.
+  Each file is read again just before it is written, so a client that rewrites its file
+  during Apply (Claude Code does) keeps its change; if the entry itself changed, Apply stops.
+- **Sign-in checks stay outside:** when a server on the internet names an address on this
+  computer or a private network in its sign-in answers, Kitden does not fetch it. Such
+  addresses are found after the name is looked up, in every spelling (`127.1`, `0x7f.0.0.1`,
+  a name that points at `10.x`). A server added at a local address is still checked there.
+- **Gateway key stays put:** Kitden no longer follows a redirect or a proxy when it talks to
+  a gateway, so the Obot key and the MetaMCP sign-in go to the gateway's own address only.
+- **Fixed secret tool:** an installed Kitden always runs `/usr/bin/security` or
+  `/usr/bin/secret-tool`; the variables that point tests at stand-ins work only from a source
+  checkout.
+- **Stable tool names:** a tool's bare name in the gateway stays with the server that had it
+  (kept in `gateway-names.json`), so a server added later gets the `<server>_` name instead
+  and a client rule for `mcp__kitden__search` keeps meaning the same tool.
+- **Scan survives bad files:** a project file that is not UTF-8, nests too deep, is over
+  5 MB or is not a regular file (a FIFO) is shown as a problem of its own; the scan goes on
+  and lists everything else.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 
@@ -292,7 +329,7 @@ The parts, in order:
 
 - **Part 5, logins in one place,** so OAuth servers move into the gateway too. Its Keychain part
   is done.
-- **Part 7, Linux and Windows.**
+- **Part 7, Linux and Windows.** Linux is done (see Not released yet); Windows is next.
 
 Part 6, the Instructions tab and tool counts, is done.
 
@@ -368,3 +405,20 @@ Left for later in the alignment plan's phase notes:
   and the [final design](docs/research/visual-redesign-final-2026-10-23.md) in
   `design/kitden.pen`; prototype and test it before implementation.
 - A shared setup for a small team.
+
+### From the review of 2026-11-03, not checked line by line yet
+
+Ask before starting each one.
+
+- Undo removes gateway servers last, not first; an Undo that was blocked can be tried again.
+- A crash in the middle of Apply leaves no record: save the record as Applying before the first
+  change and look for such records at start.
+- A client command that times out can leave a child process holding the pipes and the write
+  lock: start it with no stdin, in its own process group, and stop the whole group.
+- Some file errors in Preview answer 500 instead of a plain refusal.
+- Secrets typed for a preview that is cancelled stay in memory.
+- Server details from a third-party `.mcp.json` follow the same local-address rule as the
+  sign-in checks.
+- The npm version check accepts `owner/repo` and `./dir`; accept exact versions only.
+- Adding the gateway overwrites a `settings.json` it cannot read.
+- File and gateway edits hide their values from `repr`.

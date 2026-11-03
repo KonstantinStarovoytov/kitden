@@ -146,6 +146,7 @@ from kitden.model import (
 )
 from kitden.redact import masked_command, redact_text
 from kitden.sign_in import SIGNED_OUT, SignIn, SignIns
+from kitden.system import secret_store_name
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
 from kitden.views.changes_view import change_entries
@@ -834,7 +835,7 @@ def create_app(
 
     async def about(request: Request) -> JSONResponse:
         """Kitden's version, and whether this is the demo; answers before the first scan."""
-        return JSONResponse({"version": __version__, "demo": demo})
+        return JSONResponse({"version": __version__, "demo": demo, "secrets": secret_store_name()})
 
     async def clients(request: Request) -> JSONResponse:
         return JSONResponse(state.data["clients"])

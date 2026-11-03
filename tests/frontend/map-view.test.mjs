@@ -1714,7 +1714,7 @@ test('the tools of a server that folds shrink back with no leaving look, and no 
 
 test("the gateway's numbers roll when they change", async () => {
   const gate = (clients, servers, on) => ({ columns: TREE.columns, links: [], blocks: [
-    { id: 'g1', column: 'a', kind: 'gateway', name: 'Kitden gateway', meta: 'On this Mac', lamp: 'on', stats: [{ icon: 'monitor', words: clients }, { icon: 'server', words: servers }] },
+    { id: 'g1', column: 'a', kind: 'gateway', name: 'Kitden gateway', meta: 'On this computer', lamp: 'on', stats: [{ icon: 'monitor', words: clients }, { icon: 'server', words: servers }] },
     { id: 's1', column: 'b', kind: 'held', name: 'github', meta: on, lamp: 'on', state: 'on' },
   ] });
   const v = view();
@@ -1743,7 +1743,7 @@ test("the gateway's numbers roll when they change", async () => {
 });
 
 test('a count rolls only from its own old value, when another count comes or goes before it', async () => {
-  const gate = (stats) => ({ columns: TREE.columns, links: [], blocks: [{ id: 'g1', column: 'a', kind: 'gateway', name: 'Kitden gateway', meta: 'On this Mac', lamp: 'on', stats }] });
+  const gate = (stats) => ({ columns: TREE.columns, links: [], blocks: [{ id: 'g1', column: 'a', kind: 'gateway', name: 'Kitden gateway', meta: 'On this computer', lamp: 'on', stats }] });
   const servers = { icon: 'server', words: '2 servers' };
   const v = view();
   const show = (m, motion) => v.draw(m, layoutTree(m, { open: new Set(), narrow: false }), { motion });

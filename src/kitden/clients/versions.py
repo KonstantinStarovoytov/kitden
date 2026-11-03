@@ -5,6 +5,8 @@ import re
 import shutil
 from collections.abc import Callable, Iterable
 
+from kitden import system
+
 # Lowest version each adapter is tested with.
 MINIMUM_VERSIONS: dict[str, str] = {
     "claude_code": "2.1.283",
@@ -13,19 +15,15 @@ MINIMUM_VERSIONS: dict[str, str] = {
     "cursor": "3.21.16",
 }
 
-# Executable on PATH first, then known install locations.
-_COMMANDS: dict[str, tuple[str, tuple[str, ...]]] = {
-    "claude_code": ("claude", ()),
-    "codex": ("codex", ("/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",)),
-    "cursor": ("cursor", ("/Applications/Cursor.app/Contents/Resources/app/bin/cursor",)),
-}
+# Each client's command; on PATH first, then where kitden.system says its app keeps it.
+_COMMANDS: dict[str, str] = {"claude_code": "claude", "codex": "codex", "cursor": "cursor"}
 
 _VERSION = re.compile(r"\b(\d+(?:\.\d+)+)\b")
 
 
 def app_commands(name: str) -> tuple[str, ...]:
     """Where an app keeps a client's command when it is not on PATH (Codex in ChatGPT.app)."""
-    return next((paths for command, paths in _COMMANDS.values() if command == name), ())
+    return system.app_commands(name)
 
 
 def parse_version(output: str) -> str | None:
@@ -58,6 +56,6 @@ def version_command(
     """Command that prints the client's version, or None if the client is not found."""
     if client not in _COMMANDS:
         return None
-    name, fallbacks = _COMMANDS[client]
-    path = which(name) or next((p for p in fallbacks if exists(p)), None)
+    name = _COMMANDS[client]
+    path = which(name) or next((p for p in app_commands(name) if exists(p)), None)
     return [path, "--version"] if path else None

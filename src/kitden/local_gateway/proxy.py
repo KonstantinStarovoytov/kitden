@@ -59,6 +59,7 @@ from mcp_types import (
 )
 
 from kitden import sign_in
+from kitden.changes.atomic import RefusedWriteError
 from kitden.gateways import data_dir
 from kitden.local_gateway import oauth
 from kitden.local_gateway.keychain import KeychainError, is_reference, resolve_entry
@@ -70,8 +71,10 @@ from kitden.local_gateway.settings import (
     count_call,
     fill_placeholders,
     is_allowed,
+    load_names,
     load_settings,
     load_tools,
+    save_names,
     save_tools,
     servers_on,
 )
@@ -97,23 +100,35 @@ HTTP_CODES = SDK_CODES | {PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INTERN
 
 
 def exposed_names(
-    tools: dict[str, list[dict]], taken: Iterable[str] = ()
+    tools: dict[str, list[dict]], taken: Iterable[str] = (), kept: dict[str, str] | None = None
 ) -> dict[str, tuple[str, str]]:
     """The name each tool is offered under → (server, tool).
 
     `tools` are every held server's known tools, on or off, so a name always means the same tool
-    in every project. Servers go in name order. A tool keeps its name unless an earlier server has
-    it or the name is `taken` (Kitden's own tools); then it gets `<server>_` in front. A name over
-    54 characters, or a `<server>_<tool>` that is in use too, becomes its first 45 characters, "_"
-    and the first 8 hex characters of its SHA-1; when that is in use too, of the name with "#2",
-    "#3" and so on. So no name is given twice and no tool is left out. In the prefix, each
-    character a tool name may not have becomes "_".
+    in every project. `kept` are the bare names given before → their server: such a name stays
+    with its server, so a server added later cannot take it (a client rule that allows
+    `mcp__kitden__search` must keep meaning the same tool). A kept name of a server whose tools
+    are not known now is left free. The other tools go by server, in name order. A tool keeps
+    its name unless it is in use or `taken` (Kitden's own tools); then it gets `<server>_` in
+    front. A name over 54 characters, or a `<server>_<tool>` that is in use too, becomes its
+    first 45 characters, "_" and the first 8 hex characters of its SHA-1; when that is in use
+    too, of the name with "#2", "#3" and so on. So no name is given twice and no tool is left
+    out. In the prefix, each character a tool name may not have becomes "_".
     """
     names: dict[str, tuple[str, str]] = {}
     used = set(taken)
+    for name, server in (kept or {}).items():
+        if name in used:
+            continue
+        if server not in tools or any(t["name"] == name for t in tools[server]):
+            used.add(name)
+            if server in tools:
+                names[name] = (server, name)
     for server in sorted(tools):
         for tool in tools[server]:
             name = tool["name"]
+            if names.get(name) == (server, name):
+                continue
             if name in used:
                 name = f"{NOT_IN_NAMES.sub('_', server)}_{name}"
             seed, tries = name, 0
@@ -125,6 +140,16 @@ def exposed_names(
             names[name] = (server, tool["name"])
             used.update((tool["name"], name))
     return names
+
+
+def bare_names(
+    names: dict[str, tuple[str, str]], kept: dict[str, str], held: Iterable[str]
+) -> dict[str, str]:
+    """The bare names to keep: those given now, and the kept ones of servers whose tools are not
+    known now (`held` are the servers whose tools are)."""
+    held = set(held)
+    still = {name: server for name, server in kept.items() if server not in held}
+    return still | {name: server for name, (server, tool) in names.items() if name == tool}
 
 
 class UpstreamError(Exception):
@@ -483,7 +508,16 @@ class _Gateway:
         found = {(server, t["name"]): t for server, listed in allowed.items() for t in listed}
         # Names come from every held server's tools, so they do not change with the project.
         held = {server: tools[server] for server in self.settings["servers"] if server in tools}
-        names = exposed_names(held, taken=[t.name for t in await self.own.list_tools()])
+        # A bare name stays with the server that had it, while that server is held.
+        saved = load_names(self.home)
+        kept = {n: s for n, s in saved.items() if s in self.settings["servers"]}
+        own = [t.name for t in await self.own.list_tools()]
+        names = exposed_names(held, taken=own, kept=kept)
+        if (bare := bare_names(names, kept, held)) != saved:
+            try:
+                await anyio.to_thread.run_sync(save_names, self.home, bare)
+            except (OSError, RefusedWriteError):
+                _say("Kitden could not keep the tool names; they may change when servers change.")
         self.names = {name: key for name, key in names.items() if key in found}
         return [_tool(name, found[key]) for name, key in self.names.items()]
 

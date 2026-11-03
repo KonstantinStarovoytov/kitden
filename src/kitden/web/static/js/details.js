@@ -1,7 +1,7 @@
 // The parts every Details card shares: the card itself (detailsCard), its facts, buttons and More,
 // Technical details, the buttons and switches that follow the tray, and the way back from a step
 // (keepFrom, backToDetails). Gateway and Library Details are drawn from them.
-import { $, $$, button, el, joinWords, reportError, shortPath, withFocusKey } from "./dom.js";
+import { $, $$, button, el, joinWords, reportError, secretsWord, shortPath, withFocusKey } from "./dom.js";
 import { fold } from "./motion.js";
 import { header, isPanelOpen, isQuiet, openInfo, panelState } from "./panel.js";
 import { ALL_PROJECTS, byClientOrder, callout, CLIENT_NAMES, folderName, gatewayName, ROUTE_WORDS, WRITABLE } from "./parts.js";
@@ -24,7 +24,7 @@ const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 export const clientName = (id) => CLIENT_NAMES[id] || id;
 
 // The gateways that can take the direct servers of one group of the Gateway page, in the order
-// offered: the Kitden gateway first (it runs on this Mac, so it also takes local servers), then
+// offered: the Kitden gateway first (it runs on this computer, so it also takes local servers), then
 // each registered gateway that takes servers (remote ones only).
 export function moveTargets(model, group) {
   if (!model) return [];
@@ -46,7 +46,7 @@ export function moveBody(gateway, items) {
 export function moveInto(gateways, items, title) {
   if (gateways.length === 1) return review(moveBody(gateways[0], items));
   const body = el("div", "body");
-  body.append(el("p", "muted", "More than one gateway can take it. The Kitden gateway runs on this Mac and turns tools on or off per project."));
+  body.append(el("p", "muted", "More than one gateway can take it. The Kitden gateway runs on this computer and turns tools on or off per project."));
   const into = (gateway) => (gateway.kind === "kitden" ? "the Kitden gateway" : gatewayName(gateway));
   // The primary button sits last, so the Kitden gateway is drawn last.
   const choices = gateways.map((gateway, i) => previewButton(`Move into ${into(gateway)}…`, moveBody(gateway, items), { look: i === 0 ? "btn primary" : "btn" }));
@@ -64,7 +64,7 @@ export function heldActions(server, clients, plain = false) {
       label: `Put back in ${CLIENT_NAMES[client]}…`,
       body: { action: "gateway.put_back", targets: [{ client }], params: { server } },
     })),
-    ...(plain ? [{ label: "Move secrets to the Keychain…", body: { action: "gateway.keychain", targets: [], params: { server } } }] : []),
+    ...(plain ? [{ label: `Move secrets to the ${secretsWord()}…`, body: { action: "gateway.keychain", targets: [], params: { server } } }] : []),
   ];
 }
 
@@ -208,7 +208,7 @@ function scopeIn(def, user, project) {
   return {
     user,
     project,
-    local: folder ? `Only on this Mac · ${folder}` : "Only on this Mac",
+    local: folder ? `Only on this computer · ${folder}` : "Only on this computer",
     plugin: "From a plugin",
     account: "Claude account",
     managed: "Managed by your organization",

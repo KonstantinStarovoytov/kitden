@@ -3,14 +3,12 @@
 # It never changes anything in Claude Code, Codex or Cursor.
 $ErrorActionPreference = "Stop"
 
-$KitdenRef = "v0.4.0"
-$KitdenSource = "git+https://github.com/KonstantinStarovoytov/kitden@$KitdenRef"
-$FollowUp = "https://github.com/KonstantinStarovoytov/kitden#linux-and-windows"
+$KitdenVersion = "0.5.0"
 
 # 1. Windows support is a later feature. Steps 2 to 5 run once it lands.
 $WindowsSupported = $false
 if (-not $WindowsSupported) {
-    Write-Host "Kitden runs on macOS today. Linux and Windows are coming: $FollowUp. Nothing was installed."
+    Write-Host "Kitden runs on macOS and Linux. Windows is coming. Nothing was installed."
     exit 1
 }
 
@@ -32,7 +30,7 @@ if ($uvCommand) {
 
 # 3. Install or update Kitden in its own environment.
 Write-Host "Installing Kitden..."
-& $uv tool install $KitdenSource
+& $uv tool install --python 3.13 "kitden==$KitdenVersion"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Could not install Kitden. See the uv output above."
     exit 3

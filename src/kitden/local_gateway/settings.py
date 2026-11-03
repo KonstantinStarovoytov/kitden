@@ -23,6 +23,8 @@ from kitden.model import Change, FileEdit, Scope, Step
 SETTINGS_FILE = "gateway.json"
 TOOLS_FILE = "gateway-tools.json"
 CALLS_FILE = "gateway-calls.json"
+# Which server each bare tool name belongs to, so a server added later cannot take it.
+NAMES_FILE = "gateway-names.json"
 CLIENT = "kitden"
 STATES = ("on", "off")
 # A Codex entry's own start time; the move carries it and the gateway waits that long.
@@ -107,6 +109,18 @@ def save_tools(home: Path, server: str, tools: list[dict]) -> None:
         for tool in tools
     ]
     write_atomic(folder / TOOLS_FILE, json.dumps(cache, indent=2).encode())
+
+
+def load_names(home: Path) -> dict[str, str]:
+    """Each bare tool name the gateway gave → the server it belongs to."""
+    data = read_object(data_dir(home) / NAMES_FILE)
+    return {name: server for name, server in data.items() if isinstance(server, str)}
+
+
+def save_names(home: Path, names: dict[str, str]) -> None:
+    """Keep the bare tool names. Like the tool cache, no lock: the write is atomic, and every
+    gateway works the names out the same way."""
+    write_atomic(private_data_dir(home) / NAMES_FILE, json.dumps(names, indent=2).encode())
 
 
 def load_calls(home: Path) -> dict[str, dict[str, dict]]:
