@@ -432,7 +432,3 @@ Left for later in the alignment plan's phase notes:
   `design/kitden.pen`; prototype and test it before implementation.
 - A shared setup for a small team.
 
-### From the review of 2026-11-03, not checked line by line yet
-
-Ask before starting each one.
-
