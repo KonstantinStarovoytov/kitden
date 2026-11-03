@@ -23,6 +23,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   helper it started keeps the pipes or the write lock.
 - **Cancel forgets secrets:** cancelling a preview clears the secrets typed for it: Keychain
   values, and the secret parts of new file entries and gateway servers.
+- **Plugin servers stay outside too:** a server from a plugin's `.mcp.json` or a catalog row
+  whose address is on this computer or a private network is not asked before Apply; the
+  gateway reaches it only once you apply. Project files were already never moved.
 
 ### 0.5.0
 
@@ -430,5 +433,3 @@ Ask before starting each one.
 - Undo removes gateway servers last, not first; an Undo that was blocked can be tried again.
 - A crash in the middle of Apply leaves no record: save the record as Applying before the first
   change and look for such records at start.
-- Server details from a third-party `.mcp.json` follow the same local-address rule as the
-  sign-in checks.
