@@ -29,6 +29,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   halfway is taken back too. "The original settings were restored" is said only when every
   file reads back as it was; otherwise the error names each file that is not.
   A secret that was already in the Keychain gets its old value back.
+  Each file is read again just before it is written, so a client that rewrites its file
+  during Apply (Claude Code does) keeps its change; if the entry itself changed, Apply stops.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 

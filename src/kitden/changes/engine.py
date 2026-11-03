@@ -718,10 +718,7 @@ class Engine:
             self._log(change)
             return change
 
-        saved = self.store.backup(change.id, current)
-        for step in file_steps:
-            copy = saved[step.edit.path]
-            step.edit.backup_path = str(copy) if copy else None
+        self._back_up(change.id, file_steps, current)
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
         tick = self._counter(change)
@@ -743,8 +740,21 @@ class Engine:
             # Steps on one file run in order, each on the result of the one before.
             working = dict(current)
             expected: dict[str, bytes | None] = {}
+            written: set[str] = set()
             for step in file_steps:
                 path = step.edit.path
+                fresh = _read(path)
+                if fresh != working[path]:
+                    # The client wrote the file during Apply (Claude Code rewrites its file
+                    # often). Kitden goes on from those bytes only if the entry is still as
+                    # previewed; a file Kitden has not written yet is restored to them.
+                    if path not in written:
+                        current[path] = fresh
+                        self._back_up(change.id, file_steps, current)
+                    if reason := self._stale(step, fresh):
+                        raise _ApplyError(reason)
+                    working[path] = fresh
+                written.add(path)
                 ran.append(step)  # first: a command that fails halfway is taken back too
                 result = self._apply_step(step, working[path])
                 working[path] = result if result is not None else _read(path)
@@ -770,6 +780,15 @@ class Engine:
         change.move_to(ChangeState.VERIFIED)
         self._finish(change)
         return change
+
+    def _back_up(
+        self, change_id: str, file_steps: list[Step], current: dict[str, bytes | None]
+    ) -> None:
+        """Save each file's bytes as the change's backup, which Undo restores."""
+        saved = self.store.backup(change_id, current)
+        for step in file_steps:
+            copy = saved[step.edit.path]
+            step.edit.backup_path = str(copy) if copy else None
 
     def _roll_back(
         self,

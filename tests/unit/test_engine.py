@@ -1162,3 +1162,49 @@ def test_a_failed_apply_puts_back_the_old_keychain_value(tmp_path, config):
     assert change.state is ChangeState.RESTORED
     assert json.loads(items.read_text()) == {"kitden gw/GW_KEY": "A"}
     assert step.keychain[0].old is None and step.keychain[0].value == ""
+
+
+# The client writes its file during Apply (review 2026-11-03) --------------------------------
+
+
+def test_a_client_write_during_apply_is_kept(tmp_path, fake, claude_json):
+    engine, gateway = gateway_engine(tmp_path, fake)
+    edit = FileEdit(
+        path=str(claude_json), fmt="json", key=("mcpServers", "old"), after=ABSENT, check="entry"
+    )
+    step = Step(client="claude_code", scope=Scope.USER, name="old", edit=edit)
+    change = engine.preview("gateway.move", [gateway_step(gateway), step])
+    real = engine._apply_gateway
+
+    def apply_gateway(steps, tick):  # Claude Code writes its file meanwhile
+        real(steps, tick)
+        data = json.loads(claude_json.read_text())
+        data["numStartups"] = 2
+        claude_json.write_text(json.dumps(data, indent=2))
+
+    engine._apply_gateway = apply_gateway
+    engine.apply(change.id)
+    assert change.state is ChangeState.VERIFIED, change.error
+    assert json.loads(claude_json.read_text()) == {"numStartups": 2, "mcpServers": {}}
+
+
+def test_a_client_write_to_the_entry_during_apply_stops_it(tmp_path, fake, claude_json):
+    engine, gateway = gateway_engine(tmp_path, fake)
+    edit = FileEdit(
+        path=str(claude_json), fmt="json", key=("mcpServers", "old"), after=ABSENT, check="entry"
+    )
+    step = Step(client="claude_code", scope=Scope.USER, name="old", edit=edit)
+    change = engine.preview("gateway.move", [gateway_step(gateway), step])
+    real = engine._apply_gateway
+    newer = {"numStartups": 2, "mcpServers": {"old": {"command": "y"}}}
+
+    def apply_gateway(steps, tick):
+        real(steps, tick)
+        claude_json.write_text(json.dumps(newer))
+
+    engine._apply_gateway = apply_gateway
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED
+    assert "changed since preview" in change.error
+    assert json.loads(claude_json.read_text()) == newer
+    assert fake.held_names() == []
