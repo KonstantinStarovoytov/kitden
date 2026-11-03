@@ -64,7 +64,7 @@ const CLIENTS = [
   { id: 'cursor', status: 'found', version: '3.21.16', app_url: null },
 ];
 const FOUND = ['claude_code', 'codex', 'cursor'];
-const KITDEN = { id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this Mac', movable: true, servers: [{ name: 'files', kind: 'local', state: 'on' }, { name: 'tracker', kind: 'remote', state: 'on' }] };
+const KITDEN = { id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this computer', movable: true, servers: [{ name: 'files', kind: 'local', state: 'on' }, { name: 'tracker', kind: 'remote', state: 'on' }] };
 const row = (name, client, items, fields = {}) => ({ name, clients: [client], columns: [client], items, client_items: { [client]: items }, stays: null, ...fields });
 const GITHUB = row('github', 'claude_code', ['g']);
 const DOCS = row('docs', 'claude_code', ['a']);
@@ -150,7 +150,7 @@ test('a server that stays says why instead of Move', () => {
 
 test('a connected client offers Disconnect, a free one Connect', () => {
   const codex = clientCard('codex', { setup: SETUP, clients: CLIENTS, view: VIEW });
-  assert.deepEqual([codex.kind, codex.title, codex.id], ['Client', 'Codex', 'Version 0.159.2 · on this Mac']);
+  assert.deepEqual([codex.kind, codex.title, codex.id], ['Client', 'Codex', 'Version 0.159.2 · on this computer']);
   assert.ok(codex.tile.childNodes[0].className.startsWith('client-mark'));
   assert.deepEqual(mainOf(codex), [['Disconnect from the gateway…', false], ['See what it loads in Library', false]]);
   assert.deepEqual(codex.actions[0].body, DISCONNECT('codex'));
@@ -170,17 +170,17 @@ test('a connected client offers Disconnect, a free one Connect', () => {
   assert.ok(old.why.startsWith('Codex has an old Kitden entry, so it does not use the gateway yet.'), old.why);
   // A found client whose version is not read says so in its own words.
   const quiet = clientCard('cursor', { setup: SETUP, clients: [{ id: 'cursor', status: 'found', version: null }], progress: null, view: VIEW });
-  assert.equal(quiet.id, 'Version not known · on this Mac');
+  assert.equal(quiet.id, 'Version not known · on this computer');
   const reading = clientCard('cursor', { setup: SETUP, clients: [{ id: 'cursor', status: 'found', version: null }], progress: { steps: [{ name: 'client versions', done: false }] }, view: VIEW });
-  assert.equal(reading.id, 'Checking the version… · on this Mac');
+  assert.equal(reading.id, 'Checking the version… · on this computer');
   // A plugin gives Cursor its entry: Kitden cannot take it out, and says how.
   const plugin = clientCard('cursor', { setup: [entry('cursor', 'plugin')], clients: CLIENTS, view: VIEW });
   assert.deepEqual([labels(plugin), facts(plugin)[0]], [['See what it loads in Library'], ['Gateway', 'Connected']]);
   assert.ok(plugin.why.endsWith('Cursor gets Kitden from a plugin: turn the plugin off to disconnect it.'), plugin.why);
-  // Not on this Mac: nothing to connect, and the panel says why.
+  // Not on this computer: nothing to connect, and the panel says why.
   const gone = clientCard('cursor', { setup: [entry('cursor', 'not_installed', { enabled: null })], clients: [{ id: 'cursor', status: 'not_found', version: null }], view: VIEW });
   assert.deepEqual([gone.id, labels(gone)], ['Not installed', ['See what it loads in Library']]);
-  assert.ok(gone.why.startsWith('Kitden did not find Cursor on this Mac, so it cannot connect it.'), gone.why);
+  assert.ok(gone.why.startsWith('Kitden did not find Cursor on this computer, so it cannot connect it.'), gone.why);
   // Its own entry off: Claude Code and Cursor keep that switch in their own settings (docs checked
   // 2026-10-24); Codex turns it on again in a review, under More.
   const off = clientCard('claude_code', { setup: [entry('claude_code', 'added', { enabled: false })], clients: CLIENTS, view: VIEW });
@@ -260,7 +260,7 @@ test("the gateway panel's server count follows the tray", async () => {
 
 test('the gateway panel lists every client with its own button', async () => {
   const card = gatewayCard(KITDEN_TOOLS, { view: VIEW_TOOLS, setup: SETUP, projects: PROJECTS, clients: FOUND });
-  assert.deepEqual([card.kind, card.title, card.id], ['Gateway', 'Kitden gateway', 'On this Mac']);
+  assert.deepEqual([card.kind, card.title, card.id], ['Gateway', 'Kitden gateway', 'On this computer']);
   assert.equal(card.tile.childNodes[0].className, 'p-house');
   assert.deepEqual(facts(card), [['Servers', '2 in the gateway · 4 outside'], ['Tools', '3 of 6 on']]);
   const [head, list] = card.list.children;
@@ -288,12 +288,12 @@ test('the gateway panel lists every client with its own button', async () => {
   assert.deepEqual(facts(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: PROJECTS, clients: FOUND })).at(-1), ['Tools', 'Not known yet']);
   const empty = gatewayCard({ ...KITDEN, servers: [] }, { view: { ...VIEW, groups: { move: [], local: [], plugin: [] } }, setup: SETUP, projects: [], clients: FOUND });
   assert.deepEqual([facts(empty), moreLabels(empty)], [[['Servers', '0 in the gateway · 0 outside'], ['Tools', 'Nothing yet']], ['Add a server…', 'Add another gateway…']]);
-  // A client a plugin connects, or one not on this Mac, has no button.
+  // A client a plugin connects, or one not on this computer, has no button.
   const plugin = gatewayCard(KITDEN, { view: VIEW, setup: [entry('claude_code', 'plugin'), entry('codex', 'not_installed', { enabled: null }), entry('cursor', 'missing')], projects: PROJECTS, clients: FOUND });
   assert.deepEqual(plugin.list.children[1].children.map((r) => r.children.length), [2, 2, 3]);
   // A row with no button says why in its small line.
   const smallOf = (card) => card.list.children[1].children.map((r) => textOf(r.children[1].children[1]));
-  assert.deepEqual(smallOf(plugin), ['Connected · from a plugin', 'Not connected · not on this Mac', 'Not connected']);
+  assert.deepEqual(smallOf(plugin), ['Connected · from a plugin', 'Not connected · not on this computer', 'Not connected']);
   const off = gatewayCard(KITDEN, { view: VIEW, setup: [entry('claude_code', 'added', { enabled: false }), entry('codex', 'not_installed', { enabled: null }), entry('cursor', 'old', { item: 'cursor:agentsetup' })], clients: FOUND, clientList: [{ id: 'codex', status: 'unreadable' }] });
   assert.deepEqual(smallOf(off), ['Not connected · its entry is off', 'Not connected · settings not readable', 'Not connected']);
   // An old entry is updated, not connected.

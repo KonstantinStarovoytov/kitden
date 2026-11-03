@@ -30,7 +30,7 @@ test('a section title names only a known client as the owner of a folder', () =>
   assert.equal(scopeWords({ scope: 'user', client: 'cursor', owner_client: 'kitden', via_gateway: 'kitden' }, null), 'All projects');
   assert.equal(fileScopeWords({ scope: 'user', client: 'cursor', owner_client: 'shared' }), 'Global settings');
   assert.equal(fileScopeWords({ scope: 'user', client: 'cursor', owner_client: 'claude_code' }), 'Global settings · via Claude Code');
-  assert.equal(fileScopeWords({ scope: 'local', client: 'claude_code', owner_client: 'claude_code', project: site }), 'Only on this Mac · website');
+  assert.equal(fileScopeWords({ scope: 'local', client: 'claude_code', owner_client: 'claude_code', project: site }), 'Only on this computer · website');
   assert.equal(fileScopeWords({ scope: 'project', client: 'claude_code', owner_client: 'claude_code', project: site }), 'Project website');
 });
 

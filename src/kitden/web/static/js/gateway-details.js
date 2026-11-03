@@ -25,7 +25,7 @@ const disconnectNote = (name) => `${name} loses the Kitden gateway's servers and
 export const KIND = { client: "Client", gateway: "Gateway", server: "Server", tool: "Tool", connection: "Connection", add: "Gateway" };
 // What a server outside the gateway is, by the Gateway's group for it.
 const GROUP_KINDS = { move: "Remote", local: "Local", plugin: "From a plugin" };
-// The icon of a server, by what it is: one reached over the network, one that runs on this Mac,
+// The icon of a server, by what it is: one reached over the network, one that runs on this computer,
 // one that comes with a plugin (Kitden knows no icon of a server's own); and of a server outside
 // the gateway, by its group. The map and the panels show the same.
 export const SERVER_ICONS = { remote: "globe", local: "hard-drive", plugin: "package-open" };
@@ -107,7 +107,7 @@ function waitWords(key, words) {
 // What connects a client to the Kitden gateway, or takes it off again, by its kitden entry (its row
 // in the setup): `{ connect, update, body }`, Connect being the entry's set up (`update` for an old
 // entry, which it replaces) and Disconnect its removal (Task 1). Null where Kitden cannot do
-// either: the setup was not read, a plugin gives the entry, the client is not on this Mac, or its
+// either: the setup was not read, a plugin gives the entry, the client is not on this computer, or its
 // own entry is turned off.
 export function connectAction(client, setup) {
   const entry = (setup || []).find((e) => e.client === client);
@@ -134,7 +134,7 @@ export function connectBody(client, setup) {
 // the scan's `found`). Null where it has a button, or Kitden cannot say.
 function noButtonWords(entry, found) {
   if (!entry) return null;
-  if (entry.state === "not_installed") return found && found.status === "unreadable" ? "settings not readable" : "not on this Mac";
+  if (entry.state === "not_installed") return found && found.status === "unreadable" ? "settings not readable" : "not on this computer";
   if (entry.enabled === false) return "its entry is off";
   return entry.state === "plugin" ? "from a plugin" : null;
 }
@@ -154,13 +154,13 @@ function throughKitden(view) {
 
 // Clients ------------------------------------------------------------------------------------
 
-// Under a client's name: its version on this Mac, or why there is none: still read in the
+// Under a client's name: its version on this computer, or why there is none: still read in the
 // background, or not known.
 function clientWhere(found, progress) {
   if (!found || found.status === "not_found") return STATE_WORDS.missing;
   if (found.status === "unreadable") return STATE_WORDS.unread;
-  if (found.version) return `Version ${found.version} · on this Mac`;
-  return versionsOpen(progress) ? "Checking the version… · on this Mac" : "Version not known · on this Mac";
+  if (found.version) return `Version ${found.version} · on this computer`;
+  return versionsOpen(progress) ? "Checking the version… · on this computer" : "Version not known · on this computer";
 }
 
 // The clients whose own kitden entry Kitden turns on again, by the key their docs name: the twin
@@ -221,14 +221,14 @@ function throughSay(name, through, place) {
 }
 
 // What the client panel says (gateway-notes 3.5): whether the client calls servers through Kitden,
-// so its rules apply, or why not (not on this Mac, its entry off); the servers it sets up on its
+// so its rules apply, or why not (not on this computer, its entry off); the servers it sets up on its
 // own, which skip those rules; and why there is no Disconnect for a plugin's entry.
 function clientSay(name, { known, on, entry, found, turnsOn, through, place, own }) {
   if (!known) return "Kitden could not read which clients use it.";
   let said = { say: `${name} does not use the Kitden gateway yet.`, rules: false };
   if (entry && entry.state === "not_installed") {
     const unread = found && found.status === "unreadable";
-    said.say = unread ? `Kitden could not read ${name}'s settings, so it cannot connect it.` : `Kitden did not find ${name} on this Mac, so it cannot connect it.`;
+    said.say = unread ? `Kitden could not read ${name}'s settings, so it cannot connect it.` : `Kitden did not find ${name} on this computer, so it cannot connect it.`;
   } else if (on) said = throughSay(name, through, place);
   else if (entry && entry.state === "old") said.say = `${name} has an old Kitden entry, so it does not use the gateway yet.`;
   else if (entry && entry.enabled === false) {

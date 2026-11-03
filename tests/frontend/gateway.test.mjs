@@ -108,7 +108,7 @@ test('a selected server the Kitden gateway holds opens in its own panel', () => 
 // (local); github in Claude Code; Cursor's direct files.
 const tool = (name, state, hint, fields = {}) => ({ name, title: null, state, effective: state, hint, origin: 'default', origin_from: null, ...fields });
 const MEDIUM_VIEW = {
-  gateways: [{ id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this Mac', movable: true, servers: [
+  gateways: [{ id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this computer', movable: true, servers: [
     { name: 'files', kind: 'local', state: 'on', differs: false, origin: 'default', tools: 4, on_count: 3, on_in: 0, projects: 2, tool_list: [
       tool('read_file', 'on', 'reads'), tool('write_file', 'on', 'writes'), tool('delete_file', 'off', 'may write', { origin: 'global' }), tool('search_files', 'on', 'unknown'),
     ] },
@@ -341,7 +341,7 @@ test('the large sample opens in List', () => {
 // A first run: every client found, none with a kitden entry, an empty Kitden gateway, and two
 // servers each client set up on its own.
 const FIRST_RUN_VIEW = {
-  gateways: [{ id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this Mac', movable: true, servers: [] }],
+  gateways: [{ id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this computer', movable: true, servers: [] }],
   connections: { kitden: { claude_code: [], codex: [], cursor: [] } },
   used: [],
   groups: {
@@ -448,9 +448,9 @@ test('a gateway block speaks no state word, and one Kitden could not read is not
   // Its words say where it runs and its clients and servers: an "On" beside them would say more
   // than Kitden knows.
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);
-  assert.equal(blockLabel(block(tree, 'gateway:kitden')), 'Kitden gateway, On this Mac, 2 clients · 2 servers');
+  assert.equal(blockLabel(block(tree, 'gateway:kitden')), 'Kitden gateway, On this computer, 2 clients · 2 servers');
   const none = ['claude_code', 'codex', 'cursor'].map((c) => entry(c, 'missing'));
-  assert.equal(blockLabel(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: none }), 'gateway:kitden')), 'Kitden gateway, On this Mac, 0 clients · 2 servers');
+  assert.equal(blockLabel(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: none }), 'gateway:kitden')), 'Kitden gateway, On this computer, 0 clients · 2 servers');
   const broken = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [], problem: 'Kitden could not read the gateway settings.' }] };
   const unread = block(gatewayTree(broken, OPTS), 'gateway:kitden');
   assert.equal(unread.state, 'unk');
@@ -2257,10 +2257,10 @@ test('a client that has the name refuses before the drop, with the reason, and s
     };
     // Cursor sets up its own files.
     await refused('held:kitden:files', CLIENTS, 'Cursor already has files.');
-    // Cursor is not on this Mac.
+    // Cursor is not on this computer.
     const away = CLIENTS.map((c) => (c.id === 'cursor' ? { ...c, status: 'missing' } : c));
-    await refused('held:kitden:tracker', away, 'Cursor is not on this Mac.');
-    // Cursor is on this Mac but its settings cannot be read: the panel's reason, not "not on this Mac".
+    await refused('held:kitden:tracker', away, 'Cursor is not on this computer.');
+    // Cursor is on this computer but its settings cannot be read: the panel's reason, not "not on this computer".
     const unreadable = CLIENTS.map((c) => (c.id === 'cursor' ? { ...c, status: 'unreadable' } : c));
     await refused('held:kitden:tracker', unreadable, "Cursor's settings are not readable.");
   } finally {
@@ -2699,9 +2699,9 @@ test('a server block carries its lamp and on count', () => {
 test('the gateway block counts clients and servers, one in the singular', () => {
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);
   const kitden = block(tree, 'gateway:kitden');
-  assert.deepEqual([kitden.meta, kitden.lamp, kitden.ports], ['On this Mac', 'on', { left: true, right: true }]);
+  assert.deepEqual([kitden.meta, kitden.lamp, kitden.ports], ['On this computer', 'on', { left: true, right: true }]);
   assert.deepEqual(kitden.stats, [{ icon: 'monitor', words: '2 clients' }, { icon: 'server', words: '2 servers' }]);
-  assert.equal(blockLabel(kitden), 'Kitden gateway, On this Mac, 2 clients · 2 servers');
+  assert.equal(blockLabel(kitden), 'Kitden gateway, On this computer, 2 clients · 2 servers');
   const one = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [MEDIUM_VIEW.gateways[0].servers[0]] }] };
   const alone = [entry('claude_code', 'added'), entry('codex', 'missing'), entry('cursor', 'missing')];
   assert.deepEqual(block(gatewayTree(one, { ...OPTS, setup: alone }), 'gateway:kitden').stats.map((s) => s.words), ['1 client', '1 server']);

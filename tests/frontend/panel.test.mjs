@@ -23,7 +23,7 @@ const model = (gateways, local = []) => ({ gateways, groups: { move: [direct], l
 
 test('the Kitden gateway is offered first, a registered gateway second, never in its place', () => {
   assert.deepEqual(moveTargets(model([kitden, other, obot]), 'move'), [kitden, obot]);
-  // A local server starts a program on this Mac: only the Kitden gateway can hold it.
+  // A local server starts a program on this computer: only the Kitden gateway can hold it.
   assert.deepEqual(moveTargets(model([kitden, obot]), 'local'), [kitden]);
   assert.deepEqual(moveTargets(model([kitden, obot]), 'plugin'), []);
   assert.deepEqual(moveTargets(null, 'move'), []);

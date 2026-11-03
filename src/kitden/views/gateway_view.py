@@ -12,12 +12,12 @@ from kitden.views.findings import group_of
 from kitden.views.setup_server import is_own_entry
 from kitden.views.words import KEPT_UNREAD
 
-# The gateway inside `kitden mcp`. It runs on this Mac, so it also takes local servers.
+# The gateway inside `kitden mcp`. It runs on this computer, so it also takes local servers.
 KITDEN = {
     "id": KITDEN_GATEWAY,
     "kind": "kitden",
     "name": "Kitden gateway",
-    "where": "On this Mac",
+    "where": "On this computer",
     "movable": True,
 }
 

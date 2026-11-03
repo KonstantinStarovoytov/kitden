@@ -212,7 +212,7 @@ async function open(sample = MAP, rows = OFFERS) {
   await wait(10);
   assert.equal(panelState.current.type, 'discovery', '+ Add opens catalogs first');
   assert.equal(find((n) => n.tagName === 'SELECT').length, 0, 'catalog choices use buttons');
-  await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac')[0]);
+  await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this computer')[0]);
   await wait(10);
   return { box, add };
 }
@@ -657,7 +657,7 @@ test('the map ends Plugins and skills with an Add a plugin card that opens the c
     await press(card);
     await wait(10);
     assert.equal(panelState.current.type, 'discovery');
-    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac')[0]);
+    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this computer')[0]);
     await wait(10);
     // Closed, focus goes back to the card that opened it.
     closePanel({ instant: true });

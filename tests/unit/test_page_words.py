@@ -730,7 +730,8 @@ def test_the_map_blocks_look_like_the_mockup():
     # A screen reader hears what a tool's folder tag means.
     assert '"own rule in this project"' in text and "`own rule in ${" in text
     # The Kitden gateway says where it runs, in the words of the gateway view.
-    assert '"where": "On this Mac"' in (STATIC.parents[1] / "views/gateway_view.py").read_text()
+    view = (STATIC.parents[1] / "views/gateway_view.py").read_text()
+    assert '"where": "On this computer"' in view
     assert "gateway.where" in script("gateway.js")
     # Names are Inter, not mono; a block's edge is the line color.
     assert "--mono" not in rule("div.map .block-name")
@@ -1869,7 +1870,7 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
     # written in the gateway's file.
     text = gw()
     for words in (
-        "· on this Mac`",
+        "· on this computer`",
         '"Connect to the gateway…"',
         '"Disconnect from the gateway…"',
         '"See what it loads in Library"',
@@ -1911,11 +1912,11 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
         '"Update the Kitden entry…"',
         '"Update…"',
         '"from a plugin"',
-        '"not on this Mac"',
+        '"not on this computer"',
         '"its entry is off"',
         '"settings not readable"',
         "`Remove ${to.name} from ${from.name}`",
-        '"Version not known · on this Mac"',
+        '"Version not known · on this computer"',
     ):
         assert words in text, words
     review, parts = script("review.js"), script("parts.js")
@@ -2323,7 +2324,7 @@ def test_a_server_drags_onto_a_client():
     for words in (
         "`Move into ${CLIENT_NAMES[client.client]}`",
         "`${who} already has ${name}.`",
-        "`${who} is not on this Mac.`",
+        "`${who} is not on this computer.`",
     ):
         assert words in drag, words
     # Its client's box is widened 24 px left, 40 right and 16 up and down (map-drag.js).

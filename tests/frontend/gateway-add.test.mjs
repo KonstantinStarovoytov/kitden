@@ -462,7 +462,7 @@ test('a greyed or previewed row does not drag', async () => {
 test("the Kitden gateway's More list opens the same panel", async () => {
   const from = addButton();
   servers = SERVERS;
-  const kitden = { id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this Mac', movable: true, servers: [] };
+  const kitden = { id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this computer', movable: true, servers: [] };
   const view = { gateways: [kitden], connections: { kitden: {} }, used: ['kitden'], groups: { move: [], local: [], plugin: [] } };
   const card = gatewayCard(kitden, { view, setup: [], clients: [] });
   const more = card.more.find((m) => m.label === ADD_SERVER);
@@ -471,7 +471,7 @@ test("the Kitden gateway's More list opens the same panel", async () => {
     await more.run();
     await wait(10);
     assert.equal(panelState.current.type, 'discovery');
-    const local = walk(drawer).find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac');
+    const local = walk(drawer).find((n) => n.tagName === 'BUTTON' && text(n) === 'On this computer');
     fire(local, 'click');
     await wait(200);
     assert.equal(rows().length, 4);
