@@ -399,3 +399,20 @@ Left for later in the alignment plan's phase notes:
   and the [final design](docs/research/visual-redesign-final-2026-10-23.md) in
   `design/kitden.pen`; prototype and test it before implementation.
 - A shared setup for a small team.
+
+### From the review of 2026-11-03, not checked line by line yet
+
+Ask before starting each one.
+
+- Undo removes gateway servers last, not first; an Undo that was blocked can be tried again.
+- A crash in the middle of Apply leaves no record: save the record as Applying before the first
+  change and look for such records at start.
+- A client command that times out can leave a child process holding the pipes and the write
+  lock: start it with no stdin, in its own process group, and stop the whole group.
+- Some file errors in Preview answer 500 instead of a plain refusal.
+- Secrets typed for a preview that is cancelled stay in memory.
+- Server details from a third-party `.mcp.json` follow the same local-address rule as the
+  sign-in checks.
+- The npm version check accepts `owner/repo` and `./dir`; accept exact versions only.
+- Adding the gateway overwrites a `settings.json` it cannot read.
+- File and gateway edits hide their values from `repr`.
