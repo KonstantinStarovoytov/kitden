@@ -229,9 +229,11 @@ def test_claude_desktop_config_is_read_from_the_linux_config_folder(system, tmp_
     assert desktop.id == "claude_desktop_code_tab"
 
 
-def _scan_with_bad_project_file(tmp_path, no_version, make_bad, wait=False):
-    """Scan with the project's .mcp.json made bad. With `wait`, the scan runs in a thread that
-    must finish within 10 seconds (in the main thread, deep JSON hits the recursion limit)."""
+def _scan_with_bad_project_file(tmp_path, no_version, make_bad):
+    """Scan with the project's .mcp.json made bad. The scan runs in a thread with a fixed
+    4 MB stack that must finish within 10 seconds. Python 3.14 stops deep JSON by the stack
+    left, not by the recursion limit, so the main thread's stack would make it vary by
+    machine."""
     import os
     import threading
 
@@ -244,14 +246,15 @@ def _scan_with_bad_project_file(tmp_path, no_version, make_bad, wait=False):
     def scan():
         done["scan"] = ClaudeCodeAdapter(home, read_version=no_version).scan()
 
-    if wait:
+    before = threading.stack_size(4 * 1024 * 1024)
+    try:
         worker = threading.Thread(target=scan, daemon=True)
         worker.start()
-        worker.join(10)
-        if worker.is_alive():  # let a stuck reader go before failing
-            os.close(os.open(bad, os.O_WRONLY | os.O_NONBLOCK))
-    else:
-        scan()
+    finally:
+        threading.stack_size(before)
+    worker.join(10)
+    if worker.is_alive():  # let a stuck reader go before failing
+        os.close(os.open(bad, os.O_WRONLY | os.O_NONBLOCK))
     assert "scan" in done, "the scan did not finish"
     problems = [(p.path, p.unknown_reason) for p in done["scan"].problems]
     assert (str(bad), UnknownReason.PARSE_ERROR) in problems
@@ -267,7 +270,7 @@ def test_a_project_file_that_is_not_utf8_is_a_problem_of_its_own(tmp_path, no_ve
 def test_a_fifo_named_like_a_project_file_does_not_stop_the_scan(tmp_path, no_version):
     import os
 
-    _scan_with_bad_project_file(tmp_path, no_version, os.mkfifo, wait=True)
+    _scan_with_bad_project_file(tmp_path, no_version, os.mkfifo)
 
 
 def test_a_deeply_nested_project_file_is_a_problem_of_its_own(tmp_path, no_version):
