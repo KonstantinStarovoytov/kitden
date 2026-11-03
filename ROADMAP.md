@@ -7,7 +7,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
-### Not released yet
+### 0.5.0
 
 - **Python servers from the catalog:** an Official MCP Registry server published only on PyPI
   runs with `uvx name==version`, with its required values asked for as for npm. Without uv the
