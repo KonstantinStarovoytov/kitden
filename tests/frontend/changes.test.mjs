@@ -467,6 +467,9 @@ test('Redo… adds a fresh preview and writes nothing; an old change offers none
   show();
   assert.equal(buttonIn(drawer, 'Redo…'), null);
   assert.ok(buttonIn(drawer, 'Undo'));
+  // So does a change whose Undo stopped: it can be tried again.
+  show([change('b1', TODAY, { state: 'undo_blocked' })]);
+  assert.ok(buttonIn(drawer, 'Undo'));
 });
 
 test('an undone change offers no Redo… once a later applied change made the same request', async () => {

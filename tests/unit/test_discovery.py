@@ -679,3 +679,10 @@ def test_only_an_exact_version_is_run():
     for bad in ("owner/repo", "./dir", "../up", "latest", "^1.2.0", "~1.2", "1.x", "file:x"):
         assert server_entry({"packages": [{**npm, "version": bad}]})[0] is None, bad
         assert server_entry({"packages": [{**pypi, "version": bad}]})[0] is None, bad
+
+
+def test_a_version_that_is_not_text_is_skipped_not_an_error():
+    # A hand-written server.json may give null or a number; the search must go on.
+    npm = {"registryType": "npm", "identifier": "@acme/mcp", "transport": {"type": "stdio"}}
+    for odd in (None, 1, 1.2, ["1.2.3"]):
+        assert server_entry({"packages": [{**npm, "version": odd}]})[0] is None

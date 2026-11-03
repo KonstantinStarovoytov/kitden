@@ -21,8 +21,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Client commands end cleanly:** a client's own command runs with no input and in a process
   group of its own; when it takes longer than 60 seconds, the whole group is stopped, so no
   helper it started keeps the pipes or the write lock.
-- **Cancel forgets secrets:** cancelling a preview clears the secrets typed for it: Keychain
-  values, and the secret parts of new file entries and gateway servers.
+- **Cancel forgets secrets:** cancelling a preview, or an Apply that stops because a file
+  changed, clears the secrets typed for it: Keychain values, and the secret parts of new file
+  entries and gateway servers.
 - **Plugin servers stay outside too:** a server from a plugin's `.mcp.json` or a catalog row
   whose address is on this computer or a private network is not asked before Apply; the
   gateway reaches it only once you apply. Project files were already never moved.

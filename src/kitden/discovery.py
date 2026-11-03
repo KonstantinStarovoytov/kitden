@@ -161,6 +161,8 @@ def server_entry(server: dict) -> tuple[dict | None, str | None]:
         ):
             continue
         name, version = package.get("identifier", ""), package.get("version", "")
+        if not isinstance(name, str) or not isinstance(version, str):
+            continue  # a hand-written server.json may give null or a number
         if (
             package.get("registryType") == "npm"
             and _NPM_VERSION.fullmatch(version)

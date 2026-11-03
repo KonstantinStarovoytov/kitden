@@ -1240,6 +1240,63 @@ def test_a_crash_during_apply_leaves_a_record_that_says_so(tmp_path, config):
     assert len(make_engine(tmp_path).store.entries()) == 1
 
 
+def test_apply_refuses_when_its_record_cannot_be_saved(tmp_path, config):
+    engine = make_engine(tmp_path)
+    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    real = engine.store.save
+
+    def full(change_id, record):
+        raise OSError("No space left on device")
+
+    engine.store.save = full
+    with pytest.raises(ChangeRefusedError, match="could not save"):
+        engine.apply(change.id)
+    assert change.state is ChangeState.PREVIEWED and config.read_text() == CONFIG
+    engine.store.save = real
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+
+
+def test_a_crash_record_says_what_secrets_it_may_have_left(tmp_path, config):
+    from kitden.model import KeychainItem
+
+    class Crash(BaseException):
+        pass
+
+    engine, _ = keychain_engine(tmp_path)
+    config.write_text(
+        CONFIG + '\n[mcp_servers.old]\nurl = "https://o.example"\n'
+        'http_headers = { Authorization = "Bearer sk-live-OLD0123456789" }\n'
+    )
+    step = toml_step(config, ("mcp_servers", "gw"), GATEWAY)
+    step.keychain = [KeychainItem("gw", "GW_KEY", "SENTINEL_SECRET_NEW")]
+    change = engine.preview("gateway.connect", [step])
+
+    def die(path, data):
+        raise Crash
+
+    engine._write = die
+    with pytest.raises(Crash):
+        engine.apply(change.id)
+    found, _ = keychain_engine(tmp_path)
+    after = found.changes[change.id]
+    assert after.holds_secret
+    assert "gw/GW_KEY" in after.error
+
+
+def test_a_stale_change_forgets_the_secrets_typed_for_it(tmp_path, config):
+    import dataclasses
+
+    typed = "sk-live-SENTINEL0123456789"
+    engine = make_engine(tmp_path)
+    step = toml_step(
+        config, ("mcp_servers", "gw"), {**GATEWAY, "http_headers": {"Authorization": typed}}
+    )
+    change = engine.preview("gateway.connect", [step])
+    config.write_text(CONFIG + "\n# changed\n")
+    assert engine.apply(change.id).state is ChangeState.STALE
+    assert typed not in json.dumps(dataclasses.asdict(change), default=str)
+
+
 # The client writes its file during Apply (review 2026-11-03) --------------------------------
 
 

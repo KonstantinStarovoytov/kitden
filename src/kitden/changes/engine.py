@@ -636,6 +636,12 @@ class Engine:
         and new entries keep only what `redact` lets through."""
         change = self.changes[change_id]
         change.move_to(ChangeState.CANCELLED)
+        self._forget_typed(change)
+        return change
+
+    def _forget_typed(self, change: Change) -> None:
+        """For a change that will never be applied: clear its Keychain values and keep only
+        what `redact` lets through of its new entries."""
         self._forget_secrets(change)
         for step in change.steps:
             if step.edit is not None:
@@ -644,7 +650,6 @@ class Engine:
             if step.gateway is not None:
                 shown, hid = redact(step.gateway.server)
                 step.gateway.server = shown if hid else step.gateway.server
-        return change
 
     # Apply -------------------------------------------------------------------------------
 
@@ -743,6 +748,7 @@ class Engine:
         if reason:
             change.move_to(ChangeState.STALE)
             change.error = reason
+            self._forget_typed(change)
             self._log(change)
             return change
 
@@ -750,8 +756,14 @@ class Engine:
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
         # Saved before the first change, so a crash leaves a record that says so at the next
-        # start, next to the backups.
-        self.store.save(change.id, _record(change))
+        # start, next to the backups. Without it nothing is written.
+        try:
+            self.store.save(change.id, _record(change))
+        except OSError:
+            change.state = ChangeState.PREVIEWED
+            raise ChangeRefusedError(
+                "Kitden could not save the change's record, so nothing was changed."
+            ) from None
         tick = self._counter(change)
         ran: list[Step] = []
         copied: list[Step] = []
@@ -1186,7 +1198,11 @@ class Engine:
         places += [s.removal.path for s in change.steps if s.removal is not None]
         if any(s.gateway is not None for s in change.steps):
             places.append("the gateway")
+        items = [f"{i.server}/{i.key}" for s in change.steps for i in s.keychain]
+        if items:
+            places.append(f"the {secret_store_name()} items {', '.join(items)}")
         listed = ", ".join(dict.fromkeys(places)) or "the setup"
+        change.holds_secret = change.holds_secret or self.store.backup_holds_secret(change.id)
         change.move_to(ChangeState.RESTORED)
         change.error = (
             "Kitden stopped during Apply, so this change was not checked. "
