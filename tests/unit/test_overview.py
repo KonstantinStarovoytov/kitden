@@ -16,7 +16,7 @@ from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.views.load_map import load_map
 from kitden.views.overview import overview
-from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
+from tests.conftest import cursor_db, make_home, write_cursor_fixture_state
 from tests.unit.test_demo_mode import demo_page
 from tests.unit.test_local_gateway_views import page_for
 
@@ -41,7 +41,7 @@ def test_attention_cards_and_the_notes_count(home):
 
 
 def test_no_card_shows_a_file_path(home, tmp_path):
-    db = home / CURSOR_DB
+    db = cursor_db(home)
     db.write_bytes(b"this is not a database")
     inventory = build_inventory(home)
     gateway = Gateway(url="https://mcp.neon.tech/mcp")
@@ -52,7 +52,7 @@ def test_no_card_shows_a_file_path(home, tmp_path):
 
 def test_unreadable_file_becomes_an_attention_card(tmp_path):
     home = make_home(tmp_path, "cursor/3.21.16")
-    db = home / CURSOR_DB
+    db = cursor_db(home)
     db.parent.mkdir(parents=True)
     db.write_bytes(b"this is not a database")
     first = overview(build_inventory(home), [], None)["cards"][0]
@@ -443,7 +443,7 @@ def test_unreadable_and_untested_cards_have_no_button(home, monkeypatch):
     monkeypatch.setattr(
         version_cache, "cached_version", lambda home, c: "2.0.0" if c == "claude_code" else None
     )
-    (home / CURSOR_DB).write_bytes(b"this is not a database")
+    (cursor_db(home)).write_bytes(b"this is not a database")
     data = overview(build_inventory(home), [], None)
     unread = next(c for c in data["cards"] if c["name"] == "Could not read state.vscdb")
     assert unread["action"] is None
@@ -550,7 +550,7 @@ def test_no_card_or_map_field_holds_a_path(home, monkeypatch):
     monkeypatch.setattr(
         version_cache, "cached_version", lambda home, c: "2.0.0" if c == "claude_code" else None
     )
-    (home / CURSOR_DB).write_bytes(b"this is not a database")
+    (cursor_db(home)).write_bytes(b"this is not a database")
     config = home / ".codex/config.toml"
     old = {"command": str(home / ".local/bin/agentsetup"), "args": ["mcp"]}
     config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "agentsetup"), old))

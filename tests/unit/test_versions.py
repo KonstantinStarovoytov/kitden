@@ -54,7 +54,8 @@ def test_version_command_uses_path_when_available():
     ]
 
 
-def test_version_command_falls_back_to_bundled_codex():
+def test_version_command_falls_back_to_bundled_codex(system):
+    system("mac")
     bundled = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
     assert version_command("codex", which=lambda n: None, exists=lambda p: p == bundled) == [
         bundled,
@@ -64,3 +65,12 @@ def test_version_command_falls_back_to_bundled_codex():
 
 def test_version_command_is_none_when_client_missing():
     assert version_command("cursor", which=lambda n: None, exists=lambda p: False) is None
+
+
+def test_no_app_command_fallback_on_linux(system):
+    from kitden.clients.versions import app_commands
+
+    system("mac")
+    assert app_commands("cursor")
+    system("linux")
+    assert app_commands("cursor") == ()

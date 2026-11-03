@@ -59,6 +59,7 @@ from kitden.model import (
     UnknownReason,
 )
 from kitden.redact import redact
+from kitden.system import claude_desktop_dir
 from kitden.views.words import NO_CLAUDE_FOLDER
 
 CLIENT = "claude_code"
@@ -67,8 +68,11 @@ NEW_SESSION = "Start a new Claude Code session (or a new Code tab chat) for this
 RELOAD = "Run /reload-plugins in Claude Code, or start a new session, for this to take effect."
 ACCOUNT_HINT = "Stored in your Claude account. Change it in the Claude app or on claude.ai."
 DESKTOP = "claude_desktop_code_tab"
-DESKTOP_CONFIG = "Library/Application Support/Claude/claude_desktop_config.json"
-DESKTOP_BUNDLED = "Library/Application Support/Claude/claude-code"
+# In kitden.system's Claude Desktop folder. On Linux (a beta for Ubuntu 22.04+ and Debian 12+,
+# support.claude.com, checked 2026-11-03) the folder is assumed to be ~/.config/Claude, like
+# other Electron apps; to confirm on a real install before release.
+DESKTOP_CONFIG = "claude_desktop_config.json"
+DESKTOP_BUNDLED = "claude-code"
 # Plugins that come from these places have no install to remove (plugins/loading docs).
 NOT_INSTALLED = ("@synced", "@inline", "@skills-dir")
 
@@ -216,8 +220,8 @@ class ClaudeCodeAdapter(ClientAdapter):
 
     def extra_clients(self) -> list[Client]:
         """The Claude Desktop Code tab: Claude Code settings plus claude_desktop_config.json."""
-        config = self.home / DESKTOP_CONFIG
-        bundled = self.home / DESKTOP_BUNDLED
+        config = claude_desktop_dir(self.home) / DESKTOP_CONFIG
+        bundled = claude_desktop_dir(self.home) / DESKTOP_BUNDLED
         if not config.exists() and not bundled.is_dir():
             return []
         version = highest_version(p.name for p in bundled.iterdir()) if bundled.is_dir() else None
@@ -632,7 +636,7 @@ class ClaudeCodeAdapter(ClientAdapter):
             )
 
         # Claude Desktop Code tab also loads claude_desktop_config.json.
-        desktop_path = self.home / DESKTOP_CONFIG
+        desktop_path = claude_desktop_dir(self.home) / DESKTOP_CONFIG
         servers = as_dict(read.json(desktop_path)).get("mcpServers")
         scan.items += mcp_items(DESKTOP, servers, desktop_path, Scope.USER)
 

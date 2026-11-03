@@ -2,6 +2,7 @@ import json
 
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.model import ClientStatus, Enabled, ItemKind, Scope, UnknownReason
+from kitden.system import claude_desktop_dir
 from kitden.views.inventory import build_inventory
 from tests.conftest import all_text, make_home, rows
 
@@ -111,7 +112,7 @@ def test_detect_reports_version_and_support(tmp_path):
 
 def test_desktop_code_tab_is_its_own_client_with_its_bundled_version(tmp_path, no_version):
     home = make_home(tmp_path, FIXTURE)
-    bundled = home / "Library/Application Support/Claude/claude-code"
+    bundled = claude_desktop_dir(home) / "claude-code"
     for version in ("2.1.295", "2.1.299", "latest"):
         (bundled / version).mkdir(parents=True)
     (desktop,) = ClaudeCodeAdapter(home, read_version=no_version).extra_clients()
@@ -125,7 +126,7 @@ def test_desktop_code_tab_is_its_own_client_with_its_bundled_version(tmp_path, n
 
 def test_no_desktop_client_without_claude_desktop(tmp_path, no_version):
     home = make_home(tmp_path, FIXTURE)
-    (home / "Library/Application Support/Claude/claude_desktop_config.json").unlink()
+    (claude_desktop_dir(home) / "claude_desktop_config.json").unlink()
     assert ClaudeCodeAdapter(home, read_version=no_version).extra_clients() == []
 
 
@@ -136,7 +137,7 @@ def test_detect_without_files_or_command_is_not_found(tmp_path, no_version):
 
 def test_the_desktop_tab_keeps_its_folder_version_in_a_scan(tmp_path):
     home = make_home(tmp_path, FIXTURE)
-    (home / "Library/Application Support/Claude/claude-code/2.1.299").mkdir(parents=True)
+    (claude_desktop_dir(home) / "claude-code/2.1.299").mkdir(parents=True)
     clients = {c.id: c for c in build_inventory(home).clients}
     assert clients["claude_desktop_code_tab"].version == "2.1.299"
     assert clients["claude_code"].version is None
@@ -217,3 +218,12 @@ def test_the_home_folder_as_a_project_keeps_only_its_root_files(tmp_path, no_ver
     (home / ".claude.json").write_text(json.dumps(state))
     in_home = {(i[1], i[2]) for i in _instructions(home, no_version) if i[3] == str(home)}
     assert in_home == {("CLAUDE.md", "instructions"), ("CLAUDE.local.md", "instructions")}
+
+
+def test_claude_desktop_config_is_read_from_the_linux_config_folder(system, tmp_path, no_version):
+    system("linux")
+    home = make_home(tmp_path, FIXTURE)
+    assert (home / ".config/Claude/claude_desktop_config.json").is_file()
+    assert not (home / "Library").exists()
+    (desktop,) = ClaudeCodeAdapter(home, read_version=no_version).extra_clients()
+    assert desktop.id == "claude_desktop_code_tab"

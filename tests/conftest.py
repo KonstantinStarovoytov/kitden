@@ -1,5 +1,6 @@
 """Shared test helpers: fake home folders built from tests/fixtures."""
 
+import contextlib
 import json
 import os
 import shlex
@@ -91,7 +92,7 @@ def _never_the_real_keychain(tmp_path_factory, monkeypatch):
 
     missing = tmp_path_factory.getbasetemp().resolve() / "no-security"
     monkeypatch.setenv("KITDEN_SECURITY", str(missing))
-    inherited = [*stdio.DEFAULT_INHERITED_ENV_VARS, "KITDEN_SECURITY"]
+    inherited = [*stdio.DEFAULT_INHERITED_ENV_VARS, "KITDEN_SECURITY", "KITDEN_SYSTEM"]
     monkeypatch.setattr(stdio, "DEFAULT_INHERITED_ENV_VARS", inherited)
 
 
@@ -117,8 +118,24 @@ def fake_keychain(tmp_path, monkeypatch) -> Path:
     return items
 
 
-CURSOR_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
-CURSOR_WORKSPACES = "Library/Application Support/Cursor/User/workspaceStorage"
+def cursor_db(home: Path) -> Path:
+    """Cursor's global state database in this system's folder."""
+    from kitden.system import cursor_state_dir
+
+    return cursor_state_dir(home) / "globalStorage/state.vscdb"
+
+
+def cursor_workspaces(home: Path) -> Path:
+    from kitden.system import cursor_state_dir
+
+    return cursor_state_dir(home) / "workspaceStorage"
+
+
+# Fixture homes keep macOS's Library folders; on Linux they move to that system's places.
+MAC_FOLDERS = {
+    "Library/Application Support/Claude": "claude_desktop_dir",
+    "Library/Application Support/Cursor/User": "cursor_state_dir",
+}
 
 
 def make_home(tmp_path: Path, *fixtures: str) -> Path:
@@ -131,12 +148,24 @@ def make_home(tmp_path: Path, *fixtures: str) -> Path:
             text = path.read_text()
             if "{HOME}" in text:
                 path.write_text(text.replace("{HOME}", str(home)))
+    import kitden.system
+
+    if kitden.system.SYSTEM != "mac":
+        for mac, helper in MAC_FOLDERS.items():
+            if (home / mac).is_dir():
+                target = getattr(kitden.system, helper)(home)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(home / mac, target)
+        shutil.rmtree(home / "Library/Application Support", ignore_errors=True)
+        with contextlib.suppress(OSError):
+            (home / "Library").rmdir()
     return home
 
 
-def write_cursor_state(home: Path, rows: dict, db_path: str = CURSOR_DB) -> Path:
-    """Create a Cursor state database with the given key → value rows."""
-    db = home / db_path
+def write_cursor_state(home: Path, rows: dict, db: Path | None = None) -> Path:
+    """Create a Cursor state database with the given key → value rows (the global one by
+    default)."""
+    db = db or cursor_db(home)
     db.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(db)) as con, con:
         con.execute("CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)")
@@ -161,7 +190,7 @@ def write_cursor_fixture_state(home: Path, extra_rows: dict | None = None) -> No
     """Write the fixture's global and per-workspace Cursor state databases."""
     write_cursor_state(home, {**cursor_state_rows(home), **(extra_rows or {})})
     for workspace, rows in _cursor_fixture(home, "cursor-workspace-state.json").items():
-        write_cursor_state(home, rows, f"{CURSOR_WORKSPACES}/{workspace}/state.vscdb")
+        write_cursor_state(home, rows, cursor_workspaces(home) / workspace / "state.vscdb")
 
 
 def rows(items, home: Path) -> set[tuple]:

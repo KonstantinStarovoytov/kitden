@@ -9,6 +9,7 @@ from starlette.testclient import TestClient
 
 from kitden import discovery
 from kitden.discovery import Discovery, checked_url, row_key, server_entry
+from kitden.gateways import data_dir
 from kitden.local_gateway.settings import load_settings
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
@@ -509,7 +510,7 @@ def test_token_preview_apply_and_undo_use_keychain(tmp_path, monkeypatch, fake_k
         assert applied.json()["state"] == "verified", applied.text
         assert "SENTINEL_TEST_TOKEN" not in applied.text
         assert "SENTINEL_TEST_TOKEN" in fake_keychain.read_text()
-        for record in (home / "Library/Application Support/kitden/changes").rglob("*.json"):
+        for record in (data_dir(home) / "changes").rglob("*.json"):
             assert "SENTINEL_TEST_TOKEN" not in record.read_text()
         undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST)
         assert undone.json()["state"] == "undone", undone.text

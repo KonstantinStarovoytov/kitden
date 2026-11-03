@@ -2,7 +2,7 @@
 
 | What | macOS, under ~/Library/Application Support | Linux |
 | --- | --- | --- |
-| Kitden's data | kitden | $XDG_DATA_HOME/kitden (~/.local/share) |
+| Kitden's data | kitden | ~/.local/share/kitden |
 | Cursor's state | Cursor/User | $XDG_CONFIG_HOME/Cursor/User (~/.config) |
 | Claude Desktop | Claude | $XDG_CONFIG_HOME/Claude (~/.config) |
 | Secrets | the Keychain (`security`) | the keyring (`secret-tool`) |
@@ -34,9 +34,11 @@ def _xdg(name: str, home: Path, default: str) -> Path:
 
 
 def data_dir(home: Path) -> Path:
+    """Not moved by XDG_DATA_HOME: the gateway a client starts may not get that variable (Codex
+    passes only a short list), and the page and the gateway must find the same folder."""
     if SYSTEM == "mac":
         return Path(home) / MAC_SUPPORT / "kitden"
-    return _xdg("XDG_DATA_HOME", home, ".local/share") / "kitden"
+    return Path(home) / ".local/share/kitden"
 
 
 def cursor_state_dir(home: Path) -> Path:

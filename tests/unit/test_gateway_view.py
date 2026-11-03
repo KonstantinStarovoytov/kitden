@@ -6,6 +6,7 @@ from dataclasses import replace
 import pytest
 
 from kitden.model import Client, ClientStatus, Gateway, Item, ItemKind, Scope, Source, SourceKind
+from kitden.system import claude_desktop_dir
 from kitden.views.effective import DESKTOP
 from kitden.views.findings import mark_gateways
 from kitden.views.gateway_view import gateway_view
@@ -144,7 +145,7 @@ def test_each_gateway_lists_only_its_own_effective_connections(home):
     config = json.loads(mcp_json.read_text())
     config["mcpServers"]["docs"]["url"] = a.url
     mcp_json.write_text(json.dumps(config))
-    desktop = home / "Library/Application Support/Claude/claude_desktop_config.json"
+    desktop = claude_desktop_dir(home) / "claude_desktop_config.json"
     config = json.loads(desktop.read_text())
     config["mcpServers"]["desk"] = {"url": b.url}
     desktop.write_text(json.dumps(config))

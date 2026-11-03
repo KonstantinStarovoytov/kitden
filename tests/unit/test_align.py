@@ -9,7 +9,7 @@ from contextlib import closing
 import pytest
 
 from kitden.clients.cursor import REACTIVE_KEY
-from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
+from tests.conftest import cursor_db, make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
 from tests.unit.test_api_plugin_install import FakeCli
 from tests.unit.test_catalog import add_marketplaces
@@ -321,7 +321,7 @@ def test_under_all_projects_cursor_never_gets_a_plugin(home):
     # Cursor does not load Claude Code's plugins here, and it lacks linter. It adds plugins only
     # in its own window (D26), so it is not offered, and not said as left out either.
     _user_plugin(home, "linter@claude-plugins-official")
-    with closing(sqlite3.connect(home / CURSOR_DB)) as db, db:
+    with closing(sqlite3.connect(cursor_db(home))) as db, db:
         row = db.execute("SELECT value FROM ItemTable WHERE key = ?", (REACTIVE_KEY,)).fetchone()
         flags = {**(json.loads(row[0]) if row else {}), "importPluginsFromClaudeOnBoot": False}
         db.execute("INSERT INTO ItemTable VALUES (?, ?)", (REACTIVE_KEY, json.dumps(flags)))

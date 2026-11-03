@@ -10,17 +10,14 @@ scheme gives no link.
 import plistlib
 from pathlib import Path
 
+from kitden.system import app_roots  # noqa: F401 - kept here for its callers
+
 # client id -> (app bundle name, scheme the page opens)
 CLIENT_APPS = {
     "claude_code": ("Claude", "claude"),
     "codex": ("ChatGPT", "codex"),
     "cursor": ("Cursor", "cursor"),
 }
-
-
-def app_roots(home: Path) -> list[Path]:
-    """Where macOS keeps apps: the system folder and the person's own."""
-    return [Path("/Applications"), Path(home) / "Applications"]
 
 
 def registered_schemes(plist: Path) -> set[str]:

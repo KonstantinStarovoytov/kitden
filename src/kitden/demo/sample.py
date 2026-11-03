@@ -15,6 +15,7 @@ from typing import Any
 from kitden.clients.cursor import INSTALLED_PREFIX, SNAPSHOT_PREFIX, STATE_DB, WORKSPACE_STATE
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import CALLS_FILE, SETTINGS_FILE, TOOLS_FILE
+from kitden.system import cursor_state_dir
 
 SIZES = ("small", "medium", "large")
 DEMO_SECRET = "DEMO_SECRET_"  # noqa: S105 - the prefix of every fake secret
@@ -313,7 +314,7 @@ def _cursor(home: Path) -> None:
     _skill(ui_kit / "skills", "ui-components")
     user = [{"id": "501", "sources": ["user"]}]
     _sqlite(
-        home / STATE_DB,
+        cursor_state_dir(home) / STATE_DB,
         {
             f"{INSTALLED_PREFIX}{CURSOR_TEAM}|no-workspace": user,
             f"{INSTALLED_PREFIX}{CURSOR_TEAM}|{atlas.as_uri()}": user,
@@ -336,7 +337,7 @@ def _cursor(home: Path) -> None:
             }
         ],
     }
-    workspace = home / WORKSPACE_STATE / "a1b2c3d4/state.vscdb"
+    workspace = cursor_state_dir(home) / WORKSPACE_STATE / "a1b2c3d4/state.vscdb"
     _sqlite(workspace, {f"{SNAPSHOT_PREFIX}skills.v3": snapshot})
 
 

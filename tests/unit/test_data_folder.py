@@ -4,11 +4,21 @@ import json
 import shutil
 import stat
 
+import pytest
+
 from kitden.changes.backup import ChangeStore
 from kitden.changes.engine import Engine
 from kitden.changes.json_splice import ABSENT
 from kitden.gateways import OLD_DATA_DIR, data_dir, ensure_data_folder, load_gateways
 from kitden.model import FileEdit, Scope, Step
+
+
+@pytest.fixture(autouse=True)
+def _as_mac(system, request):
+    """The old folder is macOS's; only the Linux test runs as Linux."""
+    if request.node.name != "test_no_copy_on_linux":
+        system("mac")
+
 
 SETTINGS = {"gateways": [{"url": "http://127.0.0.1:12008/mcp", "auth": "none"}]}
 CONFIG = '[mcp_servers.neon]\nurl = "https://mcp.neon.tech/mcp"\n'

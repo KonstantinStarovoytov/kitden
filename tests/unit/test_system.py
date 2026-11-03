@@ -26,10 +26,12 @@ def test_data_dir_on_each_system(system, tmp_path):
     assert data_dir(tmp_path) == tmp_path / ".local/share/kitden"
 
 
-def test_xdg_data_home_moves_the_linux_data_dir(system, tmp_path, monkeypatch):
+def test_xdg_data_home_does_not_move_the_data_dir(system, tmp_path, monkeypatch):
+    # The gateway a client starts may not get XDG_DATA_HOME (Codex passes a short list of
+    # variables), so the page and the gateway must find the folder without it.
     system("linux")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
-    assert data_dir(tmp_path) == tmp_path / "xdg/kitden"
+    assert data_dir(tmp_path) == tmp_path / ".local/share/kitden"
 
 
 def test_cursor_and_claude_desktop_folders(system, tmp_path, monkeypatch):

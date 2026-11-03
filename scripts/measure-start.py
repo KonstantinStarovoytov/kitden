@@ -37,10 +37,10 @@ sys.path.insert(0, str(ROOT))
 
 from tests.conftest import fake_client_command  # noqa: E402
 
-from kitden.cli import WATCHED  # noqa: E402
 from kitden.clients import version_cache  # noqa: E402
 from kitden.demo import build_demo_home, demo_build  # noqa: E402
 from kitden.model import CLIENTS  # noqa: E402
+from kitden.system import watched  # noqa: E402
 from kitden.views.inventory import build_inventory  # noqa: E402
 from kitden.web.app import create_app  # noqa: E402
 
@@ -117,7 +117,7 @@ def measure(home: Path, slow: float) -> dict:
         lambda **options: build_inventory(home, **options),
         token=token,
         port=port,
-        watch_folders=[home / name for name in WATCHED],
+        watch_folders=watched(home),
         flat_folders=[home],
         home=home,
         first_scan_later=True,
@@ -173,7 +173,7 @@ def _demo_app(home: Path, port: int, token: str):
         demo_build(home),
         token=token,
         port=port,
-        watch_folders=[home / name for name in WATCHED],
+        watch_folders=watched(home),
         flat_folders=[home],
         home=home,
         first_scan_later=True,
