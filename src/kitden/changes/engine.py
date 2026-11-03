@@ -819,14 +819,13 @@ class Engine:
             lost.append(f"{names} may still be in the gateway.")
         store = secret_store_name()
         for item in reversed(stored):
-            if item.existed:
-                # Its old value is recorded nowhere.
-                lost.append(f"{item.server}/{item.key} in your {store} keeps the new value.")
-                continue
             try:
-                keychain.delete(item.ref, run=self._security())
+                if item.old is not None:
+                    keychain.store(item.server, item.key, item.old, run=self._security())
+                else:
+                    keychain.delete(item.ref, run=self._security())
             except Exception:  # noqa: BLE001
-                lost.append(f"{item.server}/{item.key} stays in your {store}.")
+                lost.append(f"{item.server}/{item.key} in your {store} was not put back.")
         # Say "restored" only for files that read back as they were.
         for path in current:
             if not self._as_before(path, current[path], ran, by_command):
@@ -866,10 +865,13 @@ class Engine:
         )
 
     def _store_secrets(self, change: Change, stored: list[KeychainItem]) -> None:
-        """Write each secret to the Keychain; `store` reads it back."""
+        """Write each secret to the Keychain; `store` reads it back. The value there before
+        is read first, so a failed Apply can put it back."""
         for step in change.steps:
             for item in step.keychain:
-                stored.append(item)  # first: a write that fails halfway is taken back too
+                item.old = keychain.read(item.ref, run=self._security())
+                item.existed = item.old is not None
+                stored.append(item)  # before the write: one that fails halfway is taken back
                 keychain.store(item.server, item.key, item.value, run=self._security())
 
     @staticmethod
@@ -878,6 +880,7 @@ class Engine:
         for step in change.steps:
             for item in step.keychain:
                 item.value = ""
+                item.old = None
 
     def _stale_copy(self, step: Step) -> str | None:
         copy = step.copy

@@ -28,6 +28,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   and one restore action that fails no longer stops the others. A client command that fails
   halfway is taken back too. "The original settings were restored" is said only when every
   file reads back as it was; otherwise the error names each file that is not.
+  A secret that was already in the Keychain gets its old value back.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 

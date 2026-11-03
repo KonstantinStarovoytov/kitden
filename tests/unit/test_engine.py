@@ -1142,3 +1142,23 @@ def test_a_command_that_fails_after_writing_is_taken_back(tmp_path, settings):
     assert change.state is ChangeState.RESTORED
     assert f"{settings} is not as it was before." in change.error
     assert "restored" not in change.error
+
+
+def test_a_failed_apply_puts_back_the_old_keychain_value(tmp_path, config):
+    from kitden.model import KeychainItem
+
+    engine, items = keychain_engine(tmp_path)
+    items.write_text(json.dumps({"kitden gw/GW_KEY": "OLD"}))
+    step = toml_step(config, ("mcp_servers", "gw"), GATEWAY)
+    step.keychain = [KeychainItem("gw", "GW_KEY", "SENTINEL_SECRET_NEW")]
+    change = engine.preview("gateway.connect", [step])
+    items.write_text(json.dumps({"kitden gw/GW_KEY": "A"}))  # rotated since the preview
+
+    def verify(step, expected, exact=None):
+        raise RuntimeError("the entry did not read back")
+
+    engine._verify = verify
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED
+    assert json.loads(items.read_text()) == {"kitden gw/GW_KEY": "A"}
+    assert step.keychain[0].old is None and step.keychain[0].value == ""

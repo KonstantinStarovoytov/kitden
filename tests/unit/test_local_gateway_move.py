@@ -1285,7 +1285,7 @@ def test_a_keychain_item_that_cannot_be_deleted_after_undo_is_named(
     assert client_files(home) == before
 
 
-def test_a_restore_says_an_item_that_was_there_keeps_the_new_value(home, fake_keychain):
+def test_a_restore_puts_back_the_old_value_of_an_item_that_was_there(home, fake_keychain):
     fake_keychain.write_text(json.dumps({"kitden files/FILES_TOKEN": "OLD"}))
     add_claude(home, "files", {"type": "stdio", **FILES})
     before = client_files(home)
@@ -1293,8 +1293,8 @@ def test_a_restore_says_an_item_that_was_there_keeps_the_new_value(home, fake_ke
     change = engine.preview("gateway.move", move(home, ("claude_code", "files")))
     engine.apply(change.id)
     assert str(change.state) == "restored"
-    assert change.error.endswith(" files/FILES_TOKEN in your Keychain keeps the new value.")
-    assert "The original settings were restored." not in change.error
+    assert change.error.endswith("The original settings were restored.")
+    assert keychain_items(fake_keychain) == {"kitden files/FILES_TOKEN": "OLD"}
     assert client_files(home) == before
 
 

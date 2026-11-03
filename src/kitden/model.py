@@ -294,7 +294,10 @@ class KeychainItem:
     server: str
     key: str
     value: str = field(default="", repr=False)
-    existed: bool = False  # read at preview; Undo deletes only an item the change created
+    existed: bool = False  # read at preview and again at Apply; Undo deletes only new items
+    # The value the item had before Apply, held in memory only until Apply ends, so a failed
+    # Apply can write it back.
+    old: str | None = field(default=None, repr=False)
 
     @property
     def ref(self) -> dict:
