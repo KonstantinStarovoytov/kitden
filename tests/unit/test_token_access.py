@@ -299,3 +299,53 @@ def test_a_remote_without_a_sign_in_may_start_one(home, fake_keychain):
         local = page.post("/api/sign-in/offer", json={"server": "tool"}, headers=POST)
     assert remote.status_code == 200 and remote.json()["id"]
     assert local.status_code == 404
+
+
+def test_a_header_name_in_other_letters_replaces_the_one_held(home, fake_keychain):
+    remote = FakeRemote(401, token="new")
+    try:
+        keep(fake_keychain, "neon/Authorization", "Bearer old")
+        held = {"Authorization": {"keychain": "neon/Authorization"}}
+        write_held(home, {"neon": {"url": remote.url, "headers": held}})
+        with page_for(home, Opened()) as page:
+            answer = access(page, "neon", "headers", "authorization", "Bearer new")
+            assert answer.status_code == 200, answer.text
+            page.post(f"/api/changes/{answer.json()['id']}/apply", headers=POST)
+    finally:
+        stop(remote)
+    entry = json.loads(gateway_file(home).read_text())["servers"]["neon"]
+    assert entry["headers"] == held
+    assert keychain_items(fake_keychain)["kitden neon/Authorization"] == "Bearer new"
+
+
+def test_a_removed_server_loses_its_needs_token_note(home, fake_keychain):
+    from kitden.local_gateway.settings import load_refused, mark_refused
+
+    write_held(home, {"docs": {"url": "https://x/mcp"}})
+    mark_refused(home, "docs", True)
+    with page_for(home, Opened()) as page:
+        write_held(home, {})
+        # Any verified Apply drops the notes of servers the gateway no longer holds.
+        write_held(home, {"tool": {"command": "uvx"}})
+        answer = access(page, "tool", "env", "API_KEY", "SENTINEL_X")
+        page.post(f"/api/changes/{answer.json()['id']}/apply", headers=POST)
+    assert load_refused(home) == {}
+
+
+def test_two_new_values_for_one_server_in_one_preview_are_refused_plainly(home, fake_keychain):
+    write_held(home, {"tool": {"command": "uvx"}})
+
+    def row(id, name, value):
+        params = {"server": "tool", "field": "env", "name": name, "value": value}
+        return {"id": id, "kind": "gateway.access", "targets": [], "params": params, "title": id}
+
+    with page_for(home, Opened()) as page:
+        answer = page.post(
+            "/api/batch/preview",
+            json={"requests": [row("a", "API_KEY", "SENTINEL_A"), row("b", "OTHER", "SENTINEL_B")]},
+            headers=POST,
+        )
+    # Each builds the whole entry, so the second waits until the first is applied.
+    assert answer.status_code == 422
+    assert "changes the same setting" in answer.json()["detail"]
+    assert "SENTINEL" not in answer.text

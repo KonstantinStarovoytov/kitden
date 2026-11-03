@@ -786,6 +786,26 @@ async def test_a_remote_that_starts_but_turns_down_a_call_needs_a_token(home):
     assert not fine.is_error and load_refused(home) == {}
 
 
+async def test_a_refused_call_beside_one_that_answers_still_says_it_needs_a_token(home):
+    remote = FakeHttpServer("http://127.0.0.1:9/elsewhere")
+    settings = {"servers": {"remote": {"url": f"http://127.0.0.1:{remote.server_port}/mcp"}}}
+    try:
+        async with Upstreams(home, settings) as upstreams:
+            await upstreams.call("remote", "fine", {})  # it starts
+            async with anyio.create_task_group() as group:
+                answers = {}
+
+                async def call(tool):
+                    answers[tool] = await upstreams.call("remote", tool, {})
+
+                group.start_soon(call, "locked")
+                group.start_soon(call, "fine")
+    finally:
+        remote.shutdown()
+    assert text(answers["locked"]).startswith("remote needs a token")
+    assert not answers["fine"].is_error
+
+
 async def test_a_call_is_counted(home):
     write_settings(home, {"echo": echo("echo")})
     save_tools(home, "echo", [tool("echo")])

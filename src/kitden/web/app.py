@@ -1713,11 +1713,16 @@ def create_app(
             moved = [name for move in moves for name in moved_in(move)]
             if moved:
                 refresh_later(moved)
-            # New access for a server that turned down a call: the next call says if it works.
-            changed = [change] if change.action == GATEWAY_ACCESS else []
+            # New access or a sign-in for a server that turned down a call: the next call says
+            # if it works. A server the gateway no longer holds loses its note too.
+            fresh = (GATEWAY_ACCESS, GATEWAY_SIGN_IN)
+            changed = [change] if change.action in fresh else []
             if change.rows:
-                changed = [part_of(change, r) for r in change.rows if r["kind"] == GATEWAY_ACCESS]
-            for name in {step.name for part in changed for step in part.steps}:
+                changed = [part_of(change, r) for r in change.rows if r["kind"] in fresh]
+            names = {step.name for part in changed for step in part.steps}
+            held_now = load_settings(home)["servers"]
+            names |= {name for name in load_refused(home) if name not in held_now}
+            for name in names:
                 # A note that cannot be cleared stays until the server answers a call again.
                 with contextlib.suppress(OSError):
                     await asyncio.to_thread(mark_refused, home, name, False)

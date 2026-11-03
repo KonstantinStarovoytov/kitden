@@ -93,7 +93,11 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
       node.setAttribute("aria-selected", String(picked.has(key)));
     }
     // The bar is in the list only while tools are picked.
-    if (!picked.size) return bar.remove();
+    if (!picked.size) {
+      document.removeEventListener("keydown", onKey, true);
+      return bar.remove();
+    }
+    document.addEventListener("keydown", onKey, true);
     if (!bar.isConnected) list.prepend(bar);
     const count = plural(picked.size, "tool", "tools");
     bar.replaceChildren(
@@ -116,17 +120,20 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
     }
     list.append(node);
   }
-  list.addEventListener("keydown", (event) => {
-    if (!picked.size) return;
+  // While tools are picked, Escape and Space are heard on the whole page first (focus may be
+  // anywhere after a press on a row), so Escape lets the tools go before it closes Details.
+  // Space on a button or a switch is that button's own.
+  const onKey = (event) => {
+    if (!list.isConnected || !picked.size) return document.removeEventListener("keydown", onKey, true);
     if (event.key === "Escape") {
       event.stopPropagation();
       pick(new Set(), null);
-    } else if (event.key === " " && !event.target.closest?.("input")) {
+    } else if (event.key === " " && !event.target.closest?.("button, a, input, textarea, [role=switch]")) {
       event.preventDefault();
       const anyOn = tools.some((row) => picked.has(row.tool) && row.on);
-      flipPicked(anyOn ? "off" : "on").catch?.(() => {});
+      Promise.resolve(flipPicked(anyOn ? "off" : "on")).catch(() => {});
     }
-  });
+  };
   // A drag over the rows (not from a switch or a button) picks the rows it covers; with Cmd or
   // Ctrl, on top of what is picked.
   let dragged = false;
@@ -158,6 +165,7 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
     const end = () => {
       removeEventListener("pointermove", move);
       removeEventListener("pointerup", end);
+      removeEventListener("pointercancel", end);
       box?.remove();
       list.classList.remove("picking");
       // The click that ends a drag picks nothing more.
@@ -165,6 +173,7 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
     };
     addEventListener("pointermove", move);
     addEventListener("pointerup", end);
+    addEventListener("pointercancel", end);
   });
   return list;
 }

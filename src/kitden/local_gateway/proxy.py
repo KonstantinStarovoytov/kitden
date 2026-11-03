@@ -207,9 +207,10 @@ class Upstreams:
         self.folder: str | None = None
         self._clients: dict[str, Client] = {}
         self._auths: dict[str, oauth.StoredSignIn] = {}  # the stored sign-in of each running one
-        # Remote servers whose last HTTP answer was 401 or 403: the MCP library reports such an
-        # answer to a call only as an internal error, so the HTTP client notes it.
-        self._turned: set[str] = set()
+        # How many 401 or 403 answers each remote server gave: the MCP library reports such an
+        # answer to a call only as an internal error, so the HTTP client counts them, and a call
+        # compares the count before and after (calls to one server may run at once).
+        self._turned: dict[str, int] = {}
         self._locks: dict[str, anyio.Lock] = {}
         self._group: TaskGroup | None = None
 
@@ -271,7 +272,7 @@ class Upstreams:
             return _error(str(problem))
         except TimeoutError:
             return _error(f"{server} did not start in {wait:g} seconds.")
-        self._turned.discard(server)
+        turned = self._turned.get(server, 0)
         try:
             with anyio.fail_after(CALL_TIMEOUT):
                 answer = await client.call_tool(tool, arguments)
@@ -281,20 +282,20 @@ class Upstreams:
             if refused.code not in (HTTP_CODES if self._remote(server) else SDK_CODES):
                 await self._note_refused(server, False)
                 return _answer(refused.message)  # the server's own answer
-            return _error(await self._failed(server))
+            return _error(await self._failed(server, turned))
         except Exception:
             # The text of an error may hold the server's address; say it plainly instead.
-            return _error(await self._failed(server))
+            return _error(await self._failed(server, turned))
         await self._note_refused(server, False)
         return answer
 
-    async def _failed(self, server: str) -> str:
+    async def _failed(self, server: str, turned: int = 0) -> str:
         """Why a call failed: a sign-in that ended while the server ran, a token the server
         wants (noted for the page), or plainly."""
         auth = self._auths.get(server)
         if auth is not None and auth.signed_out:
             return sign_in.SIGNED_OUT.format(server=server)
-        if server in self._turned:
+        if self._turned.get(server, 0) > turned:
             await self._note_refused(server, True)
             return ASK_FOR_ACCESS.format(server=server)
         return f"The call to {server} failed."
@@ -392,7 +393,7 @@ class Upstreams:
         self, entry: dict, stack: AsyncExitStack, auth: Any = None, server: str = ""
     ) -> Any:
         """How to reach a server: streamable HTTP for a `url` (with `auth`, its stored
-        sign-in), else its command over stdio. A 401 or 403 answer is noted (`_turned`)."""
+        sign-in), else its command over stdio. A 401 or 403 answer is counted (`_turned`)."""
         if entry.get("url"):
             # It names itself: Cloudflare turns down Python's default agent (seen 2026-10-31).
             headers = {"User-Agent": "kitden"}
@@ -401,7 +402,7 @@ class Upstreams:
 
             async def note(answer: httpx2.Response) -> None:
                 if answer.status_code in (401, 403):
-                    self._turned.add(server)
+                    self._turned[server] = self._turned.get(server, 0) + 1
 
             hooks = {"response": [note]}
             http = await stack.enter_async_context(

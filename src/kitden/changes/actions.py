@@ -1234,6 +1234,9 @@ def access_steps(
         if values:
             entry[field] = values
         return [_entry_step(home, server, entry)]
+    # A header held under other letters is the same header: it is replaced, not added again.
+    if field == "headers":
+        name = next((held_name for held_name in values if held_name.lower() == name.lower()), name)
     if name not in values:
         _check_new_name(server, field, name, "url" in held)
     value = value.strip()
