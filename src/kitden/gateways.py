@@ -11,17 +11,18 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from kitden import system
 from kitden.changes.atomic import write_atomic
 from kitden.model import Gateway, GatewayAuth
 from kitden.redact import redact
 
-DATA_DIR = "Library/Application Support/kitden"
-OLD_DATA_DIR = "Library/Application Support/agentsetup"  # the working name, before feature 002
-SETTINGS = f"{DATA_DIR}/settings.json"
+OLD_DATA_DIR = "Library/Application Support/agentsetup"  # the working name, macOS only
+SETTINGS_FILE = "settings.json"
 
 
 def data_dir(home: Path) -> Path:
-    return Path(home) / DATA_DIR
+    """Kitden's own folder: see kitden.system for where each system keeps it."""
+    return system.data_dir(home)
 
 
 def private_data_dir(home: Path) -> Path:
@@ -44,7 +45,7 @@ def ensure_data_folder(home: Path) -> str | None:
     absolute paths, so the copy points them at the new folder.
     """
     new, old = data_dir(home), Path(home) / OLD_DATA_DIR
-    if not old.is_dir():
+    if system.SYSTEM != "mac" or not old.is_dir():
         return None
     if (new / COPIED).exists():
         return f"Kitden uses {new}; the old folder {old} is not used."
@@ -101,7 +102,7 @@ def check_gateway(gateway: Gateway) -> None:
 
 
 def _read(home: Path) -> dict:
-    path = Path(home) / SETTINGS
+    path = data_dir(home) / SETTINGS_FILE
     try:
         data = json.loads(path.read_text())
     except (OSError, ValueError):
@@ -145,5 +146,5 @@ def add_gateway(home: Path, gateway: Gateway) -> Gateway:
         for g in [*kept, gateway]
     ]
     private_data_dir(home)
-    write_atomic(Path(home) / SETTINGS, json.dumps(settings, indent=2).encode())
+    write_atomic(data_dir(home) / SETTINGS_FILE, json.dumps(settings, indent=2).encode())
     return gateway

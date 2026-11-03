@@ -136,3 +136,13 @@ def test_a_broken_change_record_does_not_stop_the_copy(tmp_path):
     assert "Copied" in note
     record = json.loads((data_dir(tmp_path) / "changes" / change_id / "change.json").read_text())
     assert record["steps"][0]["edit"]["backup_path"].startswith(str(data_dir(tmp_path)))
+
+
+def test_no_copy_on_linux(system, tmp_path):
+    system("linux")
+    old = tmp_path / OLD_DATA_DIR
+    old.mkdir(parents=True)
+    (old / "settings.json").write_text(json.dumps(SETTINGS))
+    assert ensure_data_folder(tmp_path) is None
+    assert not data_dir(tmp_path).exists()
+    assert [p.name for p in old.iterdir()] == ["settings.json"]

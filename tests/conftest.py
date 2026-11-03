@@ -16,8 +16,23 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.fixture(autouse=True)
 def _never_the_real_home(tmp_path_factory, monkeypatch):
-    """Tests never read or write the developer's real home folder, even by accident."""
+    """Tests never read or write the developer's real home folder, even by accident. The XDG
+    folders would point Linux paths outside the sandbox home, so they go too."""
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("real-home")))
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+
+@pytest.fixture
+def system(monkeypatch):
+    """`system("linux")` makes this test, and the commands it starts, run as that system."""
+    import kitden.system
+
+    def use(name: str) -> None:
+        monkeypatch.setenv("KITDEN_SYSTEM", name)
+        monkeypatch.setattr(kitden.system, "SYSTEM", name)
+
+    return use
 
 
 CLIENT_BINARIES = {"claude", "codex", "cursor"}  # compared in lower case, so "Cursor" too
