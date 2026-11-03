@@ -1364,15 +1364,23 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .access-names summary { cursor: pointer; color: var(--ink-3); font-size: 12px; }
 .access-names p { margin: 4px 0 0; }
 
-/* Hover words (tips.js): one at a time, dark on light and light on dark, 400 ms after the
-   pointer rests and at once on keyboard focus; they fade in 140 ms and never take a press. */
+/* Hover words (tips.js): a small popover in the page's own colors (the raised panel, its line
+   and the popover shadow, as menus have), one at a time, 400 ms after the pointer rests and at
+   once on keyboard focus. It rises 4 px as it fades in (160 ms, --ease-out) and takes no press. */
 .tip {
-  position: fixed; z-index: 1000; max-width: 280px; padding: 6px 10px; border-radius: 8px;
-  background: var(--ink); color: var(--panel); font-size: 12px; line-height: 1.4;
-  box-shadow: var(--shadow); pointer-events: none;
-  opacity: 0; transform: translateY(-2px); transition: opacity 140ms ease-out, transform 140ms ease-out;
+  position: fixed; z-index: 1000; max-width: 260px; padding: 7px 10px; border-radius: 8px;
+  background: var(--panel-raised); color: var(--ink-2); box-shadow: var(--shadow-pop);
+  font: 12px/1.45 var(--sans); pointer-events: none;
+  opacity: 0; transform: translateY(4px); transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
 }
-.tip.above { transform: translateY(2px); }
+.tip.above { transform: translateY(-4px); }
 .tip.in { opacity: 1; transform: none; }
-@media (prefers-reduced-motion: reduce) { .tip { transition: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tip { transition: opacity 160ms linear; transform: none; } }
 .held-parts { display: grid; gap: 16px; }
+/* Picked tools (tools.js switchList): the rows tint like a selected row; the bar sits on top. */
+.sw-list { position: relative; }
+.sw-list.picking { user-select: none; }
+.sw-row.picked { background: var(--route-soft); box-shadow: inset 2px 0 0 var(--route); }
+.sw-picked { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: var(--panel-raised); border-bottom: 1px solid var(--wire); }
+.sw-picked > span { margin-right: auto; font-size: 12px; }
+.sw-marquee { position: absolute; z-index: 3; border: 1px solid var(--route); background: color-mix(in srgb, var(--route-soft) 60%, transparent); border-radius: 4px; pointer-events: none; }

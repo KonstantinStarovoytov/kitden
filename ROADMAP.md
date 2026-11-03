@@ -7,6 +7,18 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not released yet
+
+- **Add access to a server in the gateway:** its Details can add a token, a header of its own,
+  a browser sign-in, or a variable for a local server, through the preview with a backup and
+  Undo. A server that answers without the value says its first call checks it.
+- **Needs token:** a server that starts without a token but turns down calls (agent-docs does)
+  shows "Needs token" on the map, and the agent is told where to add one.
+- **Hover words:** every button and switch says what it does and what changes, in the page's
+  own style.
+- **Pick several tools:** Cmd or Ctrl and a press, Shift, or a drag over the rows picks tools;
+  Turn off or Turn on changes them all in one row of the preview.
+
 ### 0.5.0
 
 - **Python servers from the catalog:** an Official MCP Registry server published only on PyPI

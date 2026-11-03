@@ -140,7 +140,8 @@ export function startTips(root = document) {
     tip.style.top = `${Math.round(top)}px`;
     tip.style.left = `${Math.round(left)}px`;
     tip.classList.toggle("above", !below);
-    requestAnimationFrame(() => tip.classList.add("in"));
+    // Measured above with opacity 0, so the fade runs from there.
+    tip.classList.add("in");
   };
   const wait = (node, ms) => {
     clearTimeout(timer);

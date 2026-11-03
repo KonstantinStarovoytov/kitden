@@ -50,7 +50,7 @@ const NOT_KNOWN = "Not known";
 const HINT_TAGS = { reads: "Read", writes: "Write", "may write": "May write" };
 
 // The hint line under the dock on the map (gateway-notes 8); the List has none.
-const MAP_HINT = "Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client";
+const MAP_HINT = "Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click tools in Details to pick several";
 
 // What an arrival with a selection (Back, Forward or a link) opens, once: a server the Kitden
 // gateway holds (`held`, and `tool` for one of its tools), a server outside it by its name (its

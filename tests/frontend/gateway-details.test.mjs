@@ -1711,3 +1711,29 @@ test('new access is a token, a header or a variable, as one gateway.access row',
   assert.equal(newAccess('docs', 'token', '', '  '), null);
   assert.equal(newAccess('docs', 'header', '', 'k1'), null);
 });
+
+const { pickTools, pickedBody } = await import('../../src/kitden/web/static/js/tools.js');
+
+test('Cmd or Ctrl picks one more tool, Shift picks a run, a plain press lets go', () => {
+  const keys = ['a', 'b', 'c', 'd', 'e'];
+  let now = pickTools(new Set(), keys, 'b', { add: true });
+  assert.deepEqual([[...now.picked], now.anchor], [['b'], 'b']);
+  now = pickTools(now.picked, keys, 'd', { add: true, anchor: now.anchor });
+  assert.deepEqual([...now.picked], ['b', 'd']);
+  // Cmd on a picked one lets it go.
+  assert.deepEqual([...pickTools(now.picked, keys, 'b', { add: true, anchor: 'd' }).picked], ['d']);
+  // Shift: from the last one picked to this one, added to what is picked.
+  now = pickTools(new Set(['a']), keys, 'd', { range: true, anchor: 'b' });
+  assert.deepEqual([...now.picked].sort(), ['a', 'b', 'c', 'd']);
+  assert.equal(now.anchor, 'b');
+  // Shift with nothing picked yet starts at the first tool.
+  assert.deepEqual([...pickTools(new Set(), keys, 'c', { range: true }).picked], ['a', 'b', 'c']);
+  // A plain press lets every tool go.
+  assert.deepEqual([...pickTools(new Set(['a', 'b']), keys, 'c').picked], []);
+});
+
+test('the picked tools turn off or on in one row of the preview', () => {
+  assert.deepEqual(pickedBody('files', 'p1', ['read', 'write'], 'off'), {
+    action: 'gateway.rules', targets: [], params: { server: 'files', tools: ['read', 'write'], state: 'off', project: 'p1' },
+  });
+});
