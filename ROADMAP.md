@@ -21,6 +21,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Client commands end cleanly:** a client's own command runs with no input and in a process
   group of its own; when it takes longer than 60 seconds, the whole group is stopped, so no
   helper it started keeps the pipes or the write lock.
+- **Cancel forgets secrets:** cancelling a preview clears the secrets typed for it: Keychain
+  values, and the secret parts of new file entries and gateway servers.
 
 ### 0.5.0
 
@@ -428,6 +430,5 @@ Ask before starting each one.
 - Undo removes gateway servers last, not first; an Undo that was blocked can be tried again.
 - A crash in the middle of Apply leaves no record: save the record as Applying before the first
   change and look for such records at start.
-- Secrets typed for a preview that is cancelled stay in memory.
 - Server details from a third-party `.mcp.json` follow the same local-address rule as the
   sign-in checks.

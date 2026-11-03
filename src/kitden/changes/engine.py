@@ -622,8 +622,18 @@ class Engine:
             removal.masked_diff = "\n".join(f"-{f}" for f in files)
 
     def cancel(self, change_id: str) -> Change:
+        """Cancel a previewed change. The secrets typed for it go: Keychain values are cleared,
+        and new entries keep only what `redact` lets through."""
         change = self.changes[change_id]
         change.move_to(ChangeState.CANCELLED)
+        self._forget_secrets(change)
+        for step in change.steps:
+            if step.edit is not None:
+                shown, hid = redact(step.edit.after)
+                step.edit.after = shown if hid else step.edit.after
+            if step.gateway is not None:
+                shown, hid = redact(step.gateway.server)
+                step.gateway.server = shown if hid else step.gateway.server
         return change
 
     # Apply -------------------------------------------------------------------------------

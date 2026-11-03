@@ -1174,6 +1174,23 @@ def test_a_failed_apply_puts_back_the_old_keychain_value(tmp_path, config):
     assert step.keychain[0].old is None and step.keychain[0].value == ""
 
 
+def test_a_cancelled_change_forgets_the_secrets_typed_for_it(tmp_path, config):
+    import dataclasses
+
+    from kitden.model import KeychainItem
+
+    engine, _ = keychain_engine(tmp_path)
+    typed = "sk-live-SENTINEL0123456789"
+    step = toml_step(
+        config, ("mcp_servers", "gw"), {**GATEWAY, "http_headers": {"Authorization": typed}}
+    )
+    step.keychain = [KeychainItem("gw", "GW_KEY", typed)]
+    change = engine.preview("gateway.connect", [step])
+    engine.cancel(change.id)
+    assert change.state is ChangeState.CANCELLED
+    assert typed not in json.dumps(dataclasses.asdict(change), default=str)
+
+
 # The client writes its file during Apply (review 2026-11-03) --------------------------------
 
 
