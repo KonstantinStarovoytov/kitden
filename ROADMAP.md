@@ -9,6 +9,11 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **Linux:** Kitden runs on a Linux desktop as on a Mac. Secrets go to the desktop keyring
+  through `secret-tool` (libsecret-tools); the page says "keyring" there and "this computer"
+  in place of "this Mac" on both systems. `install.sh` accepts Linux and installs Kitden from
+  PyPI by version, so git is no longer needed. CI runs every check on macOS and Ubuntu, with
+  one real keyring round trip.
 - **Homebrew:** `brew install konstantinstarovoytov/tap/kitden` installs Kitden without uv,
   from a tap that follows PyPI releases on its own. The same formula can go to homebrew-core
   once the repository passes its notability bar (225 stars for a submission by the author,
@@ -296,7 +301,7 @@ The parts, in order:
 
 - **Part 5, logins in one place,** so OAuth servers move into the gateway too. Its Keychain part
   is done.
-- **Part 7, Linux and Windows.**
+- **Part 7, Linux and Windows.** Linux is done (see Not released yet); Windows is next.
 
 Part 6, the Instructions tab and tool counts, is done.
 

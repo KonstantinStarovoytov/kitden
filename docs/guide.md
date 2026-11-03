@@ -24,13 +24,13 @@ the List offers a project scope where supported. Start a new client session to l
 
 **+ Add plugins** in Library and **+ Add servers** in Gateway open one catalog: **skills.sh**,
 the **official MCP Registry**, the Claude plugins marketplace, any public GitHub repository you
-add, and what is already **On this Mac**. Click a result to preview it, or drag it onto a client
+add, and what is already **On this computer**. Click a result to preview it, or drag it onto a client
 or the gateway. Skills come from a pinned GitHub commit, plugins use the client's own installer,
 and MCP servers go to the Kitden gateway, so every connected client gets them.
 See [online sources](discovery.md) for formats and limits.
 
 - **Tokens:** a server asks for exactly the value it needs. Kitden checks it against the server
-  before Apply and keeps it in the **macOS Keychain** only.
+  before Apply and keeps it in the **macOS Keychain** or the **Linux keyring** only.
 - **Browser sign-in:** **Sign in** opens the server's page; Kitden catches the answer itself
   and refreshes it later. A server that allows no sign-in for Kitden asks for an API key instead.
 - **Not ready yet:** it waits in the preview; Apply writes the rest. **Details** show each secret
@@ -67,9 +67,11 @@ Press **Ctrl+C** in Terminal to stop and delete the sample.
 
 ## Install
 
-Requires **macOS**, **[uv](https://docs.astral.sh/uv/)** and at least one of **Claude Code,
-Codex or Cursor**. uv gets Python 3.13 if needed. Install uv with its official installer, then
-open a new Terminal window:
+Requires **macOS or Linux**, **[uv](https://docs.astral.sh/uv/)** and at least one of
+**Claude Code, Codex or Cursor**. uv gets Python 3.13 if needed. On Linux, also install
+`libsecret-tools` (Debian, Ubuntu) or `libsecret` (Fedora, Arch): Kitden keeps server secrets
+in your desktop keyring through it. Install uv with its official installer, then open a new
+Terminal window:
 
 <!-- Checked 2026-10-28: https://docs.astral.sh/uv/getting-started/installation/ -->
 ```bash
@@ -98,8 +100,8 @@ source, which takes a few minutes the first time.
 
 - The page runs locally at `127.0.0.1`, with a private access link. No account or telemetry.
 - Credentials go to the server they belong to, or to a gateway you move that server into.
-  Secrets you type or sign in with are kept in the macOS Keychain only; the page never shows
-  more than their first and last characters. Kitden masks secret fields and known token
+  Secrets you type or sign in with are kept in the macOS Keychain or the Linux keyring only;
+  the page never shows more than their first and last characters. Kitden masks secret fields and known token
   formats in its page and logs.
 - Kitden goes online only to reach remote servers, the catalogs you open and the GitHub
   sources you add. Nothing from a catalog runs during search or download.

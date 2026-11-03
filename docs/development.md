@@ -156,6 +156,10 @@ project, with a server that has a token:
 Not run yet for steps 17 to 22: Part 5 was built and tested with a fake `security` only, and
 step 22 with a fake `claude`.
 
+On Linux, check steps 17 to 19 once by hand too, on an Ubuntu desktop: the item shows in
+`secret-tool lookup service kitden account <server>/<key>`. With `libsecret-tools` removed, the
+same move waits in the review with "Kitden could not reach the keyring." and changes nothing.
+
 Before a release that touches Details or the preview tray, also check this once by hand, on the
 same test project, with a Claude Code plugin that is on:
 
@@ -227,4 +231,11 @@ with trusted publishing and creates the GitHub release with the notes file as it
 
 ## Linux and Windows
 
-Not supported yet: the install scripts stop with a message, and the page looks for macOS paths.
+Linux runs as macOS does; `kitden/system.py` is the one place that knows where each system keeps
+things, and secrets go to the keyring through `secret-tool`. To run the suite as Linux on a Mac:
+`KITDEN_SYSTEM=linux uv run pytest -q`. The Ubuntu job in CI is the real check: it runs every
+test there and one real keyring round trip (`tests/unit/test_real_keyring.py`). Tests that are
+about macOS words or `security` command lines say so with `pytestmark =
+pytest.mark.usefixtures("as_mac")`.
+
+Windows is not supported yet: `install.ps1` stops with a message.
