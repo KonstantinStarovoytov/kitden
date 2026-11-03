@@ -1363,3 +1363,16 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .access-works .access-check path { stroke-dasharray: 24; }
 .access-names summary { cursor: pointer; color: var(--ink-3); font-size: 12px; }
 .access-names p { margin: 4px 0 0; }
+
+/* Hover words (tips.js): one at a time, dark on light and light on dark, 400 ms after the
+   pointer rests and at once on keyboard focus; they fade in 140 ms and never take a press. */
+.tip {
+  position: fixed; z-index: 1000; max-width: 280px; padding: 6px 10px; border-radius: 8px;
+  background: var(--ink); color: var(--panel); font-size: 12px; line-height: 1.4;
+  box-shadow: var(--shadow); pointer-events: none;
+  opacity: 0; transform: translateY(-2px); transition: opacity 140ms ease-out, transform 140ms ease-out;
+}
+.tip.above { transform: translateY(2px); }
+.tip.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .tip { transition: none; transform: none; } }
+.held-parts { display: grid; gap: 16px; }

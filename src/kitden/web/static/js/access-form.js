@@ -266,7 +266,7 @@ export function newAccess(server, way, name, value) {
   const given = String(value || "").trim();
   const called = String(name || "").trim();
   if (!given) return null;
-  const params = (field, key, text) => ({ action: "gateway.access", targets: [], params: { server, field, name: key, value: text } });
+  const params = (field, key, text) => ({ action: "gateway.access", targets: [], params: { server, field, name: key, value: text, added: true } });
   if (way === "token") return params("headers", "Authorization", `Bearer ${given.replace(/^bearer\s+/i, "")}`);
   if (!called) return null;
   return params(way === "variable" ? "env" : "headers", called, given);
@@ -290,21 +290,24 @@ export function addAccess(server, { remote = true } = {}) {
   const form = el("form", "form access-form");
   const pick = el("div", "seg sm");
   const fields = el("div", "access-fields");
+  // How the value is sent: technical, so under Details.
   const say = el("p", "muted");
+  const how = el("details", "access-names");
+  how.append(el("summary", null, "Details"), say);
   const submit = el("button", "btn primary", "Preview");
   submit.type = "submit";
   const { why, done, refused, worked } = statusLines();
   let name = null;
   let value = null;
   const draw = () => {
-    const how = WAYS[way];
-    say.textContent = how.say;
+    const ask = WAYS[way];
+    say.textContent = ask.say;
     name = value = null;
     fields.replaceChildren();
-    submit.hidden = how.fields === null;
+    submit.hidden = ask.fields === null;
     why.hidden = done.hidden = true;
-    if (how.fields === null) {
-      fields.append(button("Sign in", () => signInAgain(server, { first: true }), "btn primary"));
+    if (ask.fields === null) {
+      fields.append(el("p", "muted", ask.say), button("Sign in", () => signInAgain(server, { first: true }), "btn primary"));
       return;
     }
     const input = (label, type, placeholder) => {
@@ -315,7 +318,7 @@ export function addAccess(server, { remote = true } = {}) {
       fields.append(line);
       return box;
     };
-    if (how.fields.length) name = input(how.fields[0], "text", how.fields[1]);
+    if (ask.fields.length) name = input(ask.fields[0], "text", ask.fields[1]);
     value = input(way === "token" ? "Token" : "Value", "password", way === "token" ? "Paste token" : "Enter value");
   };
   const choices = ways.map((id) => {
@@ -331,7 +334,7 @@ export function addAccess(server, { remote = true } = {}) {
   });
   pick.append(...choices);
   if (ways.length > 1) form.append(pick);
-  form.append(fields, say, why, done, el("p", "muted", `Saved in your ${secretsWord()} on Apply.`), submit);
+  form.append(fields, why, done, el("p", "muted", `Saved in your ${secretsWord()} on Apply.`), how, submit);
   draw();
   form.addEventListener("input", () => { why.hidden = true; });
   form.addEventListener("submit", (event) => {

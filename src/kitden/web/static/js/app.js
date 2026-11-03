@@ -10,6 +10,7 @@ import { startGlow } from "./glow.js";
 import { initLibraryDetails } from "./library-details.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
 import { startLogo } from "./logo.js";
+import { startTips } from "./tips.js";
 import { drawChip } from "./map-page.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, holdPanel, initPanel, isPanelOpen } from "./panel.js";
@@ -382,6 +383,7 @@ function start() {
   initDock();
   startGlow($("#content"));
   startLogo($(".brand"));
+  startTips();
 
   // Markers measured before a font arrived sit on the old widths; a resize re-seats them.
   document.fonts?.addEventListener("loadingdone", () => dispatchEvent(new Event("resize")));

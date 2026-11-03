@@ -1702,11 +1702,11 @@ test('an Access block without secrets says so and offers Add access', () => {
 const { newAccess } = await import('../../src/kitden/web/static/js/access-form.js');
 
 test('new access is a token, a header or a variable, as one gateway.access row', () => {
-  const body = (field, name, value) => ({ action: 'gateway.access', targets: [], params: { server: 'docs', field, name, value } });
+  const body = (field, name, value) => ({ action: 'gateway.access', targets: [], params: { server: 'docs', field, name, value, added: true } });
   assert.deepEqual(newAccess('docs', 'token', '', ' sk-123 '), body('headers', 'Authorization', 'Bearer sk-123'));
   assert.deepEqual(newAccess('docs', 'token', '', 'bearer sk-123'), body('headers', 'Authorization', 'Bearer sk-123'));
   assert.deepEqual(newAccess('docs', 'header', ' X-API-Key ', 'k1'), body('headers', 'X-API-Key', 'k1'));
-  assert.deepEqual(newAccess('tool', 'variable', 'API_KEY', 'v1').params, { server: 'tool', field: 'env', name: 'API_KEY', value: 'v1' });
+  assert.deepEqual(newAccess('tool', 'variable', 'API_KEY', 'v1').params, { server: 'tool', field: 'env', name: 'API_KEY', value: 'v1', added: true });
   // Nothing typed, or no name for a header or variable: nothing to add.
   assert.equal(newAccess('docs', 'token', '', '  '), null);
   assert.equal(newAccess('docs', 'header', '', 'k1'), null);
