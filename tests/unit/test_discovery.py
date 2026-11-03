@@ -603,3 +603,65 @@ def test_details_say_up_front_when_kitden_cannot_sign_in(tmp_path):
     assert out["access_note"] == (
         "zoom does not let Kitden sign in yet. It may take an API key; see its docs."
     )
+
+
+def test_a_python_package_runs_with_uvx_at_its_exact_version():
+    # Official MCP Registry packages with registryType "pypi" (checked 2026-11-03).
+    package = {
+        "registryType": "pypi",
+        "identifier": "mcparmory-atlassian-jira",
+        "version": "1.0.3",
+        "transport": {"type": "stdio"},
+    }
+    entry, refusal = server_entry({"packages": [package]})
+    assert refusal is None
+    assert entry == {"command": "uvx", "args": ["mcparmory-atlassian-jira==1.0.3"]}
+    # Without uv (Kitden from Homebrew) it says what to install.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(discovery.shutil, "which", lambda name: None)
+        assert server_entry({"packages": [package]}) == (
+            None,
+            "This Python server runs with uv. Install uv, then search again.",
+        )
+    # A name or version that is not a plain package spec is never run.
+    for bad in ({"identifier": "x; rm -rf /"}, {"version": "1.0 || true"}):
+        assert server_entry({"packages": [{**package, **bad}]})[0] is None
+
+
+def test_a_python_package_that_needs_a_value_asks_for_it():
+    from kitden.discovery import server_setup
+
+    package = {
+        "registryType": "pypi",
+        "identifier": "jira-mcp",
+        "version": "2.0.0",
+        "transport": {"type": "stdio"},
+        "environmentVariables": [{"name": "JIRA_TOKEN", "isRequired": True}],
+    }
+    entry, refusal, fields = server_setup({"packages": [package]})
+    assert refusal is None and entry == {"command": "uvx", "args": ["jira-mcp==2.0.0"]}
+    assert [f["name"] for f in fields] == ["JIRA_TOKEN"]
+
+
+def test_a_server_kitden_cannot_add_says_why():
+    docker = {"registryType": "oci", "identifier": "ghcr.io/x/y:1", "transport": {"type": "stdio"}}
+    bundle = {
+        "registryType": "mcpb",
+        "identifier": "https://github.com/x/y/releases/download/v1/y.mcpb",
+        "version": "1.0.0",
+        "transport": {"type": "stdio"},
+    }
+    sse = {"type": "sse", "url": "https://example.com/sse"}
+    assert server_entry({"packages": [docker]})[1] == (
+        "Only a Docker image. Kitden cannot run Docker servers yet."
+    )
+    assert server_entry({"packages": [bundle]})[1] == (
+        "Only an .mcpb bundle. Install it in your client, then move it into the gateway."
+    )
+    assert server_entry({"remotes": [sse]})[1] == (
+        "Only an SSE address. The gateway does not support SSE yet."
+    )
+    # Anything else keeps the general words.
+    assert server_entry({})[1] == (
+        "This server needs sign-in, configuration or a transport Kitden cannot add yet."
+    )

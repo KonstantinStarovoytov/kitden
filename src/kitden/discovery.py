@@ -160,7 +160,28 @@ def server_entry(server: dict) -> tuple[dict | None, str | None]:
             r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", name
         ):
             return {"command": "npx", "args": ["-y", f"{name}@{version}"]}, None
-    return None, "This server needs sign-in, configuration or a transport Kitden cannot add yet."
+        # A Python package runs with uvx (registry checked 2026-11-03). Kitden from Homebrew has
+        # no uv, so it says so rather than add a server that cannot start.
+        if package.get("registryType") == "pypi" and re.fullmatch(
+            r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?", name
+        ):
+            if not shutil.which("uvx"):
+                return None, "This Python server runs with uv. Install uv, then search again."
+            return {"command": "uvx", "args": [f"{name}=={version}"]}, None
+    return None, refusal_words(server)
+
+
+def refusal_words(server: dict) -> str:
+    """Why a server cannot be added, when the only ways it offers are ones Kitden cannot use."""
+    kinds = {p.get("registryType") for p in server.get("packages", [])}
+    remotes = {r.get("type") for r in server.get("remotes", [])}
+    if kinds == {"oci"} and not remotes:
+        return "Only a Docker image. Kitden cannot run Docker servers yet."
+    if kinds == {"mcpb"} and not remotes:
+        return "Only an .mcpb bundle. Install it in your client, then move it into the gateway."
+    if remotes == {"sse"} and not kinds:
+        return "Only an SSE address. The gateway does not support SSE yet."
+    return "This server needs sign-in, configuration or a transport Kitden cannot add yet."
 
 
 def server_setup(server: dict) -> tuple[dict | None, str | None, list[dict]]:
