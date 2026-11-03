@@ -43,6 +43,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Stable tool names:** a tool's bare name in the gateway stays with the server that had it
   (kept in `gateway-names.json`), so a server added later gets the `<server>_` name instead
   and a client rule for `mcp__kitden__search` keeps meaning the same tool.
+- **Scan survives bad files:** a project file that is not UTF-8, nests too deep, is over
+  5 MB or is not a regular file (a FIFO) is shown as a problem of its own; the scan goes on
+  and lists everything else.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 

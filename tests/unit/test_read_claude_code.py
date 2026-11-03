@@ -227,3 +227,49 @@ def test_claude_desktop_config_is_read_from_the_linux_config_folder(system, tmp_
     assert not (home / "Library").exists()
     (desktop,) = ClaudeCodeAdapter(home, read_version=no_version).extra_clients()
     assert desktop.id == "claude_desktop_code_tab"
+
+
+def _scan_with_bad_project_file(tmp_path, no_version, make_bad, wait=False):
+    """Scan with the project's .mcp.json made bad. With `wait`, the scan runs in a thread that
+    must finish within 10 seconds (in the main thread, deep JSON hits the recursion limit)."""
+    import os
+    import threading
+
+    home = make_home(tmp_path, FIXTURE)
+    bad = home / "work/website/.mcp.json"
+    bad.unlink()
+    make_bad(bad)
+    done = {}
+
+    def scan():
+        done["scan"] = ClaudeCodeAdapter(home, read_version=no_version).scan()
+
+    if wait:
+        worker = threading.Thread(target=scan, daemon=True)
+        worker.start()
+        worker.join(10)
+        if worker.is_alive():  # let a stuck reader go before failing
+            os.close(os.open(bad, os.O_WRONLY | os.O_NONBLOCK))
+    else:
+        scan()
+    assert "scan" in done, "the scan did not finish"
+    problems = [(p.path, p.unknown_reason) for p in done["scan"].problems]
+    assert (str(bad), UnknownReason.PARSE_ERROR) in problems
+    found = rows(done["scan"].items, home)
+    assert ("claude_code", "skill", "brandkit", "user", "on", None) in found
+    assert ("claude_code", "mcp_server", "local-db", "local", "on", "work/website") in found
+
+
+def test_a_project_file_that_is_not_utf8_is_a_problem_of_its_own(tmp_path, no_version):
+    _scan_with_bad_project_file(tmp_path, no_version, lambda p: p.write_bytes(b'{"a": "\xff"}'))
+
+
+def test_a_fifo_named_like_a_project_file_does_not_stop_the_scan(tmp_path, no_version):
+    import os
+
+    _scan_with_bad_project_file(tmp_path, no_version, os.mkfifo, wait=True)
+
+
+def test_a_deeply_nested_project_file_is_a_problem_of_its_own(tmp_path, no_version):
+    deep = "[" * 100_000 + "]" * 100_000
+    _scan_with_bad_project_file(tmp_path, no_version, lambda p: p.write_text(deep))

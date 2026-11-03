@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import stat
 import tomllib
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -41,6 +42,7 @@ from kitden.redact import redact
 
 # MCP entry fields shown on the page (after redaction). Everything else stays hidden.
 _SUMMARY_FIELDS = ("type", "transport", "command", "args", "url")
+MAX_FILE = 5_000_000  # bytes; a settings file is far smaller
 
 
 @dataclass
@@ -70,25 +72,34 @@ class Reader:
             )
         )
 
-    def _read(self, path: Path, parse: Callable[[str], Any], errors: tuple) -> Any:
+    def _read(self, path: Path, parse: Callable[[str], Any]) -> Any:
+        """The parsed file, or None. Only a regular file up to MAX_FILE bytes is read, so a
+        FIFO or /dev/zero named like a settings file cannot stop the scan; a file that is not
+        UTF-8, does not parse or nests too deep is a problem of its own, never of the client."""
         try:
-            text = path.read_text()
+            found = path.stat()
+            if stat.S_ISDIR(found.st_mode):
+                raise IsADirectoryError(path)
+            if not stat.S_ISREG(found.st_mode) or found.st_size > MAX_FILE:
+                raise ValueError("not a settings file")
+            with path.open(encoding="utf-8") as file:
+                text = file.read(MAX_FILE + 1)
+            if len(text) > MAX_FILE:
+                raise ValueError("too big")
+            return parse(text)
         except FileNotFoundError:
             return None
         except (PermissionError, IsADirectoryError):
             self.problem(path, UnknownReason.NO_ACCESS)
-            return None
-        try:
-            return parse(text)
-        except errors:
+        except (OSError, ValueError, RecursionError):  # JSON, TOML and UTF-8 errors are ValueErrors
             self.problem(path, UnknownReason.PARSE_ERROR)
-            return None
+        return None
 
     def json(self, path: Path) -> Any:
-        return self._read(path, json.loads, (json.JSONDecodeError, UnicodeDecodeError))
+        return self._read(path, json.loads)
 
     def toml(self, path: Path) -> Any:
-        return self._read(path, tomllib.loads, (tomllib.TOMLDecodeError, UnicodeDecodeError))
+        return self._read(path, tomllib.loads)
 
     def failed(self, path: Path) -> bool:
         return any(p.path == str(path) for p in self.problems)
@@ -103,7 +114,7 @@ def file_source(
 def skill_name(skill_md: Path) -> str:
     """The `name:` from SKILL.md front matter, or the folder name."""
     try:
-        head = skill_md.read_text().split("---", 2)
+        head = skill_md.read_text(errors="replace").split("---", 2)
     except OSError:
         return skill_md.parent.name
     if len(head) == 3 and (m := re.search(r"^name:\s*(.+?)\s*$", head[1], re.M)):
