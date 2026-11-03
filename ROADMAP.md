@@ -26,6 +26,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Plugin servers stay outside too:** a server from a plugin's `.mcp.json` or a catalog row
   whose address is on this computer or a private network is not asked before Apply; the
   gateway reaches it only once you apply. Project files were already never moved.
+- **Undo in a safe order, and again:** Undo takes servers out of a gateway last, once the
+  client files read back as before, so a server is never in neither place. An Undo that stopped
+  keeps its Undo button and can be pressed again; what is back already is skipped.
 
 ### 0.5.0
 
@@ -430,6 +433,5 @@ Left for later in the alignment plan's phase notes:
 
 Ask before starting each one.
 
-- Undo removes gateway servers last, not first; an Undo that was blocked can be tried again.
 - A crash in the middle of Apply leaves no record: save the record as Applying before the first
   change and look for such records at start.

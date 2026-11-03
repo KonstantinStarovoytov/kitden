@@ -181,7 +181,8 @@ function changeRow(entry) {
   words.append(el("span", null, stateWord(entry.state, entry.technical.error)));
   state.append(lamp, words);
   const act = el("span", "act");
-  if (entry.state === "verified") act.append(undoButton(entry));
+  // An Undo that stopped can be tried again once its cause is gone (the toast says why).
+  if (entry.state === "verified" || entry.state === "undo_blocked") act.append(undoButton(entry));
   node.append(dot, el("span", "time", clock(entry.time)), title, clientTiles(entry.clients, "who"), el("span", "sr-only", clientWords(entry.clients)), state, act, el("span", "sr-only", "Open details"));
   showSelected(node, entry.id === page.selected);
   node.addEventListener("click", (event) => {

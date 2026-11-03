@@ -209,6 +209,8 @@ _TRANSITIONS: dict[ChangeState, set[ChangeState]] = {
     ChangeState.PREVIEWED: {ChangeState.STALE, ChangeState.CANCELLED, ChangeState.APPLYING},
     ChangeState.APPLYING: {ChangeState.VERIFIED, ChangeState.RESTORED},
     ChangeState.VERIFIED: {ChangeState.UNDONE, ChangeState.UNDO_BLOCKED},
+    # A blocked Undo can be tried again once its cause is gone.
+    ChangeState.UNDO_BLOCKED: {ChangeState.UNDONE, ChangeState.UNDO_BLOCKED},
 }
 
 

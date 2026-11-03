@@ -542,6 +542,31 @@ def test_undo_goes_on_when_the_server_was_removed_by_hand(tmp_path, fake, config
     assert config.read_text() == CONFIG
 
 
+def test_undo_takes_the_server_out_of_the_gateway_last_and_can_be_tried_again(
+    tmp_path, fake, claude_json
+):
+    # If putting the client entry back fails, the gateway still has the server: it is never
+    # in neither place. Once the cause is gone, Undo can be pressed again and finishes.
+    cli = FakeClaude(claude_json)
+    engine, gateway = gateway_engine(tmp_path, fake, run=cli)
+    entry = {"command": "x"}
+    remove = claude_step(
+        claude_json, "old", ABSENT, ["claude", "mcp", "remove", "-s", "user", "old"]
+    )
+    remove.undo_command = ["claude", "mcp", "add-json", "-s", "user", "old", json.dumps(entry)]
+    change = engine.preview("gateway.move", [gateway_step(gateway), remove])
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+
+    engine.run = lambda command, cwd: CommandResult(returncode=1, output="no network")
+    assert engine.undo(change.id).state is ChangeState.UNDO_BLOCKED
+    assert fake.held_names() == ["neon"]
+
+    engine.run = cli
+    assert engine.undo(change.id).state is ChangeState.UNDONE, change.error
+    assert fake.held_names() == []
+    assert json.loads(claude_json.read_text())["mcpServers"] == {"old": entry}
+
+
 def test_a_change_without_file_steps_is_still_recorded(tmp_path, fake):
     engine, gateway = gateway_engine(tmp_path, fake)
     change = engine.preview("gateway.move", [gateway_step(gateway)])
