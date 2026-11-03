@@ -18,6 +18,30 @@ What Kitden does today and what comes next. Ideas and bugs:
   own style.
 - **Pick several tools:** Cmd or Ctrl and a press, Shift, or a drag over the rows picks tools;
   Turn off or Turn on changes them all in one row of the preview.
+- **Exact versions only:** a registry server runs only at an exact version (semver for npm,
+  PEP 440 for PyPI); `owner/repo`, `./dir`, tags and ranges are refused.
+- **No values in repr:** a file edit's old and new entry and a gateway edit's server stay out
+  of `repr`, so a traceback or a log line cannot show a secret.
+- **Gateway settings kept:** adding a gateway when Kitden's own `settings.json` cannot be read
+  is refused with "Kitden could not read its settings, so it saved nothing." instead of
+  replacing the file.
+- **Preview refuses, never fails:** a file or folder that a change would read but cannot (no
+  access, a folder in place of a file) gives "Kitden could not read …" instead of an error 500.
+- **Client commands end cleanly:** a client's own command runs with no input and in a process
+  group of its own; when it takes longer than 60 seconds, the whole group is stopped, so no
+  helper it started keeps the pipes or the write lock.
+- **Cancel forgets secrets:** cancelling a preview, or an Apply that stops because a file
+  changed, clears the secrets typed for it: Keychain values, and the secret parts of new file
+  entries and gateway servers.
+- **Plugin servers stay outside too:** a server from a plugin's `.mcp.json` or a catalog row
+  whose address is on this computer or a private network is not asked before Apply; the
+  gateway reaches it only once you apply. Project files were already never moved.
+- **Undo in a safe order, and again:** Undo takes servers out of a gateway last, once the
+  client files read back as before, so a server is never in neither place. An Undo that stopped
+  keeps its Undo button and can be pressed again; what is back already is skipped.
+- **A crash during Apply is found:** the change is saved as Applying before its first write.
+  At the next start such a record says "Kitden stopped during Apply" and names the files to
+  compare with their backups; nothing is put back on its own.
 
 ### 0.5.0
 
@@ -418,19 +442,3 @@ Left for later in the alignment plan's phase notes:
   `design/kitden.pen`; prototype and test it before implementation.
 - A shared setup for a small team.
 
-### From the review of 2026-11-03, not checked line by line yet
-
-Ask before starting each one.
-
-- Undo removes gateway servers last, not first; an Undo that was blocked can be tried again.
-- A crash in the middle of Apply leaves no record: save the record as Applying before the first
-  change and look for such records at start.
-- A client command that times out can leave a child process holding the pipes and the write
-  lock: start it with no stdin, in its own process group, and stop the whole group.
-- Some file errors in Preview answer 500 instead of a plain refusal.
-- Secrets typed for a preview that is cancelled stay in memory.
-- Server details from a third-party `.mcp.json` follow the same local-address rule as the
-  sign-in checks.
-- The npm version check accepts `owner/repo` and `./dir`; accept exact versions only.
-- Adding the gateway overwrites a `settings.json` it cannot read.
-- File and gateway edits hide their values from `repr`.

@@ -209,6 +209,8 @@ _TRANSITIONS: dict[ChangeState, set[ChangeState]] = {
     ChangeState.PREVIEWED: {ChangeState.STALE, ChangeState.CANCELLED, ChangeState.APPLYING},
     ChangeState.APPLYING: {ChangeState.VERIFIED, ChangeState.RESTORED},
     ChangeState.VERIFIED: {ChangeState.UNDONE, ChangeState.UNDO_BLOCKED},
+    # A blocked Undo can be tried again once its cause is gone.
+    ChangeState.UNDO_BLOCKED: {ChangeState.UNDONE, ChangeState.UNDO_BLOCKED},
 }
 
 
@@ -223,8 +225,8 @@ class FileEdit:
     path: str
     fmt: str  # "json" or "toml"
     key: tuple[str, ...]
-    after: Any  # json_splice.ABSENT removes the entry
-    before: Any = None  # read at preview
+    after: Any = field(repr=False)  # json_splice.ABSENT removes the entry
+    before: Any = field(default=None, repr=False)  # read at preview
     check: str = "file"  # "file": the whole file must be unchanged; "entry": only this entry
     before_hash: str | None = None  # None when the file did not exist
     after_hash: str | None = None
@@ -239,7 +241,7 @@ class GatewayEdit:
     gateway_id: str
     url: str  # the gateway's endpoint address: the step's place on the Changes page
     name: str  # the server's name in the gateway
-    server: dict  # type, url, headers, as the gateway takes them
+    server: dict = field(repr=False)  # type, url, headers, as the gateway takes them
     server_uuid: str | None = None  # known after apply; undo removes it
     masked_diff: str = ""
 

@@ -223,6 +223,16 @@ def test_add_steps_write_only_the_gateway_settings(home):
     assert local[0].edit.after == {"command": "uvx", "args": ["mcp-db-query"]}
 
 
+def test_a_plugin_server_at_a_local_address_is_not_asked_before_apply(home):
+    # A plugin's .mcp.json is someone else's file: it must not make Kitden reach this computer
+    # or a private network on its own. The server is still added; the gateway reaches it only
+    # after Apply.
+    for url in ("http://169.254.169.254/latest/mcp", "http://127.0.0.1:3845/mcp"):
+        _offer(home, "inside", {"type": "http", "url": url})
+        [step] = _steps(home, f"extra@{MARKET}/inside", _never)
+        assert step.edit.after == {"url": url}
+
+
 def test_add_steps_put_secrets_in_the_keychain_and_map_streamable_http(home):
     entry = {
         "type": "streamable-http",

@@ -240,6 +240,16 @@ def test_hard_linked_file_is_refused(tmp_path, config):
         )
 
 
+def test_a_target_that_cannot_be_read_is_refused_not_an_error(tmp_path):
+    # The page answers a refusal with its words; any other error would be a 500.
+    folder = tmp_path / "config.toml"
+    folder.mkdir()
+    with pytest.raises(ChangeRefusedError, match="could not read"):
+        make_engine(tmp_path).preview(
+            "gateway.connect", [toml_step(folder, ("mcp_servers", "gw"), GATEWAY)]
+        )
+
+
 def test_nothing_to_change_is_refused(tmp_path, config):
     with pytest.raises(ChangeRefusedError, match="nothing to change"):
         make_engine(tmp_path).preview(
@@ -530,6 +540,31 @@ def test_undo_goes_on_when_the_server_was_removed_by_hand(tmp_path, fake, config
     assert change.state is ChangeState.UNDONE
     assert "already been removed" in change.error
     assert config.read_text() == CONFIG
+
+
+def test_undo_takes_the_server_out_of_the_gateway_last_and_can_be_tried_again(
+    tmp_path, fake, claude_json
+):
+    # If putting the client entry back fails, the gateway still has the server: it is never
+    # in neither place. Once the cause is gone, Undo can be pressed again and finishes.
+    cli = FakeClaude(claude_json)
+    engine, gateway = gateway_engine(tmp_path, fake, run=cli)
+    entry = {"command": "x"}
+    remove = claude_step(
+        claude_json, "old", ABSENT, ["claude", "mcp", "remove", "-s", "user", "old"]
+    )
+    remove.undo_command = ["claude", "mcp", "add-json", "-s", "user", "old", json.dumps(entry)]
+    change = engine.preview("gateway.move", [gateway_step(gateway), remove])
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+
+    engine.run = lambda command, cwd: CommandResult(returncode=1, output="no network")
+    assert engine.undo(change.id).state is ChangeState.UNDO_BLOCKED
+    assert fake.held_names() == ["neon"]
+
+    engine.run = cli
+    assert engine.undo(change.id).state is ChangeState.UNDONE, change.error
+    assert fake.held_names() == []
+    assert json.loads(claude_json.read_text())["mcpServers"] == {"old": entry}
 
 
 def test_a_change_without_file_steps_is_still_recorded(tmp_path, fake):
@@ -1162,6 +1197,104 @@ def test_a_failed_apply_puts_back_the_old_keychain_value(tmp_path, config):
     assert change.state is ChangeState.RESTORED
     assert json.loads(items.read_text()) == {"kitden gw/GW_KEY": "A"}
     assert step.keychain[0].old is None and step.keychain[0].value == ""
+
+
+def test_a_cancelled_change_forgets_the_secrets_typed_for_it(tmp_path, config):
+    import dataclasses
+
+    from kitden.model import KeychainItem
+
+    engine, _ = keychain_engine(tmp_path)
+    typed = "sk-live-SENTINEL0123456789"
+    step = toml_step(
+        config, ("mcp_servers", "gw"), {**GATEWAY, "http_headers": {"Authorization": typed}}
+    )
+    step.keychain = [KeychainItem("gw", "GW_KEY", typed)]
+    change = engine.preview("gateway.connect", [step])
+    engine.cancel(change.id)
+    assert change.state is ChangeState.CANCELLED
+    assert typed not in json.dumps(dataclasses.asdict(change), default=str)
+
+
+def test_a_crash_during_apply_leaves_a_record_that_says_so(tmp_path, config):
+    class Crash(BaseException):  # as the process dying: no handler of Apply sees it
+        pass
+
+    engine = make_engine(tmp_path)
+    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+
+    def die(path, data):
+        raise Crash
+
+    engine._write = die
+    with pytest.raises(Crash):
+        engine.apply(change.id)
+
+    after_restart = make_engine(tmp_path).changes[change.id]
+    assert after_restart.state is ChangeState.RESTORED
+    assert after_restart.error.startswith("Kitden stopped during Apply")
+    assert str(config) in after_restart.error
+    logged = make_engine(tmp_path).store.entries()[0]
+    assert logged["id"] == change.id and logged["state"] == "restored"
+    # Found once: a second start does not log it again.
+    assert len(make_engine(tmp_path).store.entries()) == 1
+
+
+def test_apply_refuses_when_its_record_cannot_be_saved(tmp_path, config):
+    engine = make_engine(tmp_path)
+    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    real = engine.store.save
+
+    def full(change_id, record):
+        raise OSError("No space left on device")
+
+    engine.store.save = full
+    with pytest.raises(ChangeRefusedError, match="could not save"):
+        engine.apply(change.id)
+    assert change.state is ChangeState.PREVIEWED and config.read_text() == CONFIG
+    engine.store.save = real
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+
+
+def test_a_crash_record_says_what_secrets_it_may_have_left(tmp_path, config):
+    from kitden.model import KeychainItem
+
+    class Crash(BaseException):
+        pass
+
+    engine, _ = keychain_engine(tmp_path)
+    config.write_text(
+        CONFIG + '\n[mcp_servers.old]\nurl = "https://o.example"\n'
+        'http_headers = { Authorization = "Bearer sk-live-OLD0123456789" }\n'
+    )
+    step = toml_step(config, ("mcp_servers", "gw"), GATEWAY)
+    step.keychain = [KeychainItem("gw", "GW_KEY", "SENTINEL_SECRET_NEW")]
+    change = engine.preview("gateway.connect", [step])
+
+    def die(path, data):
+        raise Crash
+
+    engine._write = die
+    with pytest.raises(Crash):
+        engine.apply(change.id)
+    found, _ = keychain_engine(tmp_path)
+    after = found.changes[change.id]
+    assert after.holds_secret
+    assert "gw/GW_KEY" in after.error
+
+
+def test_a_stale_change_forgets_the_secrets_typed_for_it(tmp_path, config):
+    import dataclasses
+
+    typed = "sk-live-SENTINEL0123456789"
+    engine = make_engine(tmp_path)
+    step = toml_step(
+        config, ("mcp_servers", "gw"), {**GATEWAY, "http_headers": {"Authorization": typed}}
+    )
+    change = engine.preview("gateway.connect", [step])
+    config.write_text(CONFIG + "\n# changed\n")
+    assert engine.apply(change.id).state is ChangeState.STALE
+    assert typed not in json.dumps(dataclasses.asdict(change), default=str)
 
 
 # The client writes its file during Apply (review 2026-11-03) --------------------------------

@@ -476,12 +476,12 @@ def _gateway_server(name: str, entry: dict) -> dict:
     return server
 
 
-def is_local_address(url: str) -> bool:
+def is_local_address(url: str, unknown: bool = True) -> bool:
     """True for an address on this computer or a private network: localhost, loopback,
     private, link-local, unspecified and shared (100.64/10) ranges, and Docker's name for the
     host. The name is looked up, so `127.1`, `2130706433`, `0x7f.0.0.1`, `localhost.` and a
-    name that points at a private address count too; a name that does not resolve counts as
-    local, as it cannot be checked."""
+    name that points at a private address count too; a name that does not resolve is
+    `unknown`: local by default, as it cannot be checked."""
     try:
         host = (urlsplit(url).hostname or "").lower().rstrip(".")
     except ValueError:
@@ -492,8 +492,10 @@ def is_local_address(url: str) -> bool:
         found = socket.getaddrinfo(host, None)
         addresses = [ipaddress.ip_address(info[4][0].partition("%")[0]) for info in found]
     except (OSError, UnicodeError, ValueError):
-        return True
-    return not addresses or any(_local_ip(address) for address in addresses)
+        return unknown
+    if not addresses:
+        return unknown
+    return any(_local_ip(address) for address in addresses)
 
 
 def _local_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
@@ -1320,7 +1322,10 @@ def gateway_add_steps(
     if refusal is not None:
         raise ValueError(refusal)
     server = _with_access(gateway_entry(entry), headers, signed_in)
-    if "url" in server:
+    # The entry comes from someone else's file (a plugin's .mcp.json, a catalog row): at an
+    # address on this computer or a private network it is not asked before Apply, as a sign-in
+    # check never follows a server there. The gateway reaches it once the user applies.
+    if "url" in server and not is_local_address(server["url"], unknown=False):
         # A value typed for it was refused: for a marketplace server only a token typed here
         # (its entry may send a header of its own); a catalog row's headers are all typed.
         given = bool(headers) if discovered is None else bool(server.get("headers"))

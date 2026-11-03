@@ -4,10 +4,12 @@ from kitden.clients.base import expand, instruction_items
 from kitden.model import (
     Change,
     ChangeState,
+    FileEdit,
     Finding,
     FindingType,
     Gateway,
     GatewayAuth,
+    GatewayEdit,
     Item,
     ItemKind,
     ReadStatus,
@@ -15,6 +17,7 @@ from kitden.model import (
     Severity,
     Source,
     SourceKind,
+    Step,
     UnknownReason,
 )
 
@@ -153,3 +156,27 @@ def test_expand_takes_a_glob_and_names_sub_folder_files_with_a_colon(tmp_path):
         ("frontend:components", "instructions"),
         ("style", "instructions"),
     ]
+
+
+SECRET = "sk-live-0123456789abcdef"
+
+
+def test_edits_hide_their_values_from_repr():
+    # A repr ends up in tracebacks and logs; the values of an edit may hold secrets.
+    file_edit = FileEdit(
+        path="/h/.claude.json",
+        fmt="json",
+        key=("mcpServers", "x"),
+        after={"env": {"TOKEN": SECRET}},
+        before={"env": {"TOKEN": SECRET}},
+    )
+    gateway = GatewayEdit(
+        gateway_id="obot",
+        url="https://gw.example/mcp",
+        name="x",
+        server={"headers": {"Authorization": f"Bearer {SECRET}"}},
+    )
+    step = Step(client="claude_code", scope=Scope.USER, name="x", edit=file_edit, gateway=gateway)
+    for shown in (repr(file_edit), repr(gateway), repr(step)):
+        assert SECRET not in shown
+    assert "/h/.claude.json" in repr(file_edit) and "gw.example" in repr(gateway)
