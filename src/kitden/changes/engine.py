@@ -52,6 +52,7 @@ from kitden.model import (
     Step,
 )
 from kitden.redact import masked_command, redact
+from kitden.system import secret_store_name
 
 if TYPE_CHECKING:
     from kitden.views.inventory import Inventory
@@ -796,12 +797,13 @@ class Engine:
             for item in reversed(stored):
                 if item.existed:
                     # Its old value is recorded nowhere.
-                    lost.append(f"{item.server}/{item.key} in your Keychain keeps the new value.")
+                    where = f"{item.server}/{item.key} in your {secret_store_name()}"
+                    lost.append(f"{where} keeps the new value.")
                     continue
                 try:
                     keychain.delete(item.ref, run=self._security())
                 except KeychainError:
-                    lost.append(f"{item.server}/{item.key} stays in your Keychain.")
+                    lost.append(f"{item.server}/{item.key} stays in your {secret_store_name()}.")
             self._mark_secret(change, file_steps)
             change.move_to(ChangeState.RESTORED)
             if lost:
@@ -1005,10 +1007,11 @@ class Engine:
                 keychain.read(item.ref, run=self._security())
         except KeychainError:
             return self._blocked(
-                change, "Kitden could not reach the Keychain; nothing was changed."
+                change, f"Kitden could not reach the {secret_store_name()}; nothing was changed."
             )
+        store = secret_store_name()
         kept = [
-            f"{i.server}/{i.key} in your Keychain keeps the new value." for i in items if i.existed
+            f"{i.server}/{i.key} in your {store} keeps the new value." for i in items if i.existed
         ]
 
         # The gateway side goes next: if it cannot be reached, the files stay as they are.
@@ -1061,7 +1064,7 @@ class Engine:
             try:
                 keychain.delete(item.ref, run=self._security())
             except KeychainError:
-                kept.append(f"{item.server}/{item.key} stays in your Keychain.")
+                kept.append(f"{item.server}/{item.key} stays in your {store}.")
         self.on_progress(change.id, len(change.steps), len(change.steps), None)
         change.move_to(ChangeState.UNDONE)
         notes = [f"{', '.join(gone)} had already been removed from the gateway."] if gone else []

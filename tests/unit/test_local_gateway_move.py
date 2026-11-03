@@ -39,6 +39,9 @@ from kitden.views.setup_server import setup_server_state
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 
+# macOS words and `security` command lines; Linux has its own tests.
+pytestmark = pytest.mark.usefixtures("as_mac")
+
 KITDEN = "/opt/kitden/bin/kitden"
 FILES = {"command": "npx", "args": ["files-mcp"], "env": {"FILES_TOKEN": "SENTINEL_SECRET_FILES"}}
 REFERENCE = {"keychain": "files/FILES_TOKEN"}
@@ -1346,3 +1349,36 @@ def test_a_web_page_at_the_metadata_path_is_not_sign_in():
         assert access_needed(f"http://127.0.0.1:{server.server_port}/mcp", {}) == "token"
     finally:
         stop(server)
+
+
+LINUX_REACH = (
+    "Kitden could not reach the keyring. Install libsecret-tools and sign in to your desktop "
+    "session."
+)
+
+
+def test_on_linux_a_keyring_that_is_down_refuses_the_review(home, monkeypatch, system):
+    system("linux")
+    monkeypatch.setenv("FAKE_SECRET_TOOL_DOWN", "1")
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    before = client_files(home)
+    with page_for(home) as page:
+        answer = preview(page, home, ("claude_code", "files"))
+    assert (answer.status_code, answer.json()["detail"]) == (422, LINUX_REACH)
+    assert client_files(home) == before
+
+
+def test_on_linux_the_secrets_go_to_the_keyring_and_undo_says_so(
+    home, fake_keychain, monkeypatch, system
+):
+    system("linux")
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    with page_for(home) as page:
+        answer = preview(page, home, ("claude_code", "files"))
+    assert "The token goes to your keyring;" in answer.json()["after"][0]["note"]
+    engine, change = apply(home, move(home, ("claude_code", "files")))
+    assert keychain_items(fake_keychain) == {"kitden files/FILES_TOKEN": "SENTINEL_SECRET_FILES"}
+    monkeypatch.setenv("FAKE_SECRET_TOOL_DOWN", "1")
+    engine.undo(change.id)
+    assert str(change.state) == "undo_blocked"
+    assert change.error == "Kitden could not reach the keyring; nothing was changed."

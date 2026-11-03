@@ -22,6 +22,9 @@ from kitden.local_gateway import keychain
 from kitden.local_gateway.keychain import REACH, KeychainError
 from kitden.local_gateway.settings import load_tools
 
+# macOS words and `security` command lines; Linux has its own tests.
+pytestmark = pytest.mark.usefixtures("as_mac")
+
 
 def _files(folder):
     """Every file under a folder with its bytes, to show nothing was written."""
@@ -168,3 +171,15 @@ def test_a_canned_refresh_fills_only_servers_without_tools(tmp_path):
 def test_the_stand_in_keychain_returns_three_values(tmp_path):
     run = DemoKeychain(tmp_path / "items.json")
     assert run(["find-generic-password", "-s", "kitden", "-a", "a/b", "-w"]) == (44, "", "")
+
+
+def test_the_stand_in_keyring_keeps_values_on_linux(tmp_path, system):
+    system("linux")
+    path = tmp_path / "keychain.json"
+    run = DemoKeychain(path)
+    ref = keychain.store("files", "FILES_TOKEN", "DEMO_SECRET_X", run=run)
+    assert keychain.read(ref, run=run) == "DEMO_SECRET_X"
+    assert json.loads(path.read_text()) == {"kitden files/FILES_TOKEN": "DEMO_SECRET_X"}
+    keychain.delete(ref, run=run)
+    assert keychain.read(ref, run=run) is None
+    keychain.delete(ref, run=run)  # quiet when it is not there

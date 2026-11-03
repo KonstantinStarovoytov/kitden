@@ -1,6 +1,8 @@
 """Where a change goes, for the review's first sentence, and what Undo cannot bring back
 (spec 3.3). Synthetic steps; every folder is under tmp_path."""
 
+import pytest
+
 from kitden.model import (
     Change,
     Client,
@@ -20,6 +22,9 @@ from kitden.views import after
 from kitden.views.inventory import Inventory
 from kitden.views.review import change_target, step_project, undo_note
 from kitden.views.words import KEYCHAIN_UNDO, KEYCHAIN_UNDO_MANY, REMOVE_NOTE
+
+# macOS words and `security` command lines; Linux has its own tests.
+pytestmark = pytest.mark.usefixtures("as_mac")
 
 
 def edit(path, scope=Scope.PROJECT, key=("mcpServers", "db"), client="cursor"):
@@ -259,10 +264,11 @@ def test_a_keychain_item_that_was_there_keeps_its_new_value_after_undo(tmp_path)
         KeychainItem(server="github", key="URL", existed=False),
     ]
     change = Change(action="gateway.keychain", steps=[step])
-    assert undo_note(change) == KEYCHAIN_UNDO.format("github/TOKEN")
+    assert undo_note(change) == KEYCHAIN_UNDO.format("github/TOKEN", store="Keychain")
     assert undo_note(change) == "After Undo, github/TOKEN in your Keychain keeps its new value."
     step.keychain[1].existed = True
-    assert undo_note(change) == KEYCHAIN_UNDO_MANY.format("github/TOKEN and github/URL")
+    both = "github/TOKEN and github/URL"
+    assert undo_note(change) == KEYCHAIN_UNDO_MANY.format(both, store="Keychain")
     assert undo_note(change) == (
         "After Undo, github/TOKEN and github/URL in your Keychain keep their new values."
     )
@@ -277,3 +283,11 @@ def test_a_folder_no_client_reads_is_still_its_own_clients_change(tmp_path):
     change = Change(action="skill.remove", steps=[removed])
     # No reader listed: the step's own client counts, and nothing overrides it in web.
     assert change_target(change, [web], inventory(), web)["scope"] == "all"
+
+
+def test_on_linux_the_undo_note_names_the_keyring(tmp_path, system):
+    system("linux")
+    step = edit(tmp_path / ".kitden/settings.json", Scope.USER, client="kitden")
+    step.keychain = [KeychainItem(server="github", key="TOKEN", existed=True)]
+    change = Change(action="gateway.keychain", steps=[step])
+    assert undo_note(change) == "After Undo, github/TOKEN in your keyring keeps its new value."

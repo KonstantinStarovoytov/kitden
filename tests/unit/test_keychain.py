@@ -18,6 +18,9 @@ from kitden.local_gateway.keychain import (
     store,
 )
 
+# macOS words and `security` command lines; Linux has its own tests.
+pytestmark = pytest.mark.usefixtures("as_mac")
+
 REACH = "Kitden could not reach the Keychain."
 
 

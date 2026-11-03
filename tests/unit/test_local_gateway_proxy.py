@@ -43,7 +43,8 @@ from tests.unit.fake_oauth import FakeOAuth
 ECHO = Path(__file__).parents[1] / "fixtures/fake_mcp/echo_server.py"
 KITDEN = "/opt/kitden/bin/kitden"
 READ_ONLY = {"show_setup", "list_findings", "explain_item", "list_projects"}
-pytestmark = pytest.mark.anyio
+# macOS words and `security` command lines; Linux has its own tests.
+pytestmark = [pytest.mark.anyio, pytest.mark.usefixtures("as_mac")]
 
 
 @pytest.fixture

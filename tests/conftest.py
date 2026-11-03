@@ -37,7 +37,7 @@ def system(monkeypatch):
 
 
 CLIENT_BINARIES = {"claude", "codex", "cursor"}  # compared in lower case, so "Cursor" too
-KEYCHAIN_BINARIES = {"security"}  # macOS's Keychain command
+KEYCHAIN_BINARIES = {"security", "secret-tool"}  # the Keychain on macOS, the keyring on Linux
 WRAPPERS = {"env", "sh", "bash", "zsh", "dash"}
 
 
@@ -92,30 +92,44 @@ def _never_the_real_keychain(tmp_path_factory, monkeypatch):
 
     missing = tmp_path_factory.getbasetemp().resolve() / "no-security"
     monkeypatch.setenv("KITDEN_SECURITY", str(missing))
-    inherited = [*stdio.DEFAULT_INHERITED_ENV_VARS, "KITDEN_SECURITY", "KITDEN_SYSTEM"]
+    monkeypatch.setenv("KITDEN_SECRET_TOOL", str(missing))
+    inherited = [
+        *stdio.DEFAULT_INHERITED_ENV_VARS,
+        "KITDEN_SECURITY",
+        "KITDEN_SECRET_TOOL",
+        "KITDEN_SYSTEM",
+    ]
     monkeypatch.setattr(stdio, "DEFAULT_INHERITED_ENV_VARS", inherited)
 
 
 def install_fake_security(folder: Path) -> Path:
-    """Put a `security` stand-in in folder/bin and return the JSON file that holds its items."""
+    """Put `security` and `secret-tool` stand-ins in folder/bin, sharing one JSON file of items,
+    and return that file."""
     items = folder / "fake-keychain.json"
-    binary = folder / "bin" / "security"
-    binary.parent.mkdir(parents=True, exist_ok=True)
-    script = FIXTURES / "fake_security.py"
-    binary.write_text(
-        f'#!/bin/sh\nexec {shlex.join([sys.executable, str(script), str(items)])} "$@"\n'
-    )
-    binary.chmod(0o755)
+    for name, script in (("security", "fake_security.py"), ("secret-tool", "fake_secret_tool.py")):
+        binary = folder / "bin" / name
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        command = shlex.join([sys.executable, str(FIXTURES / script), str(items)])
+        binary.write_text(f'#!/bin/sh\nexec {command} "$@"\n')
+        binary.chmod(0o755)
     return items
 
 
 @pytest.fixture
 def fake_keychain(tmp_path, monkeypatch) -> Path:
-    """Kitden's Keychain calls, in this process and its children, go to the stand-in.
-    Returns the JSON file of its items."""
+    """Kitden's Keychain and keyring calls, in this process and its children, go to the
+    stand-ins. Returns the JSON file of their items."""
     items = install_fake_security(tmp_path / "keychain")
     monkeypatch.setenv("KITDEN_SECURITY", str(tmp_path / "keychain/bin/security"))
+    monkeypatch.setenv("KITDEN_SECRET_TOOL", str(tmp_path / "keychain/bin/secret-tool"))
     return items
+
+
+@pytest.fixture
+def as_mac(system):
+    """For a test module about macOS's words and `security` command lines:
+    `pytestmark = pytest.mark.usefixtures("as_mac")`."""
+    system("mac")
 
 
 def cursor_db(home: Path) -> Path:

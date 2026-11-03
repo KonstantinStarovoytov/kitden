@@ -22,6 +22,9 @@ from tests.unit.test_local_gateway_views import (
     tool,
 )
 
+# macOS words and `security` command lines; Linux has its own tests.
+pytestmark = pytest.mark.usefixtures("as_mac")
+
 TITLE = "Move files out of the gateway into Codex"
 
 

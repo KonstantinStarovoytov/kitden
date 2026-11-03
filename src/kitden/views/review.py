@@ -18,6 +18,7 @@ from kitden.changes.actions import PLUGIN_INSTALL
 from kitden.changes.engine import step_readers
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE
 from kitden.model import Change, Item, Scope, Step
+from kitden.system import secret_store_name
 from kitden.views.affects import affects
 from kitden.views.effective import effective_view
 from kitden.views.words import KEYCHAIN_UNDO, KEYCHAIN_UNDO_MANY, REMOVE_NOTE, join_words
@@ -147,7 +148,7 @@ def undo_note(change: Change) -> str | None:
     kept = [f"{i.server}/{i.key}" for s in change.steps for i in s.keychain if i.existed]
     if kept:
         words = KEYCHAIN_UNDO if len(kept) == 1 else KEYCHAIN_UNDO_MANY
-        notes.append(words.format(join_words(kept)))
+        notes.append(words.format(join_words(kept), store=secret_store_name()))
     return " ".join(notes) or None
 
 

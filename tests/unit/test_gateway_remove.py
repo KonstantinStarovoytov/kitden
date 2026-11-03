@@ -19,6 +19,9 @@ from tests.unit.test_local_gateway_views import (
     tool,
 )
 
+# macOS words and `security` command lines; Linux has its own tests.
+pytestmark = pytest.mark.usefixtures("as_mac")
+
 NOTE = "files is then in no client. Undo brings it back."
 
 

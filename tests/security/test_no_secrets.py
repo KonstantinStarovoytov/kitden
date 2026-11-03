@@ -27,6 +27,9 @@ from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
 
+# macOS words and `security` command lines; Linux has its own tests.
+pytestmark = pytest.mark.usefixtures("as_mac")
+
 ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
 LOCAL = {"127.0.0.1", "::1", "localhost", "testserver", None}
