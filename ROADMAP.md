@@ -40,6 +40,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Fixed secret tool:** an installed Kitden always runs `/usr/bin/security` or
   `/usr/bin/secret-tool`; the variables that point tests at stand-ins work only from a source
   checkout.
+- **Stable tool names:** a tool's bare name in the gateway stays with the server that had it
+  (kept in `gateway-names.json`), so a server added later gets the `<server>_` name instead
+  and a client rule for `mcp__kitden__search` keeps meaning the same tool.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 

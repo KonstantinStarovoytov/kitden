@@ -205,11 +205,12 @@ with trusted publishing and creates the GitHub release with the notes file as it
 
 ## Gateways
 
-- **Kitden gateway** — three files in `~/Library/Application Support/kitden` (mode 700):
-  `gateway.json` (mode 600) holds the servers and rules, `gateway-tools.json` the tool lists, and
+- **Kitden gateway** — four files in `~/Library/Application Support/kitden` (mode 700):
+  `gateway.json` (mode 600) holds the servers and rules, `gateway-tools.json` the tool lists,
   `gateway-calls.json` the count and last time (UTC) of each tool's forwarded calls, never what
-  was sent. Only `gateway.json` changes through review and Undo; the other two are found data that
-  the gateway and Rescan write. The gateway reads `gateway.json` again on each call, so a tool
+  was sent, and `gateway-names.json` which server each bare tool name belongs to, so a server
+  added later cannot take it. Only `gateway.json` changes through review and Undo; the other
+  three are found data that the gateway and Rescan write. The gateway reads `gateway.json` again on each call, so a tool
   turned off is refused at once; if the file cannot be read, the rules it started with apply. It
   keeps references, not secrets: each non-empty env value or header that would be hidden is a Keychain item
   (service `kitden`, account `<server>/<key>`), and `gateway.json` holds `{"keychain": "<server>/<key>"}`.

@@ -470,6 +470,33 @@ def test_a_server_name_with_other_characters_gets_a_clean_prefix():
     assert names == {"clash": ("a", "clash"), "my_docs_server_clash": ("my.docs server", "clash")}
 
 
+def test_a_server_added_later_does_not_take_a_bare_name():
+    from kitden.local_gateway.proxy import bare_names
+
+    first = exposed_names({"zeta": [tool("search")]})
+    kept = bare_names(first, {}, ["zeta"])
+    assert kept == {"search": "zeta"}
+    later = {"acme": [tool("search")], "zeta": [tool("search")]}
+    names = exposed_names(later, kept=kept)
+    assert names == {"search": ("zeta", "search"), "acme_search": ("acme", "search")}
+    # While zeta's tools are not known, its name is kept free and stays zeta's.
+    names = exposed_names({"acme": [tool("search")]}, kept=kept)
+    assert names == {"acme_search": ("acme", "search")}
+    assert bare_names(names, kept, ["acme"]) == {"search": "zeta"}
+
+
+async def test_the_gateway_keeps_bare_names_between_sessions(home):
+    write_settings(home, {"zeta": echo("zeta")})
+    save_tools(home, "zeta", [tool("search")])
+    async with gateway(home) as client:
+        assert "search" in [t.name for t in (await client.list_tools()).tools]
+    write_settings(home, {"acme": echo("acme"), "zeta": echo("zeta")})
+    save_tools(home, "acme", [tool("search")])
+    async with gateway(home) as client:
+        offered = sorted(t.name for t in (await client.list_tools()).tools)
+    assert "search" in offered and "acme_search" in offered
+
+
 def test_servers_whose_names_clean_to_one_name_keep_every_tool():
     # All four become "a_b_" in front; Kitden's own list_projects is taken too.
     servers = ("a b", "a,b", "a.b", "a_b")
