@@ -28,7 +28,7 @@ REACH = "Kitden could not reach the Keychain."
 # Characters that would break the `security -i` command line.
 NOT_IN_ACCOUNTS = {'"', "\\"}
 
-Runner = Callable[..., tuple[int, str]]  # (args, stdin=None) → (exit code, stdout)
+Runner = Callable[..., tuple[int, str, str]]  # (args, stdin=None) → (code, stdout, stderr)
 
 
 class KeychainError(Exception):
@@ -40,8 +40,8 @@ def security_path() -> str:
     return os.environ.get("KITDEN_SECURITY", SECURITY)
 
 
-def run_security(args: list[str], stdin: str | None = None) -> tuple[int, str]:
-    """Run `security` with args and return its exit code and output."""
+def run_security(args: list[str], stdin: str | None = None) -> tuple[int, str, str]:
+    """Run `security` with args and return its exit code, output and error output."""
     try:
         done = subprocess.run(  # noqa: S603 - a fixed program and no shell
             [security_path(), *args],
@@ -53,7 +53,7 @@ def run_security(args: list[str], stdin: str | None = None) -> tuple[int, str]:
         )
     except (OSError, subprocess.SubprocessError):
         raise KeychainError(REACH) from None
-    return done.returncode, done.stdout
+    return done.returncode, done.stdout, done.stderr
 
 
 def is_reference(value: object) -> bool:
@@ -71,7 +71,7 @@ def store(server: str, key: str, value: str, run: Runner = run_security) -> dict
     if NOT_IN_ACCOUNTS & set(account) or not account.isprintable():
         raise KeychainError(REACH)
     line = f'add-generic-password -U -s {SERVICE} -a "{account}" -X {value.encode().hex()}\n'
-    code, _ = run(["-i"], stdin=line)
+    code, _, _ = run(["-i"], stdin=line)
     if code != 0 or _find(account, run) != value:
         raise KeychainError(REACH)
     return {"keychain": account}
@@ -84,7 +84,7 @@ def read(ref: dict, run: Runner = run_security) -> str | None:
 
 def delete(ref: dict, run: Runner = run_security) -> None:
     """Remove the item a reference names. Quiet when it is not there."""
-    code, _ = run(["delete-generic-password", "-s", SERVICE, "-a", ref["keychain"]])
+    code, _, _ = run(["delete-generic-password", "-s", SERVICE, "-a", ref["keychain"]])
     if code not in (0, NOT_FOUND):
         raise KeychainError(REACH)
 
@@ -120,7 +120,7 @@ def _value(value: object, run: Runner) -> object:
 
 
 def _find(account: str, run: Runner) -> str | None:
-    code, out = run(["find-generic-password", "-s", SERVICE, "-a", account, "-w"])
+    code, out, _ = run(["find-generic-password", "-s", SERVICE, "-a", account, "-w"])
     if code == NOT_FOUND:
         return None
     if code != 0:

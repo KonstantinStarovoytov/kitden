@@ -48,16 +48,17 @@ def _command(items: dict[str, str], words: list[str]) -> tuple[int, str]:
 
 
 class DemoKeychain:
-    """The Keychain runner in the demo: `(args, stdin=None) -> (exit code, stdout)`."""
+    """The Keychain runner in the demo: `(args, stdin=None) -> (code, stdout, stderr)`; it never
+    writes to stderr."""
 
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
 
-    def __call__(self, args: list[str], stdin: str | None = None) -> tuple[int, str]:
+    def __call__(self, args: list[str], stdin: str | None = None) -> tuple[int, str, str]:
         try:
-            return self._run(args, stdin)
+            return (*self._run(args, stdin), "")
         except (OSError, ValueError):
-            return 1, ""
+            return 1, "", ""
 
     def _run(self, args: list[str], stdin: str | None) -> tuple[int, str]:
         items = json.loads(self.path.read_text()) if self.path.exists() else {}

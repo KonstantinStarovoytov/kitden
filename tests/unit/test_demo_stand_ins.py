@@ -142,7 +142,7 @@ def test_a_broken_stand_in_file_reads_as_a_keychain_kitden_cannot_reach(tmp_path
 
 
 def test_the_stand_in_keychain_answers_no_arguments(tmp_path):
-    assert DemoKeychain(tmp_path / "keychain.json")([]) == (1, "")
+    assert DemoKeychain(tmp_path / "keychain.json")([]) == (1, "", "")
 
 
 def test_the_stand_in_reads_the_sample_reference(tmp_path):
@@ -163,3 +163,8 @@ def test_a_canned_refresh_fills_only_servers_without_tools(tmp_path):
     assert [t["name"] for t in tools["notes"]] == [t["name"] for t in CANNED_TOOLS]
     assert tools["files"] == before["files"]
     assert asyncio.run(canned_refresh(home, ["not-held"])) == {}
+
+
+def test_the_stand_in_keychain_returns_three_values(tmp_path):
+    run = DemoKeychain(tmp_path / "items.json")
+    assert run(["find-generic-password", "-s", "kitden", "-a", "a/b", "-w"]) == (44, "", "")
