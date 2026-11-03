@@ -40,14 +40,22 @@ jobs:
       - run: uv run ruff check .
       # The Python tests, with a floor on how much of the package they run.
       - run: uv run pytest -q --cov=kitden --cov-fail-under=94 --cov-report=term:skip-covered
-      # One real round trip through secret-tool, with the bus where a desktop session has it.
+      # One real round trip through secret-tool, with the bus where a desktop session has it
+      # ($XDG_RUNTIME_DIR/bus). The keyring is unlocked with a throwaway password; secret-tool
+      # runs once by itself first, so a broken keyring shows its own error, not Kitden's.
       - name: The real keyring (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           export XDG_RUNTIME_DIR="$(mktemp -d)"
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
           dbus-daemon --session --address="$DBUS_SESSION_BUS_ADDRESS" --fork
-          printf '' | gnome-keyring-daemon --unlock --components=secrets
+          printf 'kitden-ci' | gnome-keyring-daemon --unlock --components=secrets
+          sleep 1
+          dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus.ListNames | grep -q org.freedesktop.secrets
+          printf 'ci' | secret-tool store --label=ci service kitden-ci account smoke
+          test "$(secret-tool lookup service kitden-ci account smoke)" = ci
+          secret-tool clear service kitden-ci account smoke
           KITDEN_REAL_KEYRING=1 uv run pytest -q tests/unit/test_real_keyring.py -rs
       # The page's own tests, in Node with a stand-in DOM.
       - run: node --test tests/frontend/*.test.mjs
