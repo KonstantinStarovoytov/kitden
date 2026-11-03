@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **Homebrew:** `brew install konstantinstarovoytov/tap/kitden` installs Kitden without uv,
+  from a tap that follows PyPI releases on its own. The same formula can go to homebrew-core
+  once the repository passes its notability bar (225 stars for a submission by the author,
+  75 if someone else submits; checked 2026-11-03).
 - **Lean README:** the logo and slogan, then three scenes of the real page in light and dark,
   each with a line on what it shows, cropped to the part it is about and different in look: a still of what each agent
   loads, then two short animations, sharing servers across all agents and turning tools off.

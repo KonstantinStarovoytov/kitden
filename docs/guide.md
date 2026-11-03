@@ -85,6 +85,15 @@ uv tool install --python 3.13 kitden
 If the command is not found, run `uv tool update-shell` and open a new Terminal window.
 To update, run `uv tool upgrade kitden`, then restart your clients.
 
+With [Homebrew](https://brew.sh) instead, uv is not needed:
+
+```bash
+brew install konstantinstarovoytov/tap/kitden
+```
+
+To update, run `brew upgrade kitden`. Homebrew builds Kitden and its dependencies from
+source, which takes a few minutes the first time.
+
 ## Privacy and limits
 
 - The page runs locally at `127.0.0.1`, with a private access link. No account or telemetry.

@@ -185,6 +185,10 @@ Not run yet for step 24: Part 4 was tested with sandbox files only.
 3. Update `ROADMAP.md`: rename "### Not released yet" to the version, move anything else that
    shipped under Done, and change the "Last updated" date.
 4. Commit, then `git tag vX.Y.Z` and `git push origin main vX.Y.Z`.
+5. The Homebrew tap, [KonstantinStarovoytov/homebrew-tap](https://github.com/KonstantinStarovoytov/homebrew-tap),
+   checks PyPI once a day and opens a pull request with the new version and its Python
+   resources (`brew bump` in its workflow). Merge it. To do it at once: `brew bump-formula-pr
+   --version X.Y.Z konstantinstarovoytov/tap/kitden`.
 
 On every push and pull request the workflow runs ruff, the Python tests with a 94% coverage
 floor, the page's tests (`node --test tests/frontend/*.test.mjs`), the start-time budget
