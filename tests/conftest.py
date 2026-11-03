@@ -37,6 +37,8 @@ def system(monkeypatch):
 
 
 CLIENT_BINARIES = {"claude", "codex", "cursor"}  # compared in lower case, so "Cursor" too
+# Only the Ubuntu CI job sets KITDEN_REAL_KEYRING, for tests/unit/test_real_keyring.py.
+REAL_KEYRING = os.environ.get("KITDEN_REAL_KEYRING") == "1"
 KEYCHAIN_BINARIES = {"security", "secret-tool"}  # the Keychain on macOS, the keyring on Linux
 WRAPPERS = {"env", "sh", "bash", "zsh", "dash"}
 
@@ -76,7 +78,7 @@ def _no_client_commands(tmp_path_factory, monkeypatch):
                     continue
                 if path.name.lower() in CLIENT_BINARIES:
                     raise AssertionError(f"a test tried to run a real client: {word}")
-                if path.name.lower() in KEYCHAIN_BINARIES:
+                if path.name.lower() in KEYCHAIN_BINARIES and not REAL_KEYRING:
                     raise AssertionError(f"a test tried to run the real Keychain: {word}")
             super().__init__(args, *rest, **options)
 
