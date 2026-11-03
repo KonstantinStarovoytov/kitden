@@ -57,10 +57,12 @@ A new module `kitden/system.py` answers "where does this system keep things" and
   `KITDEN_SYSTEM` overrides it, for tests and the demo only. Any other platform is refused at
   start with one sentence: "Kitden runs on macOS and Linux." (Windows keeps its own message in
   `install.ps1`.)
-- `data_dir(home)`: macOS `Library/Application Support/kitden`; Linux `$XDG_DATA_HOME/kitden`,
-  by default `~/.local/share/kitden`. `gateways.py` and everything that builds on `DATA_DIR`
-  goes through it. The one-time copy from the old `agentsetup` folder stays macOS-only; on
-  Linux there is nothing to copy.
+- `data_dir(home)`: macOS `Library/Application Support/kitden`; Linux `~/.local/share/kitden`,
+  not moved by `XDG_DATA_HOME` (changed while building, 2026-11-03: the gateway `kitden mcp` is
+  started by each client with that client's environment, and Codex passes only a short list of
+  variables, so the page and a gateway under Codex would read different folders). `gateways.py`
+  and everything that builds on `DATA_DIR` goes through it. The one-time copy from the old
+  `agentsetup` folder stays macOS-only; on Linux there is nothing to copy.
 - `cursor_state_dir(home)`: macOS `Library/Application Support/Cursor/User`; Linux
   `$XDG_CONFIG_HOME/Cursor/User`, by default `~/.config/Cursor/User`. Cursor is a VS Code
   build and keeps its state where VS Code does (to check on a real Linux install before
