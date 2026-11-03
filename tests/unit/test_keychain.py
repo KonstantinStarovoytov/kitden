@@ -153,3 +153,13 @@ def test_the_runner_returns_stderr_too(fake_keychain):
     )
     assert (code, out) == (44, "")
     assert "could not be found" in err
+
+
+def test_a_release_ignores_the_stand_in_variables(monkeypatch):
+    # Whoever sets the gateway's environment must not choose the program that gets the secrets.
+    monkeypatch.setenv("KITDEN_SECURITY", "/tmp/x")
+    monkeypatch.setenv("KITDEN_SECRET_TOOL", "/tmp/x")
+    assert keychain.security_path() == "/tmp/x"  # a source checkout: the tests' stand-in
+    monkeypatch.setattr(keychain, "from_source", lambda: False)
+    assert keychain.security_path() == "/usr/bin/security"
+    assert keychain.secret_tool_path() == "/usr/bin/secret-tool"

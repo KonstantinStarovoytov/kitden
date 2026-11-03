@@ -37,6 +37,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   a name that points at `10.x`). A server added at a local address is still checked there.
 - **Gateway key stays put:** Kitden no longer follows a redirect or a proxy when it talks to
   a gateway, so the Obot key and the MetaMCP sign-in go to the gateway's own address only.
+- **Fixed secret tool:** an installed Kitden always runs `/usr/bin/security` or
+  `/usr/bin/secret-tool`; the variables that point tests at stand-ins work only from a source
+  checkout.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 

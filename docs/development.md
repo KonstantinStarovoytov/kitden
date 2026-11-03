@@ -214,7 +214,8 @@ with trusted publishing and creates the GitHub release with the notes file as it
   keeps references, not secrets: each non-empty env value or header that would be hidden is a Keychain item
   (service `kitden`, account `<server>/<key>`), and `gateway.json` holds `{"keychain": "<server>/<key>"}`.
   The gateway reads the items when it starts a server. Kitden calls `/usr/bin/security`; the
-  env variable `KITDEN_SECURITY` replaces that path, as a test hook only. `kitden mcp` finds the project once, at start: the `CLAUDE_PROJECT_DIR` variable, then
+  env variables `KITDEN_SECURITY` and `KITDEN_SECRET_TOOL` replace the paths only when Kitden
+  runs from a source checkout (tests); a release, installed in site-packages, ignores them. `kitden mcp` finds the project once, at start: the `CLAUDE_PROJECT_DIR` variable, then
   the client's roots, then `WORKSPACE_FOLDER_PATHS`, then its start folder. Codex keeps a tool
   list for up to 30 minutes and ignores "list changed" (checked 2026-10-21), so the offered list
   is fixed for a session; a tool turned off is still refused at once.

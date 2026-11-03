@@ -34,6 +34,7 @@ Debian man page and libsecret's `tool/secret-tool.c`, checked 2026-11-03:
 import os
 import subprocess
 from collections.abc import Callable
+from pathlib import Path
 
 from kitden import system
 
@@ -58,14 +59,27 @@ class KeychainError(Exception):
     """The Keychain could not be used. The message is one plain sentence, never a value."""
 
 
+def from_source() -> bool:
+    """Kitden runs from a source checkout (tests, development), not from an installed release,
+    which always lives in a site-packages folder."""
+    return "site-packages" not in Path(__file__).resolve().parts
+
+
+def _stand_in(variable: str, real: str) -> str:
+    """The real tool, or in a source checkout the stand-in that tests name in `variable`. A
+    release never reads it: whoever can set the gateway's environment (the `env` of its client
+    entry) must not choose the program that gets every secret."""
+    return os.environ.get(variable, real) if from_source() else real
+
+
 def security_path() -> str:
     """The `security` command; tests point KITDEN_SECURITY at a stand-in."""
-    return os.environ.get("KITDEN_SECURITY", SECURITY)
+    return _stand_in("KITDEN_SECURITY", SECURITY)
 
 
 def secret_tool_path() -> str:
     """The `secret-tool` command; tests point KITDEN_SECRET_TOOL at a stand-in."""
-    return os.environ.get("KITDEN_SECRET_TOOL", SECRET_TOOL)
+    return _stand_in("KITDEN_SECRET_TOOL", SECRET_TOOL)
 
 
 def reach() -> str:
