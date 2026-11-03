@@ -132,6 +132,13 @@ def row_key(row: dict) -> str:
     return hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()[:24]
 
 
+# Exact versions only: npm reads "owner/repo" as a GitHub repository and "./dir" as a folder,
+# and a tag or a range runs whatever is newest. Semantic versions for npm, and plain PEP 440
+# release versions for PyPI.
+_NPM_VERSION = re.compile(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?")
+_PYPI_VERSION = re.compile(r"\d+(?:\.\d+)*(?:(?:a|b|rc)\d+)?(?:\.post\d+)?(?:\.dev\d+)?")
+
+
 def server_entry(server: dict) -> tuple[dict | None, str | None]:
     """Use a complete transport as declared; never guess missing arguments or credentials."""
     for remote in server.get("remotes", []):
@@ -154,16 +161,20 @@ def server_entry(server: dict) -> tuple[dict | None, str | None]:
         ):
             continue
         name, version = package.get("identifier", ""), package.get("version", "")
-        if not version or not re.fullmatch(r"[A-Za-z0-9._+/-]+", version):
-            continue
-        if package.get("registryType") == "npm" and re.fullmatch(
-            r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", name
+        if not isinstance(name, str) or not isinstance(version, str):
+            continue  # a hand-written server.json may give null or a number
+        if (
+            package.get("registryType") == "npm"
+            and _NPM_VERSION.fullmatch(version)
+            and re.fullmatch(r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", name)
         ):
             return {"command": "npx", "args": ["-y", f"{name}@{version}"]}, None
         # A Python package runs with uvx (registry checked 2026-11-03). Kitden from Homebrew has
         # no uv, so it says so rather than add a server that cannot start.
-        if package.get("registryType") == "pypi" and re.fullmatch(
-            r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?", name
+        if (
+            package.get("registryType") == "pypi"
+            and _PYPI_VERSION.fullmatch(version)
+            and re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?", name)
         ):
             if not shutil.which("uvx"):
                 return None, "This Python server runs with uv. Install uv, then search again."

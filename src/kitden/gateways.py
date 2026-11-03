@@ -101,13 +101,24 @@ def check_gateway(gateway: Gateway) -> None:
         _check_web_address(gateway.ui_url, "The interface link")
 
 
-def _read(home: Path) -> dict:
+UNREADABLE = "Kitden could not read its settings, so it saved nothing."
+
+
+def _read(home: Path, strict: bool = False) -> dict:
+    """Kitden's settings; {} when there are none. With `strict`, settings that are there but
+    cannot be read raise ValueError, so that a write never replaces them."""
     path = data_dir(home) / SETTINGS_FILE
     try:
         data = json.loads(path.read_text())
-    except (OSError, ValueError):
+    except FileNotFoundError:
         return {}
-    return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        data = None
+    if isinstance(data, dict):
+        return data
+    if strict:
+        raise ValueError(UNREADABLE)
+    return {}
 
 
 def load_gateways(home: Path) -> list[Gateway]:
@@ -132,7 +143,7 @@ def load_gateways(home: Path) -> list[Gateway]:
 def add_gateway(home: Path, gateway: Gateway) -> Gateway:
     """Save a gateway; one with the same address is replaced."""
     check_gateway(gateway)
-    settings = _read(home)
+    settings = _read(home, strict=True)
     kept = [g for g in load_gateways(home) if g.id != gateway.id]
     settings["gateways"] = [
         {

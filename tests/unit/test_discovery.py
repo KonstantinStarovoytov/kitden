@@ -665,3 +665,24 @@ def test_a_server_kitden_cannot_add_says_why():
     assert server_entry({})[1] == (
         "This server needs sign-in, configuration or a transport Kitden cannot add yet."
     )
+
+
+def test_only_an_exact_version_is_run():
+    # npm reads "owner/repo" as a GitHub repository and "./dir" as a local folder; a tag or a
+    # range picks whatever is newest. Only an exact version runs what the registry listed.
+    npm = {"registryType": "npm", "identifier": "@acme/mcp", "transport": {"type": "stdio"}}
+    pypi = {"registryType": "pypi", "identifier": "acme-mcp", "transport": {"type": "stdio"}}
+    for good in ("1.2.3", "0.1.0-beta.2", "1.2.3+build.5"):
+        assert server_entry({"packages": [{**npm, "version": good}]})[0] is not None, good
+    for good in ("1.0", "1.0.3", "2024.10.1", "1.0rc1", "1.0.post2", "1.0.dev3"):
+        assert server_entry({"packages": [{**pypi, "version": good}]})[0] is not None, good
+    for bad in ("owner/repo", "./dir", "../up", "latest", "^1.2.0", "~1.2", "1.x", "file:x"):
+        assert server_entry({"packages": [{**npm, "version": bad}]})[0] is None, bad
+        assert server_entry({"packages": [{**pypi, "version": bad}]})[0] is None, bad
+
+
+def test_a_version_that_is_not_text_is_skipped_not_an_error():
+    # A hand-written server.json may give null or a number; the search must go on.
+    npm = {"registryType": "npm", "identifier": "@acme/mcp", "transport": {"type": "stdio"}}
+    for odd in (None, 1, 1.2, ["1.2.3"]):
+        assert server_entry({"packages": [{**npm, "version": odd}]})[0] is None

@@ -285,6 +285,7 @@ test('undone rows are muted with a strike; failed rows keep their phrase (no can
   }
   show([change('c5', TODAY, { state: 'undo_blocked' }), change('c6', TODAY, { state: 'restored', backup: 'kept', technical: { paths: [], backups: [], commands: [], error: 'Codex did not start.' } })]);
   assert.equal(text(cell('c5', 'sw')), "Can't undo: the file changed after this");
+  assert.ok(buttonIn(cell('c5', 'act'), 'Undo'), 'an Undo that stopped can be tried again');
   assert.equal(text(cell('c6', 'sw')), 'Failed');
 });
 
@@ -465,6 +466,9 @@ test('Redo… adds a fresh preview and writes nothing; an old change offers none
   // An applied change offers Undo, not Redo….
   show();
   assert.equal(buttonIn(drawer, 'Redo…'), null);
+  assert.ok(buttonIn(drawer, 'Undo'));
+  // So does a change whose Undo stopped: it can be tried again.
+  show([change('b1', TODAY, { state: 'undo_blocked' })]);
   assert.ok(buttonIn(drawer, 'Undo'));
 });
 

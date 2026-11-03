@@ -31,6 +31,8 @@ const AMBER = ["stale", "restored", "undo_blocked"];
 // What the history says for each point; any other state says its word.
 const HISTORY = { previewed: ["Preview"], verified: ["Applied", "Checked"], stale: ["Stopped: the file changed first"] };
 
+// An applied change has Undo; so has a blocked one, to try again once its cause is gone.
+const canUndo = (entry) => entry.state === "verified" || entry.state === "undo_blocked";
 const stateWord = (state, error) => (state === "restored" ? failedWord(error) : WORDS[state] || state);
 const lampLook = (state) => (state === "verified" ? "lamp on" : AMBER.includes(state) ? "lamp warn" : "lamp");
 const factWord = (entry) => (entry.state === "verified" ? "Applied and checked" : stateWord(entry.state, entry.technical.error));
@@ -181,7 +183,7 @@ function changeRow(entry) {
   words.append(el("span", null, stateWord(entry.state, entry.technical.error)));
   state.append(lamp, words);
   const act = el("span", "act");
-  if (entry.state === "verified") act.append(undoButton(entry));
+  if (canUndo(entry)) act.append(undoButton(entry));
   node.append(dot, el("span", "time", clock(entry.time)), title, clientTiles(entry.clients, "who"), el("span", "sr-only", clientWords(entry.clients)), state, act, el("span", "sr-only", "Open details"));
   showSelected(node, entry.id === page.selected);
   node.addEventListener("click", (event) => {
@@ -392,7 +394,7 @@ function rowTitles(rows) {
 // undone change that kept its request, while no later applied change made the same one.
 function changeActions(entry, status) {
   const actions = [];
-  if (entry.state === "verified") actions.push({ label: "Undo", run: () => undoChange(entry) });
+  if (canUndo(entry)) actions.push({ label: "Undo", run: () => undoChange(entry) });
   if (entry.map) actions.push({ label: "See it on the map", run: () => seeOnMap(entry.map, status) });
   if (entry.state === "undone" && redoStands(entry)) actions.push({ label: "Redo…", node: redoButton(entry) });
   return actions;

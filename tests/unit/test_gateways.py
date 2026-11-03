@@ -98,3 +98,13 @@ def test_an_obot_gateway_is_managed_with_a_key_variable_even_for_oauth_clients(t
     assert managed_metamcp.movable
     with pytest.raises(ValueError):
         Gateway(url=OBOT, auth=GatewayAuth.OAUTH, key_env_var="ok1-3-abc-secretvalue")
+
+
+def test_adding_a_gateway_never_overwrites_settings_it_cannot_read(tmp_path):
+    data_dir(tmp_path).mkdir(parents=True, exist_ok=True)
+    path = data_dir(tmp_path) / SETTINGS_FILE
+    for text in ('{"gateways": [', '["not", "an", "object"]'):
+        path.write_text(text)
+        with pytest.raises(ValueError, match="could not read its settings"):
+            add_gateway(tmp_path, Gateway(url=URL))
+        assert path.read_text() == text

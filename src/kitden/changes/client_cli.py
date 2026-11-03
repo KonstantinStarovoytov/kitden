@@ -1,7 +1,9 @@
 """Run a client's own command (FR-021), for example `claude mcp add-json`. Output is redacted."""
 
+import contextlib
 import os
 import shutil
+import signal
 import subprocess  # noqa: S404 - runs fixed client commands without a shell
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,16 +45,39 @@ class CommandRunner:
         if binary is None:
             return CommandResult(127, f"{command[0]} was not found")
         env = {**os.environ, "HOME": str(self.home)}
+        # No stdin, so a question never waits on the page's input; a group of its own, so a
+        # timeout stops the helpers it started too and nothing keeps the pipes open.
         try:
-            done = subprocess.run(  # noqa: S603 - fixed client command, no shell
+            process = subprocess.Popen(  # noqa: S603 - fixed client command, no shell
                 [binary, *command[1:]],
                 cwd=cwd,
                 env=env,
-                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=TIMEOUT_SECONDS,
-                check=False,
+                start_new_session=True,
             )
-        except (OSError, subprocess.TimeoutExpired) as error:
+        except OSError as error:
             return CommandResult(1, redact_text(str(error)))
-        return CommandResult(done.returncode, redact_text((done.stdout + done.stderr).strip()))
+        try:
+            out, err = process.communicate(timeout=TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            _stop_group(process)
+            return CommandResult(1, f"{command[0]} did not finish in {TIMEOUT_SECONDS:g} seconds")
+        return CommandResult(process.returncode, redact_text((out + err).strip()))
+
+
+def _stop_group(process: subprocess.Popen) -> None:
+    """Stop the command and everything it started, then collect it. A helper that left the
+    group can still hold the pipes: after a few seconds they are closed instead."""
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(process.pid, signal.SIGKILL)
+    process.kill()
+    try:
+        process.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        for pipe in (process.stdout, process.stderr):
+            if pipe is not None:
+                pipe.close()
+        process.wait()

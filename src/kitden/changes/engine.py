@@ -259,6 +259,14 @@ def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
     return text.encode()
 
 
+def _back_already(steps: list[Step], data: bytes | None) -> bool:
+    """Every entry these steps changed in one file reads as it did before the change."""
+    try:
+        return all(_value(s.edit, data) == s.edit.before for s in steps)
+    except (UnrecognizedFormatError, UnicodeDecodeError):
+        return False
+
+
 def _same_folder(path: str, content_hash: str | None) -> bool:
     """The folder still hashes as it did; False when it cannot be read (or is a link)."""
     try:
@@ -454,6 +462,8 @@ class Engine:
             except (KeyError, ValueError):
                 continue
             self.changes[change.id] = change
+            if change.state is ChangeState.APPLYING:
+                self._interrupted(change)
 
     # Preview -----------------------------------------------------------------------------
 
@@ -461,8 +471,16 @@ class Engine:
         """Read each target, fill in the before state and a masked diff. Writes nothing.
 
         Several steps may edit one file (research R2 of feature 002), but never the same entry
-        or an entry inside another one.
+        or an entry inside another one. A target that cannot be read (no access, a folder in
+        place of a file) refuses the change, so the page shows why instead of an error.
         """
+        try:
+            return self._preview(action, steps)
+        except OSError as error:
+            place = error.filename or "a file this change reads"
+            raise ChangeRefusedError(f"Kitden could not read {place}.") from None
+
+    def _preview(self, action: str, steps: list[Step]) -> Change:
         if not steps:
             raise ChangeRefusedError("Nothing to change.")
         for step in steps:
@@ -614,9 +632,24 @@ class Engine:
             removal.masked_diff = "\n".join(f"-{f}" for f in files)
 
     def cancel(self, change_id: str) -> Change:
+        """Cancel a previewed change. The secrets typed for it go: Keychain values are cleared,
+        and new entries keep only what `redact` lets through."""
         change = self.changes[change_id]
         change.move_to(ChangeState.CANCELLED)
+        self._forget_typed(change)
         return change
+
+    def _forget_typed(self, change: Change) -> None:
+        """For a change that will never be applied: clear its Keychain values and keep only
+        what `redact` lets through of its new entries."""
+        self._forget_secrets(change)
+        for step in change.steps:
+            if step.edit is not None:
+                shown, hid = redact(step.edit.after)
+                step.edit.after = shown if hid else step.edit.after
+            if step.gateway is not None:
+                shown, hid = redact(step.gateway.server)
+                step.gateway.server = shown if hid else step.gateway.server
 
     # Apply -------------------------------------------------------------------------------
 
@@ -715,12 +748,22 @@ class Engine:
         if reason:
             change.move_to(ChangeState.STALE)
             change.error = reason
+            self._forget_typed(change)
             self._log(change)
             return change
 
         self._back_up(change.id, file_steps, current)
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
+        # Saved before the first change, so a crash leaves a record that says so at the next
+        # start, next to the backups. Without it nothing is written.
+        try:
+            self.store.save(change.id, _record(change))
+        except OSError:
+            change.state = ChangeState.PREVIEWED
+            raise ChangeRefusedError(
+                "Kitden could not save the change's record, so nothing was changed."
+            ) from None
         tick = self._counter(change)
         ran: list[Step] = []
         copied: list[Step] = []
@@ -1009,9 +1052,12 @@ class Engine:
     # Undo --------------------------------------------------------------------------------
 
     def undo(self, change_id: str) -> Change:
+        """Put back what the change wrote. A blocked Undo can be tried again: what is back
+        already is skipped. The servers it added to a gateway are taken out last, once the
+        client files read back as before, so a server is never in neither place."""
         change = self.changes[change_id]
-        if change.state is not ChangeState.VERIFIED:
-            change.move_to(ChangeState.UNDONE)  # raises: only a verified change can be undone
+        if change.state not in (ChangeState.VERIFIED, ChangeState.UNDO_BLOCKED):
+            change.move_to(ChangeState.UNDONE)  # raises: only an applied change can be undone
         by_command = _command_paths(change.steps)
         by_path: dict[str, list[Step]] = {}  # files that get planned bytes, after any command
         for step in change.steps:
@@ -1020,6 +1066,8 @@ class Engine:
         plans: dict[str, bytes | None] = {}
         for path, steps in by_path.items():
             data = _read(path)
+            if _back_already(steps, data):
+                continue  # a blocked Undo put it back before
             first = steps[0].edit
             if _sha(data) == first.after_hash:
                 plans[path] = Path(first.backup_path).read_bytes() if first.backup_path else None
@@ -1046,6 +1094,7 @@ class Engine:
                 )
 
         removals = [s for s in change.steps if s.removal is not None]
+        removals = [s for s in removals if not _same_folder(s.removal.path, s.removal.content_hash)]
         for step in removals:
             removal = step.removal
             if os.path.lexists(removal.path):
@@ -1074,14 +1123,15 @@ class Engine:
             f"{i.server}/{i.key} in your {store} keeps the new value." for i in items if i.existed
         ]
 
-        # The gateway side goes next: if it cannot be reached, the files stay as they are.
-        tick = self._counter(change)
+        # The gateway must answer before anything changes; its servers go last, below.
+        added = [s for s in change.steps if s.gateway is not None]
         try:
-            gone = self._remove_from_gateway(
-                [s for s in change.steps if s.gateway is not None], tick=tick
-            )
+            if added and any(s.gateway.server_uuid for s in added):
+                with self._client(added[0].gateway) as client:
+                    client.held()
         except GatewayError as error:
             return self._blocked(change, f"{error}; the client files were not changed")
+        tick = self._counter(change)
         for step in reversed(copies):
             remove_folder(step.copy.target)
             tick(step)
@@ -1093,8 +1143,8 @@ class Engine:
         for step in reversed(change.steps):
             if step.edit is None or not _by_command(step):
                 continue
-            if _value(step.edit, _read(step.edit.path)) is ABSENT and step.edit.before is ABSENT:
-                continue
+            if _value(step.edit, _read(step.edit.path)) == step.edit.before:
+                continue  # gone already, or put back by a blocked Undo
             result = self.run(step.undo_command, step.cwd)
             if result.returncode != 0:
                 return self._blocked(
@@ -1120,6 +1170,12 @@ class Engine:
                 raise RuntimeError(f"{step.copy.target}: undo did not remove the copy")
             if step.removal and digest(step.removal.path) != step.removal.content_hash:
                 raise RuntimeError(f"{step.removal.path}: undo did not copy the folder back")
+        try:
+            gone = self._remove_from_gateway(added, tick=tick)
+        except GatewayError as error:
+            return self._blocked(
+                change, f"The client files are back, but {error}. Undo again to finish."
+            )
         for item in reversed(created):
             try:
                 keychain.delete(item.ref, run=self._security())
@@ -1133,6 +1189,26 @@ class Engine:
             change.error = " ".join(notes)
         self._finish(change)
         return change
+
+    def _interrupted(self, change: Change) -> None:
+        """A record still Applying: Kitden stopped in the middle of that Apply. Nothing is put
+        back on its own; the change says so, with the files to compare with their backups."""
+        places = [s.edit.path for s in change.steps if s.edit is not None]
+        places += [s.copy.target for s in change.steps if s.copy is not None]
+        places += [s.removal.path for s in change.steps if s.removal is not None]
+        if any(s.gateway is not None for s in change.steps):
+            places.append("the gateway")
+        items = [f"{i.server}/{i.key}" for s in change.steps for i in s.keychain]
+        if items:
+            places.append(f"the {secret_store_name()} items {', '.join(items)}")
+        listed = ", ".join(dict.fromkeys(places)) or "the setup"
+        change.holds_secret = change.holds_secret or self.store.backup_holds_secret(change.id)
+        change.move_to(ChangeState.RESTORED)
+        change.error = (
+            "Kitden stopped during Apply, so this change was not checked. "
+            f"Compare {listed} with the backups by hand."
+        )
+        self._finish(change)
 
     def _blocked(self, change: Change, reason: str) -> Change:
         """Undo stops here, with the reason."""
