@@ -61,10 +61,15 @@ export function reviewLede(change, picked) {
 // The review title names the exact entry; the toast uses the short name ("superpowers").
 // `previewBody` is what the review asked for; Add skills names its plugin and a tool rule its
 // tool and project from it.
-// A held server's secret replaced or removed, or a sign-out (gateway.access).
-function accessText({ server, field, name, value }) {
+// A held server's secret added, replaced or removed, or a sign-out (gateway.access).
+function accessText({ server, field, name, value, added = false }) {
   if (field === "sign_in") return { title: `Sign out of ${server}`, done: `Signed out of ${server}` };
   if (value === null || value === undefined) return { title: `Remove ${name} from ${server}`, done: `Removed ${name} from ${server}` };
+  // Add access… marks a new value (`added`); a token is the Authorization header.
+  if (added) {
+    const what = name === "Authorization" ? "a token" : name;
+    return { title: `Add ${what} to ${server}`, done: `Added ${what} to ${server}` };
+  }
   return { title: `Replace ${name} of ${server}`, done: `Replaced ${name} of ${server}` };
 }
 

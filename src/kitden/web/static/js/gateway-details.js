@@ -3,7 +3,7 @@
 // that detailsCard draws, so a test reads it without a page), and a show… that opens it beside the
 // page. The forms to add a gateway and to connect clients live here too, with what each registered
 // gateway holds.
-import { replaceAccess, signInAgain } from "./access-form.js";
+import { addAccess, replaceAccess, signInAgain } from "./access-form.js";
 import { getJson, postJson, query } from "./api.js";
 import { $, busyWhile, button, el, icon, joinWords, plural, reportError, secretsWord, withFocusKey } from "./dom.js";
 import { ADD_SERVER, openAdd } from "./gateway-add.js";
@@ -849,23 +849,31 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
   if (server.needs === "sign-in") {
     warning = `${name} needs sign-in again.`;
     actions.unshift(stepAction("Sign in", () => signInAgain(name)));
+  } else if (server.needs === "token") {
+    warning = `${name} needs a token, or its token is wrong.`;
+    actions.unshift(stepAction(ADD_ACCESS, () => addAccess(name, { remote: true })));
   }
   const more = [...heldMore(server, picked, detail, some), ...heldActions(name, clients, server.plain_secrets)];
   const id = `${server.kind === "remote" ? "Remote" : "Local"} · in the Kitden gateway`;
-  // Its secrets come first (Access), then its tools.
-  const shown = [detail.access && detail.access.length ? accessBlock(name, detail.access) : null, heldList(name, detail, picked, folder)].filter(Boolean);
+  // Its secrets come first (Access, once its details are read), then its tools.
+  const access = Array.isArray(detail.access) ? accessBlock(name, detail.access, { remote: server.kind === "remote" }) : null;
+  const shown = [access, heldList(name, detail, picked, folder)].filter(Boolean);
   const parts = shown.length > 1 ? el("div", "held-parts") : shown[0] || null;
   if (shown.length > 1) parts.append(...shown);
   return { kind: KIND.server, title: name, id, facts, list: parts, actions, more, warning };
 }
 
+const ADD_ACCESS = "Add access…";
+
 // A held server's secrets (Access): each by name, with only its start and end ("Bearer
 // sk-a…1234"; the server never sends more), and where it is missing from the Keychain. A
 // sign-in says when its token ends and whether the gateway refreshes it. Its buttons (replace,
-// remove, sign in again, sign out) each go through the tray: preview, Apply, Undo.
-export function accessBlock(server, rows, { now = Date.now() / 1000 } = {}) {
+// remove, sign in again, sign out) each go through the tray: preview, Apply, Undo. Add access…
+// ends it: a token, a header or a sign-in for a remote server, a variable for a local one.
+export function accessBlock(server, rows, { now = Date.now() / 1000, remote = true } = {}) {
   const section = el("section", "access");
   section.append(el("h2", "sw-head", "Access"));
+  if (!rows.length) section.append(el("p", "muted", remote ? "No token or header. Kitden sends none." : "No secret variables. Kitden sets none."));
   for (const row of rows) {
     const line = el("div", "access-row");
     const what = el("div", "access-what");
@@ -882,6 +890,9 @@ export function accessBlock(server, rows, { now = Date.now() / 1000 } = {}) {
     line.append(what, acts);
     section.append(line);
   }
+  const add = el("div", "access-acts");
+  add.append(button(ADD_ACCESS, () => addAccess(server, { remote })));
+  section.append(add);
   return section;
 }
 

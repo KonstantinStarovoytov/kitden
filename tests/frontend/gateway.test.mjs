@@ -233,6 +233,13 @@ test('a held server whose sign-in ended is amber and says Needs sign-in', () => 
   assert.deepEqual([shown.lamp, shown.meta, shown.stateInMeta], ['warn', 'Needs sign-in', true]);
 });
 
+test('a held server that turned down a call is amber and says Needs token', () => {
+  const refused = { name: 'docs', kind: 'remote', state: 'on', tools: 2, on_count: 2, on_in: 0, tool_list: [], needs: 'token' };
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [refused] }] };
+  const shown = block(gatewayTree(view, OPTS), 'held:kitden:docs');
+  assert.deepEqual([shown.lamp, shown.meta, shown.stateInMeta], ['warn', 'Needs token', true]);
+});
+
 test('tags say where a rule comes from', () => {
   const servers = [
     { ...MEDIUM_VIEW.gateways[0].servers[0], origin: 'project', differs: true, on_elsewhere: 0, tool_list: [tool('write_file', 'off', 'writes', { origin: 'project' })] },

@@ -74,6 +74,7 @@ from kitden.local_gateway.settings import (
     load_names,
     load_settings,
     load_tools,
+    mark_refused,
     save_names,
     save_tools,
     servers_on,
@@ -158,6 +159,11 @@ class UpstreamError(Exception):
 
 # A remote server that answered 401 or 403: the library reports only the server's own words.
 REFUSED = "{server} turned down its access: its token is wrong or has ended."
+# A remote server that started but answered a call with 401 or 403.
+ASK_FOR_ACCESS = (
+    "{server} needs a token, or its token is wrong. Add it in Kitden: Gateway, {server}, "
+    "Add access."
+)
 
 
 def _turned_down(entry: dict) -> bool:
@@ -201,6 +207,10 @@ class Upstreams:
         self.folder: str | None = None
         self._clients: dict[str, Client] = {}
         self._auths: dict[str, oauth.StoredSignIn] = {}  # the stored sign-in of each running one
+        # How many 401 or 403 answers each remote server gave: the MCP library reports such an
+        # answer to a call only as an internal error, so the HTTP client counts them, and a call
+        # compares the count before and after (calls to one server may run at once).
+        self._turned: dict[str, int] = {}
         self._locks: dict[str, anyio.Lock] = {}
         self._group: TaskGroup | None = None
 
@@ -262,25 +272,43 @@ class Upstreams:
             return _error(str(problem))
         except TimeoutError:
             return _error(f"{server} did not start in {wait:g} seconds.")
+        turned = self._turned.get(server, 0)
         try:
             with anyio.fail_after(CALL_TIMEOUT):
-                return await client.call_tool(tool, arguments)
+                answer = await client.call_tool(tool, arguments)
         except TimeoutError:
             return _error(f"{server} did not answer in {CALL_TIMEOUT} seconds.")
         except MCPError as refused:
             if refused.code not in (HTTP_CODES if self._remote(server) else SDK_CODES):
+                await self._note_refused(server, False)
                 return _answer(refused.message)  # the server's own answer
-            return _error(self._failed(server))
+            return _error(await self._failed(server, turned))
         except Exception:
             # The text of an error may hold the server's address; say it plainly instead.
-            return _error(self._failed(server))
+            return _error(await self._failed(server, turned))
+        await self._note_refused(server, False)
+        return answer
 
-    def _failed(self, server: str) -> str:
-        """Why a call failed: a sign-in that ended while the server ran, or plainly."""
+    async def _failed(self, server: str, turned: int = 0) -> str:
+        """Why a call failed: a sign-in that ended while the server ran, a token the server
+        wants (noted for the page), or plainly."""
         auth = self._auths.get(server)
         if auth is not None and auth.signed_out:
             return sign_in.SIGNED_OUT.format(server=server)
+        if self._turned.get(server, 0) > turned:
+            await self._note_refused(server, True)
+            return ASK_FOR_ACCESS.format(server=server)
         return f"The call to {server} failed."
+
+    async def _note_refused(self, server: str, refused: bool) -> None:
+        """Keep for the page whether a remote server turned down its last call. A note that
+        cannot be written is only said."""
+        if not self._remote(server):
+            return
+        try:
+            await anyio.to_thread.run_sync(mark_refused, self.home, server, refused)
+        except OSError:
+            _say(f"Kitden could not note the answer of {server}.")
 
     def _start_time(self, server: str) -> float:
         """Seconds for the server to start and list its tools: the gateway's own, or the longer
@@ -327,7 +355,7 @@ class Upstreams:
             ready = False
             try:
                 async with AsyncExitStack() as stack:
-                    target = await self._target(entry, stack, auth)
+                    target = await self._target(entry, stack, auth, server)
                     # The initialize handshake, which every server answers. Mode "auto" first
                     # asks `server/discover`; a server that leaves it unanswered costs 10 s.
                     client = await stack.enter_async_context(Client(target, mode="legacy"))
@@ -361,16 +389,24 @@ class Upstreams:
             return False
         return now is not None and now != auth.storage.raw
 
-    async def _target(self, entry: dict, stack: AsyncExitStack, auth: Any = None) -> Any:
+    async def _target(
+        self, entry: dict, stack: AsyncExitStack, auth: Any = None, server: str = ""
+    ) -> Any:
         """How to reach a server: streamable HTTP for a `url` (with `auth`, its stored
-        sign-in), else its command over stdio."""
+        sign-in), else its command over stdio. A 401 or 403 answer is counted (`_turned`)."""
         if entry.get("url"):
             # It names itself: Cloudflare turns down Python's default agent (seen 2026-10-31).
             headers = {"User-Agent": "kitden"}
             headers.update({str(k): str(v) for k, v in (entry.get("headers") or {}).items()})
             timeout = httpx2.Timeout(START_TIMEOUT, read=CALL_TIMEOUT)
+
+            async def note(answer: httpx2.Response) -> None:
+                if answer.status_code in (401, 403):
+                    self._turned[server] = self._turned.get(server, 0) + 1
+
+            hooks = {"response": [note]}
             http = await stack.enter_async_context(
-                httpx2.AsyncClient(headers=headers, timeout=timeout, auth=auth)
+                httpx2.AsyncClient(headers=headers, timeout=timeout, auth=auth, event_hooks=hooks)
             )
             return streamable_http_client(str(entry["url"]), http_client=http)
         folder = self.folder or str(self.home)

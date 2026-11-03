@@ -2,9 +2,9 @@
 // 2026-11-01 design): one field per value the server declares, labelled with its own words. A
 // plain token is the token alone; Kitden adds "Bearer ". The header or variable name shows only
 // under Details. The catalog details, the map and the dock all use it.
-import { busyWhile, el, icon, secretsWord } from "./dom.js";
+import { busyWhile, button, el, icon, secretsWord } from "./dom.js";
 import { closePanel, header, openPanel } from "./panel.js";
-import { animateTo, D, shake } from "./motion.js";
+import { animateTo, D, glide, shake } from "./motion.js";
 import { addToTray, giveAccess, inTray, keyFor, tray } from "./tray.js";
 import { postJson } from "./api.js";
 
@@ -218,11 +218,12 @@ export function openAccess(row, { start = false } = {}) {
 }
 
 // A held server whose sign-in ended (Part 3b): Sign in again in its own panel. Once signed in,
-// a row joins the tray that writes the new sign-in to its Keychain item on Apply.
-export async function signInAgain(name) {
+// a row joins the tray that writes the new sign-in to its Keychain item on Apply. `first`: a
+// server that had no sign-in (Add access…).
+export async function signInAgain(name, { first = false } = {}) {
   const offered = await postJson("/api/sign-in/offer", { server: name });
   if (!offered.ok) throw new Error(offered.data?.detail || "Kitden could not start sign-in.");
-  const reason = `${name} needs sign-in again.`;
+  const reason = first ? `Sign in to ${name} on its own page in your browser.` : `${name} needs sign-in again.`;
   const waits = { server: name, kind: "sign-in", sign_in: offered.data.id, fields: [], reason };
   const signed = async (id) => {
     const body = { action: "gateway.sign_in", targets: [], params: { server: name, sign_in: id } };
@@ -232,7 +233,7 @@ export async function signInAgain(name) {
     return false;
   };
   const form = signInForm(waits, signed);
-  openForm("Needs sign-in", name, reason, form.node);
+  openForm(first ? "Sign in" : "Needs sign-in", name, reason, form.node);
   form.start();
   return form;
 }
@@ -256,4 +257,113 @@ export function replaceAccess(server, row) {
   openForm("Replace", server, `A new ${row.name}. The old one stays until Apply.`, form.node);
   form.focus();
   return form;
+}
+
+// The tray row for new access to a held server, or null while a value (or a header's or
+// variable's name) is missing. A token is sent as "Authorization: Bearer <token>"; a pasted
+// "Bearer …" keeps one prefix.
+export function newAccess(server, way, name, value) {
+  const given = String(value || "").trim();
+  const called = String(name || "").trim();
+  if (!given) return null;
+  const params = (field, key, text) => ({ action: "gateway.access", targets: [], params: { server, field, name: key, value: text, added: true } });
+  if (way === "token") return params("headers", "Authorization", `Bearer ${given.replace(/^bearer\s+/i, "")}`);
+  if (!called) return null;
+  return params(way === "variable" ? "env" : "headers", called, given);
+}
+
+// The ways to give a server access: a remote server takes a token, a header of its own or a
+// browser sign-in; a local one a variable.
+const WAYS = {
+  token: { label: "Token", fields: [], say: "Sent as the Authorization header, with \"Bearer\" in front." },
+  header: { label: "Header", fields: ["Header name", "X-API-Key"], say: "Sent as this header on every request." },
+  "sign-in": { label: "Sign in", fields: null, say: "Opens the server's own sign-in page in your browser." },
+  variable: { label: "Variable", fields: ["Variable name", "API_KEY"], say: "Set as this variable when the gateway starts the server." },
+};
+
+// Add access… in a held server's Access block: one form, a choice of way first (a remote server
+// only). Preview adds a row to the tray; a remote server is asked with the value first, and a
+// server that answers without it says the first call checks it. Sign in opens its own panel.
+export function addAccess(server, { remote = true } = {}) {
+  const ways = remote ? ["token", "header", "sign-in"] : ["variable"];
+  let way = ways[0];
+  const form = el("form", "form access-form");
+  const pick = el("div", "seg sm");
+  const fields = el("div", "access-fields");
+  // How the value is sent: technical, so under Details.
+  const say = el("p", "muted");
+  const how = el("details", "access-names");
+  how.append(el("summary", null, "Details"), say);
+  const submit = el("button", "btn primary", "Preview");
+  submit.type = "submit";
+  const { why, done, refused, worked } = statusLines();
+  let name = null;
+  let value = null;
+  const draw = () => {
+    const ask = WAYS[way];
+    say.textContent = ask.say;
+    name = value = null;
+    fields.replaceChildren();
+    submit.hidden = ask.fields === null;
+    why.hidden = done.hidden = true;
+    if (ask.fields === null) {
+      fields.append(el("p", "muted", ask.say), button("Sign in", () => signInAgain(server, { first: true }), "btn primary"));
+      return;
+    }
+    const input = (label, type, placeholder) => {
+      const line = el("label", "field");
+      const box = el("input");
+      Object.assign(box, { type, placeholder, autocomplete: "off", spellcheck: false });
+      line.append(el("span", null, label), box);
+      fields.append(line);
+      return box;
+    };
+    if (ask.fields.length) name = input(ask.fields[0], "text", ask.fields[1]);
+    value = input(way === "token" ? "Token" : "Value", "password", way === "token" ? "Paste token" : "Enter value");
+  };
+  const choices = ways.map((id) => {
+    const choice = button(WAYS[id].label, () => {
+      way = id;
+      for (const other of choices) other.setAttribute("aria-pressed", String(other === choice));
+      glide(pick, choice, "access-way", { duration: 280 });
+      draw();
+      (name || value)?.focus();
+    }, "");
+    choice.setAttribute("aria-pressed", String(id === way));
+    return choice;
+  });
+  pick.append(...choices);
+  if (ways.length > 1) form.append(pick);
+  form.append(fields, why, done, el("p", "muted", `Saved in your ${secretsWord()} on Apply.`), how, submit);
+  draw();
+  form.addEventListener("input", () => { why.hidden = true; });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const body = newAccess(server, way, name?.value, value?.value);
+    if (!body) {
+      (name && !name.value.trim() ? name : value)?.focus();
+      return;
+    }
+    submit.textContent = "Checking…";
+    const check = addToTray(body).then(() => {
+      if (!inTray(keyFor(body))) {
+        if (tray.refused) refused(tray.refused.reason);
+        shake(fields);
+        return;
+      }
+      const note = (tray.change?.steps || []).find((step) => step.name === server && step.check_note)?.check_note;
+      if (way === "variable" || note) {
+        why.hidden = true;
+        done.replaceChildren(note || "Saved on Apply. Checked when the gateway starts it");
+        done.hidden = false;
+        return;
+      }
+      worked("Works");
+      closeSoon({ node: form });
+    }).finally(() => { submit.textContent = "Preview"; });
+    busyWhile(submit, check).catch(() => {});
+  });
+  openForm("Add access", server, remote ? "A token, a header or a sign-in. Nothing changes until Apply." : "A variable with a secret. Nothing changes until Apply.", form);
+  if (ways.length > 1) glide(pick, choices[0], "access-way", { animated: false });
+  (name || value)?.focus();
 }

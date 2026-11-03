@@ -147,6 +147,9 @@ test('a changed secret of a held server says what changes', () => {
   const change = { action: 'gateway.access', steps: [{ client: 'kitden', name: 'neon' }], target: { scope: 'all', project: null, others_unchanged: false } };
   const words = (field, name, value) => changeWords(change, { params: { server: 'neon', field, name, value } });
   assert.deepEqual(words('headers', 'Authorization', 'Bearer x'), { title: 'Replace Authorization of neon', done: 'Replaced Authorization of neon' });
+  const added = (name) => changeWords(change, { params: { server: 'neon', field: 'headers', name, value: 'x', added: true } });
+  assert.deepEqual(added('Authorization'), { title: 'Add a token to neon', done: 'Added a token to neon' });
+  assert.deepEqual(added('X-API-Key'), { title: 'Add X-API-Key to neon', done: 'Added X-API-Key to neon' });
   assert.deepEqual(words('headers', 'Authorization', null), { title: 'Remove Authorization from neon', done: 'Removed Authorization from neon' });
   assert.deepEqual(words('sign_in', 'Sign-in', null), { title: 'Sign out of neon', done: 'Signed out of neon' });
 });

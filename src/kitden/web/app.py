@@ -113,8 +113,10 @@ from kitden.local_gateway.project import project_chain, project_chains
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import (
     load_calls,
+    load_refused,
     load_settings,
     load_tools,
+    mark_refused,
     moved_in,
     remove_server_steps,
     save_tools,
@@ -260,6 +262,7 @@ def change_dict(change: Change) -> dict:
                 "restart_note": s.restart_note,
                 "login_note": s.login_note,
                 "shared_file": s.shared_file,
+                "check_note": s.check_note,
             }
             for s in change.steps
         ],
@@ -737,12 +740,12 @@ def create_app(
         return JSONResponse({})
 
     async def sign_in_offer(request: Request) -> JSONResponse:
-        """A sign-in id for a held server whose entry names a stored sign-in."""
+        """A sign-in id for a held remote server: to sign in again, or for the first time."""
         if stand_ins:
             return _error(stand_ins.NOT_IN_DEMO, 422)
         name = str((await _body(request)).get("server", ""))
         held = load_settings(home)["servers"].get(name) if home is not None else None
-        if not isinstance(held, dict) or not held.get("url") or "sign_in" not in held:
+        if not isinstance(held, dict) or not held.get("url"):
             return _error("Unknown server.", 404)
         return JSONResponse({"id": signins.offer(str(held["url"]), name)})
 
@@ -1022,10 +1025,14 @@ def create_app(
         if home is None:
             return None, None
         held = held_servers(load_settings(home), _chain(path), load_tools(home), _chains())
-        # A server whose sign-in ended (the last tool read said so) needs the person.
+        # A server whose sign-in ended (the last tool read said so) needs the person, and so
+        # does one that turned down a call through the gateway: it needs a token.
+        refused = load_refused(home)
         for server in held:
             if tool_problems.get(server["name"]) == SIGNED_OUT.format(server=server["name"]):
                 server["needs"] = "sign-in"
+            elif server["name"] in refused:
+                server["needs"] = "token"
         problem = UNREADABLE if settings_unreadable(home) else None
         return held, problem
 
@@ -1706,6 +1713,19 @@ def create_app(
             moved = [name for move in moves for name in moved_in(move)]
             if moved:
                 refresh_later(moved)
+            # New access or a sign-in for a server that turned down a call: the next call says
+            # if it works. A server the gateway no longer holds loses its note too.
+            fresh = (GATEWAY_ACCESS, GATEWAY_SIGN_IN)
+            changed = [change] if change.action in fresh else []
+            if change.rows:
+                changed = [part_of(change, r) for r in change.rows if r["kind"] in fresh]
+            names = {step.name for part in changed for step in part.steps}
+            held_now = load_settings(home)["servers"]
+            names |= {name for name in load_refused(home) if name not in held_now}
+            for name in names:
+                # A note that cannot be cleared stays until the server answers a call again.
+                with contextlib.suppress(OSError):
+                    await asyncio.to_thread(mark_refused, home, name, False)
         events.publish("change_state")
         return JSONResponse(change_dict(change), status_code=STATUS.get(change.state, 200))
 

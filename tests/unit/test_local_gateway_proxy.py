@@ -30,6 +30,7 @@ from kitden.local_gateway.settings import (
     CALLS_FILE,
     SETTINGS_FILE,
     load_calls,
+    load_refused,
     load_settings,
     load_tools,
     save_tools,
@@ -712,8 +713,16 @@ class FakeHttpServer(ThreadingHTTPServer):
                     info = {"name": "fake", "version": "1"}
                     reply = {"protocolVersion": version, "capabilities": {}, "serverInfo": info}
                     return self.answer(200, {"result": reply}, body["id"])
+                if body["method"] != "tools/call":
+                    result = {"tools": []} if body["method"] == "tools/list" else {}
+                    return self.answer(200, {"result": result}, body["id"])
                 if body["params"]["name"] == "moved":
                     return self.answer(307, location=moved_to)
+                if body["params"]["name"] == "locked":  # starts without a token, calls need one
+                    return self.answer(401)
+                if body["params"]["name"] == "fine":
+                    content = [{"type": "text", "text": "done"}]
+                    return self.answer(200, {"result": {"content": content}}, body["id"])
                 error = {"code": -32602, "message": "Give the text to look for."}
                 return self.answer(200, {"error": error}, body["id"])
 
@@ -754,6 +763,47 @@ async def test_a_servers_own_error_passes_but_a_transport_error_stays_plain(home
     assert (refused.is_error, text(refused)) == (True, "Give the text to look for.")
     # The HTTP layer makes its own errors, and a refused redirect names the other address.
     assert (moved.is_error, text(moved)) == (True, "The call to remote failed.")
+
+
+async def test_a_remote_that_starts_but_turns_down_a_call_needs_a_token(home):
+    remote = FakeHttpServer("http://127.0.0.1:9/elsewhere")
+    settings = {"servers": {"remote": {"url": f"http://127.0.0.1:{remote.server_port}/mcp"}}}
+    try:
+        async with Upstreams(home, settings) as upstreams:
+            locked = await upstreams.call("remote", "locked", {})
+            marked = load_refused(home)
+            fine = await upstreams.call("remote", "fine", {})
+    finally:
+        remote.shutdown()
+
+    assert (locked.is_error, text(locked)) == (
+        True,
+        "remote needs a token, or its token is wrong. Add it in Kitden: Gateway, remote, "
+        "Add access.",
+    )
+    assert set(marked) == {"remote"}
+    # It answered again, so the note goes.
+    assert not fine.is_error and load_refused(home) == {}
+
+
+async def test_a_refused_call_beside_one_that_answers_still_says_it_needs_a_token(home):
+    remote = FakeHttpServer("http://127.0.0.1:9/elsewhere")
+    settings = {"servers": {"remote": {"url": f"http://127.0.0.1:{remote.server_port}/mcp"}}}
+    try:
+        async with Upstreams(home, settings) as upstreams:
+            await upstreams.call("remote", "fine", {})  # it starts
+            async with anyio.create_task_group() as group:
+                answers = {}
+
+                async def call(tool):
+                    answers[tool] = await upstreams.call("remote", tool, {})
+
+                group.start_soon(call, "locked")
+                group.start_soon(call, "fine")
+    finally:
+        remote.shutdown()
+    assert text(answers["locked"]).startswith("remote needs a token")
+    assert not answers["fine"].is_error
 
 
 async def test_a_call_is_counted(home):

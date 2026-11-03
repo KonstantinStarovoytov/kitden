@@ -1,7 +1,7 @@
 // Tools of a server in the Kitden gateway: a switch each, for the project picked at the top.
 import { postJson } from "./api.js";
 import { previewButton, switchNode } from "./details.js";
-import { el, icon, plural } from "./dom.js";
+import { button, el, icon, plural } from "./dom.js";
 import { ALL_PROJECTS, flag, folderName } from "./parts.js";
 import { review } from "./review.js";
 import { data } from "./store.js";
@@ -62,13 +62,146 @@ export function offNote(answer, where) {
 // then each tool. A press adds the row's rule for `project` (null: all projects) to the tray, and
 // a second press on a pending switch takes it out (switchNode). `back(key)` is the way
 // back to its Details after a refusal; `flip` names the switch that has just flipped.
+//
+// Several tools can be picked and turned off or on in one row of the preview: Cmd (Mac) or Ctrl
+// and a press picks one more, Shift a run, and a drag over the rows picks the rows it covers. A
+// bar at the top then says how many, with Turn off, Turn on and Clear; Space turns them all off
+// (or on, when all are off), and Escape lets them go.
 export function switchList(rows, { server, project, back = () => null, flip = null }) {
   const list = el("div", "sw-list");
+  const tools = rows.filter((row) => row.tool !== null);
+  const keys = tools.map((row) => row.tool);
+  const nodes = new Map();
+  let picked = new Set();
+  let anchor = null;
+  const bar = el("div", "sw-picked");
+  const flipPicked = (state) => {
+    const body = pickedBody(server, project, keys.filter((key) => picked.has(key)), state);
+    pick(new Set(), null);
+    return review(body, { back: back(null) });
+  };
+  const action = (label, tip, run) => {
+    const node = button(label, run);
+    node.dataset.tip = tip;
+    return node;
+  };
+  const pick = (next, from) => {
+    picked = next;
+    anchor = from;
+    for (const [key, node] of nodes) {
+      node.classList.toggle("picked", picked.has(key));
+      node.setAttribute("aria-selected", String(picked.has(key)));
+    }
+    // The bar is in the list only while tools are picked.
+    if (!picked.size) {
+      document.removeEventListener("keydown", onKey, true);
+      return bar.remove();
+    }
+    document.addEventListener("keydown", onKey, true);
+    if (!bar.isConnected) list.prepend(bar);
+    const count = plural(picked.size, "tool", "tools");
+    bar.replaceChildren(
+      el("span", null, `${picked.size} selected`),
+      action("Turn off", `Turns the ${count} off. ${PREVIEW}`, () => flipPicked("off")),
+      action("Turn on", `Turns the ${count} on. ${PREVIEW}`, () => flipPicked("on")),
+      action("Clear", "Lets the picked tools go. Nothing changes.", () => pick(new Set(), null)),
+    );
+  };
   for (const row of rows) {
     const rule = (value) => ({ action: "gateway.rule", targets: [], params: { server, tool: row.tool, state: value, project } });
-    list.append(switchRow(row, rule, back, flip));
+    const node = switchRow(row, rule, back, flip);
+    if (row.tool !== null) {
+      nodes.set(row.tool, node);
+      node.addEventListener("click", (event) => {
+        if (event.target.closest?.("button, a, input") || dragged) return;
+        const next = pickTools(picked, keys, row.tool, { add: event.metaKey || event.ctrlKey, range: event.shiftKey, anchor });
+        pick(next.picked, next.anchor);
+      });
+    }
+    list.append(node);
   }
+  // While tools are picked, Escape and Space are heard on the whole page first (focus may be
+  // anywhere after a press on a row), so Escape lets the tools go before it closes Details.
+  // Space on a button or a switch is that button's own.
+  const onKey = (event) => {
+    if (!list.isConnected || !picked.size) return document.removeEventListener("keydown", onKey, true);
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      pick(new Set(), null);
+    } else if (event.key === " " && !event.target.closest?.("button, a, input, textarea, [role=switch]")) {
+      event.preventDefault();
+      const anyOn = tools.some((row) => picked.has(row.tool) && row.on);
+      Promise.resolve(flipPicked(anyOn ? "off" : "on")).catch(() => {});
+    }
+  };
+  // A drag over the rows (not from a switch or a button) picks the rows it covers; with Cmd or
+  // Ctrl, on top of what is picked.
+  let dragged = false;
+  list.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest?.("button, a, input, summary")) return;
+    const start = { x: event.clientX, y: event.clientY };
+    const base = event.metaKey || event.ctrlKey ? new Set(picked) : new Set();
+    let box = null;
+    dragged = false;
+    const move = (moved) => {
+      const [x0, x1] = [Math.min(start.x, moved.clientX), Math.max(start.x, moved.clientX)];
+      const [y0, y1] = [Math.min(start.y, moved.clientY), Math.max(start.y, moved.clientY)];
+      if (!box && Math.hypot(x1 - x0, y1 - y0) < 5) return;
+      if (!box) {
+        dragged = true;
+        box = el("div", "sw-marquee");
+        list.append(box);
+        list.classList.add("picking");
+      }
+      const frame = list.getBoundingClientRect();
+      Object.assign(box.style, { left: `${x0 - frame.left}px`, top: `${y0 - frame.top + list.scrollTop}px`, width: `${x1 - x0}px`, height: `${y1 - y0}px` });
+      const hits = new Set(base);
+      for (const [key, node] of nodes) {
+        const r = node.getBoundingClientRect();
+        if (r.bottom >= y0 && r.top <= y1 && r.right >= x0 && r.left <= x1) hits.add(key);
+      }
+      pick(hits, anchor);
+    };
+    const end = () => {
+      removeEventListener("pointermove", move);
+      removeEventListener("pointerup", end);
+      removeEventListener("pointercancel", end);
+      box?.remove();
+      list.classList.remove("picking");
+      // The click that ends a drag picks nothing more.
+      setTimeout(() => { dragged = false; }, 0);
+    };
+    addEventListener("pointermove", move);
+    addEventListener("pointerup", end);
+    addEventListener("pointercancel", end);
+  });
   return list;
+}
+
+const PREVIEW = "Nothing changes until you press Apply.";
+
+// The tools picked after a press on `key` (`keys`: every tool, in order): with `add` (Cmd or
+// Ctrl) one more, or one less when it was picked; with `range` (Shift) every tool from `anchor`
+// (the last one picked, else the first) to `key`, on top of what is picked; else none.
+export function pickTools(picked, keys, key, { add = false, range = false, anchor = null } = {}) {
+  if (range) {
+    const from = keys.indexOf(anchor ?? keys[0]);
+    const to = keys.indexOf(key);
+    const run = keys.slice(Math.min(from, to), Math.max(from, to) + 1);
+    return { picked: new Set([...picked, ...run]), anchor: anchor ?? keys[0] };
+  }
+  if (add) {
+    const next = new Set(picked);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return { picked: next, anchor: key };
+  }
+  return { picked: new Set(), anchor: null };
+}
+
+// One row of the preview that turns the picked tools off or on.
+export function pickedBody(server, project, tools, state) {
+  return { action: "gateway.rules", targets: [], params: { server, tools, state, project } };
 }
 
 // One row: the name (a tool's in mono, with its "New" flag), its quiet line, its description in two

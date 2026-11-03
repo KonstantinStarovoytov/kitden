@@ -606,6 +606,12 @@ test('a held server whose sign-in ended says so first and offers Sign in', () =>
   assert.equal(card.actions[0].label, 'Sign in');
 });
 
+test('a held server that turned down a call says so first and offers Add access', () => {
+  const card = held({ ...FILES_HELD, kind: 'remote', needs: 'token' });
+  assert.equal(card.warning, 'files needs a token, or its token is wrong.');
+  assert.equal(card.actions[0].label, 'Add access…');
+});
+
 test('the server panel lists its tools with a switch each and a Whole server row', () => {
   const card = held(FILES_HELD);
   assert.deepEqual([card.kind, card.title, card.id], ['Server', 'files', 'Local · in the Kitden gateway']);
@@ -1642,7 +1648,8 @@ const buttonsIn = (node) => nodesOf(node).filter((n) => n.tag === 'button');
 
 test('the Access block names each secret and shows only its start and end', () => {
   const block = accessBlock('neon', ACCESS, { now: 1_000_000 });
-  const [head, ...rows] = block.childNodes;
+  const [head, ...rest] = block.childNodes;
+  const rows = rest.slice(0, -1); // Add access… comes last
   assert.equal(textOf(head), 'Access');
   assert.deepEqual(rows.map((row) => textOf(row.childNodes[0])), [
     'AuthorizationBearer sk-a…1234',
@@ -1674,8 +1681,59 @@ test('Remove and Sign out add a gateway.access row to the tray', async () => {
   });
 });
 
-test('the server panel shows its Access block when it has secrets', () => {
+test('the server panel shows its Access block once its details are read', () => {
   const card = held(FILES_HELD, { detail: { ...FILES_TOOLS, access: ACCESS.slice(0, 1) } });
   assert.equal(textOf(card.list).includes('Bearer sk-a…1234'), true);
   assert.equal(textOf(held(FILES_HELD).list).includes('Access'), false);
+  const none = held(FILES_HELD, { detail: { ...FILES_TOOLS, access: [] } });
+  assert.equal(textOf(none.list).includes('No secret variables. Kitden sets none.'), true);
+});
+
+test('an Access block without secrets says so and offers Add access', () => {
+  const remote = accessBlock('docs', [], { remote: true });
+  assert.equal(textOf(remote), 'AccessNo token or header. Kitden sends none.Add access…');
+  const local = accessBlock('tool', [], { remote: false });
+  assert.equal(textOf(local), 'AccessNo secret variables. Kitden sets none.Add access…');
+  // With secrets, Add access… comes after them, for one more.
+  const some = buttonsIn(accessBlock('neon', ACCESS, { now: 1_000_000 })).map((b) => b.textContent);
+  assert.equal(some.at(-1), 'Add access…');
+});
+
+const { newAccess } = await import('../../src/kitden/web/static/js/access-form.js');
+
+test('new access is a token, a header or a variable, as one gateway.access row', () => {
+  const body = (field, name, value) => ({ action: 'gateway.access', targets: [], params: { server: 'docs', field, name, value, added: true } });
+  assert.deepEqual(newAccess('docs', 'token', '', ' sk-123 '), body('headers', 'Authorization', 'Bearer sk-123'));
+  assert.deepEqual(newAccess('docs', 'token', '', 'bearer sk-123'), body('headers', 'Authorization', 'Bearer sk-123'));
+  assert.deepEqual(newAccess('docs', 'header', ' X-API-Key ', 'k1'), body('headers', 'X-API-Key', 'k1'));
+  assert.deepEqual(newAccess('tool', 'variable', 'API_KEY', 'v1').params, { server: 'tool', field: 'env', name: 'API_KEY', value: 'v1', added: true });
+  // Nothing typed, or no name for a header or variable: nothing to add.
+  assert.equal(newAccess('docs', 'token', '', '  '), null);
+  assert.equal(newAccess('docs', 'header', '', 'k1'), null);
+});
+
+const { pickTools, pickedBody } = await import('../../src/kitden/web/static/js/tools.js');
+
+test('Cmd or Ctrl picks one more tool, Shift picks a run, a plain press lets go', () => {
+  const keys = ['a', 'b', 'c', 'd', 'e'];
+  let now = pickTools(new Set(), keys, 'b', { add: true });
+  assert.deepEqual([[...now.picked], now.anchor], [['b'], 'b']);
+  now = pickTools(now.picked, keys, 'd', { add: true, anchor: now.anchor });
+  assert.deepEqual([...now.picked], ['b', 'd']);
+  // Cmd on a picked one lets it go.
+  assert.deepEqual([...pickTools(now.picked, keys, 'b', { add: true, anchor: 'd' }).picked], ['d']);
+  // Shift: from the last one picked to this one, added to what is picked.
+  now = pickTools(new Set(['a']), keys, 'd', { range: true, anchor: 'b' });
+  assert.deepEqual([...now.picked].sort(), ['a', 'b', 'c', 'd']);
+  assert.equal(now.anchor, 'b');
+  // Shift with nothing picked yet starts at the first tool.
+  assert.deepEqual([...pickTools(new Set(), keys, 'c', { range: true }).picked], ['a', 'b', 'c']);
+  // A plain press lets every tool go.
+  assert.deepEqual([...pickTools(new Set(['a', 'b']), keys, 'c').picked], []);
+});
+
+test('the picked tools turn off or on in one row of the preview', () => {
+  assert.deepEqual(pickedBody('files', 'p1', ['read', 'write'], 'off'), {
+    action: 'gateway.rules', targets: [], params: { server: 'files', tools: ['read', 'write'], state: 'off', project: 'p1' },
+  });
 });

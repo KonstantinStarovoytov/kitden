@@ -50,7 +50,7 @@ const NOT_KNOWN = "Not known";
 const HINT_TAGS = { reads: "Read", writes: "Write", "may write": "May write" };
 
 // The hint line under the dock on the map (gateway-notes 8); the List has none.
-const MAP_HINT = "Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client";
+const MAP_HINT = "Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click tools in Details to pick several";
 
 // What an arrival with a selection (Back, Forward or a link) opens, once: a server the Kitden
 // gateway holds (`held`, and `tool` for one of its tools), a server outside it by its name (its
@@ -637,6 +637,8 @@ function kitdenServer(block, word, picked, waiting) {
   block.lamp = (list.length ? server.on_count > 0 : block.state === "on") ? "on" : "off";
   // Its sign-in ended and could not be refreshed: it needs the person (amber), not a count.
   if (server.needs === "sign-in") Object.assign(block, { lamp: "warn", meta: "Needs sign-in", stateInMeta: true });
+  // It turned down a call through the gateway: it needs a token, or a new one.
+  if (server.needs === "token") Object.assign(block, { lamp: "warn", meta: "Needs token", stateInMeta: true });
   block.ports = { left: true, right: typeof block.count === "number" };
   // Back from a move out taken out of the tray, it starts where its preview was.
   block.from = `preview-out:${server.name}`;
