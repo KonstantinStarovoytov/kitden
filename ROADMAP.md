@@ -7,6 +7,11 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not released yet
+
+- **Exact versions only:** a registry server runs only at an exact version (semver for npm,
+  PEP 440 for PyPI); `owner/repo`, `./dir`, tags and ranges are refused.
+
 ### 0.5.0
 
 - **Python servers from the catalog:** an Official MCP Registry server published only on PyPI
@@ -419,6 +424,5 @@ Ask before starting each one.
 - Secrets typed for a preview that is cancelled stay in memory.
 - Server details from a third-party `.mcp.json` follow the same local-address rule as the
   sign-in checks.
-- The npm version check accepts `owner/repo` and `./dir`; accept exact versions only.
 - Adding the gateway overwrites a `settings.json` it cannot read.
 - File and gateway edits hide their values from `repr`.
