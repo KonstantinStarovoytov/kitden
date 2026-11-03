@@ -229,11 +229,9 @@ def test_claude_desktop_config_is_read_from_the_linux_config_folder(system, tmp_
     assert desktop.id == "claude_desktop_code_tab"
 
 
-def _scan_with_bad_project_file(tmp_path, no_version, make_bad):
-    """Scan with the project's .mcp.json made bad. The scan runs in a thread with a fixed
-    4 MB stack that must finish within 10 seconds. Python 3.14 stops deep JSON by the stack
-    left, not by the recursion limit, so the main thread's stack would make it vary by
-    machine."""
+def _scan_with_bad_project_file(tmp_path, no_version, make_bad, problem=True):
+    """Scan with the project's .mcp.json made bad. The scan runs in a thread that must finish
+    within 10 seconds. With `problem`, the bad file must be a problem of its own."""
     import os
     import threading
 
@@ -246,18 +244,15 @@ def _scan_with_bad_project_file(tmp_path, no_version, make_bad):
     def scan():
         done["scan"] = ClaudeCodeAdapter(home, read_version=no_version).scan()
 
-    before = threading.stack_size(4 * 1024 * 1024)
-    try:
-        worker = threading.Thread(target=scan, daemon=True)
-        worker.start()
-    finally:
-        threading.stack_size(before)
+    worker = threading.Thread(target=scan, daemon=True)
+    worker.start()
     worker.join(10)
     if worker.is_alive():  # let a stuck reader go before failing
         os.close(os.open(bad, os.O_WRONLY | os.O_NONBLOCK))
     assert "scan" in done, "the scan did not finish"
     problems = [(p.path, p.unknown_reason) for p in done["scan"].problems]
-    assert (str(bad), UnknownReason.PARSE_ERROR) in problems
+    if problem:
+        assert (str(bad), UnknownReason.PARSE_ERROR) in problems
     found = rows(done["scan"].items, home)
     assert ("claude_code", "skill", "brandkit", "user", "on", None) in found
     assert ("claude_code", "mcp_server", "local-db", "local", "on", "work/website") in found
@@ -273,6 +268,21 @@ def test_a_fifo_named_like_a_project_file_does_not_stop_the_scan(tmp_path, no_ve
     _scan_with_bad_project_file(tmp_path, no_version, os.mkfifo)
 
 
-def test_a_deeply_nested_project_file_is_a_problem_of_its_own(tmp_path, no_version):
+def test_a_deeply_nested_project_file_does_not_stop_the_scan(tmp_path, no_version):
+    # Whether Python parses this depends on the stack it has, so only the scan is checked.
     deep = "[" * 100_000 + "]" * 100_000
-    _scan_with_bad_project_file(tmp_path, no_version, lambda p: p.write_text(deep))
+    _scan_with_bad_project_file(tmp_path, no_version, lambda p: p.write_text(deep), False)
+
+
+def test_a_file_too_deep_for_the_parser_is_a_problem_of_its_own(tmp_path, no_version, monkeypatch):
+    import json
+
+    real = json.loads
+
+    def loads(text, *args, **kwargs):
+        if text.startswith("[[["):
+            raise RecursionError
+        return real(text, *args, **kwargs)
+
+    monkeypatch.setattr(json, "loads", loads)
+    _scan_with_bad_project_file(tmp_path, no_version, lambda p: p.write_text("[[[]]]"))
