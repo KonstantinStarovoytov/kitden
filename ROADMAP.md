@@ -1,13 +1,13 @@
 # Kitden roadmap
 
-Last updated: 2026-11-03
+Last updated: 2026-11-04
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not released yet
+### 0.6.0
 
 - **No Add where it cannot work:** a client that cannot take a server (Claude Code has no
   start folder setting; Codex cannot use an SSE connection) gets one line that says why, on the
