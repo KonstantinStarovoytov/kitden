@@ -6,7 +6,7 @@ import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gate
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
-import { onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
+import { flipToolPick, onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
 import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
 import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
@@ -130,7 +130,7 @@ export function renderGateway(main, { again = false } = {}) {
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
   head.append(headActions(addHeadButton("+ Add servers", "add:servers", (node) => openAdd({ from: node })), seg));
   const model = treeFor(view, mode);
-  setHint(mode === "map" ? mapHint() : "");
+  setHint(mode === "map" ? mapHint() : "", mode === "map" ? hintActs() : []);
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
   // It changes nothing in a client and moves no Details.
   const found = state.q.trim() ? findIn(model, state.q) : null;
@@ -1214,7 +1214,7 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   const { view, selected } = onMap;
   const later = lightsLater({ unfolds: lightLater, lit });
   keepPickable(model);
-  setHint(mapHint());
+  setHint(mapHint(), hintActs());
   const chosen = new Set([...pick.ids, ...[...toolPick.tools].map((name) => `tool:${toolPick.server}/${name}`)]);
   const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, chosen, lit: later ? new Set() : lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js); a drag draws the
@@ -1263,6 +1263,11 @@ function togglePickHere(id) {
 // open, and the pick is the same as in its Details' list (tools.js toolPick), whose bar turns them
 // off or on. Cmd or Ctrl and a click picks one more, Shift a run; a band over the tools picks them.
 const toolBlocks = (model) => model.blocks.filter((block) => block.kind === "tool");
+// Which tools of `server` are on, and where a rule for them goes: what Turn off and Space need.
+const toolStates = (server) => ({
+  states: new Map(toolBlocks(onMap.model).filter((b) => b.server.name === server).map((b) => [b.name, b.state === "on"])),
+  project: state.project || null,
+});
 function pickToolHere(id, how) {
   const block = onMap.model.blocks.find((b) => b.id === id);
   if (!block || block.kind !== "tool") return false;
@@ -1270,7 +1275,7 @@ function pickToolHere(id, how) {
   const keys = toolBlocks(onMap.model).filter((b) => b.server.name === server).map((b) => b.name);
   const now = toolPick.server === server ? toolPick.tools : new Set();
   const next = pickTools(now, keys, block.name, { add: how === "add", range: how === "range", anchor: toolPick.anchor });
-  setToolPick(server, next.picked, next.anchor);
+  setToolPick(server, next.picked, next.anchor, toolStates(server));
   return true;
 }
 function bandTools(ids, base) {
@@ -1278,14 +1283,22 @@ function bandTools(ids, base) {
   if (!met.length) return;
   const server = met[0].server.name;
   const kept = toolPick.server === server ? base : new Set();
-  setToolPick(server, new Set([...kept, ...met.filter((b) => b.server.name === server).map((b) => b.name)]), toolPick.anchor);
+  setToolPick(server, new Set([...kept, ...met.filter((b) => b.server.name === server).map((b) => b.name)]), toolPick.anchor, toolStates(server));
 }
 // The map draws the tool pick, and the hint counts it.
 onToolPick(() => {
   if (!onMap.view || !onMap.view.box.isConnected) return;
-  setHint(mapHint());
+  setHint(mapHint(), hintActs());
   drawAgain();
 });
+
+// The hint line's own buttons while tools are picked: they turn them off or on from the map, with
+// or without their server's Details open.
+function hintActs() {
+  if (!toolPick.tools.size) return [];
+  const act = (label, value) => button(label, () => flipToolPick(value));
+  return [act("Turn off", "off"), act("Turn on", "on"), button("Clear", () => setToolPick(null, new Set()))];
+}
 
 // Escape on the Gateway map's page clears the pick.
 function escapePick(event) {
@@ -1295,13 +1308,13 @@ function escapePick(event) {
 
 // The pick changed: the map draws it, and the hint counts it.
 function pickChanged() {
-  setHint(mapHint());
+  setHint(mapHint(), hintActs());
   drawAgain();
 }
 
 // The map's hint: the pick's count while something is picked, or what the band left out.
 function mapHint() {
-  if (toolPick.tools.size) return `${plural(toolPick.tools.size, "tool", "tools")} picked · Turn off or on in Details, or press Space · Esc clears`;
+  if (toolPick.tools.size) return `${plural(toolPick.tools.size, "tool", "tools")} picked · Space turns them off · Esc clears`;
   return pick.ids.size || pick.stuck ? PICK_HINT(pick.ids.size, pick.stuck) : MAP_HINT;
 }
 

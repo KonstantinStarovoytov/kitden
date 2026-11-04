@@ -74,34 +74,19 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
   const nodes = new Map();
   // The pick is shared with the Gateway map (toolPick): this list shows it and changes it.
   const mine = () => (toolPick.server === server ? toolPick.tools : new Set());
-  const pick = (next, from) => setToolPick(server, next, from);
+  const states = new Map(tools.map((row) => [row.tool, Boolean(row.on)]));
+  const pick = (next, from) => setToolPick(server, next, from, { states, project });
   const bar = el("div", "sw-picked");
-  const flipPicked = (state) => {
-    const body = pickedBody(server, project, keys.filter((key) => mine().has(key)), state);
-    pick(new Set(), null);
-    return review(body, { back: back(null) });
-  };
   const action = (label, tip, run) => {
     const node = button(label, run);
     node.dataset.tip = tip;
     return node;
   };
-  // Escape and Space are heard only while tools are picked.
-  let listening = false;
-  const listen = (on) => {
-    if (on === listening) return;
-    listening = on;
-    if (on) document.addEventListener("keydown", onKey, true);
-    else document.removeEventListener("keydown", onKey, true);
-  };
   // Drawn again on every change of the pick; a list taken off the page stops listening.
   let placed = false;
   const show = () => {
     if (list.isConnected) placed = true;
-    else if (placed) {
-      listen(false);
-      return stop();
-    }
+    else if (placed) return stop();
     const picked = mine();
     for (const [key, node] of nodes) {
       node.classList.toggle("picked", picked.has(key));
@@ -109,18 +94,16 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
     }
     // The bar is in the list only while tools are picked.
     if (!picked.size) {
-      listen(false);
       if (bar.isConnected) bar.remove();
       return;
     }
-    listen(true);
     if (!bar.isConnected) list.prepend(bar);
     // Only Turn off and Turn on say what the label leaves out: one row for all of them.
     const one = "One row in the preview for all of them. Space does the same, Escape lets them go.";
     bar.replaceChildren(
       el("span", null, `${picked.size} selected`),
-      action("Turn off", one, () => flipPicked("off")),
-      action("Turn on", one, () => flipPicked("on")),
+      action("Turn off", one, () => flipToolPick("off", back(null))),
+      action("Turn on", one, () => flipToolPick("on", back(null))),
       button("Clear", () => pick(new Set(), null)),
     );
   };
@@ -137,20 +120,6 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
     }
     list.append(node);
   }
-  // While tools are picked, Escape and Space are heard on the whole page first (focus may be
-  // anywhere after a press on a row), so Escape lets the tools go before it closes Details.
-  // Space on a button or a switch is that button's own.
-  const onKey = (event) => {
-    if (!list.isConnected || !mine().size) return listen(false);
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      pick(new Set(), null);
-    } else if (event.key === " " && !event.target.closest?.("button, a, input, textarea, [role=switch]")) {
-      event.preventDefault();
-      const anyOn = tools.some((row) => mine().has(row.tool) && row.on);
-      Promise.resolve(flipPicked(anyOn ? "off" : "on")).catch(() => {});
-    }
-  };
   // A drag over the rows (not from a switch or a button) picks the rows it covers; with Cmd or
   // Ctrl, on top of what is picked.
   let dragged = false;
@@ -199,13 +168,48 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
 
 // The tools picked now, all of one server, shared by its Details list and the Gateway map, and
 // the last one picked (`anchor`, where Shift starts).
-export const toolPick = { server: null, tools: new Set(), anchor: null };
+// `states` says which of its tools are on, and `project` is where a rule for them goes (null:
+// all projects).
+export const toolPick = { server: null, tools: new Set(), anchor: null, states: new Map(), project: null };
 const pickWatchers = new Set();
 
 // Pick `tools` of `server` (none: nothing is picked); every watcher hears it.
-export function setToolPick(server, tools, anchor = null) {
-  Object.assign(toolPick, { server: tools.size ? server : null, tools: new Set(tools), anchor: tools.size ? anchor : null });
+export function setToolPick(server, tools, anchor = null, { states = toolPick.states, project = toolPick.project } = {}) {
+  const any = tools.size > 0;
+  Object.assign(toolPick, { server: any ? server : null, tools: new Set(tools), anchor: any ? anchor : null, states: any ? states : new Map(), project: any ? project : null });
+  if (any) listenKeys();
   for (const watch of [...pickWatchers]) watch();
+}
+
+// Turn the picked tools off or on: one row of the preview, and the pick is let go. `back` is the
+// way back to Details after a refusal, if any.
+export function flipToolPick(state, back = null) {
+  const { server, project } = toolPick;
+  const body = pickedBody(server, project, [...toolPick.tools], state);
+  setToolPick(null, new Set());
+  return review(body, { back });
+}
+
+// While tools are picked, Escape and Space are heard on the whole page first, wherever focus is
+// (a block on the map, a row in Details): Escape lets them go before it closes Details, and Space
+// turns them off (on, when all are off) instead of scrolling or pressing what has focus. Space in
+// a field, on a switch or on a button of the picked bar stays theirs.
+let keysOn = false;
+function listenKeys() {
+  if (keysOn || typeof document === "undefined" || !document.addEventListener) return;
+  keysOn = true;
+  document.addEventListener("keydown", (event) => {
+    if (!toolPick.tools.size) return;
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      setToolPick(null, new Set());
+    } else if (event.key === " " && !event.target.closest?.("input, textarea, select, [contenteditable], [role=switch], .sw-picked, .hint-acts, #dock")) {
+      event.preventDefault();
+      event.stopPropagation();
+      const anyOn = [...toolPick.tools].some((name) => toolPick.states.get(name));
+      Promise.resolve(flipToolPick(anyOn ? "off" : "on")).catch(() => {});
+    }
+  }, true);
 }
 
 // Hear every change of the tool pick; returns the way to stop.

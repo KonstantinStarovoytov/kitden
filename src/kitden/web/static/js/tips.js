@@ -77,7 +77,9 @@ export function wordsOf(node, title = node.title) {
   const shown = String(node.textContent || "").replace(/\s+/g, " ").trim();
   const label = String(node.getAttribute?.("aria-label") || shown).trim();
   const own = (title || node.dataset.tip || "").trim();
-  if (own && !shown.includes(own)) return own;
+  // An icon's name written beside it ("Kitden gateway" next to its tile) is on screen too.
+  const beside = String(node.parentElement?.textContent || "").replace(/\s+/g, " ");
+  if (own && !shown.includes(own) && !beside.includes(own)) return own;
   const extra = node.disabled ? null : tipFor(label);
   if (extra) return extra;
   return own && cutOff(node) ? own : null;

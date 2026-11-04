@@ -258,11 +258,17 @@ export function scopeBar(folder, count) {
 
 // The line at the bottom of the page (`.hint-line`, found by its id): an info icon and a few
 // words. The words change at once; empty words hide the line.
-export function setHint(text) {
+export function setHint(text, actions = []) {
   const line = document.getElementById("hint");
   line.replaceChildren();
   line.hidden = !text;
   if (text) line.append(icon("info", 13), el("span", null, text));
+  // Buttons the hint offers (picked tools: Turn off, Turn on, Clear) come after its words.
+  if (text && actions.length) {
+    const acts = el("span", "hint-acts");
+    acts.append(...actions);
+    line.append(acts);
+  }
 }
 
 // A reason from the engine may name a file by its full path ("/Users/me/.cursor/mcp.json", or one
@@ -509,6 +515,13 @@ export function kitdenHouse(look = null) {
 export function mark(clientId) {
   const node = el("span", "mono-mark", CLIENT_MARKS[clientId] || "?");
   node.title = CLIENT_NAMES[clientId] || clientId;
+  // The Kitden gateway's tile holds its house, as its block on the map does.
+  if (clientId === "kitden") {
+    node.className = "client-mark";
+    node.dataset.icon = "kitden";
+    node.replaceChildren(kitdenHouse());
+    return node;
+  }
   const icon = CLIENT_ICONS[clientId];
   if (icon) {
     // One rounded tile for every client; the vendor icon keeps its own colors.

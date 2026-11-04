@@ -999,3 +999,11 @@ test('a Linux home folder shows as ~', () => {
   assert.equal(shortPaths('Could not write /home/me/.codex/config.toml.'), 'Could not write ~/.codex/config.toml.');
   assert.equal(shortPath('/Users/me/.claude.json'), '~/.claude.json');
 });
+
+test('the Kitden gateway tile holds its house, never "GW"', async () => {
+  const { mark } = await import('../../src/kitden/web/static/js/parts.js');
+  const tile = mark('kitden');
+  assert.equal(tile.dataset.icon, 'kitden');
+  assert.equal(tile.childNodes[0].src, '/static/brand/kitden.svg');
+  assert.deepEqual(tile.childNodes.map((n) => n.tag), ['img']);
+});

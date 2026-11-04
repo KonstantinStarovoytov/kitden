@@ -57,3 +57,14 @@ test('words already on screen are not shown again, unless they are cut off', () 
   assert.equal(wordsOf(node('Move all 3…', 'Move all 3…')), tipFor('Move all 3…'));
   assert.equal(wordsOf(node('', 'In preview. Press to take it out.')), 'In preview. Press to take it out.');
 });
+
+test('an icon whose name is written beside it gets no hover words', () => {
+  const icon = {
+    title: 'Kitden gateway', textContent: '', dataset: {}, disabled: false, scrollWidth: 24, clientWidth: 24,
+    parentElement: { textContent: ' Kitden gateway 7 servers' },
+    getAttribute: () => null, querySelectorAll: () => [],
+  };
+  assert.equal(wordsOf(icon), null);
+  // Alone, as a client tile among others, its name is the hover words.
+  assert.equal(wordsOf({ ...icon, parentElement: { textContent: '' } }), 'Kitden gateway');
+});

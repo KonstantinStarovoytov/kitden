@@ -356,7 +356,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
    and switch to the vendor's dark version in the dark theme (img.light / img.dark). */
 .client-mark, .mono-mark { --tile: 24px; width: var(--tile); height: var(--tile); border-radius: 6px; display: inline-grid; place-items: center; flex: none; background: var(--panel-raised); box-shadow: 0 0 0 1px var(--wire-strong); overflow: hidden; }
 .client-mark img { display: block; width: 100%; height: 100%; object-fit: contain; grid-area: 1 / 1; }
-.client-mark[data-icon="claude"] img { box-sizing: border-box; padding: 4px; }
+.client-mark[data-icon="claude"] img, .client-mark[data-icon="kitden"] img { box-sizing: border-box; padding: 4px; }
 .who:has(> h2) > .client-mark, .who:has(> h2) > .mono-mark { --tile: 28px; }
 /* A client's mark beside its name (or beside a row of marks). */
 .who { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
@@ -1386,3 +1386,5 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .sw-marquee { position: absolute; z-index: 3; border: 1px solid var(--route); background: color-mix(in srgb, var(--route-soft) 60%, transparent); border-radius: 4px; pointer-events: none; }
 /* A count whose names wait in its hover words ("9 projects"): a dotted line says there is more. */
 .count-tip { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+/* The hint line's own buttons (picked tools): small, after its words. */
+.hint-acts { display: inline-flex; gap: 6px; margin-left: 10px; pointer-events: auto; }
