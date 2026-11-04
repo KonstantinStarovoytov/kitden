@@ -12,6 +12,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **No Add where it cannot work:** a client that cannot take a server (Claude Code has no
   start folder setting; Codex cannot use an SSE connection) gets one line that says why, on the
   Gateway and in the Library, in place of an Add that would be refused.
+- **Pick tools on the map too:** Cmd, Ctrl or Shift and a click, or a band over the tools
+  column; the server's Details show the same pick with Turn off and Turn on.
 - **Hover words that add something:** only labels that leave something out have hover words;
   a long list of projects in a tool's sentence is counted ("9 projects"), names on hover.
 - **No flicker on a refused change:** a button says "In preview" only once the preview took it.

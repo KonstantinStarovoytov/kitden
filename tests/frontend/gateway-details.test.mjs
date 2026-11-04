@@ -640,7 +640,7 @@ test('the server panel lists its tools with a switch each and a Whole server row
   // The tool's name is mono, where its word comes from waits in hover text, and its description
   // waits in its own panel.
   const read = listOf(card).children[1].children[0];
-  assert.deepEqual([read.children[0].children[0].tag, read.children[1].title, read.children.length], ['code', 'from the server', 2]);
+  assert.deepEqual([read.children[0].children[0].tag, read.children[1].title, read.children.length], ['code', 'The server says so.', 2]);
   // Each switch adds the rule for all projects; the list sits in the body, under the facts.
   const [, body] = detailsCard(card);
   assert.deepEqual(body.children.map((node) => node.className), ['facts', 'tools']);
@@ -1746,4 +1746,24 @@ test('the picked tools turn off or on in one row of the preview', () => {
   assert.deepEqual(pickedBody('files', 'p1', ['read', 'write'], 'off'), {
     action: 'gateway.rules', targets: [], params: { server: 'files', tools: ['read', 'write'], state: 'off', project: 'p1' },
   });
+});
+
+test('a tool pick made on the map shows in the server list, and goes with Clear', async () => {
+  const { setToolPick, toolPick } = await import('../../src/kitden/web/static/js/tools.js');
+  const list = switchList(toolRows(FILES_TOOLS, null), { server: 'files', project: null });
+  const picked = () => list.childNodes.filter((n) => /\bsw-row\b/.test(n.className) && n.className.includes('picked')).map((n) => textOf(n.childNodes[0].childNodes[0]));
+  const saved = globalThis.document.addEventListener;
+  globalThis.document.addEventListener = () => {};
+  globalThis.document.removeEventListener = () => {};
+  try {
+    setToolPick('files', new Set(['read_file', 'delete_file']));
+    assert.deepEqual(picked(), ['read_file', 'delete_file']);
+    // Another server's pick is not this list's.
+    setToolPick('tracker', new Set(['list_issues']));
+    assert.deepEqual(picked(), []);
+    setToolPick(null, new Set());
+    assert.equal(toolPick.server, null);
+  } finally {
+    globalThis.document.addEventListener = saved;
+  }
 });
