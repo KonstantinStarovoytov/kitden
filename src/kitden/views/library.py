@@ -17,6 +17,7 @@ from kitden.changes.actions import (
     PLUGIN_INSTALL,
     PLUGIN_SKILLS,
     SKILL_INSTALL,
+    add_refusals,
 )
 from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, found_columns, is_direct_entry, is_home
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Item, ItemKind, Scope, _hash
@@ -221,9 +222,24 @@ def _map_rows(
     return out
 
 
-def _server_add(found: list[str], items: list[Item]) -> Add:
+def _refusals(adapters, items: list[Item]):
+    """Why each client cannot take a direct server, by item id, read once (`add_refusals`)."""
+    by_id = {i.id: i for i in items}
+    found: dict[str, dict[str, str]] = {}
+
+    def refused(item_id: str) -> dict[str, str]:
+        if item_id not in found:
+            item = by_id.get(item_id)
+            found[item_id] = add_refusals(adapters, item) if item else {}
+        return found[item_id]
+
+    return refused
+
+
+def _server_add(found: list[str], items: list[Item], refused=lambda item_id: {}) -> Add:
     """A direct user-scope server one client loads: the other clients Kitden writes can add
-    it. The source is the first such entry in column order. A row a gateway serves has none."""
+    it, unless a client cannot take it (`refused`: why, by client). The source is the first
+    such entry in column order. A row a gateway serves has none."""
     by_id = {i.id: i for i in items}
 
     def source(row: Row) -> str | None:
@@ -245,12 +261,17 @@ def _server_add(found: list[str], items: list[Item]) -> Add:
         if any(row.cells[c].state == "gw" for c in found):
             return None
         item = source(row)
-        return _add(MCP_ADD, "+ Add", item=item) if item else None
+        if item is None or client in refused(item):
+            return None
+        return _add(MCP_ADD, "+ Add", item=item)
 
+    add.source = source  # the why of a cell names the reason a client cannot take it
     return add
 
 
-def _server_why(map_rows: list[Row], found: list[str], items: list[Item]) -> Why:
+def _server_why(
+    map_rows: list[Row], found: list[str], items: list[Item], cannot=lambda row, client: None
+) -> Why:
     """A gateway entry: connect the client. A direct server another client loads: move it into
     the gateway this client reaches, when the client gets no add (_server_add). A server only
     this project has: Kitden adds MCP servers for all projects only. Other dashes have no
@@ -288,6 +309,8 @@ def _server_why(map_rows: list[Row], found: list[str], items: list[Item]) -> Why
         return bool(loaded) and all(i.project is not None for i in loaded)
 
     def why(row: Row, client: str) -> str | None:
+        if reason := cannot(row, client):
+            return reason
         if client in on_gateway:
             if movable(row):
                 return SHARE_IN_GATEWAY
@@ -805,13 +828,23 @@ def _tables(
     map_rows = load_map(inventory, project, gateway_registered=gateway_registered)
     offers = catalog(inventory, adapters)
     skills = skill_catalog(inventory, adapters)
+    # A client that cannot take a direct server gets its reason in place of an add.
+    refused = _refusals(adapters, inventory.items)
+    server_add = _server_add(found, inventory.items, refused)
+
+    def cannot(row: Row, client: str) -> str | None:
+        if row.cells[client].state == "on":
+            return None
+        item = server_add.source(row)
+        return refused(item).get(client) if item else None
+
     built = {
         "mcp_server": _map_rows(
             map_rows,
             "mcp_server",
             found,
-            _server_why(map_rows, found, inventory.items),
-            _server_add(found, inventory.items),
+            _server_why(map_rows, found, inventory.items, cannot),
+            server_add,
         ),
         "plugin": _plugin_rows(
             map_rows, offers, skills, found, imports, in_project=project is not None

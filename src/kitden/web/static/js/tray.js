@@ -157,6 +157,12 @@ export function waitingRows(t = tray) { return t.rows.filter((row) => row.waits)
 // The row with this key, if it is in the tray. Keys are unique there.
 export const trayRow = (key) => tray.rows.find((row) => row.key === key);
 export const inTray = (key) => Boolean(trayRow(key));
+// A row the preview has taken (it has its part), or one that waits for access: a control shows
+// "In preview" only then, so a change that is refused at once never flips it there and back.
+export const shownInTray = (key) => {
+  const row = trayRow(key);
+  return Boolean(row && (row.part || row.waits));
+};
 
 // The row of `body` leaves the tray if it is there, else joins it (addToTray's `opts`).
 export function toggleInTray(body, opts) {

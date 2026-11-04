@@ -908,3 +908,19 @@ test('a check dropped by another ask says nothing', async () => {
   assert.equal(await checking, null);
   await other;
 });
+
+test('a control shows In preview only once the preview took its row, or the row waits', async () => {
+  const { shownInTray, inTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
+  const saved = tray.rows;
+  try {
+    tray.rows = [{ key: 'k', part: null, waits: null }];
+    // Being asked for: in the tray, but a refusal may take it out at once.
+    assert.deepEqual([inTray('k'), shownInTray('k')], [true, false]);
+    tray.rows = [{ key: 'k', part: { steps: [] }, waits: null }];
+    assert.equal(shownInTray('k'), true);
+    tray.rows = [{ key: 'k', part: null, waits: { kind: 'token' } }];
+    assert.equal(shownInTray('k'), true);
+  } finally {
+    tray.rows = saved;
+  }
+});

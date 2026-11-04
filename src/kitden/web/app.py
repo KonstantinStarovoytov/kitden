@@ -49,6 +49,7 @@ from kitden.changes.actions import (
     SKILL_RULE,
     NeedsAccess,
     access_steps,
+    add_refusals,
     add_server_steps,
     connect_steps,
     disconnect_steps,
@@ -999,14 +1000,17 @@ def create_app(
         kind = request.query_params.get("kind") or None
         category = request.query_params.get("category") or None
         tools = load_tools(home) if home is not None else None
-        definitions = explain(state.inventory, name, kind, path, category, tools)
-        # What each change reaches, and whether Cursor loads Claude Code's plugins and folder.
-        return JSONResponse(
-            {
-                "definitions": with_page_fields(definitions, state.inventory),
-                "inherits": _inherits(),
-            }
+        definitions = with_page_fields(
+            explain(state.inventory, name, kind, path, category, tools), state.inventory
         )
+        # A direct server says which clients cannot take it, so the page offers no Add there.
+        items = {i.id: i for i in state.inventory.items}
+        for definition in definitions:
+            item = items.get(definition["id"])
+            if item is not None and REMOVE_DIRECT in item.actions:
+                definition["cannot_add"] = add_refusals(adapters, item)
+        # What each change reaches, and whether Cursor loads Claude Code's plugins and folder.
+        return JSONResponse({"definitions": definitions, "inherits": _inherits()})
 
     def _overview(request, project, path):
         held, problem = _kitden(path)

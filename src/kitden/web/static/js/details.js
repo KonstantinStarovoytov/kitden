@@ -7,7 +7,7 @@ import { header, isPanelOpen, isQuiet, openInfo, panelState } from "./panel.js";
 import { ALL_PROJECTS, byClientOrder, callout, CLIENT_NAMES, folderName, gatewayName, ROUTE_WORDS, WRITABLE } from "./parts.js";
 import { review } from "./review.js";
 import { data, projectPath } from "./store.js";
-import { inTray, keyFor, takeOut } from "./tray.js";
+import { inTray, keyFor, shownInTray, takeOut } from "./tray.js";
 
 export const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -291,12 +291,12 @@ const trayLooks = new WeakMap();
 export function followTray(node, key, look) {
   node.dataset.tray = key;
   trayLooks.set(node, look);
-  look(inTray(key));
+  look(shownInTray(key));
 }
 
 function showTrayLook(node) {
   const look = trayLooks.get(node);
-  if (look) look(inTray(node.dataset.tray));
+  if (look) look(shownInTray(node.dataset.tray));
 }
 
 // The tray changed (panel.js listens): every switch and button in Details shows whether its change

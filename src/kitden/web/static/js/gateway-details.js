@@ -559,8 +559,15 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
     more.push({ label: "Remove direct entry…", body: { action: "mcp.remove_direct", targets: row.items.map((item) => ({ item })), params: {} } });
   }
   const source = own.find((d) => d.scope === "user" && d.actions.includes("mcp.remove_direct"));
+  // A client that cannot take it (Claude Code has no start folder setting) gets no Add, only why.
+  const cannot = [];
   if (source && !definitions.some((d) => d.via_gateway)) {
     for (const client of WRITABLE.filter((c) => clients.includes(c) && !definitions.some((d) => d.client === c))) {
+      const reason = source.cannot_add?.[client];
+      if (reason) {
+        cannot.push(`${reason.replace(/\.$/, "")}, so it cannot be added there.`);
+        continue;
+      }
       const body = { action: "mcp.add", targets: [{ client }], params: { item: source.id } };
       // In a project an add still goes to the client's settings for all projects; its note says so.
       more.push({ label: `+ Add to ${CLIENT_NAMES[client]}…`, body, note: projectNote(state.project) });
@@ -570,7 +577,7 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
   for (const offer of offers) {
     more.push({ label: offerLabel(offer, offers), body: { action: offer.action, targets: [{ item: offer.def.id }], params: {} } });
   }
-  const note = row.stays || (group === "move" && row.items.length && !targets.length ? GATEWAY_NOTE : null);
+  const note = [row.stays || (group === "move" && row.items.length && !targets.length ? GATEWAY_NOTE : null), ...cannot].filter(Boolean).join(" ") || null;
   const evidence = techRows(own.length ? own : definitions.filter((d) => !d.via_gateway && columns.includes(d.client)));
   const route = el("span", "fact-mark");
   route.append(lamp("out"), el("span", null, "Direct, on its own"));
@@ -759,8 +766,23 @@ export function toolCard(tool, server, { linked, picked = "", folder = "", detai
   return { ...card, why, ...toolActions(server.name, tool, { picked, folder, detail, shared, some }) };
 }
 
-// "atlas, where it is on; web, where it is off": each project and its state.
-const whereItIs = (list) => list.map((p) => `${p.name}, where it is ${p.state}`).join("; ");
+// The projects that decide otherwise, kept short: up to two by name ("atlas and web"), more as
+// "9 projects", whose names wait in its hover words.
+function projectsPart(list) {
+  if (list.length <= 2) return joinWords(list.map((p) => p.name));
+  const node = el("span", "count-tip", `${list.length} projects`);
+  node.dataset.tip = list.map((p) => p.name).join(", ");
+  node.tabIndex = 0;
+  return node;
+}
+
+// A sentence of words and nodes: the words alone while there is no node.
+function sentence(...parts) {
+  if (parts.every((part) => typeof part === "string")) return parts.join("");
+  const node = el("p", "why");
+  node.append(...parts);
+  return node;
+}
 
 // What the tool panel says. With All projects: whether the clients that reach the gateway (`who`)
 // can call it in every project, then each known project that decides otherwise (`others`, null
@@ -775,16 +797,16 @@ function toolSay({ who, none, on, picked, folder, tool, shared, serverShared, ot
   if (none) return none;
   if (!picked) {
     if (!others) return `${who} ${on ? "can" : "can't"} call this tool through Kitden by the shared rule.`;
-    const all = on ? `${who} can call this tool through Kitden, in every project.` : `${who} can't call this tool through Kitden, in any project.`;
+    const all = on ? `${who} can call this tool through Kitden in every project` : `${who} can't call this tool through Kitden in any project`;
     const differ = others.filter((p) => p.state !== state);
-    return differ.length ? `${all} Except ${whereItIs(differ)}.` : all;
+    return differ.length ? sentence(`${all} except `, projectsPart(differ), `, where it is ${other(state)}.`) : `${all}.`;
   }
   const here = `${who} ${on ? "can" : "can't"} call this tool in ${folder}.`;
   const base = serverShared === "off" ? "off" : shared;
   if (!others || !base) return here;
   const differ = others.filter((p) => p.id !== picked && p.state !== base);
   const every = base === "on" ? "Every other project has it on" : "Every other project still has it off";
-  return `${here} ${every}${differ.length ? `, except ${whereItIs(differ)}` : ""}.`;
+  return differ.length ? sentence(`${here} ${every}, except `, projectsPart(differ), `, where it is ${other(base)}.`) : `${here} ${every}.`;
 }
 
 // The tool panel's actions. With All projects: the rule for all projects the other way (primary

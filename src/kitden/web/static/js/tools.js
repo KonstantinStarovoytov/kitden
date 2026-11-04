@@ -99,12 +99,13 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
     }
     document.addEventListener("keydown", onKey, true);
     if (!bar.isConnected) list.prepend(bar);
-    const count = plural(picked.size, "tool", "tools");
+    // Only Turn off and Turn on say what the label leaves out: one row for all of them.
+    const one = "One row in the preview for all of them. Space does the same, Escape lets them go.";
     bar.replaceChildren(
       el("span", null, `${picked.size} selected`),
-      action("Turn off", `Turns the ${count} off. ${PREVIEW}`, () => flipPicked("off")),
-      action("Turn on", `Turns the ${count} on. ${PREVIEW}`, () => flipPicked("on")),
-      action("Clear", "Lets the picked tools go. Nothing changes.", () => pick(new Set(), null)),
+      action("Turn off", one, () => flipPicked("off")),
+      action("Turn on", one, () => flipPicked("on")),
+      button("Clear", () => pick(new Set(), null)),
     );
   };
   for (const row of rows) {
@@ -177,8 +178,6 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
   });
   return list;
 }
-
-const PREVIEW = "Nothing changes until you press Apply.";
 
 // The tools picked after a press on `key` (`keys`: every tool, in order): with `add` (Cmd or
 // Ctrl) one more, or one less when it was picked; with `range` (Shift) every tool from `anchor`

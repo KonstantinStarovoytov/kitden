@@ -1366,6 +1366,31 @@ def put_back_steps(
     return steps
 
 
+def add_refusals(adapters: dict[str, ClientAdapter], item: Item) -> dict[str, str]:
+    """Why each other client cannot take this direct server (`add_server_steps`), by client:
+    a start folder Claude Code has no setting for, a connection Codex cannot use. Empty when
+    every client can, or when the server is not a direct entry for all projects."""
+    if item.scope in (Scope.PROJECT, Scope.LOCAL) or item.via_gateway:
+        return {}
+    if REMOVE_DIRECT not in item.actions:
+        return {}
+    try:
+        entry = _raw_entry(remove_steps(adapters, item)[0])
+    except (ValueError, OSError):
+        return {}
+    if entry is None:
+        return {}
+    refusals = {}
+    for client in adapters:
+        if client == item.client:
+            continue
+        try:
+            translate_entry(entry, client, source=item.client)
+        except ValueError as refused:
+            refusals[client] = str(refused)
+    return refusals
+
+
 def add_server_steps(
     adapters: dict[str, ClientAdapter], item: Item, clients: list[str]
 ) -> list[Step]:

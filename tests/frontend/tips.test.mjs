@@ -8,28 +8,48 @@ const JS = new URL('../../src/kitden/web/static/js/', import.meta.url);
 const source = readdirSync(JS).filter((f) => f.endsWith('.js')).map((f) => readFileSync(new URL(f, JS), 'utf8')).join('\n');
 
 // Words that end in "…" but are not actions: a wait, a placeholder, a search box.
-const NOT_ACTIONS = new Set(['Applying…', 'Bearer …', 'Checking the version…', 'Checking…', 'Find a project…', 'Loading…', 'Reading what it holds…', 'Search MCP servers…', 'Search plugins and skills…', 'Searching…', 'Show…', 'Still checking …', 'Waiting for browser…']);
+const NOT_ACTIONS = new Set(['Applying…', 'Bearer …', 'Checking the version…', 'Checking…', 'Find a project…', 'Loading…', 'Reading what it holds…', 'Search MCP servers…', 'Search plugins and skills…', 'Searching…', 'Still checking …', 'Waiting for browser…']);
+// Actions whose label says it all: hover words would only repeat it.
+const SAYS_IT_ALL = new Set(['Add…', 'Add to Codex…', 'Add to Claude Code or Codex…', 'Show…', 'Update…']);
 
-test('every action label in the page code has hover words', () => {
+test('every action label has hover words, or is known to say it all', () => {
   const labels = [...new Set([...source.matchAll(/"([A-Z][A-Za-z ,'/-]{2,40}…)"/g)].map((m) => m[1]))].filter((l) => !NOT_ACTIONS.has(l));
   assert.ok(labels.length > 30);
-  assert.deepEqual(labels.filter((label) => !tipFor(label)), []);
+  assert.deepEqual(labels.filter((label) => !tipFor(label) && !SAYS_IT_ALL.has(label)), []);
 });
 
-test('labels built with a name get words too', () => {
+test('hover words never repeat a plain label', () => {
+  for (const label of ['Close', 'Done', 'Cancel', 'Cancel all', 'Details', 'More', 'Map', 'List', 'Remove', 'Preview', 'Sign in', 'Show all', 'Try again', 'Take it out', 'Add to Codex…']) {
+    assert.equal(tipFor(label), null, label);
+  }
+});
+
+test('labels built with a name get words that add something', () => {
   for (const label of [
-    'Add to Claude Code or Codex…', 'Connect Cursor to the gateway…', 'Disconnect Codex from the gateway…', 'Move all 3…',
-    'Move into Obot…', 'Move secrets to the Keychain…', 'Put back in Cursor…', 'Remove from Codex…', 'Set up in Cursor…',
+    'Connect Cursor to the gateway…', 'Disconnect Codex from the gateway…', 'Move all 3…', 'Move into Obot…',
+    'Move secrets to the Keychain…', 'Put back in Cursor…', 'Remove from Codex…', 'Set up in Cursor…',
     'Turn off in website…', 'Turn on search_docs in website…', 'Turn it on in Codex…', 'Turn off Figma in this project…',
-    'Turn on in Claude Code…', "Update neon's Kitden entry…", "Use website's rule…",
-    'Apply', 'Apply all', 'Apply 3', 'Cancel all', 'Undo', 'Preview', 'Rescan', 'Map', 'List', 'Details', 'Replace…', 'Remove', 'Sign out', 'Add access…',
+    "Update neon's Kitden entry…", "Use website's rule…", 'Apply', 'Apply all', 'Apply 3', 'Undo', 'Replace…', 'Sign out', 'Add access…',
   ]) assert.ok(tipFor(label), label);
 });
 
-test('the words say what the button does, plainly', () => {
-  assert.equal(tipFor('Turn off in some projects…'), 'Pick the projects where it is off. The other projects keep the shared rule.');
-  assert.equal(tipFor('Turn strict mode off…'), 'Tools without a rule of their own are on again, and new tools start on.');
-  assert.equal(tipFor('Turn off in this project…'), 'Turns it off only in the picked project. Everything else stays as it is.');
-  assert.equal(tipFor("Use website's rule…"), "Drops this project's own rule, so it follows website's rule again.");
-  assert.equal(tipFor('Something else'), null);
+test('the words say what the label leaves out', () => {
+  assert.equal(tipFor('Move all 3…'), 'Moves every server outside the gateway that can move into it, in one change. Servers set up differently in two clients stay out until you keep one.');
+  assert.equal(tipFor('Turn off in some projects…'), 'You pick the projects. Every other project keeps the shared rule, and new projects follow it too.');
+  assert.equal(tipFor('Turn off in website…'), 'A rule for website only. The shared rule and other projects stay as they are.');
+});
+
+const { wordsOf } = await import('../../src/kitden/web/static/js/tips.js');
+
+test('a title that only repeats the label is not shown, unless the label is cut off', () => {
+  const node = (text, title, cut = false) => ({
+    title, textContent: text, dataset: {}, disabled: false,
+    removeAttribute(name) { if (name === 'title') this.title = ''; },
+    getAttribute: () => null,
+    querySelector: () => ({ scrollWidth: cut ? 200 : 100, clientWidth: 100 }),
+  });
+  assert.equal(wordsOf(node('+ Add to Codex…', '+ Add to Codex…')), null);
+  assert.equal(wordsOf(node('+ Add to Codex…', '+ Add to Codex…', true)), '+ Add to Codex…');
+  assert.equal(wordsOf(node('Move all 3…', 'Move all 3…')), tipFor('Move all 3…'));
+  assert.equal(wordsOf(node('On', 'On. Press to preview turning it off.')), 'On. Press to preview turning it off.');
 });

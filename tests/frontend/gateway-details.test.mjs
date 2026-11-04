@@ -84,6 +84,13 @@ const VIEW_TOOLS = { ...VIEW, gateways: [KITDEN_TOOLS] };
 const REGISTER = (client) => ({ action: 'setup_server.register', targets: [{ client }], params: {} });
 const DISCONNECT = (client) => ({ action: 'client.disconnect', targets: [{ client }], params: {} });
 
+test('a client that cannot take the server gets no Add, only the reason', () => {
+  const cannot = { cannot_add: { codex: 'Codex cannot use an SSE connection from here.' } };
+  const card = outsideCard(GITHUB, 'move', [def('g', 'claude_code', cannot)], { view: VIEW, clients: FOUND, linked: ['claude_code', 'codex'] });
+  assert.deepEqual(moreLabels(card), ['+ Add to Cursor…', 'Remove from Claude Code…']);
+  assert.equal(textOf(card.after), 'Codex cannot use an SSE connection from here, so it cannot be added there.');
+});
+
 test('the outside panel keeps every action, the rest under More', () => {
   asked.length = 0;
   const card = outsideCard(GITHUB, 'move', [def('g', 'claude_code', { summary: 'https://api.github.example.test/mcp' })], { view: VIEW, clients: FOUND, linked: ['claude_code', 'codex'] });
@@ -414,7 +421,7 @@ test("the tool panel says Permission and Reported in the mockup's words", () => 
   assert.deepEqual(card.facts[1].value.children.map((node) => node.className), ['mark', '']);
   assert.equal(card.facts[3].warn, true);
   // With All projects: everywhere, then each known project that decides otherwise.
-  assert.equal(card.why, "Claude Code and Codex can't call this tool through Kitden, in any project. Except atlas, where it is on; web, where it is on.");
+  assert.equal(card.why, "Claude Code and Codex can't call this tool through Kitden in any project except atlas and web, where it is on.");
   assert.deepEqual(actionsOf(card), [['Turn on for all projects…', true], ['Turn on in some projects…', false]]);
   assert.deepEqual(card.actions[0].body, { action: 'gateway.rule', targets: [], params: { server: 'github', tool: 'push_files', state: 'on', project: null } });
   assert.equal(typeof card.actions[1].run, 'function');
@@ -422,7 +429,7 @@ test("the tool panel says Permission and Reported in the mockup's words", () => 
   const on = toolCard(tool({ title: null, state: 'on', effective: 'on', hint: 'reads' }), HELD_GITHUB, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on', hint_from: 'server' }, rules: rulesFor({ a: 'on', m: 'on' }), projects: CHOICE });
   assert.deepEqual([on.title, on.id, on.facts[1].text, on.facts[3].value, on.facts[3].warn, facts(on).map(([label]) => label)], ['push_files', null, 'On', 'Reads only', false, ['Server', 'Permission', 'Comes from', 'Reported', 'Clients']]);
   assert.deepEqual(on.facts[1].value.children.map((node) => node.className), ['mark on', '']);
-  assert.equal(on.why, 'Claude Code and Codex can call this tool through Kitden, in every project.');
+  assert.equal(on.why, 'Claude Code and Codex can call this tool through Kitden in every project.');
   assert.deepEqual(actionsOf(on), [['Turn off for all projects…', false], ['Turn off in some projects…', false]]);
   // Without each project's rules Kitden cannot say who decides otherwise, nor offer a project.
   const unread = toolCard(tool({ state: 'on', effective: 'on' }), HELD_GITHUB, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on' }, projects: CHOICE });
@@ -485,13 +492,16 @@ test("in a project the tool panel says what the project follows, or its own rule
 test('in some projects is offered only while a project would change', () => {
   // write_file is on for all projects; atlas turns it off, atlas/web follows atlas.
   const write = medium('write_file');
-  assert.equal(write.why, 'Claude Code and Codex can call this tool through Kitden, in every project. Except atlas, where it is off; web, where it is off.');
+  assert.equal(write.why, 'Claude Code and Codex can call this tool through Kitden in every project except atlas and web, where it is off.');
   assert.deepEqual(actionsOf(write), [['Turn off for all projects…', false], ['Turn off in some projects…', false]]);
   // Every project has it off already: nothing to turn off in some projects.
   const off = { ...MEDIUM_RULES, projects: MEDIUM_RULES.projects.map((p) => ({ ...p, tools: { write_file: 'off' } })) };
   const none = medium('write_file', { rules: off });
   assert.deepEqual(actionsOf(none), [['Turn off for all projects…', false]]);
-  assert.equal(none.why, 'Claude Code and Codex can call this tool through Kitden, in every project. Except atlas, where it is off; old-app, where it is off; sandbox, where it is off; web, where it is off; website, where it is off.');
+  // More than two projects are counted; their names wait in the hover words of the count.
+  assert.equal(textOf(none.why), 'Claude Code and Codex can call this tool through Kitden in every project except 5 projects, where it is off.');
+  const count = none.why.childNodes.find((n) => typeof n === 'object');
+  assert.equal(count.dataset.tip, 'atlas, old-app, sandbox, web, website');
 });
 
 test('Projects with a rule of their own lists each and Show picks it', async () => {
