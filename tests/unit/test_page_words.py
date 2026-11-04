@@ -1828,10 +1828,10 @@ def test_the_tool_panel_says_the_mockups_words():
         '"Projects with a rule of their own"',
         '"Show"',
         "`Show ${",
-        "call this tool through Kitden, in every project.`",
-        "call this tool through Kitden, in any project.`",
-        " Except ${",
-        ", where it is ${",
+        "call this tool through Kitden in every project`",
+        "call this tool through Kitden in any project`",
+        " except `, projectsPart(",
+        "`, where it is ${",
         " follows the shared rule: ",
         "'s rule: ",
         "call this tool in ${folder}.`",
@@ -1980,7 +1980,7 @@ def test_the_tool_list_has_a_strict_switch():
 def test_the_tool_list_says_reads_and_writes_and_has_a_batch_switch():
     code = panel() + gw()
     assert "Turn off every writing tool…" in code
-    assert "from the server" in code and "by its name" in code
+    assert "The server says so." in code and "A guess from its name" in code
     assert 'action: "gateway.rules"' in code
 
 
@@ -2629,7 +2629,7 @@ def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
         'changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click '
         'tools in Details to pick several"'
     ) in gateway
-    assert 'setHint(mode === "map" ? mapHint() : "");' in gateway
+    assert 'setHint(mode === "map" ? mapHint() : "", mode === "map" ? hintActs() : []);' in gateway
     # While servers are picked, or the band left some out, the hint counts them (gateway-pick.js).
     hint = "return pick.ids.size || pick.stuck ? PICK_HINT(pick.ids.size, pick.stuck) : MAP_HINT;"
     assert hint in gateway

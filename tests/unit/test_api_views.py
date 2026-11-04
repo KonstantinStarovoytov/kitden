@@ -1,5 +1,7 @@
 """Read models for the redesigned page (redesign plan, Task 4)."""
 
+import json
+
 import pytest
 from starlette.testclient import TestClient
 
@@ -108,3 +110,16 @@ def test_explain_says_what_a_change_reaches(client):
 def test_new_endpoints_need_the_session_cookie(home, path):
     with TestClient(_app(home), base_url=ORIGIN, follow_redirects=False) as anonymous:
         assert anonymous.get(path).status_code == 401
+
+
+def test_explain_says_which_clients_cannot_take_a_direct_server(home):
+    path = home / ".cursor/mcp.json"
+    data = json.loads(path.read_text())
+    data["mcpServers"]["brain"] = {"command": "node", "args": ["server.js"], "cwd": "/srv/brain"}
+    path.write_text(json.dumps(data))
+    with TestClient(_app(home), base_url=ORIGIN, follow_redirects=False) as client:
+        client.get("/?token=tok")
+        found = client.get("/api/explain?kind=mcp_server&name=brain").json()["definitions"]
+    [cursor] = [d for d in found if d["client"] == "cursor"]
+    # Codex has a start folder setting; Claude Code has none, so Add is not offered there.
+    assert cursor["cannot_add"] == {"claude_code": "Claude Code has no setting for a start folder."}

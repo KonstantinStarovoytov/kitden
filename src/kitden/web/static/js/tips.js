@@ -8,79 +8,47 @@ import { el } from "./dom.js";
 const WAIT_MS = 400;
 const GAP = 8; // between the element and the tip
 const EDGE = 8; // the tip keeps this far from the window's edge
-const PREVIEW = "Nothing changes until you press Apply.";
 
-const where = (place) => (place === "this project" ? "only in the picked project" : `only in ${place}`);
-
-// Label → words, first match wins. `m` is the match, for labels with a name in them.
+// Label → words, first match wins. Only what the label leaves out: what else it touches, what
+// stays, where the value goes. A label that says it all ("Close", "Details", "Map") has none.
+// `m` is the match, for labels with a name in them.
 const RULES = [
-  [/^Turn (off|on) in some projects…$/, (m) => `Pick the projects where it is ${m[1]}. The other projects keep the shared rule.`],
-  [/^Turn (off|on) for all projects…$/, (m) => `Turns it ${m[1]} in every project that has no rule of its own. ${PREVIEW}`],
-  [/^Turn (off|on) (.+ )?in (this project|.+)…$/, (m) => `Turns ${m[2] ? m[2].trim() : "it"} ${m[1]} ${where(m[3])}. Everything else stays as it is.`],
-  [/^Turn it on in (.+)…$/, (m) => `Turns it on in ${m[1]}. ${PREVIEW}`],
-  [/^Turn strict mode on…$/, () => "In strict mode a tool of this server is off until you turn it on. New tools start off too."],
-  [/^Turn strict mode off…$/, () => "Tools without a rule of their own are on again, and new tools start on."],
-  [/^Turn off every writing tool…$/, () => "Turns off the tools that can change things. Tools that only read stay on."],
-  [/^Use (the shared|.+'s) rule…$/, (m) => `Drops this project's own rule, so it follows ${m[1] === "the shared" ? "the shared setup" : `${m[1].slice(0, -2)}'s rule`} again.`],
-  [/^Move out of the gateway…$/, () => "Gives this server back to the clients' own settings. Kitden stops turning its tools on or off."],
-  [/^Move (into the gateway|in|into .+)…$/, () => "Moves this server into the Kitden gateway, so you turn its tools on or off in one place for every client."],
-  [/^Move all \d+…$/, () => "Moves every server in this list into the gateway in one change."],
-  [/^Move secrets to the .+…$/, () => "Moves the secrets in the settings file into a safe store. The file keeps only a reference."],
-  [/^Add access…$/, () => "Adds a token, a header or a sign-in that this server needs. The value is kept in a safe store, not in a file."],
-  [/^Replace…$/, () => "Puts a new value in place of this one. The old one stays until you press Apply."],
-  [/^Remove$/, () => `Takes this out. ${PREVIEW} Undo brings it back.`],
-  [/^Sign in again$/, () => "Opens the server's sign-in page in your browser, to get a new token."],
-  [/^Sign in$/, () => "Opens the server's sign-in page in your browser."],
-  [/^Sign out$/, () => "Forgets this sign-in. The server cannot be reached until you sign in again."],
-  [/^\+? ?Add (a server|servers)…?$/, () => "Find an MCP server in a catalog or type its address, and add it to the gateway."],
-  [/^Add another gateway…$/, () => "Connects another gateway, such as one your team runs, so Kitden shows its servers too."],
-  [/^Use this gateway…$/, () => "Adds this gateway's entry to your clients, so they reach its servers."],
-  [/^Connect (.+ )?to the gateway…$/, (m) => `Adds the gateway's entry to ${m[1] ? m[1].trim() : "this client"}, so it reaches every server in the gateway.`],
-  [/^Connect…$/, () => "Adds the gateway's entry to this client, so it reaches every server in the gateway."],
-  [/^Disconnect (.+ )?from the gateway…$/, (m) => `Takes the gateway's entry out of ${m[1] ? m[1].trim() : "this client"}. The servers stay in the gateway.`],
-  [/^Disconnect…$/, () => "Takes the gateway's entry out of this client. The servers stay in the gateway."],
-  [/^Put back in (.+)…$/, (m) => `Puts this server back in ${m[1]}'s own settings.`],
-  [/^Remove from the Kitden gateway…$/, () => "Takes this server out of the gateway. Clients lose its tools."],
-  [/^Remove from (.+)…$/, (m) => `Takes this entry out of ${m[1]}'s settings. A backup is kept, and Undo puts it back.`],
-  [/^Remove (direct|old) entry…$/, () => "Takes out the client's own entry for this server. The gateway gives the client the same server."],
-  [/^Keep one…$/, () => "Two entries load the same thing. Pick the one to keep; the other is taken out."],
-  [/^Add for all projects…$/, () => `Adds it to the user settings, so every project has it. ${PREVIEW}`],
-  [/^Add to this project…$/, () => `Adds it to the picked project's own settings only. ${PREVIEW}`],
-  [/^Add to (.+)…$/, (m) => `Adds it to ${m[1]}. ${PREVIEW}`],
-  [/^Add…$/, () => `Adds it. ${PREVIEW}`],
-  [/^Add missing plugins and skills…$/, () => "Lists what one client has and another lacks, so you can add it there too."],
-  [/^Add a marketplace…$/, () => "Adds a plugin marketplace by its address, so you can browse and add its plugins."],
-  [/^Add source$/, () => "Adds a catalog of MCP servers to search."],
-  [/^Add to preview$/, () => "Adds this change to the preview at the bottom. Press Apply there to write it."],
-  [/^Update (to Kitden|the Kitden entry|.+'s Kitden entry)…$/, () => "Rewrites the Kitden entry so the client starts this Kitden version."],
-  [/^Update…$/, () => "Shows how to update to the newest version."],
-  [/^Set up( in .+)?…$/, (m) => `Adds Kitden's entry to ${m[1] ? m[1].slice(4) : "the client"}, so it can read your setup.`],
-  [/^Commands…$/, () => "Shows the terminal commands that do the same, if you prefer to run them yourself."],
-  [/^Redo…$/, () => "Makes the undone change again, with a new preview."],
-  [/^Undo$/, () => "Puts the files back as they were before this change, from its backup."],
-  [/^Undo removal$/, () => "Brings back what was just removed."],
-  [/^Apply( all| \d+)?$/, () => "Writes every change in the preview, with a backup of each file, then checks it worked."],
-  [/^Preview$/, () => "Shows what would change. Nothing is written yet."],
-  [/^Take it out$/, () => "Takes this row out of the preview. Nothing was written."],
-  [/^Cancel( all)?$/, () => "Drops the preview. Nothing is written."],
-  [/^Try again$|^Retry$/, () => "Tries the same step once more."],
-  [/^Close$/, () => "Closes this panel. Changes in the preview stay there."],
-  [/^Done$/, () => "Closes this. Changes in the preview stay there."],
-  [/^Details$/, () => "Opens the details: where it comes from, its paths and settings."],
-  [/^More$/, () => "Shows more actions."],
-  [/^Refresh tools$/, () => "Asks the server for its tool list again."],
-  [/^Rescan$/, () => "Reads every client's settings again."],
-  [/^Map$/, () => "Shows clients, the gateway, servers and tools as a map."],
-  [/^List$/, () => "Shows the same as a list."],
-  [/^Show changes$/, () => "Shows each file this change writes, line by line."],
-  [/^Open Overview$/, () => "Goes to the Overview page."],
-  [/^See it on the map$/, () => "Shows this on the Gateway map."],
-  [/^See what it loads in Library$/, () => "Shows in the Library what this loads in each client."],
-  [/^Show all$/, () => "Shows everything, not only what is installed."],
-  [/^Show installed$/, () => "Shows only what is installed."],
-  [/^Clear search$|^Back to search$/, () => "Clears the search and shows the full list."],
-  [/^Save( gateway)?$/, () => "Saves these settings."],
-  [/^Edit$/, () => "Changes these settings."],
+  [/^Turn (off|on) in some projects…$/, (m) => `You pick the projects. Every other project keeps the shared rule, and new projects follow it too.`],
+  [/^Turn (off|on) for all projects…$/, () => "Sets the shared rule. A project with a rule of its own keeps it."],
+  [/^Turn (off|on) (.+ )?in (this project|.+)…$/, (m) => `A rule for ${m[3] === "this project" ? "this project" : m[3]} only. The shared rule and other projects stay as they are.`],
+  [/^Turn it on in (.+)…$/, (m) => `Only ${m[1]} changes. Other clients keep what they have.`],
+  [/^Turn strict mode on…$/, () => "Tools without a rule of their own go off, and tools the server adds later start off too."],
+  [/^Turn strict mode off…$/, () => "Tools without a rule of their own come back on, and tools the server adds later start on."],
+  [/^Turn off every writing tool…$/, () => "Tools that can change things go off. Tools that only read stay on. The hints come from the server or the tool's name, so check the list."],
+  [/^Use (the shared|.+'s) rule…$/, () => "Drops this project's own rule, so it follows the shared setup again."],
+  [/^Move out of the gateway…$/, () => "Each client gets its own entry for this server back, and Kitden stops turning its tools on or off."],
+  [/^Move (into the gateway|in|into .+)…$/, () => "Each client's own entry for this server is replaced by the gateway. Then you turn its tools on or off once, for every client."],
+  [/^Move all \d+…$/, () => "Moves every server outside the gateway that can move into it, in one change. Servers set up differently in two clients stay out until you keep one."],
+  [/^Move secrets to the .+…$/, () => "The settings file keeps only a reference; the values go to a safe store on this computer."],
+  [/^Add access…$/, () => "A token, a header or a browser sign-in this server needs. The value goes to a safe store on this computer, never to a file."],
+  [/^Replace…$/, () => "The old value keeps working until you apply the new one."],
+  [/^Sign out$/, () => "Kitden forgets this sign-in. The server's tools stop working until you sign in again."],
+  [/^\+? ?Add (a server|servers)…?$/, () => "From a catalog or by its address. It joins the gateway, so every connected client gets it."],
+  [/^Add another gateway…$/, () => "A gateway someone else runs, such as your team's. Kitden shows its servers next to yours."],
+  [/^Use this gateway…$/, () => "Adds this gateway's entry to your clients. Your other servers stay as they are."],
+  [/^Connect (.+ )?to the gateway…$|^Connect…$/, () => "Adds one entry to this client. Through it, the client reaches every server in the gateway."],
+  [/^Disconnect (.+ )?from the gateway…$|^Disconnect…$/, () => "Takes the gateway's entry out of this client. The servers stay in the gateway for the other clients."],
+  [/^Put back in (.+)…$/, (m) => `${m[1]} gets its own entry for this server again. The gateway keeps it too.`],
+  [/^Remove from the Kitden gateway…$/, () => "Every client loses this server's tools. Its secrets stay in the safe store, so Undo brings it back."],
+  [/^Remove from (.+)…$/, (m) => `Only ${m[1]}'s entry goes. A backup is kept, and Undo puts it back.`],
+  [/^Remove (direct|old) entry…$/, () => "The client loads this server through the gateway already, so its own entry is a second copy."],
+  [/^Keep one…$/, () => "Two entries load the same thing. You pick the one to keep; the other is taken out."],
+  [/^Add for all projects…$/, () => "Goes to the user settings, so every project has it."],
+  [/^Add to this project…$/, () => "Goes to this project's own settings. Other projects do not get it."],
+  [/^Add missing plugins and skills…$/, () => "What one client has and another lacks, so every client has the same."],
+  [/^Add a marketplace…$/, () => "A marketplace is a list of plugins at an address, such as a GitHub repository."],
+  [/^Update (to Kitden|the Kitden entry|.+'s Kitden entry)…$/, () => "The client's entry still starts an older Kitden. This points it at the one you run now."],
+  [/^Set up( in .+)?…$/, () => "Adds Kitden's own entry, so the agent can read this setup and use the gateway."],
+  [/^Commands…$/, () => "The same change as terminal commands, if you would rather run it yourself."],
+  [/^Redo…$/, () => "Makes the undone change again. It is checked against the files as they are now."],
+  [/^Undo$/, () => "Puts back the files this change wrote, from their backups. A file changed since is not touched."],
+  [/^Apply( all| \d+)?$/, () => "Each file is backed up before it is written and read back after. If anything fails, everything is put back."],
+  [/^Rescan$/, () => "Reads every client's settings again, for changes made outside Kitden."],
 ];
 
 // The words for a label, or null.
@@ -94,16 +62,27 @@ export function tipFor(label) {
 }
 
 // The element a tip belongs to, from where the pointer or focus is.
-const ACTS = "button, [role=switch], a.btn, [data-tip], [title]";
+const ACTS = "button, [role=switch], a.btn, [data-tip], [title], [data-held]";
 
-function wordsOf(node) {
-  if (node.title) {
-    node.dataset.tip = node.title;
-    node.removeAttribute("title");
-  }
-  if (node.dataset.tip) return node.dataset.tip;
-  if (node.disabled) return null;
-  return tipFor(node.getAttribute("aria-label") || node.textContent);
+// Whether a part of `node` (or `node` itself) shows its words cut off with "…".
+function cutOff(node) {
+  const parts = [node, ...(node.querySelectorAll?.("*") || [])];
+  return parts.some((part) => part.scrollWidth > part.clientWidth + 1 && getComputedStyle?.(part).textOverflow === "ellipsis");
+}
+
+// The words for `node`, or null. Words already on screen (a title that repeats a button's label
+// or a block's name: "Kitden gateway") show only while they are cut off with "…"; else the
+// label's own hover words, if it has any.
+export function wordsOf(node, title = node.title) {
+  const shown = String(node.textContent || "").replace(/\s+/g, " ").trim();
+  const label = String(node.getAttribute?.("aria-label") || shown).trim();
+  const own = (title || node.dataset.tip || "").trim();
+  // An icon's name written beside it ("Kitden gateway" next to its tile) is on screen too.
+  const beside = String(node.parentElement?.textContent || "").replace(/\s+/g, " ");
+  if (own && !shown.includes(own) && !beside.includes(own)) return own;
+  const extra = node.disabled ? null : tipFor(label);
+  if (extra) return extra;
+  return own && cutOff(node) ? own : null;
 }
 
 // One tip on the page at a time.
@@ -115,6 +94,25 @@ export function startTips(root = document) {
   document.body.append(tip);
   let owner = null;
   let timer = 0;
+  // The title of the element under the pointer or focus, held aside so the browser's own tooltip
+  // never shows; it is put back when the element is left (unless the page set a new one).
+  let holder = null;
+  let held = "";
+  const hold = (node) => {
+    if (holder === node) return;
+    release();
+    holder = node;
+    held = node.title;
+    node.removeAttribute("title");
+    node.dataset.held = "";
+  };
+  const release = () => {
+    if (holder) delete holder.dataset.held;
+    if (holder && held && !holder.title) holder.title = held;
+    holder = null;
+    held = "";
+  };
+  const wordsHere = (node) => wordsOf(node, node.title || (node === holder ? held : ""));
 
   const hide = () => {
     clearTimeout(timer);
@@ -125,7 +123,7 @@ export function startTips(root = document) {
   };
   const show = (node) => {
     if (!node.isConnected) return;
-    const words = wordsOf(node);
+    const words = wordsHere(node);
     if (!words) return;
     owner = node;
     node.setAttribute("aria-describedby", tip.id);
@@ -152,11 +150,16 @@ export function startTips(root = document) {
 
   root.addEventListener("pointerover", (event) => {
     const node = event.target.closest?.(ACTS);
-    if (node && event.pointerType !== "touch") wait(node, WAIT_MS);
+    if (!node || event.pointerType === "touch") return;
+    hold(node);
+    wait(node, WAIT_MS);
   });
   root.addEventListener("pointerout", (event) => {
     const node = event.target.closest?.(ACTS);
-    if (node && !node.contains(event.relatedTarget)) hide();
+    if (node && !node.contains(event.relatedTarget)) {
+      hide();
+      release();
+    }
   });
   // Keyboard focus shows it at once; focus from a press does not.
   root.addEventListener("focusin", (event) => {

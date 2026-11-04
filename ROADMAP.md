@@ -9,6 +9,16 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **No Add where it cannot work:** a client that cannot take a server (Claude Code has no
+  start folder setting; Codex cannot use an SSE connection) gets one line that says why, on the
+  Gateway and in the Library, in place of an Add that would be refused.
+- **Pick tools on the map too:** Cmd, Ctrl or Shift and a click, or a band over the tools
+  column; Turn off, Turn on and Space work from the map's hint line, and the server's
+  Details show the same pick.
+- **Hover words that add something:** only labels that leave something out have hover words;
+  a long list of projects in a tool's sentence is counted ("9 projects"), names on hover.
+- **The Kitden house in List:** the Kitden gateway's tile shows its house, not "GW".
+- **No flicker on a refused change:** a button says "In preview" only once the preview took it.
 - **Add access to a server in the gateway:** its Details can add a token, a header of its own,
   a browser sign-in, or a variable for a local server, through the preview with a backup and
   Undo. A server that answers without the value says its first call checks it.

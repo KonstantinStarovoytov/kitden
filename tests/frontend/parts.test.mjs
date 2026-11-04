@@ -95,7 +95,8 @@ test('switch looks: off and on, and a press runs its change', () => {
   // (details.test.mjs), and the switch is not flipped.
   let presses = 0;
   const node = switchNode(false, () => { presses += 1; });
-  assert.equal(node.title, 'Off. Press to preview turning it on.');
+  // Its state shows, so it has no hover words until its change waits in the preview.
+  assert.equal(node.title || '', '');
   node.listeners.click();
   assert.equal(presses, 1);
   assert.equal(node.classList.contains('pending'), false);
@@ -997,4 +998,12 @@ test('a Linux home folder shows as ~', () => {
   assert.equal(shortPath('/home/me/.config/Claude/x.json'), '~/.config/Claude/x.json');
   assert.equal(shortPaths('Could not write /home/me/.codex/config.toml.'), 'Could not write ~/.codex/config.toml.');
   assert.equal(shortPath('/Users/me/.claude.json'), '~/.claude.json');
+});
+
+test('the Kitden gateway tile holds its house, never "GW"', async () => {
+  const { mark } = await import('../../src/kitden/web/static/js/parts.js');
+  const tile = mark('kitden');
+  assert.equal(tile.dataset.icon, 'kitden');
+  assert.equal(tile.childNodes[0].src, '/static/brand/kitden.svg');
+  assert.deepEqual(tile.childNodes.map((n) => n.tag), ['img']);
 });

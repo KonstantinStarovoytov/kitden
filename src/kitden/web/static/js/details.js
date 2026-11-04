@@ -7,7 +7,7 @@ import { header, isPanelOpen, isQuiet, openInfo, panelState } from "./panel.js";
 import { ALL_PROJECTS, byClientOrder, callout, CLIENT_NAMES, folderName, gatewayName, ROUTE_WORDS, WRITABLE } from "./parts.js";
 import { review } from "./review.js";
 import { data, projectPath } from "./store.js";
-import { inTray, keyFor, takeOut } from "./tray.js";
+import { inTray, keyFor, shownInTray, takeOut } from "./tray.js";
 
 export const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -291,12 +291,12 @@ const trayLooks = new WeakMap();
 export function followTray(node, key, look) {
   node.dataset.tray = key;
   trayLooks.set(node, look);
-  look(inTray(key));
+  look(shownInTray(key));
 }
 
 function showTrayLook(node) {
   const look = trayLooks.get(node);
-  if (look) look(inTray(node.dataset.tray));
+  if (look) look(shownInTray(node.dataset.tray));
 }
 
 // The tray changed (panel.js listens): every switch and button in Details shows whether its change
@@ -323,14 +323,13 @@ export function switchNode(on, press, key = null, label = null) {
   if (label) node.setAttribute("aria-label", label);
   node.append(el("span", "thumb"));
   if (!press) return node;
-  const idle = on ? "On. Press to preview turning it off." : "Off. Press to preview turning it on.";
-  node.title = idle;
+  // Its state shows; only a change waiting in the preview gets hover words.
   if (key) {
     followTray(node, key, (waiting) => {
       node.classList.toggle("pending", waiting);
       if (label) node.setAttribute("aria-label", waiting ? `${label} (in preview)` : label);
       // A switch that is off here keeps the words that say why.
-      if (!node.disabled) node.title = waiting ? "In preview. Press to take it out." : idle;
+      if (!node.disabled) node.title = waiting ? "In preview. Press to take it out." : "";
     });
   }
   node.addEventListener("click", () => {

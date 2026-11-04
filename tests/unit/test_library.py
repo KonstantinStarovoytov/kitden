@@ -1399,3 +1399,15 @@ def test_cursor_gets_nothing_through_claude_code_when_claude_code_is_not_found(h
     assert "Via Claude Code" not in json.dumps(answer)
     assert "loads Claude Code's plugins" not in json.dumps(answer)
     assert "Via Claude Code" not in json.dumps(listed)
+
+
+def test_a_client_that_cannot_take_a_server_gets_the_reason_not_an_add(home):
+    path = home / ".cursor/mcp.json"
+    data = json.loads(path.read_text())
+    data["mcpServers"]["brain"] = {"command": "node", "args": ["server.js"], "cwd": "/srv/brain"}
+    path.write_text(json.dumps(data))
+    row = _row(_library(home, "mcp_server"), "brain")
+    claude, codex = row["cells"]["claude_code"], row["cells"]["codex"]
+    assert claude["add"] is None
+    assert claude["reason"] == "Claude Code has no setting for a start folder."
+    assert codex["add"] is not None

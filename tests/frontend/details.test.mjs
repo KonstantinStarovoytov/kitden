@@ -226,7 +226,7 @@ test('a switch in the tray shows the pending look and a press takes it out', asy
   try {
     const toggle = switchNode(true, () => review(body), keyFor(body));
     page.controls.push(toggle);
-    assert.deepEqual([toggle.className, toggle.attributes['aria-checked'], toggle.title], ['switch', 'true', 'On. Press to preview turning it off.']);
+    assert.deepEqual([toggle.className, toggle.attributes['aria-checked'], toggle.title], ['switch', 'true', '']);
     // A press adds the change: the switch rests half-way, its real state unchanged until Apply.
     await toggle.click();
     assert.deepEqual(tray.rows.map((r) => r.key), ['switch:i1']);
@@ -235,7 +235,7 @@ test('a switch in the tray shows the pending look and a press takes it out', asy
     assert.equal(switchNode(true, () => review(body), keyFor(body)).className, 'switch pending');
     // A second press takes the change out: the switch is as it was, and the server forgets it.
     await toggle.click();
-    assert.deepEqual([tray.rows.length, toggle.className, toggle.title], [0, 'switch', 'On. Press to preview turning it off.']);
+    assert.deepEqual([tray.rows.length, toggle.className, toggle.title], [0, 'switch', '']);
     assert.ok(page.sent.includes('/api/changes/c1/cancel'));
     // Taken out anywhere else (the bar's ×, Cancel), the switch comes back too.
     await toggle.click();

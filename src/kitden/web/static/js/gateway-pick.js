@@ -67,9 +67,10 @@ export function clearPick() {
 
 // A press on empty map space draws a band once the pointer moves 5 px (DRAG_START): it follows the
 // pointer with no easing and picks what it meets, added to what was picked before. `map` is the
-// page's map ({ view, model, layout }); `onPick()` runs after every change of the pick. A let go or
-// Escape fades the band out; the click that ends it clears nothing.
-export function pressBand(event, { map, onPick }) {
+// page's map ({ view, model, layout }); `onPick()` runs after every change of the pick. A band that
+// meets tool blocks picks those instead (`onTools(ids)`, the tool blocks it meets) and leaves the
+// servers' pick alone. A let go or Escape fades the band out; the click that ends it clears nothing.
+export function pressBand(event, { map, onPick, onTools = null }) {
   if (event.button !== 0 || onScrollbar(event, map.view.box)) return;
   const from = { x: event.clientX, y: event.clientY };
   const before = new Set(pick.ids);
@@ -91,6 +92,11 @@ export function pressBand(event, { map, onPick }) {
     band.style.transform = `translate(${x}px, ${y}px)`;
     band.style.width = `${Math.abs(end.x - start.x)}px`;
     band.style.height = `${Math.abs(end.y - start.y)}px`;
+    const tools = onTools ? met(map.model, map.layout, start, end, (block) => block.kind === "tool") : [];
+    if (tools.length) {
+      onTools(tools);
+      return;
+    }
     pick.ids = new Set([...before, ...bandHits(map.model, map.layout, start, end)]);
     pick.stuck = bandStuck(map.model, map.layout, start, end);
     onPick();

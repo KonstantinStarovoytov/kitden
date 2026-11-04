@@ -72,39 +72,39 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
   const tools = rows.filter((row) => row.tool !== null);
   const keys = tools.map((row) => row.tool);
   const nodes = new Map();
-  let picked = new Set();
-  let anchor = null;
+  // The pick is shared with the Gateway map (toolPick): this list shows it and changes it.
+  const mine = () => (toolPick.server === server ? toolPick.tools : new Set());
+  const states = new Map(tools.map((row) => [row.tool, Boolean(row.on)]));
+  const pick = (next, from) => setToolPick(server, next, from, { states, project });
   const bar = el("div", "sw-picked");
-  const flipPicked = (state) => {
-    const body = pickedBody(server, project, keys.filter((key) => picked.has(key)), state);
-    pick(new Set(), null);
-    return review(body, { back: back(null) });
-  };
   const action = (label, tip, run) => {
     const node = button(label, run);
     node.dataset.tip = tip;
     return node;
   };
-  const pick = (next, from) => {
-    picked = next;
-    anchor = from;
+  // Drawn again on every change of the pick; a list taken off the page stops listening.
+  let placed = false;
+  const show = () => {
+    if (list.isConnected) placed = true;
+    else if (placed) return stop();
+    const picked = mine();
     for (const [key, node] of nodes) {
       node.classList.toggle("picked", picked.has(key));
       node.setAttribute("aria-selected", String(picked.has(key)));
     }
     // The bar is in the list only while tools are picked.
     if (!picked.size) {
-      document.removeEventListener("keydown", onKey, true);
-      return bar.remove();
+      if (bar.isConnected) bar.remove();
+      return;
     }
-    document.addEventListener("keydown", onKey, true);
     if (!bar.isConnected) list.prepend(bar);
-    const count = plural(picked.size, "tool", "tools");
+    // Only Turn off and Turn on say what the label leaves out: one row for all of them.
+    const one = "One row in the preview for all of them. Space does the same, Escape lets them go.";
     bar.replaceChildren(
       el("span", null, `${picked.size} selected`),
-      action("Turn off", `Turns the ${count} off. ${PREVIEW}`, () => flipPicked("off")),
-      action("Turn on", `Turns the ${count} on. ${PREVIEW}`, () => flipPicked("on")),
-      action("Clear", "Lets the picked tools go. Nothing changes.", () => pick(new Set(), null)),
+      action("Turn off", one, () => flipToolPick("off", back(null))),
+      action("Turn on", one, () => flipToolPick("on", back(null))),
+      button("Clear", () => pick(new Set(), null)),
     );
   };
   for (const row of rows) {
@@ -114,33 +114,19 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
       nodes.set(row.tool, node);
       node.addEventListener("click", (event) => {
         if (event.target.closest?.("button, a, input") || dragged) return;
-        const next = pickTools(picked, keys, row.tool, { add: event.metaKey || event.ctrlKey, range: event.shiftKey, anchor });
+        const next = pickTools(mine(), keys, row.tool, { add: event.metaKey || event.ctrlKey, range: event.shiftKey, anchor: toolPick.anchor });
         pick(next.picked, next.anchor);
       });
     }
     list.append(node);
   }
-  // While tools are picked, Escape and Space are heard on the whole page first (focus may be
-  // anywhere after a press on a row), so Escape lets the tools go before it closes Details.
-  // Space on a button or a switch is that button's own.
-  const onKey = (event) => {
-    if (!list.isConnected || !picked.size) return document.removeEventListener("keydown", onKey, true);
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      pick(new Set(), null);
-    } else if (event.key === " " && !event.target.closest?.("button, a, input, textarea, [role=switch]")) {
-      event.preventDefault();
-      const anyOn = tools.some((row) => picked.has(row.tool) && row.on);
-      Promise.resolve(flipPicked(anyOn ? "off" : "on")).catch(() => {});
-    }
-  };
   // A drag over the rows (not from a switch or a button) picks the rows it covers; with Cmd or
   // Ctrl, on top of what is picked.
   let dragged = false;
   list.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || event.target.closest?.("button, a, input, summary")) return;
     const start = { x: event.clientX, y: event.clientY };
-    const base = event.metaKey || event.ctrlKey ? new Set(picked) : new Set();
+    const base = event.metaKey || event.ctrlKey ? new Set(mine()) : new Set();
     let box = null;
     dragged = false;
     const move = (moved) => {
@@ -160,7 +146,7 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
         const r = node.getBoundingClientRect();
         if (r.bottom >= y0 && r.top <= y1 && r.right >= x0 && r.left <= x1) hits.add(key);
       }
-      pick(hits, anchor);
+      pick(hits, toolPick.anchor);
     };
     const end = () => {
       removeEventListener("pointermove", move);
@@ -175,10 +161,62 @@ export function switchList(rows, { server, project, back = () => null, flip = nu
     addEventListener("pointerup", end);
     addEventListener("pointercancel", end);
   });
+  const stop = onToolPick(show);
+  show();
   return list;
 }
 
-const PREVIEW = "Nothing changes until you press Apply.";
+// The tools picked now, all of one server, shared by its Details list and the Gateway map, and
+// the last one picked (`anchor`, where Shift starts).
+// `states` says which of its tools are on, and `project` is where a rule for them goes (null:
+// all projects).
+export const toolPick = { server: null, tools: new Set(), anchor: null, states: new Map(), project: null };
+const pickWatchers = new Set();
+
+// Pick `tools` of `server` (none: nothing is picked); every watcher hears it.
+export function setToolPick(server, tools, anchor = null, { states = toolPick.states, project = toolPick.project } = {}) {
+  const any = tools.size > 0;
+  Object.assign(toolPick, { server: any ? server : null, tools: new Set(tools), anchor: any ? anchor : null, states: any ? states : new Map(), project: any ? project : null });
+  if (any) listenKeys();
+  for (const watch of [...pickWatchers]) watch();
+}
+
+// Turn the picked tools off or on: one row of the preview, and the pick is let go. `back` is the
+// way back to Details after a refusal, if any.
+export function flipToolPick(state, back = null) {
+  const { server, project } = toolPick;
+  const body = pickedBody(server, project, [...toolPick.tools], state);
+  setToolPick(null, new Set());
+  return review(body, { back });
+}
+
+// While tools are picked, Escape and Space are heard on the whole page first, wherever focus is
+// (a block on the map, a row in Details): Escape lets them go before it closes Details, and Space
+// turns them off (on, when all are off) instead of scrolling or pressing what has focus. Space in
+// a field, on a switch or on a button of the picked bar stays theirs.
+let keysOn = false;
+function listenKeys() {
+  if (keysOn || typeof document === "undefined" || !document.addEventListener) return;
+  keysOn = true;
+  document.addEventListener("keydown", (event) => {
+    if (!toolPick.tools.size) return;
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      setToolPick(null, new Set());
+    } else if (event.key === " " && !event.target.closest?.("input, textarea, select, [contenteditable], [role=switch], .sw-picked, .hint-acts, #dock")) {
+      event.preventDefault();
+      event.stopPropagation();
+      const anyOn = [...toolPick.tools].some((name) => toolPick.states.get(name));
+      Promise.resolve(flipToolPick(anyOn ? "off" : "on")).catch(() => {});
+    }
+  }, true);
+}
+
+// Hear every change of the tool pick; returns the way to stop.
+export function onToolPick(watch) {
+  pickWatchers.add(watch);
+  return () => pickWatchers.delete(watch);
+}
 
 // The tools picked after a press on `key` (`keys`: every tool, in order): with `add` (Cmd or
 // Ctrl) one more, or one less when it was picked; with `range` (Shift) every tool from `anchor`
@@ -263,7 +301,7 @@ export function writingToolsOn(tools) {
   return tools.filter((t) => t.state === "on" && (t.hint === "writes" || t.hint === "may write")).map((t) => t.name);
 }
 
-const HINT_FROM = { server: "from the server", name: "by its name" };
+const HINT_FROM = { server: "The server says so.", name: "A guess from its name: the server says nothing." };
 
 // Asks every held server for its tools again. The server says when it is done; without the
 // event stream, stop waiting after a minute. Ends when the refresh does, with why it could not
