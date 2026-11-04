@@ -62,22 +62,25 @@ export function tipFor(label) {
 }
 
 // The element a tip belongs to, from where the pointer or focus is.
-const ACTS = "button, [role=switch], a.btn, [data-tip], [title]";
+const ACTS = "button, [role=switch], a.btn, [data-tip], [title], [data-held]";
 
-// The words for `node`, or null. A title that only repeats the label (buttons keep one for words
-// cut off with "…") shows only while the label is cut off; else the label's own words, if any.
-export function wordsOf(node) {
-  if (node.title) {
-    node.dataset.tip = node.title;
-    node.removeAttribute("title");
-  }
-  const label = String(node.getAttribute?.("aria-label") || node.textContent || "").trim();
-  const own = node.dataset.tip;
-  if (own && own.trim() !== label) return own;
-  const cut = node.querySelector?.(".cut");
+// Whether a part of `node` (or `node` itself) shows its words cut off with "…".
+function cutOff(node) {
+  const parts = [node, ...(node.querySelectorAll?.("*") || [])];
+  return parts.some((part) => part.scrollWidth > part.clientWidth + 1 && getComputedStyle?.(part).textOverflow === "ellipsis");
+}
+
+// The words for `node`, or null. Words already on screen (a title that repeats a button's label
+// or a block's name: "Kitden gateway") show only while they are cut off with "…"; else the
+// label's own hover words, if it has any.
+export function wordsOf(node, title = node.title) {
+  const shown = String(node.textContent || "").replace(/\s+/g, " ").trim();
+  const label = String(node.getAttribute?.("aria-label") || shown).trim();
+  const own = (title || node.dataset.tip || "").trim();
+  if (own && !shown.includes(own)) return own;
   const extra = node.disabled ? null : tipFor(label);
   if (extra) return extra;
-  return own && cut && cut.scrollWidth > cut.clientWidth ? own : null;
+  return own && cutOff(node) ? own : null;
 }
 
 // One tip on the page at a time.
@@ -89,6 +92,25 @@ export function startTips(root = document) {
   document.body.append(tip);
   let owner = null;
   let timer = 0;
+  // The title of the element under the pointer or focus, held aside so the browser's own tooltip
+  // never shows; it is put back when the element is left (unless the page set a new one).
+  let holder = null;
+  let held = "";
+  const hold = (node) => {
+    if (holder === node) return;
+    release();
+    holder = node;
+    held = node.title;
+    node.removeAttribute("title");
+    node.dataset.held = "";
+  };
+  const release = () => {
+    if (holder) delete holder.dataset.held;
+    if (holder && held && !holder.title) holder.title = held;
+    holder = null;
+    held = "";
+  };
+  const wordsHere = (node) => wordsOf(node, node.title || (node === holder ? held : ""));
 
   const hide = () => {
     clearTimeout(timer);
@@ -99,7 +121,7 @@ export function startTips(root = document) {
   };
   const show = (node) => {
     if (!node.isConnected) return;
-    const words = wordsOf(node);
+    const words = wordsHere(node);
     if (!words) return;
     owner = node;
     node.setAttribute("aria-describedby", tip.id);
@@ -126,11 +148,16 @@ export function startTips(root = document) {
 
   root.addEventListener("pointerover", (event) => {
     const node = event.target.closest?.(ACTS);
-    if (node && event.pointerType !== "touch") wait(node, WAIT_MS);
+    if (!node || event.pointerType === "touch") return;
+    hold(node);
+    wait(node, WAIT_MS);
   });
   root.addEventListener("pointerout", (event) => {
     const node = event.target.closest?.(ACTS);
-    if (node && !node.contains(event.relatedTarget)) hide();
+    if (node && !node.contains(event.relatedTarget)) {
+      hide();
+      release();
+    }
   });
   // Keyboard focus shows it at once; focus from a press does not.
   root.addEventListener("focusin", (event) => {

@@ -95,7 +95,8 @@ test('switch looks: off and on, and a press runs its change', () => {
   // (details.test.mjs), and the switch is not flipped.
   let presses = 0;
   const node = switchNode(false, () => { presses += 1; });
-  assert.equal(node.title, 'Off. Press to preview turning it on.');
+  // Its state shows, so it has no hover words until its change waits in the preview.
+  assert.equal(node.title || '', '');
   node.listeners.click();
   assert.equal(presses, 1);
   assert.equal(node.classList.contains('pending'), false);

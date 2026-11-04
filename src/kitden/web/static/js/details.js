@@ -323,14 +323,13 @@ export function switchNode(on, press, key = null, label = null) {
   if (label) node.setAttribute("aria-label", label);
   node.append(el("span", "thumb"));
   if (!press) return node;
-  const idle = on ? "On. Press to preview turning it off." : "Off. Press to preview turning it on.";
-  node.title = idle;
+  // Its state shows; only a change waiting in the preview gets hover words.
   if (key) {
     followTray(node, key, (waiting) => {
       node.classList.toggle("pending", waiting);
       if (label) node.setAttribute("aria-label", waiting ? `${label} (in preview)` : label);
       // A switch that is off here keeps the words that say why.
-      if (!node.disabled) node.title = waiting ? "In preview. Press to take it out." : idle;
+      if (!node.disabled) node.title = waiting ? "In preview. Press to take it out." : "";
     });
   }
   node.addEventListener("click", () => {

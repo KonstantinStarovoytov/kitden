@@ -1980,7 +1980,7 @@ def test_the_tool_list_has_a_strict_switch():
 def test_the_tool_list_says_reads_and_writes_and_has_a_batch_switch():
     code = panel() + gw()
     assert "Turn off every writing tool…" in code
-    assert "from the server" in code and "by its name" in code
+    assert "The server says so." in code and "A guess from its name" in code
     assert 'action: "gateway.rules"' in code
 
 

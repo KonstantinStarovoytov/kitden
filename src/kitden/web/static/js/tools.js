@@ -262,7 +262,7 @@ export function writingToolsOn(tools) {
   return tools.filter((t) => t.state === "on" && (t.hint === "writes" || t.hint === "may write")).map((t) => t.name);
 }
 
-const HINT_FROM = { server: "from the server", name: "by its name" };
+const HINT_FROM = { server: "The server says so.", name: "A guess from its name: the server says nothing." };
 
 // Asks every held server for its tools again. The server says when it is done; without the
 // event stream, stop waiting after a minute. Ends when the refresh does, with why it could not

@@ -41,15 +41,19 @@ test('the words say what the label leaves out', () => {
 
 const { wordsOf } = await import('../../src/kitden/web/static/js/tips.js');
 
-test('a title that only repeats the label is not shown, unless the label is cut off', () => {
+test('words already on screen are not shown again, unless they are cut off', () => {
+  globalThis.getComputedStyle = () => ({ textOverflow: 'ellipsis' });
   const node = (text, title, cut = false) => ({
-    title, textContent: text, dataset: {}, disabled: false,
+    title, textContent: text, dataset: {}, disabled: false, scrollWidth: 100, clientWidth: 100,
     removeAttribute(name) { if (name === 'title') this.title = ''; },
     getAttribute: () => null,
-    querySelector: () => ({ scrollWidth: cut ? 200 : 100, clientWidth: 100 }),
+    querySelectorAll: () => [{ scrollWidth: cut ? 200 : 100, clientWidth: 100 }],
   });
   assert.equal(wordsOf(node('+ Add to Codex…', '+ Add to Codex…')), null);
   assert.equal(wordsOf(node('+ Add to Codex…', '+ Add to Codex…', true)), '+ Add to Codex…');
+  // A map block's title is its name, already shown beside its state.
+  assert.equal(wordsOf(node('Kitden gateway On this computer 3 clients 7 servers', 'Kitden gateway')), null);
+  assert.equal(wordsOf(node('reference-lang… 2 of 2 on', 'reference-langfuse-docs', true)), 'reference-langfuse-docs');
   assert.equal(wordsOf(node('Move all 3…', 'Move all 3…')), tipFor('Move all 3…'));
-  assert.equal(wordsOf(node('On', 'On. Press to preview turning it off.')), 'On. Press to preview turning it off.');
+  assert.equal(wordsOf(node('', 'In preview. Press to take it out.')), 'In preview. Press to take it out.');
 });
