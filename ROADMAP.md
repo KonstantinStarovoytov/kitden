@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **README in four parts:** the map, find and add, the gateway, and why it is safe. It shows a
+  search of the catalogs and names the Claude Code plugin.
+- **Ticks in line:** in the add panel, each agent's tick under Add to starts at the same edge.
 - **Copy announcements:** screen readers hear whether copying a command worked or failed,
   including repeated attempts.
 
@@ -380,7 +383,11 @@ The parts, in order:
 
 - **Part 5, logins in one place,** so OAuth servers move into the gateway too. Its Keychain part
   is done.
-- **Part 7, Linux and Windows.** Linux is done (see Not released yet); Windows is next.
+- **Part 7, Linux and Windows.** Linux is done (0.5.0) and checked on Ubuntu; reports from
+  other systems are welcome ([#16](https://github.com/KonstantinStarovoytov/kitden/issues/16)). Windows is next ([#17](https://github.com/KonstantinStarovoytov/kitden/issues/17)).
+- **A Usage tab** (asked for on 2026-11-05, no design yet): for each MCP server and each of its
+  tools, how many tokens it takes, how often it is called and by which client. The same for
+  skills and plugins.
 
 Part 6, the Instructions tab and tool counts, is done.
 
@@ -408,6 +415,7 @@ Design proposals in `design/kitden.pen`; nothing here ships yet.
 
 ## Next
 
+- Animations that shake, on Apply and in other places ([#15](https://github.com/KonstantinStarovoytov/kitden/issues/15)).
 - Two different servers with the same name: a catalog server is refused when a client already
   has another server of that name; hold both under distinct names.
 - Copy any command with one click.

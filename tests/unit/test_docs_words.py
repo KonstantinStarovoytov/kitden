@@ -30,8 +30,8 @@ def test_docs_promise_no_undo_they_cannot_keep():
 
 def test_readme_is_short_and_the_guide_names_the_page_words():
     text = (ROOT / "README.md").read_text()
-    # The README shows three scenes, the other features, why it is safe and two commands; the
-    # details live in the guide (2026-11-02).
+    # The README has four parts, the other features and two commands; the details live in the
+    # guide (2026-11-05).
     assert len(text.splitlines()) <= 110
     assert "docs/guide.md" in text
     guide = " ".join((ROOT / "docs/guide.md").read_text().split())
@@ -113,12 +113,23 @@ def test_the_readme_names_no_old_review():
     assert "review.jpg" not in readme
 
 
-def test_the_readme_shows_three_scenes_in_both_themes():
+def test_the_readme_has_four_parts_and_three_pictures_in_both_themes():
     readme = (ROOT / "README.md").read_text()
-    # One still, then two animations: the scenes differ in look as in subject.
-    for scene, kind in (("library", "png"), ("pick", "webp"), ("tools", "webp")):
+    # See it all, find and add, the gateway, and why it is safe, in this order (2026-11-05).
+    parts = (
+        "Everything your agents load, on one map",
+        "Find and add from one place",
+        "One gateway for your MCP servers",
+        "Every change can be undone",
+    )
+    places = [readme.index(f"### {part}") for part in parts]
+    assert places == sorted(places)
+    # Two stills, then one animation: the scenes differ in look as in subject.
+    for scene, kind in (("library", "png"), ("find", "png"), ("tools", "webp")):
         for theme in ("light", "dark"):
             image = ROOT / f"docs/images/readme/{scene}-{theme}.{kind}"
             assert f"docs/images/readme/{scene}-{theme}.{kind}" in readme, image.name
             # Small enough for a phone on a slow line.
             assert image.stat().st_size <= 1_600_000, image.name
+    # The sharing animation is kept for posts, not shown here.
+    assert "pick-" not in readme

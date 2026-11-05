@@ -1,5 +1,5 @@
-"""The README's pictures, played on the real page with Playwright: one still and two short
-animations.
+"""The README's pictures, played on the real page with Playwright: two stills and two short
+animations (one of them, `pick`, is for posts).
 
 Used by scripts/record_readme.py, which starts a fresh page for each one. An animated scene is
 set up first, then filmed: the page runs on a paused clock that moves one frame at a time, and
@@ -109,9 +109,24 @@ class Film:
             shutil.copy(last, self.folder / f"{self.frames:05d}.png")
             self.frames += 1
 
-    def still(self) -> None:
-        """One picture instead of frames: the scene is a still."""
-        self.page.screenshot(path=self.folder / "still.png", clip=self.clip)
+    def still(self, name: str = "still", clip: dict | None = None) -> None:
+        """One picture instead of frames: the scene is a still. `clip` is another part of the
+        page than the scene's own."""
+        self.page.screenshot(path=self.folder / f"{name}.png", clip=clip or self.clip)
+
+    def side_by_side(self, left: str, right: str, gap: int = 36) -> None:
+        """The scene's still from two pictures taken with `still(name)`, their tops in line,
+        with clear space between and under them, so it sits on a light page and a dark one."""
+        run_ffmpeg(
+            "-i",
+            str(self.folder / f"{left}.png"),
+            "-i",
+            str(self.folder / f"{right}.png"),
+            "-filter_complex",
+            "[0]format=rgba[l];[1]format=rgba[r];"
+            f"[l][r]xstack=inputs=2:layout=0_0|w0+{round(gap * SCALE)}_0:fill=black@0",
+            str(self.folder / "still.png"),
+        )
 
     def loop(self, seconds: float = 0.4) -> None:
         """Fade the last frame into the first, so the loop starts again without a jump."""
@@ -284,9 +299,52 @@ def scene_library(page: Page, film: Film, pointer: Pointer) -> None:
     film.still()
 
 
+def open_find(page: Page, link: str) -> None:
+    open_library(page, link)
+    page.locator("button:has-text('Add plugins')").first.click()
+    page.locator(".discovery-results .res").first.wait_for()
+
+
+def search_catalog(page: Page, words: str, result: str):
+    """Search the open add panel and open one result; returns the panel's details part."""
+    search = page.locator("[aria-label='Search catalogs']")
+    search.fill(words)
+    search.press("Enter")
+    page.locator(f".discovery-results .res:has-text('{result}')").first.click()
+    return page.locator(".discovery-inspector")
+
+
+def scene_find(page: Page, film: Film, pointer: Pointer) -> None:
+    """One still picture of two panels, side by side: a search for skills with the agents one
+    is added to, and a search for MCP servers with one that signs in."""
+    panel = page.locator("#drawer")
+    inspector = search_catalog(page, "mcp", "mcp-builder")
+    inspector.locator("text=Add to").wait_for()
+    for client in ("Claude Code", "Codex"):
+        inspector.locator(f"label:has-text('{client}')").click()
+    pointer.jump(60, 700)
+    time.sleep(0.6)
+    film.still("skills", panel.bounding_box())
+    page.goto(page.url.split("#")[0] + "#gateway")
+    page.locator('[data-focus="block:gateway:kitden"]').wait_for()
+    time.sleep(1.2)  # the map has landed
+    page.locator("button:has-text('Add servers')").first.click()
+    inspector = search_catalog(page, "linear", "app.linear")
+    inspector.locator("button:has-text('Sign in')").wait_for()
+    pointer.jump(60, 700)
+    time.sleep(0.6)
+    film.still("servers", panel.bounding_box())
+    film.side_by_side("skills", "servers")
+
+
+# A scene that needs a taller window than VIEW, so its panel shows whole.
+VIEWS = {"find": {"width": 1280, "height": 1000}}
+OPEN = {"library": open_library, "find": open_find}
+
 # The part of the page each animation shows, in CSS pixels: x, y, width, height.
 SCENES = (
     ("library", scene_library, (180, 255, 470, 370)),  # the clients and their plugins, a still
+    ("find", scene_find, (661, 110, 580, 850)),  # two add panels after a search, a still
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
     ("tools", scene_tools, (180, 235, 860, 500)),  # memory, its tools and the changes waiting
 )
@@ -324,7 +382,7 @@ def record_all(fresh_page, out: Path, only: str = "") -> None:
                 link, server = fresh_page(run)
                 run += 1
                 context = browser.new_context(
-                    viewport=VIEW, device_scale_factor=SCALE, color_scheme=theme
+                    viewport=VIEWS.get(name, VIEW), device_scale_factor=SCALE, color_scheme=theme
                 )
                 context.add_init_script(CURSOR)
                 page = context.new_page()
@@ -332,7 +390,7 @@ def record_all(fresh_page, out: Path, only: str = "") -> None:
                 clip = {"x": x, "y": y, "width": w, "height": h}
                 with tempfile.TemporaryDirectory() as frames:
                     try:
-                        (open_library if name == "library" else open_gateway)(page, link)
+                        OPEN.get(name, open_gateway)(page, link)
                         film = Film(page, clip, Path(frames))
                         play(page, film, Pointer(page, film))
                     finally:

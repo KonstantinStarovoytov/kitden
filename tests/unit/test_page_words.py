@@ -3157,3 +3157,8 @@ def test_hints_follow_one_pattern_and_refusals_are_amber():
     assert '"Click to review · drag onto the gateway"' in script("discovery.js")
     css = (STATIC / "style.css").read_text()
     assert ".form-message.error { color: var(--lamp-warn); }" in css
+
+
+def test_the_add_panels_client_ticks_start_at_one_edge():
+    # `.checks` centres its row; in the add panel's column that put each tick at another place.
+    assert "align-items: flex-start" in rule(".discovery-inspector .checks")
