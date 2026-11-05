@@ -12,6 +12,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **README in four parts:** the map, find and add, the gateway, and why it is safe. It shows a
   search of the catalogs and names the Claude Code plugin.
 - **Ticks in line:** in the add panel, each agent's tick under Add to starts at the same edge.
+- **Copy announcements:** screen readers hear whether copying a command worked or failed,
+  including repeated attempts.
 
 ### 0.6.0
 
@@ -445,7 +447,6 @@ Left for later in the alignment plan's phase notes:
 - Library: "See it on the map" opens a Library item in the List, since the map has no arrival yet.
 - Library, smaller: a refusal can go stale during a drag, nested imports name only the top file, a
   fold outlives a retyped search in the List, and the find chip can flash while rows land.
-- Screen readers: announce "Copied" after Copy.
 - Overview: one Update… for every old entry, so its card says In preview for an Agents-page row
   too; read the gateway settings and the notes fewer times.
 - Changes: Redo… stays hidden while a later verified change has the same request, even if a still
