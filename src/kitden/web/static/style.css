@@ -1296,7 +1296,7 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .discovery-inspector .body > p, .discovery-inspector .body > h2, .discovery-inspector .body > details { margin: 0; }
 .discovery-inspector h2 { font-size: 17px; line-height: 1.3; }
 .discovery-inspector .form { gap: 10px; }
-.discovery-inspector .checks { display: flex; flex-direction: column; gap: 0; }
+.discovery-inspector .checks { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
 .discovery-inspector .checks label { min-height: 36px; }
 .discovery .res { min-height: 48px; padding: 9px; }
 .discovery .res .st { font-size: 10px; }
