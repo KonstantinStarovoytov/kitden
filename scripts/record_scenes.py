@@ -1,5 +1,5 @@
-"""The README's pictures, played on the real page with Playwright: one still and two short
-animations.
+"""The README's pictures, played on the real page with Playwright: two stills and two short
+animations (one of them, `pick`, is for posts).
 
 Used by scripts/record_readme.py, which starts a fresh page for each one. An animated scene is
 set up first, then filmed: the page runs on a paused clock that moves one frame at a time, and
@@ -284,9 +284,37 @@ def scene_library(page: Page, film: Film, pointer: Pointer) -> None:
     film.still()
 
 
+def open_find(page: Page, link: str) -> None:
+    open_library(page, link)
+    page.locator("button:has-text('Add plugins')").first.click()
+    page.locator("[aria-label='Search catalogs']").wait_for()
+    page.locator(".discovery-results .res").first.wait_for()
+
+
+def scene_find(page: Page, film: Film, pointer: Pointer) -> None:
+    """One still picture: a search of the catalogs, one result's details, and the agents it is
+    added to."""
+    search = page.locator("[aria-label='Search catalogs']")
+    search.fill("mcp")
+    search.press("Enter")
+    page.locator(".discovery-results .res:has-text('mcp-builder')").click()
+    inspector = page.locator(".discovery-inspector")
+    inspector.locator("text=Add to").wait_for()
+    for client in ("Claude Code", "Codex"):
+        inspector.locator(f"label:has-text('{client}')").click()
+    pointer.jump(60, 700)
+    time.sleep(0.6)
+    film.still()
+
+
+# A scene that needs a taller window than VIEW, so its panel shows whole.
+VIEWS = {"find": {"width": 1280, "height": 1000}}
+OPEN = {"library": open_library, "find": open_find}
+
 # The part of the page each animation shows, in CSS pixels: x, y, width, height.
 SCENES = (
     ("library", scene_library, (180, 255, 470, 370)),  # the clients and their plugins, a still
+    ("find", scene_find, (661, 110, 580, 850)),  # the add panel after a search, a still
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
     ("tools", scene_tools, (180, 235, 860, 500)),  # memory, its tools and the changes waiting
 )
@@ -324,7 +352,7 @@ def record_all(fresh_page, out: Path, only: str = "") -> None:
                 link, server = fresh_page(run)
                 run += 1
                 context = browser.new_context(
-                    viewport=VIEW, device_scale_factor=SCALE, color_scheme=theme
+                    viewport=VIEWS.get(name, VIEW), device_scale_factor=SCALE, color_scheme=theme
                 )
                 context.add_init_script(CURSOR)
                 page = context.new_page()
@@ -332,7 +360,7 @@ def record_all(fresh_page, out: Path, only: str = "") -> None:
                 clip = {"x": x, "y": y, "width": w, "height": h}
                 with tempfile.TemporaryDirectory() as frames:
                     try:
-                        (open_library if name == "library" else open_gateway)(page, link)
+                        OPEN.get(name, open_gateway)(page, link)
                         film = Film(page, clip, Path(frames))
                         play(page, film, Pointer(page, film))
                     finally:

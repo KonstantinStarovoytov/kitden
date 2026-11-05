@@ -1,20 +1,24 @@
 # README media
 
-The README shows the logo, the slogan and three scenes of the real page, then the other
-features, why it is safe, and how to start. Steps, privacy and limits live in the [guide](guide.md). Each scene has a heading and one or two plain
-sentences; the pictures carry no captions.
+The README shows the logo, the slogan and four parts: the map, find and add, the gateway, and
+why it is safe. Then come the other features and how to start. Steps, privacy and limits live
+in the [guide](guide.md). Each part has a heading and a few plain sentences; the first three
+have a picture of the real page, with no caption.
 
 ## Scenes
 
 Each scene is in `docs/images/readme/`, in light and dark, cropped to the part of the page it
-is about, taken at 1.5 pixels per CSS pixel and shown at its CSS size (450 to 860 px wide).
-They differ in look as in subject: one still, then two animations.
+is about, taken at 1.5 pixels per CSS pixel and shown at its CSS size or smaller (460 to
+860 px wide). They differ in look as in subject: two stills, then one animation.
 
 - `library` (a PNG): the Library map, which agent loads which plugin and skill. No pointer.
-- `pick` (a looping WebP): Context7 (Cursor), memory (Claude Code) and playwright (Codex) are
-  picked with a band and dragged onto the lit gateway together.
+- `find` (a PNG): the add panel after a search for "mcp" in skills.sh. One result is open
+  with its description, and two agents are ticked under Add to. Taken in a taller window
+  (1280 by 1000), so the panel shows whole.
 - `tools` (a looping WebP): memory is in the gateway with its nine tools. The three that delete
   are turned off on the map (each link's ×) and applied for every agent.
+- `pick` (a looping WebP), for posts, not in the README: Context7 (Cursor), memory (Claude
+  Code) and playwright (Codex) are picked with a band and dragged onto the lit gateway together.
 
 Each animation ends on its key moment, holds it, and fades back to its start.
 
@@ -36,7 +40,7 @@ uv run --with playwright==1.64.1 python scripts/record_readme.py
 `ffmpeg` and `img2webp` (from libwebp) on the PATH.
 Each picture starts the real page on a fresh copy of the sample from
 `scripts/readme_demo.py`, in a temporary folder. Stand-ins keep it local: a fake Keychain,
-fake client commands, canned tool lists, and no access checks. Nothing goes online, and nothing
+fake client commands, canned tool lists and catalog answers, and no access checks. Nothing goes online, and nothing
 of the real home folder is read or written. `scripts/record_scenes.py` plays each scene and
 takes it.
 
@@ -54,6 +58,9 @@ Checked against their official sources on **2026-11-02**:
 - [Playwright MCP](https://github.com/microsoft/playwright-mcp): `npx @playwright/mcp@latest`.
 - [Superpowers](https://github.com/obra/superpowers) and the
   [frontend-design](https://github.com/anthropics/skills) skill, as the demo sample has them.
+- [skills.sh](https://skills.sh): its answer to "mcp", the first six rows as the page sorts
+  them, and [mcp-builder](https://github.com/anthropics/skills/tree/main/skills/mcp-builder)'s
+  name and description (Apache-2.0). Checked **2026-11-05**.
 
 The sample only shows these; it starts none of them and calls nothing. These
 examples do not imply endorsement.
