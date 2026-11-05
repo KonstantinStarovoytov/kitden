@@ -902,3 +902,46 @@ test('Commands… shows the commands to run yourself, each with Copy, and Done g
     await reset();
   }
 });
+
+for (const outcome of ['copied', 'rejected', 'unavailable']) {
+  test(`Copy announces ${outcome}, including a repeated attempt`, async (t) => {
+    await reset();
+    const copied = [];
+    Object.defineProperty(globalThis, 'navigator', {
+      value: outcome === 'unavailable' ? {} : { clipboard: { writeText: async (text) => {
+        copied.push(text);
+        if (outcome === 'rejected') throw new Error('Clipboard denied');
+      } } }, configurable: true, writable: true,
+    });
+    try {
+      const box = await showMap();
+      press(node(box, 'block:item:p2'));
+      await flush();
+      press(node(drawer, 'action:Commands…'));
+      await flush();
+      commandsAsked.length = 0;
+      const copy = walk(drawer).find((n) => n.tagName === 'BUTTON' && n.textContent === 'Copy');
+      const words = outcome === 'copied' ? 'Copied' : 'Could not copy';
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      pages['#said'].textContent = '';
+      copy.focus();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        press(copy);
+        await flush();
+        assert.equal(copy.textContent, words);
+        assert.equal(pages['#said'].textContent, '');
+        t.mock.timers.tick(1);
+        assert.equal(pages['#said'].textContent, words);
+        assert.equal(document.activeElement, copy);
+        assert.equal(copy.getAttribute('aria-label'), 'Copy Update in Claude Code');
+      }
+      assert.deepEqual(copied, outcome === 'unavailable' ? [] : Array(2).fill('claude plugin update superpowers@demo-market'));
+      assert.equal(tray.rows.length, 0);
+      assert.deepEqual(sent, []);
+    } finally {
+      t.mock.timers.reset();
+      delete globalThis.navigator;
+      await reset();
+    }
+  });
+}

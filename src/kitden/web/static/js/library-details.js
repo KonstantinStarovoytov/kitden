@@ -14,6 +14,7 @@ import { copyBodies, offBodies, onBodies, removeBodies, skillOffBodies, skillRul
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
+import { say } from "./toast.js";
 import { inTray, keyFor, trayRow } from "./tray.js";
 
 const OFF_ALL = "Turn off for all projects…";
@@ -474,9 +475,9 @@ function commandRow(command) {
   return row;
 }
 
-// Copy a command to the clipboard; the button says whether it worked.
+// Copy a command to the clipboard; the button and live region say whether it worked.
 function copyText(text, node) {
-  const said = (words) => { node.textContent = words; };
+  const said = (words) => { node.textContent = words; say(words); };
   const clipboard = globalThis.navigator && navigator.clipboard;
   if (!clipboard) return Promise.resolve(said(NOT_COPIED));
   return clipboard.writeText(text).then(() => said(COPIED), () => said(NOT_COPIED));
