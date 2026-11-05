@@ -237,7 +237,11 @@ export async function openDiscovery(kind = "all", options = {}) {
   const hint = el("p", "muted discovery-hint", kind === "mcp"
     ? "Click to review · drag onto the gateway"
     : "Click to review · drag onto a client");
-  body.append(form, filters, sourceLabel, sourceButtons, more, hint, status, workspace);
+  body.append(form);
+  if (kind !== "mcp") {
+    body.append(filters);
+  }
+  body.append(sourceLabel, sourceButtons, more, hint, status, workspace);
   if (saved?.answer) draw(saved.answer);
   else runSearch();
   input.focus();

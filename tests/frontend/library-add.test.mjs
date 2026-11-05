@@ -666,3 +666,22 @@ test('the map ends Plugins and skills with an Add a plugin card that opens the c
     await done();
   }
 });
+
+test('Library discovery keeps its plugin and skill filters', async () => {
+  const original = globalThis.fetch;
+  const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+
+  try {
+    await openDiscovery('all');
+    await flush();
+
+    const filters = find((n) =>
+      n.classList.contains('discovery-filters')
+    );
+
+    assert.equal(filters.length, 1);
+  } finally {
+    globalThis.fetch = original;
+    await done();
+  }
+});

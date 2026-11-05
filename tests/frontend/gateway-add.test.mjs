@@ -775,6 +775,18 @@ test('the catalog hint has no final period', async () => {
   } finally { page.restore(); }
 });
 
+test('MCP discovery does not render an empty filters row', async () => {
+  const page = await catalog(okAnswer);
+  try {
+    const filters = find((n) =>
+      n.classList.contains('discovery-filters')
+    );
+    assert.equal(filters.length, 0);
+  } finally {
+    page.restore();
+  }
+});
+
 test('a new token refused for another reason does not say Token works for the old row', async () => {
   let answers = 0;
   const page = await catalog((body) => {
