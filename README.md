@@ -61,6 +61,7 @@ not just hidden.
 | **See what runs** | How often each tool is called, and which tools only read. |
 | **Instructions in view** | Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each client loads, and where they come from. |
 | **Ask your agent** | "Show my setup" works from any agent, through Kitden's own read-only MCP server. |
+| **Claude Code plugin** | With Kitden installed, `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` adds its skill and read-only tools to Claude Code. Codex has [one too](https://github.com/KonstantinStarovoytov/kitden/blob/main/plugins/kitden/README.md). <!-- Checked 2026-11-05: https://code.claude.com/docs/en/discover-plugins --> |
 
 ## Safe to use
 
