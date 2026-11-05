@@ -32,13 +32,13 @@ at a glance. Add what an agent is missing, turn an item off or remove it, on the
 ### Find and add from one place
 
 Search the official MCP Registry, skills.sh, the Claude plugins marketplace and any public
-GitHub repository without leaving the page. Tick the agents a result goes to, or drag it onto
-an agent or the gateway.
+GitHub repository without leaving the page. Tick the agents a plugin or skill goes to. An MCP
+server goes to the gateway, and says first whether it needs a sign-in or a token.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/find-dark.png">
   <source srcset="docs/images/readme/find-light.png">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/find-light.png" width="460" alt="A search for mcp in skills.sh lists six skills with their installs. mcp-builder is open with its description, and Claude Code and Codex are ticked under Add to, next to Preview.">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/find-light.png" width="860" alt="Two add panels side by side. A search for mcp in skills.sh lists six skills with their installs; mcp-builder is open, with Claude Code and Codex ticked under Add to. A search for linear in the MCP Registry lists six servers; Linear's own is open with a Sign in button, and others say Needs token or Unavailable.">
 </picture>
 
 ### One gateway for your MCP servers

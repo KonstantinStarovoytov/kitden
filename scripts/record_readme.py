@@ -109,6 +109,79 @@ CATALOG = {
 }
 
 
+# The Official MCP Registry's answer to "linear": its first six servers in its own order, cut
+# down to what the page reads (checked 2026-11-05: https://registry.modelcontextprotocol.io).
+# Linear's own server asks for a sign-in, as Kitden's check of its address said that day.
+LINEAR = "https://mcp.linear.app/mcp"
+SERVERS = [
+    {
+        "name": "app.linear/linear",
+        "version": "1.0.2",
+        "description": "Find and manage issues, projects, and documents in your Linear workspace.",
+        "remotes": [{"type": "streamable-http", "url": LINEAR}],
+    },
+    {
+        "name": "co.civai.nova/mcp-linear",
+        "version": "1.0.0",
+        "description": "Issues, projects, cycles, and roadmaps via the official Linear hosted "
+        "MCP server.",
+        "remotes": [
+            {"type": "streamable-http", "url": "https://nova.civai.co/mcp/agents/mcp-linear"}
+        ],
+    },
+    {
+        "name": "io.github.Evozim/linear-broker",
+        "version": "1.0.0",
+        "description": "Integrates agents with Linear software development workflows.",
+        "remotes": [{"type": "sse", "url": "https://linear-broker-mcp.vercel.app/api/mcp"}],
+    },
+    {
+        "name": "io.github.adelaidasofia/linear-mcp",
+        "version": "0.3.2",
+        "description": "Multi-workspace Linear MCP — PAT auth, 57 tools + 3 prompts, substrate "
+        "enforcement, drop-in.",
+        "packages": [
+            {
+                "registryType": "pypi",
+                "identifier": "adelaidasofia-linear-mcp",
+                "version": "0.3.2",
+                "transport": {"type": "stdio"},
+                "environmentVariables": [{"name": "LINEAR_PAT", "isRequired": True}],
+            }
+        ],
+    },
+    {
+        "name": "io.github.mrfentmen/linear-mcp",
+        "version": "1.1.0",
+        "description": "Query the Linear GraphQL API: viewer, teams, issue search.",
+        "packages": [
+            {
+                "registryType": "npm",
+                "identifier": "@mrfentmen/linear-mcp",
+                "version": "1.1.0",
+                "transport": {"type": "stdio"},
+            }
+        ],
+    },
+    {
+        "name": "io.github.pipeworx-io/linear",
+        "version": "0.2.1",
+        "description": "Linear MCP — wraps the Linear GraphQL API (OAuth)",
+        "remotes": [{"type": "streamable-http", "url": "https://gateway.pipeworx.io/linear/mcp"}],
+    },
+]
+ACTIVE = {"io.modelcontextprotocol.registry/official": {"status": "active"}}
+REGISTRY = "https://registry.modelcontextprotocol.io/v0.1/servers"
+CATALOG[f"{REGISTRY}?search=linear&version=latest&limit=100"] = {
+    "servers": [{"server": server, "_meta": ACTIVE} for server in SERVERS]
+}
+
+
+def canned_access(url: str, headers: dict) -> str:
+    """What a found server needs, without asking it."""
+    return "sign-in" if url == LINEAR else "open"
+
+
 def canned_download(url: str) -> bytes:
     """A catalog's answer from the table above; any other address is refused."""
     if url not in CATALOG:
@@ -146,6 +219,7 @@ def stand_ins(root: Path) -> None:
     web.refresh_tools = canned_refresh  # tool lists without starting any server
     discovery.download = canned_download  # catalogs answer from this file
     discovery.popular_skills = lambda: FOUND
+    discovery.access_needed = canned_access
 
 
 def start_page(home: Path, port: int = PORT) -> tuple[str, uvicorn.Server]:

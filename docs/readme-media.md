@@ -8,13 +8,15 @@ have a picture of the real page, with no caption.
 ## Scenes
 
 Each scene is in `docs/images/readme/`, in light and dark, cropped to the part of the page it
-is about, taken at 1.5 pixels per CSS pixel and shown at its CSS size or smaller (460 to
+is about, taken at 1.5 pixels per CSS pixel and shown at its CSS size or smaller (470 to
 860 px wide). They differ in look as in subject: two stills, then one animation.
 
 - `library` (a PNG): the Library map, which agent loads which plugin and skill. No pointer.
-- `find` (a PNG): the add panel after a search for "mcp" in skills.sh. One result is open
-  with its description, and two agents are ticked under Add to. Taken in a taller window
-  (1280 by 1000), so the panel shows whole.
+- `find` (a PNG): two add panels side by side, each cut to its own size with clear space
+  between. Left, a search for "mcp" in skills.sh: one skill is open with its description, and
+  two agents are ticked under Add to. Right, a search for "linear" in the MCP Registry:
+  Linear's own server is open with Sign in. Taken in a taller window (1280 by 1000), so the
+  panels show whole.
 - `tools` (a looping WebP): memory is in the gateway with its nine tools. The three that delete
   are turned off on the map (each link's ×) and applied for every agent.
 - `pick` (a looping WebP), for posts, not in the README: Context7 (Cursor), memory (Claude
@@ -61,6 +63,9 @@ Checked against their official sources on **2026-11-02**:
 - [skills.sh](https://skills.sh): its answer to "mcp", the first six rows as the page sorts
   them, and [mcp-builder](https://github.com/anthropics/skills/tree/main/skills/mcp-builder)'s
   name and description (Apache-2.0). Checked **2026-11-05**.
+- [Official MCP Registry](https://registry.modelcontextprotocol.io): its answer to "linear",
+  the first six servers in its own order, and that [Linear's server](https://mcp.linear.app/mcp)
+  asks for a sign-in. Checked **2026-11-05**.
 
 The sample only shows these; it starts none of them and calls nothing. These
 examples do not imply endorsement.
