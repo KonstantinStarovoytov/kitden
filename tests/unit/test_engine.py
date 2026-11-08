@@ -1158,6 +1158,7 @@ def test_a_command_that_fails_after_writing_is_taken_back(tmp_path, settings):
     change = engine.preview("plugin.install", plugin_steps(settings)[1:])
     engine.apply(change.id)
     assert change.state is ChangeState.RESTORED
+    assert change.refused_by == "claude_code"
     assert undone and undone[0][1:3] == ["plugin", "uninstall"]
     assert json.loads(settings.read_text()).get("enabledPlugins") == {}
     assert change.error.endswith("The original settings were restored.")

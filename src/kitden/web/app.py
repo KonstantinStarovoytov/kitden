@@ -245,6 +245,7 @@ def change_dict(change: Change) -> dict:
         "action": change.action,
         "state": str(change.state),
         "error": change.error,
+        "refused_by": change.refused_by,
         "restart_needed": change.restart_needed,
         "shared_file_warning": change.shared_file_warning,
         "target": change.target,

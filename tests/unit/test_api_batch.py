@@ -153,6 +153,7 @@ def test_a_failing_last_step_puts_every_file_back(tmp_path):
         applied = _apply(page, answer.json()["id"])
         assert applied.status_code == 500
         assert applied.json()["state"] == "restored"
+        assert applied.json()["refused_by"] == "claude_code"
         assert applied.json()["error"].endswith(RESTORED)
         assert _files(page.home) == before
 

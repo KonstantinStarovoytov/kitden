@@ -85,6 +85,12 @@ class _ApplyError(Exception):
     pass
 
 
+class _ClientRefusedError(_ApplyError):
+    def __init__(self, client: str, message: str) -> None:
+        super().__init__(message)
+        self.client = client
+
+
 # How the error of a failed Apply ends when every file was put back as it was.
 PUT_BACK = "The original settings were restored."
 
@@ -364,6 +370,7 @@ def _record(change: Change) -> dict:
         "action": change.action,
         "state": str(change.state),
         "error": change.error,
+        "refused_by": change.refused_by,
         "holds_secret": change.holds_secret,
         "target": change.target,
         "rows": change.rows,
@@ -422,6 +429,7 @@ def _from_record(record: dict) -> Change:
         id=record["id"],
         steps=steps,
         error=record["error"],
+        refused_by=record.get("refused_by"),
         holds_secret=record.get("holds_secret", False),
         target=record.get("target"),
         rows=record.get("rows"),
@@ -678,7 +686,7 @@ class Engine:
             result = self.run(step.command or [], step.cwd)
             if result.returncode != 0:
                 shown = " ".join((step.command or [])[:3])
-                raise _ApplyError(f"`{shown}` failed: {result.output}")
+                raise _ClientRefusedError(step.client, f"`{shown}` failed: {result.output}")
             self.on_write(edit.path, _sha(_read(edit.path)))
             return None
         new = _edited(edit, (data or b"").decode(), edit.after)
@@ -814,6 +822,8 @@ class Engine:
             change.move_to(ChangeState.RESTORED)
             said = str(error) or type(error).__name__
             change.error = f"{said} {' '.join(lost) if lost else PUT_BACK}"
+            if getattr(error, "client", None):
+                change.refused_by = error.client
             self._finish(change)
             return change
 
