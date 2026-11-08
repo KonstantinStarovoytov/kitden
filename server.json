@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.KonstantinStarovoytov/kitden",
+  "title": "Kitden",
+  "description": "Shows what Claude Code, Codex and Cursor load on this computer: MCP servers, plugins, skills, hooks",
+  "repository": {
+    "url": "https://github.com/KonstantinStarovoytov/kitden",
+    "source": "github"
+  },
+  "version": "0.6.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "kitden",
+      "version": "0.6.1",
+      "runtimeHint": "uvx",
+      "transport": { "type": "stdio" },
+      "packageArguments": [{ "type": "positional", "value": "mcp" }]
+    }
+  ]
+}

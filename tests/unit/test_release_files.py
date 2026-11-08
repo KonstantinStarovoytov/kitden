@@ -21,6 +21,26 @@ def test_the_version_is_the_same_everywhere():
         assert json.loads((ROOT / manifest).read_text())["version"] == version
     assert f'KITDEN_VERSION="{version}"' in (ROOT / "install.sh").read_text()
     assert f'$KitdenVersion = "{version}"' in (ROOT / "install.ps1").read_text()
+    registry = json.loads((ROOT / "server.json").read_text())
+    assert registry["version"] == version
+    assert [p["version"] for p in registry["packages"]] == [version]
+
+
+def test_the_registry_entry_matches_the_package():
+    """The MCP Registry checks the PyPI README for the server name (checked 2026-11-08)."""
+    import json
+
+    registry = json.loads((ROOT / "server.json").read_text())
+    name = registry["name"]
+    assert name == "io.github.KonstantinStarovoytov/kitden"
+    assert f"<!-- mcp-name: {name} -->" in (ROOT / "README.md").read_text()
+    (package,) = registry["packages"]
+    assert package["registryType"] == "pypi"
+    assert package["identifier"] == _project()["name"]
+    assert package["transport"] == {"type": "stdio"}
+    assert package["packageArguments"] == [{"type": "positional", "value": "mcp"}]
+    glama = json.loads((ROOT / "glama.json").read_text())
+    assert glama["maintainers"] == ["KonstantinStarovoytov"]
 
 
 def test_license_is_apache_2():

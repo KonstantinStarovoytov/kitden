@@ -1,14 +1,19 @@
 # Kitden roadmap
 
-Last updated: 2026-11-05
+Last updated: 2026-11-08
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not released yet
+### 0.6.1
 
+- **Ready for the MCP Registry:** the package carries the name the official MCP Registry
+  checks, `server.json` describes `kitden mcp` for it, and `glama.json` names the maintainer
+  for Glama.
+- **No empty filters row:** the MCP add panel no longer shows an empty filters row above its
+  results.
 - **README in four parts:** the map, find and add, the gateway, and why it is safe. It shows a
   search of the catalogs and names the Claude Code plugin.
 - **Ticks in line:** in the add panel, each agent's tick under Add to starts at the same edge.
