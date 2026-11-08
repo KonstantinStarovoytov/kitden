@@ -26,8 +26,20 @@ and documentation. Follow the [design guide](docs/design.md) for interface chang
 [AGENTS.md](AGENTS.md) when working with a coding agent.
 
 Every change to client settings must go through preview → Apply with a backup → verify →
-Undo. Tests must use sandbox homes, never your real settings. If behavior or plans change,
-update [ROADMAP.md](ROADMAP.md) and the relevant documentation in the same pull request.
+Undo. Tests must use sandbox homes, never your real settings.
+
+In the same pull request:
+
+- If what Kitden does changes, add one line to [ROADMAP.md](ROADMAP.md) under
+  "Not released yet": a short bold title, one plain sentence, and the pull request number.
+  For example:
+
+  ```markdown
+  - **The toast names the client that refused a change:** when a client's own command
+    fails, "Nothing was changed" now says which client refused it (#25).
+  ```
+
+- If what the user sees changes, update [the guide](docs/guide.md).
 
 ## Check your work
 
@@ -43,9 +55,21 @@ For a UI change, also check both themes and reduced motion on the sample setup.
 
 ## Open a pull request
 
+The pull request form has a short checklist; tick each item or say why it does not apply.
 Explain the problem, what changes for the user and how you checked it. Link the related
 issue if there is one. Include before/after screenshots for visible changes and state any
 checks you could not run. Remove secrets and private paths from screenshots and logs.
 
-Use a short, plain commit subject. If a client file format or external API is involved,
-check its official documentation and record the date beside the claim.
+The pull request title becomes the commit subject when it is merged. Say what changes for
+the user, in plain English. Do not add a `fix:` or `feat(...)` prefix or the issue number;
+put `Fixes #23` in the description instead.
+
+| Good | Not |
+| --- | --- |
+| Name the client when it refuses a change | fix(dock): name client when a change is refused in toast (#23) |
+| Remove a plugin when Claude Code was started in the home folder | fix: plugin uninstall scope bug |
+
+Commit subjects inside the pull request follow the same style.
+
+If a client file format or external API is involved, check its official documentation and
+record the date beside the claim.

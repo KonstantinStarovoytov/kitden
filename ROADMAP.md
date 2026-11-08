@@ -13,6 +13,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   longer reads `~/.claude/settings.json` a second time as that "project's" file, so a user
   plugin, hook or skill has no project copy. Remove ran `uninstall -s project` on that copy,
   and Claude Code refused it.
+- **The toast names the client that refused a change:** when a client's own command fails,
+  "Nothing was changed" now says "Claude Code refused the change" instead of "The change did
+  not check out". Thanks to @chiragjangiir (#25).
 
 ### 0.6.1
 

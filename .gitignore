@@ -22,3 +22,6 @@ coverage/
 .specify/
 .superpowers/
 .coverage
+
+# Personal agent notes
+CLAUDE.local.md
