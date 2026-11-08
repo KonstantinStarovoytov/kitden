@@ -7,6 +7,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not released yet
+
+- **Remove works for plugins when Claude Code was started in the home folder:** Kitden no
+  longer reads `~/.claude/settings.json` a second time as that "project's" file, so a user
+  plugin, hook or skill has no project copy. Remove ran `uninstall -s project` on that copy,
+  and Claude Code refused it.
+
 ### 0.6.1
 
 - **Ready for the MCP Registry:** the package carries the name the official MCP Registry
