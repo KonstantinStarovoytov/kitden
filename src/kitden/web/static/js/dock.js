@@ -46,10 +46,16 @@ const IN_PREVIEW = " changes in preview";
 // refused after a failed Apply keeps those words and adds the reason to the line.
 function endWords({ failure, refused }, reason) {
   if (refused && !failure) return { head: "Could not prepare the preview", line: reason, apply: "Try again", retry: true };
-  const { state: ended = null, error = null } = failure || {};
+  const { state: ended = null, error = null, refused_by = null } = failure || {};
   let words;
   if (nothingChanged({ state: ended, error })) {
-    words = { head: "Nothing was changed", line: ended === "stale" ? STALE : "The change did not check out. Kitden put the files back.", apply: "Try again", retry: true };
+    const who = refused_by ? clientName(refused_by) : null;
+    const line = ended === "stale"
+      ? STALE
+      : who
+        ? `${who} refused the change. Kitden put the files back.`
+        : "The change did not check out. Kitden put the files back.";
+    words = { head: "Nothing was changed", line, apply: "Try again", retry: true };
   } else {
     words = { head: ended === "restored" ? "Not everything was put back" : "Could not confirm the result", line: CHECK_CHANGES, apply: null, changes: true };
   }

@@ -432,7 +432,14 @@ export async function applyTray() {
       // Kept as the server has it, so Try again knows whether it must cancel the preview.
       if (after) change.state = after.state;
       for (const row of tray.rows) row.status = "";
-      Object.assign(tray, { phase: "failed", failure: { state: after ? after.state : null, error: (after && after.error) || null } });
+      Object.assign(tray, {
+        phase: "failed",
+        failure: {
+          state: after ? after.state : null,
+          error: (after && after.error) || null,
+          ...(after && after.refused_by ? { refused_by: after.refused_by } : {}),
+        },
+      });
     }
     notify();
   } finally {

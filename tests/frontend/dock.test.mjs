@@ -265,6 +265,16 @@ test('barWords says Nothing was changed only when true', () => {
     head: 'Nothing was changed', line: 'The change did not check out. Kitden put the files back.', cancel: 'Cancel all',
     apply: 'Try again', applyWaits: false, retry: true, changes: false,
   });
+  // The client itself refused the change: the toast names the client.
+  const refusedByClient = failed({
+    state: 'restored',
+    error: '`claude plugin uninstall` failed. The original settings were restored.',
+    refused_by: 'claude_code',
+  }, [row('a'), row('b')]);
+  assert.deepEqual(refusedByClient, {
+    head: 'Nothing was changed', line: 'Claude Code refused the change. Kitden put the files back.', cancel: 'Cancel all',
+    apply: 'Try again', applyWaits: false, retry: true, changes: false,
+  });
   // Not every file went back: no Try again, a way to Changes.
   const partly = failed({ state: 'restored', error: 'Could not restore a file.' });
   assert.deepEqual(partly, {

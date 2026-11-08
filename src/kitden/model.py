@@ -352,6 +352,7 @@ class Change:
     id: str = field(default_factory=_new_change_id)
     steps: list[Step] = field(default_factory=list)
     error: str | None = None
+    refused_by: str | None = None
     # Set at Apply: the backup or the record keeps a secret (an old or new entry's value).
     holds_secret: bool = False
     # Where the steps go (views/review.py change_target), set at preview: the review's title
