@@ -40,6 +40,7 @@ from kitden.gateways import data_dir
 from kitden.local_gateway import keychain
 from kitden.local_gateway.keychain import KeychainError
 from kitden.model import (
+    CLIENT_WORDS,
     Change,
     ChangeState,
     ClientStatus,
@@ -85,8 +86,29 @@ class _ApplyError(Exception):
     pass
 
 
+class _ClientRefusedError(_ApplyError):
+    """A client's own command said no; `client` is whose command it was.
+
+    Its message is the full error, the command and its output; `short_reason` is what the
+    bar's line says, so the person sees who refused without opening the details.
+    """
+
+    def __init__(self, client: str, message: str) -> None:
+        super().__init__(message)
+        self.client = client
+
+
 # How the error of a failed Apply ends when every file was put back as it was.
 PUT_BACK = "The original settings were restored."
+
+
+def _short_reason(error: Exception) -> str | None:
+    """Why a failed Apply stopped, in short, for the bar's line: only a client that refused
+    says so; any other failure keeps the current words, and `Change.error` holds them all
+    with the paths and commands, behind Show changes and on Changes."""
+    if isinstance(error, _ClientRefusedError):
+        return f"{CLIENT_WORDS.get(error.client, error.client)} refused the change."
+    return None
 
 OUTSIDE = "Kitden writes only in your home folder and your known projects."
 
@@ -678,7 +700,7 @@ class Engine:
             result = self.run(step.command or [], step.cwd)
             if result.returncode != 0:
                 shown = " ".join((step.command or [])[:3])
-                raise _ApplyError(f"`{shown}` failed: {result.output}")
+                raise _ClientRefusedError(step.client, f"`{shown}` failed: {result.output}")
             self.on_write(edit.path, _sha(_read(edit.path)))
             return None
         new = _edited(edit, (data or b"").decode(), edit.after)
@@ -814,6 +836,8 @@ class Engine:
             change.move_to(ChangeState.RESTORED)
             said = str(error) or type(error).__name__
             change.error = f"{said} {' '.join(lost) if lost else PUT_BACK}"
+            # The bar says who refused, in short; everything else keeps its current words.
+            change.reason = _short_reason(error)
             self._finish(change)
             return change
 

@@ -56,7 +56,8 @@ export async function changeOutcome(id, verb, body) {
 // it can join the change: { server, kind, fields, reason, refused, checking } (a row that
 // waits is left out of the change, so Apply writes the others). `works`: its token was
 // checked and taken. `refused`: { reason } or null. `failure`:
-// { state, error } of an Apply that was not verified, `state` null when its end is not known.
+// { state, error, reason } of an Apply that was not verified, `state` null when its end is not
+// known and `reason` the engine's short words when a client refused the change.
 // `stale`: the files changed since the preview.
 export const tray = { rows: [], change: null, phase: "idle", refused: null, failure: null, done: 0, total: 0, stale: false };
 
@@ -432,7 +433,14 @@ export async function applyTray() {
       // Kept as the server has it, so Try again knows whether it must cancel the preview.
       if (after) change.state = after.state;
       for (const row of tray.rows) row.status = "";
-      Object.assign(tray, { phase: "failed", failure: { state: after ? after.state : null, error: (after && after.error) || null } });
+      Object.assign(tray, {
+        phase: "failed",
+        failure: {
+          state: after ? after.state : null,
+          error: (after && after.error) || null,
+          reason: (after && after.reason) || null,
+        },
+      });
     }
     notify();
   } finally {

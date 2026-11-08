@@ -7,6 +7,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not released yet
+
+- **A refusal says who refused:** when a client's own command says no, the bar after a failed
+  Apply says "<Client> refused the change. Kitden put the files back." in place of only that the
+  change did not check out. The command and its output stay behind Show changes and on Changes.
+
 ### 0.6.1
 
 - **Ready for the MCP Registry:** the package carries the name the official MCP Registry

@@ -1179,6 +1179,44 @@ def test_a_command_that_fails_after_writing_is_taken_back(tmp_path, settings):
     assert "restored" not in change.error
 
 
+def test_a_client_that_refuses_is_named_in_the_short_reason(tmp_path, settings):
+    # The bar's line after a failed Apply names who refused, in short; the command and its
+    # output stay in the error, behind Show changes and on Changes.
+    settings.write_text(json.dumps({"theme": "dark"}))
+    cli = FakePluginCli(settings)
+
+    def run(command, cwd):  # the client's own install says no
+        if command[1:3] == ["plugin", "install"]:
+            return CommandResult(returncode=1, output="installed for the user")
+        return cli(command, cwd)
+
+    engine = make_engine(tmp_path, run=run)
+    change = engine.preview("plugin.install", plugin_steps(settings)[1:])
+    assert engine.apply(change.id).state is ChangeState.RESTORED
+    assert change.reason == "Claude Code refused the change."
+    assert change.error.endswith("The original settings were restored.")
+    assert "`claude plugin install` failed: installed for the user" in change.error
+    from kitden.web.app import change_dict
+
+    assert change_dict(change)["reason"] == change.reason
+
+
+def test_a_check_that_fails_after_writing_keeps_the_current_words(tmp_path, settings):
+    # The check after the write is not a refusal, so the bar keeps "The change did not check
+    # out. Kitden put the files back." and says nothing else.
+    settings.write_text(json.dumps({"theme": "dark"}))
+    engine = make_engine(tmp_path, run=FakePluginCli(settings))
+
+    def verify(step, expected, exact=None):
+        raise RuntimeError("the entry did not read back as expected")
+
+    engine._verify = verify
+    change = engine.preview("plugin.install", plugin_steps(settings)[1:])
+    assert engine.apply(change.id).state is ChangeState.RESTORED
+    assert change.reason is None
+    assert change.error.endswith("The original settings were restored.")
+
+
 def test_a_failed_apply_puts_back_the_old_keychain_value(tmp_path, config):
     from kitden.model import KeychainItem
 

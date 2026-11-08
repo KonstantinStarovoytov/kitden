@@ -184,6 +184,15 @@ function slow() {
 const refusal = (detail) => ({ status: 422, json: { detail, row: null } });
 const verified = (id) => ({ status: 200, json: { id, state: 'verified', steps: [] } });
 const stale = (id) => ({ status: 409, json: { id, state: 'stale', error: 'Settings changed.' } });
+// An Apply the client itself refused: the engine's short reason says who, the error everything.
+const refusedByClient = (id) => ({
+  status: 500,
+  json: {
+    id, state: 'restored',
+    error: '`codex plugin add` failed: not allowed. The original settings were restored.',
+    reason: 'Codex refused the change.', steps: [],
+  },
+});
 
 const bar = () => pages['#dock'].children.find((child) => child.classList.contains('bar')) || null;
 const toastNode = () => pages['#dock'].children.find((child) => child.classList.contains('toast')) || null;
@@ -279,6 +288,26 @@ test('barWords says Nothing was changed only when true', () => {
       applyWaits: false, retry: false, changes: true,
     });
   }
+});
+
+test('barWords says who refused the change, and keeps the words of a check that failed', () => {
+  const failed = (failure) => barWords(trayOf([row('a')], { phase: 'failed', failure }));
+  const restored = 'The original settings were restored.';
+  // A client's own command said no: the engine's short reason names it first.
+  assert.equal(
+    failed({ state: 'restored', error: `Too old. ${restored}`, reason: 'Codex refused the change.' }).line,
+    'Codex refused the change. Kitden put the files back.',
+  );
+  // A check that failed after the write is not a refusal: the current words stay.
+  assert.equal(
+    failed({ state: 'restored', error: `It did not check out. ${restored}` }).line,
+    'The change did not check out. Kitden put the files back.',
+  );
+  // Not everything went back: the refusal still names the client before the way to Changes.
+  assert.equal(
+    failed({ state: 'restored', error: 'Could not restore a file.', reason: 'Codex refused the change.' }).line,
+    'Codex refused the change. Check Changes before trying again.',
+  );
 });
 
 test("the bar never shows the engine's own words: no path, no command", () => {
@@ -761,6 +790,22 @@ test('a failed Apply stays in the bar, shakes it and puts focus on Try again', a
   assert.equal(section.className, 'bar tray many');
   assert.equal(button(section, 'Apply all').attributes['aria-disabled'], undefined);
   assert.equal(section.attributes['aria-label'], '2 changes in preview');
+});
+
+test('a change a client refused says who refused in the bar', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(add('github'));
+  queue('/api/changes/c1/apply', refusedByClient('c1'));
+  await button(bar(), 'Apply').click();
+  const section = bar();
+  assert.equal(section.className, 'bar tray err');
+  assert.equal(section.attributes['aria-label'], 'Nothing was changed');
+  // The engine's short reason names the client; the command and its output stay in Details.
+  assert.deepEqual(section.children[0].children.slice(0, 2).map((node) => node.textContent), [
+    'Nothing was changed', 'Codex refused the change. Kitden put the files back.',
+  ]);
+  assert.ok(globalThis.document.activeElement === button(section, 'Try again'), 'focus is not where it should be');
 });
 
 test('an end that is not known leaves Open Changes and no Try again', async () => {

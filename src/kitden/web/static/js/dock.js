@@ -42,16 +42,22 @@ const IN_PREVIEW = " changes in preview";
 
 // How a tray that did not go through ends: the head and line, and what Apply's place holds.
 // "Nothing was changed" only when that is true (nothingChanged, review.js); the engine's own words
-// name paths and commands, so they stay behind Details and on Changes. An add that the server
-// refused after a failed Apply keeps those words and adds the reason to the line.
+// name paths and commands, so they stay behind Details and on Changes. A client that refused the
+// change is named first, in short (the engine's `failure.reason`: "Claude Code refused the
+// change."); an add that the server refused after a failed Apply keeps those words and adds the
+// reason to the line.
 function endWords({ failure, refused }, reason) {
   if (refused && !failure) return { head: "Could not prepare the preview", line: reason, apply: "Try again", retry: true };
-  const { state: ended = null, error = null } = failure || {};
+  const { state: ended = null, error = null, reason: why = null } = failure || {};
   let words;
   if (nothingChanged({ state: ended, error })) {
-    words = { head: "Nothing was changed", line: ended === "stale" ? STALE : "The change did not check out. Kitden put the files back.", apply: "Try again", retry: true };
+    // A client that refused is named in place of "did not check out": the reason says who, and
+    // the line stays short.
+    const line = ended === "stale" ? STALE : why ? `${why} Kitden put the files back.` : "The change did not check out. Kitden put the files back.";
+    words = { head: "Nothing was changed", line, apply: "Try again", retry: true };
   } else {
-    words = { head: ended === "restored" ? "Not everything was put back" : "Could not confirm the result", line: CHECK_CHANGES, apply: null, changes: true };
+    const line = why ? `${why} ${CHECK_CHANGES}` : CHECK_CHANGES;
+    words = { head: ended === "restored" ? "Not everything was put back" : "Could not confirm the result", line, apply: null, changes: true };
   }
   return refused ? { ...words, line: `${words.line} ${reason}` } : words;
 }

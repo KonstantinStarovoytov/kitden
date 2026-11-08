@@ -501,7 +501,7 @@ test('a stale apply keeps the rows', async () => {
   queue('/api/changes/c2/apply', { status: 409, json: { id: 'c2', state: 'stale', error: 'Settings changed.' } });
   await applyTray();
   assert.equal(tray.phase, 'failed');
-  assert.deepEqual(tray.failure, { state: 'stale', error: 'Settings changed.' });
+  assert.deepEqual(tray.failure, { state: 'stale', error: 'Settings changed.', reason: null });
   assert.deepEqual(tray.rows.map((row) => [row.title, row.status]), [['Add github', ''], ['Add neon', '']]);
   assert.equal(busy.change, false);
   assert.equal(listening(), 0);
@@ -520,7 +520,7 @@ test('a stale apply keeps the rows', async () => {
 test('an add after a failed Apply: a new answer clears the failure, a refusal keeps it', async () => {
   await fresh();
   await twoRows();
-  const failure = { state: 'stale', error: 'Settings changed.' };
+  const failure = { state: 'stale', error: 'Settings changed.', reason: null };
   queue('/api/changes/c2/apply', { status: 409, json: { id: 'c2', ...failure } });
   await applyTray();
   assert.deepEqual([tray.phase, tray.failure], ['failed', failure]);
@@ -542,7 +542,7 @@ test('an apply that did not run keeps its rows, and Try again drops the preview'
   queue('/api/changes/c2/apply', { status: 422, json: { detail: 'nothing to change in ~/.claude.json' } });
   await applyTray();
   assert.equal(tray.phase, 'failed');
-  assert.deepEqual(tray.failure, { state: null, error: null }); // the end is not known
+  assert.deepEqual(tray.failure, { state: null, error: null, reason: null }); // the end is not known
   assert.deepEqual(tray.rows.map((row) => row.status), ['', '']);
   queue(PREVIEW, previewed('c3'));
   await tryAgain();

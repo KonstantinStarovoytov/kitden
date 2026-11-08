@@ -352,6 +352,9 @@ class Change:
     id: str = field(default_factory=_new_change_id)
     steps: list[Step] = field(default_factory=list)
     error: str | None = None
+    # Why Apply stopped, in short, for the bar's line ("<Client> refused the change."); `error`
+    # keeps the full words, behind Show changes and on Changes. Set at Apply only.
+    reason: str | None = None
     # Set at Apply: the backup or the record keeps a secret (an old or new entry's value).
     holds_secret: bool = False
     # Where the steps go (views/review.py change_target), set at preview: the review's title
