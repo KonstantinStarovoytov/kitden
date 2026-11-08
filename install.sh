@@ -5,7 +5,7 @@
 # when a newer release is named below.
 set -eu
 
-KITDEN_VERSION="0.6.0"
+KITDEN_VERSION="0.6.1"
 
 # 1. macOS and Linux only.
 system="$(uname -s)"

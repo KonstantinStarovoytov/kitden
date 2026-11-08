@@ -107,3 +107,4 @@ Update later with `uv tool upgrade kitden` or `brew upgrade kitden`.
 [Issues](https://github.com/KonstantinStarovoytov/kitden/issues) ·
 [Contributing](https://github.com/KonstantinStarovoytov/kitden/blob/main/CONTRIBUTING.md) ·
 [Apache-2.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE)
+<!-- mcp-name: io.github.KonstantinStarovoytov/kitden -->
