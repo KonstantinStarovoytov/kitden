@@ -310,3 +310,20 @@ def test_git_root_follows_only_a_repository_folder_the_user_owns(tmp_path, monke
     (tmp_path / ".git").mkdir()
     (repo / ".git").rmdir()
     assert git_root(web, home) is None
+
+
+def test_the_home_folder_as_a_project_does_not_read_the_user_settings_twice(tmp_path, no_version):
+    # Claude Code started in the home folder records it as a project. Its `.claude/settings.json`
+    # and skills are then the user's own: one user item each, no project copy. A project copy of
+    # a user plugin made Remove run `uninstall -s project`, which Claude Code refuses.
+    hook = {"hooks": [{"type": "command", "command": "true"}]}
+    home, _ = _home(tmp_path, user={"enabledPlugins": {PLUGIN: False}, "hooks": {"Stop": [hook]}})
+    _write(home / ".claude.json", {"projects": {str(home): {}}})
+    items = _scan(home, no_version)
+    assert _plugin_rows(items) == {("user", "off", "user")}
+    kinds = (ItemKind.PLUGIN, ItemKind.HOOK, ItemKind.SKILL)
+    assert not [i for i in items if i.kind in kinds and i.project == str(home)]
+    # The home folder's local file is still its own project file.
+    _write(home / ".claude/settings.local.json", {"enabledPlugins": {PLUGIN: True}})
+    rows = _plugin_rows(_scan(home, no_version))
+    assert rows == {("user", "off", "user"), ("local", "on", "local")}

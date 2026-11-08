@@ -673,8 +673,11 @@ class ClaudeCodeAdapter(ClientAdapter):
                     enabled=state,
                 )
             )
+        # When the project is the home folder, its `.claude/settings.json` and skills are the
+        # user's own, already read as user items; reading them again made a project copy.
+        at_home = is_home(root, self.home)
         settings_path = root / ".claude/settings.json"
-        settings = as_dict(read.json(settings_path))
+        settings = {} if at_home else as_dict(read.json(settings_path))
         # The local files, the winning one last; each plugin key comes from the last that has it.
         locals_ = [(path, as_dict(read.json(path))) for path in local_files(root, self.home)]
         # checked 2026-10-26 (code.claude.com/docs/en/plugins/loading, "Find where a plugin is
@@ -713,16 +716,17 @@ class ClaudeCodeAdapter(ClientAdapter):
         )
         read_files = [settings_path, *(p for p, _ in locals_)]
         known = user_known and not any(read.failed(p) for p in read_files)
-        items += _apply_rules(
-            skill_items(CLIENT, root / ".claude/skills", Scope.PROJECT, CLIENT, project=path),
-            rules,
-            known,
-        )
+        if not at_home:
+            items += _apply_rules(
+                skill_items(CLIENT, root / ".claude/skills", Scope.PROJECT, CLIENT, project=path),
+                rules,
+                known,
+            )
         # checked 2026-10-22 (code.claude.com/docs/en/memory): a project's CLAUDE.md and
         # CLAUDE.local.md at its root, besides the files in its `.claude` folder. When the
         # project is the home folder, its `.claude` files are the user's own and are skipped.
         files = [(root / "CLAUDE.md", "instructions"), (root / "CLAUDE.local.md", "instructions")]
-        if not is_home(root, self.home):
+        if not at_home:
             files += _instruction_files(root / ".claude")
         items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
         return items, (rules if known else None)
