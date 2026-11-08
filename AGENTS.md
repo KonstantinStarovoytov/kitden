@@ -1,6 +1,5 @@
 # Working on Kitden
 
-- Talk to the owner in simple Russian until asked otherwise.
 - Write code, comments, UI text and documentation in simple English, short and plain.
 - Kitden reads and changes what AI coding clients load. Every change goes through preview →
   Apply with a backup → verify → Undo. Never write a client's settings any other way.
@@ -17,4 +16,7 @@
   change.
 - Every release has a notes file; see [docs/development.md](docs/development.md).
 - Commit messages: a short plain subject, one to three simple lines.
+- Pull request titles say what changes for the user, in plain English, with no `fix:` or
+  `feat(...)` prefix and no issue number. Fill in the checklist in the pull request form;
+  see [CONTRIBUTING.md](CONTRIBUTING.md).
 - Earlier specs and research live in the git tag `dev-notes-2026-10-19`.
