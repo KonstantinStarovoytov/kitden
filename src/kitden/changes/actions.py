@@ -64,10 +64,12 @@ from kitden.views.setup_server import is_own_entry
 from kitden.views.words import (
     APP_SET_UP,
     CHANGE_UNREAD,
+    CODEX_NO_NAME_ONLY,
     CODEX_NO_PROJECT,
     CURSOR_NO_SKILL_SWITCH,
     NO_SKILL_MERGE,
     PLUGIN_ALL_PROJECTS,
+    PLUGIN_NO_NAME_ONLY,
     PLUGIN_SKILL,
     PROJECT_SKILL_ALL,
 )
@@ -1437,7 +1439,7 @@ def skill_rules_in(path: Path) -> bool:
 
 
 def _claude_rule_steps(
-    adapter: ClientAdapter, home: Path, item: Item, project: str | None, off: bool
+    adapter: ClientAdapter, home: Path, item: Item, project: str | None, state: str
 ) -> list[Step]:
     """Claude Code: a skill's `skillOverrides` key, or a plugin's key in one project (taken out
     of each local file that holds it)."""
@@ -1446,7 +1448,9 @@ def _claude_rule_steps(
             raise ValueError(item.change_hint or f"{item.name} has no switch here.")
         if project is None:
             raise ValueError(PLUGIN_ALL_PROJECTS)
-        return adapter.plugin_rule_steps(item.name, project, off)
+        if state == "name-only":
+            raise ValueError(PLUGIN_NO_NAME_ONLY)
+        return adapter.plugin_rule_steps(item.name, project, state == "off")
     if item.kind is not ItemKind.SKILL:
         raise ValueError("Choose a skill or a plugin.")
     if item.scope is Scope.PLUGIN:
@@ -1456,7 +1460,7 @@ def _claude_rule_steps(
     real = os.path.realpath
     if item.scope is Scope.PROJECT and project and real(str(item.project)) != real(project):
         raise ValueError("This skill is in another project.")
-    if project is not None and off:
+    if project is not None and state != "on":
         # The docs do not confirm that `skillOverrides` merges key by key (claude_code.py). If a
         # higher file replaces the whole object, a new key in the local file would drop the
         # rules of the user's file, and of the project's shared file, in that project.
@@ -1468,7 +1472,7 @@ def _claude_rule_steps(
             files.append(folder / "settings.local.json")
         if any(skill_rules_in(f) for f in files):
             raise ValueError(NO_SKILL_MERGE)
-    return adapter.skill_rule_steps(item.name, project, off)
+    return adapter.skill_rule_steps(item.name, project, state)
 
 
 def skill_rule_steps(
@@ -1479,13 +1483,17 @@ def skill_rule_steps(
     params: dict,
 ) -> list[Step]:
     """Turn skills off for all projects or in one project, one step per target {client, item}
-    (spec 5.5). `params`: scope "all" or "project", `project` (its id), and `off`. `off` False
-    takes a project's own rule out, so the shared rule applies there again.
+    (spec 5.5). `params`: scope "all" or "project", `project` (its id), and `state` ("off",
+    "name-only" or "on"); without `state`, `off` stands for "off" or "on". "on" takes a project's
+    own rule out, so the shared rule applies there again.
 
     Claude Code writes `skillOverrides` (a plugin: `enabledPlugins` in one project's local
     settings), Codex a `[[skills.config]]` entry, for all projects only. Cursor has no switch.
     """
-    scope, off = params.get("scope"), params.get("off", True) is not False
+    scope = params.get("scope")
+    state = params.get("state") or ("on" if params.get("off", True) is False else "off")
+    if state not in ("off", "name-only", "on"):
+        raise ValueError("Choose On, Name only or Off.")
     project = None
     if scope == "project":
         paths = {p.id: p.path for p in inventory.projects}
@@ -1494,7 +1502,7 @@ def skill_rule_steps(
             raise ValueError("Unknown project.")
     elif scope != "all":
         raise ValueError("Choose all projects or one project.")
-    elif not off:
+    elif state == "on":
         raise ValueError("Pick a project to use the shared rule there.")
     by_id = {i.id: i for i in inventory.items}
     steps = []
@@ -1508,10 +1516,12 @@ def skill_rule_steps(
         if adapter is None or item.client not in ("claude_code", "codex"):
             raise ValueError(f"{item.name} has no switch here.")
         if item.client == "claude_code":
-            steps += _claude_rule_steps(adapter, home, item, project, off)
+            steps += _claude_rule_steps(adapter, home, item, project, state)
             continue
         if item.kind is not ItemKind.SKILL or item.scope is Scope.PLUGIN:
             raise ValueError(f"{item.name} has no switch here.")
+        if state == "name-only":
+            raise ValueError(CODEX_NO_NAME_ONLY)
         if project is not None:
             raise ValueError(CODEX_NO_PROJECT)
         steps.append(adapter.skill_rule_step(item))

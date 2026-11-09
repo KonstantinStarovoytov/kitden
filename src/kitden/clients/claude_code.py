@@ -318,12 +318,14 @@ class ClaudeCodeAdapter(ClientAdapter):
     # settings file may hold it, and "off" hides the skill from Claude and from `/`. The
     # `/skills` menu saves it to `.claude/settings.local.json`. The docs still do not say whether
     # the object merges key by key across files (also /en/settings and /en/skills, same day).
-    def skill_rule_steps(self, name: str, project: str | None, off: bool) -> list[Step]:
-        """`skillOverrides.<name>` set to "off", in the user settings or in one project's local
-        settings. With `off` False the project's key goes, so the shared rule applies there."""
-        return self._rule_steps(
-            ("skillOverrides", name), project, "off" if off else ABSENT, NEW_SESSION
-        )
+    # checked 2026-11-09 (code.claude.com/docs/en/skills, `skillOverrides`): "on", "name-only"
+    # (name listed, no description), "user-invocable-only" and "off"; a missing key is "on".
+    def skill_rule_steps(self, name: str, project: str | None, state: str) -> list[Step]:
+        """`skillOverrides.<name>` set to "off" or "name-only", in the user settings or in one
+        project's local settings. With `state` "on" the project's key goes, so the shared rule
+        applies there."""
+        value = state if state in ("off", "name-only") else ABSENT
+        return self._rule_steps(("skillOverrides", name), project, value, NEW_SESSION)
 
     # checked 2026-10-26 (code.claude.com/docs/en/settings-reference, `enabledPlugins`): "To opt
     # out of a project-enabled plugin on your machine, set it to false in

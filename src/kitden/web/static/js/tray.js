@@ -123,6 +123,11 @@ export function keyFor(body) {
   return JSON.stringify(sorted({ action, targets: inClientOrder(action, targets), params }));
 }
 
+// The state a skill rule asks for: `state` when it has one, else "off" or, with `off: false`, "on".
+export function ruleState(params = {}) {
+  return params.state || (params.off === false ? "on" : "off");
+}
+
 // An add of a plugin or a skill is the same change whatever order its clients were picked in: the
 // List's forms, the add panel and a drag give it one key.
 const ADD_ORDER = ["plugin.install", "skill.install"];

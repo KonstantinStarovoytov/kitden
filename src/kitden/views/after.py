@@ -54,6 +54,7 @@ from kitden.views.words import (
     OWN_SKILL_SETTINGS,
     REPO_RULE,
     REPO_RULE_OUT,
+    SKILL_STATE_WORDS,
     STATE_WORDS,
     join_words,
 )
@@ -780,12 +781,12 @@ def _repo_folder(step) -> Path | None:
 
 
 def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
-    """A skill or a plugin turned off: Off in its client. For all projects in Claude Code, the
-    note names each project whose own settings may keep it on. A project's own rule taken out:
-    the state the shared settings give it (the user's file, then the project's shared file). A
-    rule that makes a project's local settings file names it once (git may not ignore it), and a
-    rule written to, or taken out of, a repository root's file says it reaches all of that
-    folder. A rule taken out of two local files is one entry."""
+    """A skill or a plugin turned off, or a skill set to Name only: that state in its client.
+    For all projects in Claude Code, the note names each project whose own settings may keep it
+    on. A project's own rule taken out: the state the shared settings give it (the user's file,
+    then the project's shared file). A rule that makes a project's local settings file names it
+    once (git may not ignore it), and a rule written to, or taken out of, a repository root's
+    file says it reaches all of that folder. A rule taken out of two local files is one entry."""
     out = []
     made: set[str] = set()
     steps: dict[tuple[str, str], list] = {}
@@ -795,7 +796,12 @@ def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
         step = group[0]
         edit = step.edit
         assert edit is not None
-        entry = {"client": client, "state": "off", "word": STATE_WORDS["off"]}
+        name_only = edit.after == "name-only"
+        entry = {
+            "client": client,
+            "state": "name-only" if name_only else "off",
+            "word": SKILL_STATE_WORDS["name-only"] if name_only else STATE_WORDS["off"],
+        }
         notes = []
         new_file = step.scope is Scope.LOCAL and not Path(edit.path).exists()
         if new_file and edit.after is not ABSENT and edit.path not in made:
@@ -806,8 +812,9 @@ def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
             project = Path(step.cwd) if step.cwd else Path(edit.path).parent.parent
             shared = [home / ".claude/settings.json", project / ".claude/settings.json"]
             values = [_rules(f, key)[name] for f in shared if name in _rules(f, key)]
-            off = bool(values) and values[-1] in ("off", False)
-            entry = {"client": client, "state": "off" if off else "on", "word": FOLLOWS_SHARED}
+            shared_state = {"off": "off", False: "off", "name-only": "name-only"}
+            state = shared_state.get(values[-1], "on") if values else "on"
+            entry = {"client": client, "state": state, "word": FOLLOWS_SHARED}
         elif client == "claude_code" and step.scope is Scope.USER:
             note = _skill_keepers(inventory, home, name)
             if note:

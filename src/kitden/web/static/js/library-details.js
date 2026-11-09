@@ -15,7 +15,7 @@ import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState,
 import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, SKILL_STATE_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
 import { say } from "./toast.js";
-import { inTray, keyFor, trayRow } from "./tray.js";
+import { inTray, keyFor, ruleState, trayRow } from "./tray.js";
 
 const OFF_ALL = "Turn off for all projects…";
 const OFF_SOME = "Turn off in some projects…";
@@ -207,11 +207,10 @@ function rowsButton(label, bodies, look = "btn") {
   return node;
 }
 
-// The tray holds this very row: its key, and the same `off` (a skill rule's on and off share a key).
-function queued(body) {
-  const off = (body.params || {}).off;
+// The tray holds this very row: its key, and the same state (a skill rule's states share a key).
+export function queued(body) {
   const row = trayRow(keyFor(body));
-  return Boolean(row) && (row.body.params || {}).off === off;
+  return Boolean(row) && ruleState(row.body.params) === ruleState(body.params);
 }
 
 // Words in a quiet line that show while `when()` holds, after every change of the tray.

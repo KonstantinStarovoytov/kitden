@@ -123,6 +123,8 @@ ROUTE_WORDS: dict[str, str] = {
 # there is no switch; the review's note names a project whose own skill settings may win.
 CURSOR_NO_SKILL_SWITCH = "Cursor has no switch to turn off one skill."
 CODEX_NO_PROJECT = "Codex has no switch for one project; turn it off for all projects."
+CODEX_NO_NAME_ONLY = "Codex has no Name only setting."
+PLUGIN_NO_NAME_ONLY = "A plugin is On or Off; it has no Name only setting."
 CODEX_SKILLS_NOT_TABLES = "Codex's skills settings are not a list of tables; Kitden leaves them."
 NO_SKILL_MERGE = (
     "Claude Code may not merge skill settings across files; turn it off for all projects instead."

@@ -124,7 +124,7 @@ const { closePanel, closeForProject, initPanel, isPanelOpen, panelState } = awai
 const { data, state } = await import('../../src/kitden/web/static/js/store.js');
 const { setHint } = await import('../../src/kitden/web/static/js/parts.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
-const { addToTray, cancelTray, keyFor, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, cancelTray, keyFor, ruleState, tray } = await import('../../src/kitden/web/static/js/tray.js');
 // As app.js does: the panel's keys and its tray looks, then the Library's Details.
 initPanel();
 details.initLibraryDetails();
@@ -522,6 +522,27 @@ test('the tray never holds a skill rule for all projects and one for a project i
   await addToTray(details.projectBody(SUPERPOWERS, 'atlas'));
   assert.equal(skillRuleWaits('project', MEDIUM), false);
   await cancelTray();
+});
+
+test('a skill rule is queued for its own state only', async () => {
+  const rule = (params) => ({ action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-rn' }], params: { scope: 'project', project: 'atlas', ...params } });
+  assert.equal(ruleState({ off: true }), 'off');
+  assert.equal(ruleState({ off: false }), 'on');
+  assert.equal(ruleState({ state: 'name-only', off: true }), 'name-only');
+  try {
+    await addToTray(rule({ state: 'name-only' }));
+    assert.equal(details.queued(rule({ state: 'name-only' })), true);
+    assert.equal(details.queued(rule({ state: 'off' })), false);
+    assert.equal(details.queued(rule({ off: true })), false);
+    assert.equal(details.queued(rule({ off: false })), false);
+    // Name only is skillOverrides too: it blocks a rule for all projects, as Off does.
+    assert.equal(skillRuleWaits('project', MEDIUM), true);
+    await cancelTray();
+    await addToTray(rule({ state: 'on' }));
+    assert.equal(skillRuleWaits('project', MEDIUM), false);
+  } finally {
+    await cancelTray();
+  }
 });
 
 test('the no-switch notes say only what applies', () => {

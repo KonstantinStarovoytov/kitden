@@ -138,9 +138,13 @@ def skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
 
 def waits_to_be_asked(client: str, skill_md: Path) -> str | None:
     """"only-asked" when Claude Code or Cursor reads `disable-model-invocation: true` in SKILL.md.
-    The field comes from the task ruling, not re-checked against the docs on 2026-11-09."""
+    The field is checked in the docs of both clients."""
     from kitden.views.skills import front_matter  # views.skills imports this module
 
+    # checked 2026-11-06 (code.claude.com/docs/en/skills: "Description not in context, full skill
+    # loads when invoked")
+    # checked 2026-11-09 (cursor.com/docs/context/skills: "only included when explicitly invoked
+    # via /skill-name")
     if client not in ("claude_code", "cursor"):
         return None
     asked = front_matter(skill_md).get("disable-model-invocation", "")

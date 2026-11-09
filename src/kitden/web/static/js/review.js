@@ -9,7 +9,7 @@ import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, pan
 import { allPutBack, baseNames, byClientOrder, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, data, gatewayShows, reload, render, setBusy, state } from "./store.js";
 import { projectLabel } from "./tools.js";
-import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone, writing } from "./tray.js";
+import { addToTray, changeOutcome, checkTrayStale, onTray, ruleState, takeOut, tray, undone, writing } from "./tray.js";
 
 
 const DONE_WORDS = {
@@ -129,6 +129,9 @@ export function changeWords(change, previewBody) {
     "gateway.add": `Add ${added} to the Kitden gateway`,
     "skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`,
   }[change.action] || change.action;
+  // A skill set to Name only is neither off nor back to the shared rule.
+  const nameOnly = change.action === "skill.rule" && ruleState(previewBody && previewBody.params) === "name-only";
+  if (nameOnly) title = `Set ${short} to Name only`;
   const verb = DONE_WORDS[change.action] || change.action;
   let what = `${verb} ${short} ${REMOVES.includes(change.action) ? "from" : "in"} ${clients}`;
   // Never "removed" alone for a client that still loads another copy of the skill.
@@ -163,7 +166,7 @@ export function changeWords(change, previewBody) {
   } else if (change.action === "gateway.add") {
     what = `${verb} ${added} to the Kitden gateway`;
   } else if (change.action === "skill.rule") {
-    what = off ? `${verb} ${short}` : `${short} uses the shared rule`;
+    what = nameOnly ? `${short} is Name only` : off ? `${verb} ${short}` : `${short} uses the shared rule`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   } else if (change.action === "project.align") {

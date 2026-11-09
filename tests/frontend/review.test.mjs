@@ -205,6 +205,8 @@ test('a skill rule says what it turns off and where', () => {
   // A plugin goes by its short name.
   const plugin = { action: 'skill.rule', steps: [step('claude_code', 'superpowers@demo-market')], target: here };
   assert.equal(changeWords(plugin, body({ scope: 'project', project: 'p1', off: true })).title, 'Turn off superpowers in website');
+  // Name only is not Off.
+  assert.deepEqual(changeWords(off(target('all')), body({ scope: 'all', state: 'name-only' })), { title: 'Set deploy to Name only for all projects', done: 'deploy is Name only for all projects' });
   // Back to the shared rule: the project's own key goes.
   assert.deepEqual(changeWords(off(here), body({ scope: 'project', project: 'p1', off: false })), { title: 'Use the shared rule for deploy in website', done: 'deploy uses the shared rule in website' });
 });
