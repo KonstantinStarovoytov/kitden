@@ -21,8 +21,13 @@ function pickClient(cards) {
 }
 
 const lampClass = (lamp) => (lamp === "ok" ? "lamp on" : lamp === "warn" ? "lamp warn" : "lamp");
-// A window's lamp: amber when its result has a misfit, green when it fits, grey with no limit.
-const windowLamp = (w) => (w.result.misfit ? "warn" : w.budget ? "ok" : "none");
+// A window's lamp. The last chat's window (the first, when the client has a fact) takes the
+// client's own lamp, so "cannot tell" is never green. An estimate is amber when its result has a
+// misfit, green when it fits, grey with no limit.
+function windowLamp(w, index, card) {
+  if (index === 0 && card.fact) return card.lamp;
+  return w.result.misfit ? "warn" : w.budget ? "ok" : "none";
+}
 
 function lampNode(lamp) {
   const node = el("i", lampClass(lamp));
@@ -35,6 +40,7 @@ function chipFor(card, shown) {
     setState({ selected: { kind: "client", name: card.client } });
     render();
   }, "ctx-client");
+  chip.setAttribute("aria-label", CLIENT_NAMES[card.client] || card.client);
   chip.setAttribute("aria-pressed", String(card === shown));
   chip.classList.toggle("on", card === shown);
   chip.dataset.focus = `client:${card.client}`;
@@ -50,14 +56,13 @@ function windowCard(w, index, shown, card) {
   node.setAttribute("aria-pressed", String(index === shown));
   node.classList.toggle("on", index === shown);
   node.dataset.focus = `window:${card.client}:${index}`;
-  node.append(lampNode(windowLamp(w)), el("b", null, w.title), el("em", null, w.tag), el("small", null, w.models), el("span", "ctx-short", w.result.short));
+  node.append(lampNode(windowLamp(w, index, card)), el("b", null, w.title), el("em", null, w.tag), el("small", null, w.models), el("span", "ctx-short", w.result.short));
   return node;
 }
 
-// The verdict: the shown window's sentence, or the client's message when it has no window.
-function verdictNode(card, w) {
-  const node = el("p", "ctx-verdict");
-  const say = w ? w.result.say : card.message || "";
+// A sentence of the verdict, its "Estimate:" start marked.
+function sentence(say, className) {
+  const node = el("p", className);
   const lead = say.match(ESTIMATE);
   if (lead) node.append(el("span", "ctx-est", lead[0]), say.slice(lead[0].length));
   else node.append(say);
@@ -95,7 +100,11 @@ export function renderContext(main, { again = false } = {}) {
     wins.append(...card.windows.map((w, i) => windowCard(w, i, index, card)));
     main.append(wins);
   }
-  main.append(verdictNode(card, card.windows[index]));
+  const shown = card.windows[index];
+  // The verdict: the shown window's sentence, or the client's message when it has no window. The
+  // room left (an estimate on the last chat's window) comes under it.
+  main.append(sentence(shown ? shown.result.say : card.message || "", "ctx-verdict"));
+  if (shown && shown.result.room) main.append(sentence(shown.result.room, "ctx-room"));
   // A message beside windows (the estimate could not be checked) is a note under the verdict.
   if (card.windows.length && card.message) main.append(el("p", "ctx-note", card.message));
 }

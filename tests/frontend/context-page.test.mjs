@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs';
 
 // The Context page drawn in a small browser: the title, the lede, the client chips with their
 // lamps, the window cards and the verdict, all from /api/context as the server writes it.
-// stand-in server. It shows the timeline, a change's Details, Undo, Redo… and See it on the map.
 let reduced = true;
 globalThis.matchMedia = (query) => ({ get matches() { return /reduced-motion/.test(query) ? reduced : true; }, addEventListener() {} });
 delete globalThis.navigator;
@@ -120,14 +119,14 @@ const LEDE = 'Every chat starts with a list of your skills. The agent reads it t
 const NO_CHECK = 'Kitden cannot check its estimate against your last chat, so it shows none.';
 
 // A window card as the server gives it (views/context_view.py).
-function window(title, models, tag, short, say, { budget = 30000, misfit = null } = {}) {
-  return { title, models, tag, budget, result: { short, say, sent: {}, over: {}, used: 100, size: 100, room: null, misfit } };
+function window(title, models, tag, short, say, { budget = 30000, misfit = null, room = null } = {}) {
+  return { title, models, tag, budget, result: { short, say, sent: {}, over: {}, used: 100, size: 100, room, misfit } };
 }
 const CLAUDE = {
   client: 'claude_code', lamp: 'ok', lede: `${LEDE} Claude Code lets this list use 1% of the context window.`, message: null, unit: 'characters', checked: true,
   fact: { date: 'Nov 6', surface: 'in the Claude app', folder: '/work/a', version: '2.1.311' },
   windows: [
-    window('1M window', 'Opus 5.5 · in the Claude app', 'Last chat · Nov 6', 'All 3 sent', 'In your last chat on Nov 6, all 3 skills were sent with their descriptions.'),
+    window('1M window', 'Opus 5.5 · in the Claude app', 'Last chat · Nov 6', 'All 3 sent', 'In your last chat on Nov 6, all 3 skills were sent with their descriptions.', { room: 'Estimate: about 3,116 characters left before the limit.' }),
     window('200K window', 'Older models', 'Estimate', 'All 3 would be sent', 'Estimate: On a 200K window, every skill would keep its description.', { budget: 8000 }),
   ],
   sides: ['Description sent', 'Name only'], skills: [], after: null, how: [],
@@ -139,6 +138,11 @@ const CODEX = {
     window('272K window', 'gpt-6-astra', 'Last chat · Oct 30', '3 cut short', 'In your last chat on Oct 30, Codex cut 3 of 9 descriptions short.', { budget: 5440, misfit: { kind: 'cut', n: 3 } }),
   ],
   sides: ['Full description', 'Cut short'], skills: [], after: null, how: [],
+};
+// Codex when the files of the skills it sent cannot be found: the server cannot tell.
+const UNKNOWN = {
+  ...CODEX, lamp: 'none', checked: false,
+  windows: [window('272K window', 'gpt-6-astra', 'Last chat · Oct 29', '58 sent', 'In your last chat on Oct 29, Codex sent 58 skills. Kitden cannot find all their files, so it cannot tell if any were cut.', { budget: 5440 })],
 };
 const CURSOR = {
   client: 'cursor', lamp: 'none', lede: `${LEDE} Cursor does not publish a limit for this list.`,
@@ -311,4 +315,46 @@ test('loadContext reads the picked project, and a reload reads it only while Con
   state.view = 'context';
   await reload();
   assert.equal(asked.some((a) => a.url.startsWith('/api/context')), true);
+});
+
+test('the last chat\'s window takes the client\'s lamp, so "cannot tell" is never green', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'codex' };
+  show(answer(CLAUDE, UNKNOWN, CURSOR));
+  assert.equal(lampOf(chipFor('Codex')).className, 'lamp');
+  assert.equal(lampOf(cards()[0]).className, 'lamp');
+  // An estimate keeps its own lamp.
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...CLAUDE, lamp: 'warn' }, UNKNOWN, CURSOR));
+  assert.deepEqual(cards().map((n) => lampOf(n).className), ['lamp warn', 'lamp on']);
+});
+
+test('the room left shows under the verdict with the Estimate start marked', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show();
+  await fire(cards()[0], 'click'); // the page keeps the window picked in an earlier test
+  const room = byClass(main, 'ctx-room')[0];
+  assert.equal(text(room), 'Estimate: about 3,116 characters left before the limit.');
+  assert.equal(text(byClass(room, 'ctx-est')[0]), 'Estimate:');
+  const order = main.children.filter((n) => n.classList.contains('ctx-verdict') || n.classList.contains('ctx-room'));
+  assert.deepEqual(order.map((n) => n.className), ['ctx-verdict', 'ctx-room']);
+  // The other window has no room sentence.
+  await fire(cards()[1], 'click');
+  assert.equal(byClass(main, 'ctx-room').length, 0);
+});
+
+test('the chips and the window cards are real buttons, named and pressed by click', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show();
+  for (const node of [...chips(), ...cards()]) {
+    assert.equal(node.tagName, 'BUTTON');
+    assert.equal(node.type, 'button');
+  }
+  assert.deepEqual(chips().map((n) => n.getAttribute('aria-label')), ['Claude Code', 'Codex', 'Cursor']);
+  // A button answers Enter and Space with a click; one click picks.
+  await fire(chipFor('Codex'), 'click');
+  assert.equal(chipFor('Codex').getAttribute('aria-pressed'), 'true');
+  assert.equal(chipFor('Claude Code').getAttribute('aria-pressed'), 'false');
 });
