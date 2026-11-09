@@ -36,7 +36,7 @@ export const isQuiet = () => quiet !== null && whatShows(panelState.current) ===
 // page with no scrim and no focus trap; the page keeps its width and stays usable. Anywhere else
 // they are the drawer.
 export const FLOAT_MIN = 1024;
-const FLOATS = ["gateway", "library", "changes"];
+const FLOATS = ["gateway", "library", "context", "changes"];
 export const floatsAt = (view, width) => FLOATS.includes(view) && width >= FLOAT_MIN;
 const isWide = () => matchMedia(`(min-width: ${FLOAT_MIN}px)`).matches;
 // How the open panel sits: `floating` beside the page, else the drawer. `wantsFloat` is what the

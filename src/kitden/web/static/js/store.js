@@ -3,7 +3,7 @@
 import { getJson, query } from "./api.js";
 import { transition } from "./motion.js";
 
-const VIEWS = ["overview", "library", "gateway", "changes", "agents"];
+const VIEWS = ["overview", "library", "context", "gateway", "changes", "agents"];
 // Places the Library replaced: they open it on what is installed.
 const OLD_VIEWS = ["map", "discover"];
 // The List shows what is installed, or only what differs between the clients. An old New or All
@@ -71,7 +71,7 @@ export const freshness = { reloadStartedAt: 0, lastGoodRead: null, lastReadFaile
 // that began before a change was applied may not show it yet).
 // errorScope: the project each failed read was for.
 export const data = {
-  clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null, libraryMap: null, instructionsMap: null,
+  clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, context: null, setupServer: null, libraryMap: null, instructionsMap: null,
   progress: null, // where the first scan is, from /api/progress and its events
   errors: {}, scope: {}, readAt: {}, errorScope: {},
 };
@@ -200,6 +200,7 @@ function show(moving) {
   if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; }, RISES_ON_ITS_OWN(state) ? "map-entrance" : "place-change");
   else renderPlace();
   if (moving && state.view === "library") openLibraryMap();
+  if (moving && state.view === "context") openContext();
 }
 
 // A place opened with a selection (goTo, Back, Forward or a link) opens that item's Details once,
@@ -349,6 +350,13 @@ export async function loadMap() {
   await guarded("map", `/api/map${query({ project })}`, (v) => { data.map = v; }, project);
 }
 
+// What each client's last chat sent, read from the chat logs: only while Context shows (reload)
+// and when it opens (openContext).
+export async function loadContext() {
+  const { project } = state;
+  await guarded("context", `/api/context${query({ project })}`, (v) => { data.context = v; }, project);
+}
+
 async function loadGateway() {
   const { project } = state;
   await guarded("gateway", `/api/gateway-view${query({ project })}`, (v) => { data.gateway = v; }, project);
@@ -391,6 +399,12 @@ export function readLibraryMap() {
   return libraryMapRead.running;
 }
 
+// Context opens: the chat logs are read again, and the page is drawn again with the answer while
+// Context still shows.
+function openContext() {
+  afterShared(loadContext).then(() => { if (state.view === "context") renderPlace(); }).catch((error) => console.error(error));
+}
+
 // The Library opens: a map that may be out of date is read, and the page is drawn again with the
 // answer while the Library still shows.
 function openLibraryMap() {
@@ -410,7 +424,7 @@ export async function reload() {
   await loadShared();
   const library = state.view === "library";
   if (!library) Object.assign(libraryMapRead, { fresh: false, turn: libraryMapRead.turn + 1, running: null });
-  const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway(), ...(library ? [loadLibraryMap()] : [])];
+  const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway(), ...(library ? [loadLibraryMap()] : []), ...(state.view === "context" ? [loadContext()] : [])];
   await Promise.all([...reads, loadSetupServer()]);
   // The Library's maps count only while the Library shows: they are not read elsewhere.
   freshness.lastReadFailed = Object.keys(data.errors).some((name) => !LIBRARY_READS.includes(name) || state.view === "library");

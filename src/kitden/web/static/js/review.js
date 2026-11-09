@@ -523,10 +523,11 @@ export function showEffect() {
 }
 
 // The Library morphs its cells, the Gateway map lands its rows (gateway.js landRows), the
-// Overview's card leaves or comes back and a Changes row draws its Undo (changes.js): each is the
-// one motion of the change, so none cross-fades the page too. Other places cross-fade.
+// Overview's card leaves or comes back, a Changes row draws its Undo (changes.js) and Context
+// draws again in place: each is the one motion of the change, so none cross-fades the page too.
+// Other places cross-fade.
 function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
-  return view === "library" || view === "overview" || view === "changes" || (view === "gateway" && mode === "map");
+  return view === "library" || view === "overview" || view === "context" || view === "changes" || (view === "gateway" && mode === "map");
 }
 
 // After Apply all or an Undo, the Details open now are drawn again from what the files say, by
