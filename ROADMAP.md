@@ -9,6 +9,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **A fast Apply no longer flickers:** when the write ends within 300 ms, the bar keeps its
+  words and goes straight to Applied, instead of flashing "Applying…" and resizing twice.
 - **Remove works for plugins when Claude Code was started in the home folder:** Kitden no
   longer reads `~/.claude/settings.json` a second time as that "project's" file, so a user
   plugin, hook or skill has no project copy. Remove ran `uninstall -s project` on that copy,

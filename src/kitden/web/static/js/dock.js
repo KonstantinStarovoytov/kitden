@@ -80,7 +80,8 @@ export function barWords(t, { onMap = false } = {}) {
     ...base,
   };
   waitWords(t, words);
-  if (t.phase === "asking") words.applyWaits = true;
+  // A fast Apply keeps the words it had (tray.js SLOW_WRITE); a slow one says what it writes.
+  if (t.phase === "asking" || (t.phase === "applying" && !t.slow)) words.applyWaits = true;
   else if (t.phase === "ready" && t.stale) Object.assign(words, { line: STALE, apply: "Preview again", retry: true });
   else if (t.phase === "applying") Object.assign(words, { line: writingLine(t.change.steps), apply: stepText("Applying", t.done, t.total), applyWaits: true });
   else if (t.phase === "applied") Object.assign(words, { apply: many ? "All applied" : "Applied", applyWaits: true });
@@ -370,8 +371,9 @@ function patchApply(view) {
   const other = busy.change && t.phase !== "applying" && !applied;
   showWaits(apply, other);
   if (words.applyWaits) apply.setAttribute("aria-disabled", "true");
-  setApplyIcon(applied ? "check" : t.phase === "applying" ? "spin" : words.retry ? "again" : "arrow-right");
-  setMeter(applied ? 1 : t.phase === "applying" && t.total > 0 ? t.done / t.total : 0);
+  const writes = t.phase === "applying" && t.slow;
+  setApplyIcon(applied ? "check" : writes ? "spin" : words.retry ? "again" : "arrow-right");
+  setMeter(applied ? 1 : writes && t.total > 0 ? t.done / t.total : 0);
 }
 
 // Put the words and states of `view` into the parts of the bar. `known`: the rows that were drawn

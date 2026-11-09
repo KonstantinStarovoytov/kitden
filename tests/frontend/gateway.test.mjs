@@ -899,6 +899,30 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
   }
 });
 
+test('only an Apply that takes a while says it is writing', async (t) => {
+  await freshTray();
+  queue(PREVIEW, batch('c1'));
+  await addToTray(dropBody(GITHUB, MEDIUM_VIEW));
+  let verify;
+  queue('/api/changes/c1/apply', () => new Promise((resolve) => { verify = () => resolve({ status: 200, json: { id: 'c1', state: 'verified', steps: [] } }); }));
+  globalThis.document = { activeElement: null, body: {}, querySelector: () => ({ querySelectorAll: () => [] }), addEventListener() {}, removeEventListener() {} };
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const applying = applyTray();
+    assert.deepEqual([tray.phase, tray.slow], ['applying', false]);
+    t.mock.timers.tick(299);
+    assert.equal(tray.slow, false);
+    t.mock.timers.tick(1);
+    assert.equal(tray.slow, true);
+    verify();
+    await applying;
+    assert.equal(tray.phase, 'applied');
+  } finally {
+    delete globalThis.document;
+    await freshTray();
+  }
+});
+
 test('while the tray is written every link keeps its hit, its × waits, and a press takes nothing out', async () => {
   await freshTray();
   queue(PREVIEW, batch('c1'), batch('c2'));
