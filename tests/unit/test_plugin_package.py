@@ -132,8 +132,13 @@ def test_the_skills_and_the_server_forbid_edits_in_the_same_words():
 
 
 def test_the_plugin_has_an_icon_the_directory_accepts():
-    # The directory takes a square PNG of 512 to 2048 px, once, at the first submit (2026-11-09).
+    # The directory reads `icon` from .claude-plugin/plugin.json: a path to an image in the plugin.
+    # It accepts PNG; files must stay under 5 MiB. Checked 2026-11-09:
+    # https://code.claude.com/docs/en/plugins-reference#directory-listing-fields
+    manifest = json.loads((PLUGIN / ".claude-plugin/plugin.json").read_text())
+    assert manifest["icon"] == "./icon.png"
     data = (PLUGIN / "icon.png").read_bytes()
+    assert len(data) < 5 * 1024 * 1024
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     width, height = struct.unpack(">II", data[16:24])
     assert width == height and 512 <= width <= 2048
