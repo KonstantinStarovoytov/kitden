@@ -112,6 +112,25 @@ def test_roots_lines_are_ignored(tmp_path):
     assert last_codex_list(tmp_path, None).list.skills == (("a", "Does A."),)
 
 
+def test_a_path_under_a_root_alias_becomes_absolute(tmp_path):
+    text = (
+        "<skills_instructions>\n"
+        "### Skill roots\n"
+        "- `r2` = `/Users/x/.codex/skills`\n"
+        "### Available skills\n"
+        "- a: Does A. (file: r2/a/SKILL.md)\n"
+        "- b: (file: /s/b/SKILL.md)\n"
+        "- c: Does C. (file: r9/c/SKILL.md)\n"
+        "</skills_instructions>"
+    )
+    write_log(tmp_path, "a", [meta(), skills(text)], 100)
+    assert last_codex_list(tmp_path, None).paths == {
+        "a": "/Users/x/.codex/skills/a/SKILL.md",  # the alias is resolved
+        "b": "/s/b/SKILL.md",  # an absolute path stays
+        "c": "r9/c/SKILL.md",  # an unknown alias is left as it is
+    }
+
+
 def test_a_mixed_block_parses_every_skill_line(tmp_path):
     skill_lines = [
         "- a: Does A. (file: /s/a/SKILL.md)",

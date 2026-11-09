@@ -511,9 +511,14 @@ def _codex_fact(rows: list[_Row], names_only: bool, date: str) -> dict:
     cuts = [
         len(r.sent) for r in rows if r.sent is not None and r.full and len(r.sent) < len(r.full)
     ]
+    # Full or cut only for skills whose full size is known; else only what the log shows.
+    unknown = any(r.sent is not None and r.full is None for r in rows)
     if out:
         short = words.CODEX_SHORT_OUT.format(out=out)
         say = words.CODEX_LEFT_OUT.format(date=date, out=out, n=n)
+    elif unknown:
+        short = words.CODEX_SHORT_SENT.format(n=n)
+        say = words.CODEX_SENT_UNKNOWN.format(date=date, n=n)
     elif cuts and names_only:
         short = words.CODEX_SHORT_CUT.format(bad=len(cuts), n=n)
         say = words.CODEX_NAMES.format(date=date)
@@ -526,7 +531,12 @@ def _codex_fact(rows: list[_Row], names_only: bool, date: str) -> dict:
         short = words.CODEX_SHORT_ALL.format(n=n)
         say = words.CODEX_ALL_SENT.format(date=date, n=n)
     result = {"short": short, "say": say, "sent": sent, "over": over, "used": used}
-    return result | {"size": used + sum(over.values()), "room": None, "bad": out + len(cuts)}
+    return result | {
+        "size": used + sum(over.values()),
+        "room": None,
+        "bad": out + len(cuts),
+        "unknown": unknown and not out,
+    }
 
 
 def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str) -> dict:
@@ -599,6 +609,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
 
     fact = _codex_fact(rows, names_only, date)
     bad = fact.pop("bad")
+    unknown = fact.pop("unknown")
     if checked and not bad:
         fact["room"] = words.ROOM_LEFT.format(left=f"{budget - fact['used']:,}", unit="tokens")
     if limit is not None:
@@ -647,8 +658,10 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     skills = []
     for r in rows:
         logged = None if r.sent is None else len(r.sent)
-        side = int(r.full is not None and _codex_kind(logged, len(r.full)) != "full")
-        note = None if r.item is None else words.NOTE_CODEX_OFF
+        side = None if r.full is None else int(_codex_kind(logged, len(r.full)) != "full")
+        note = words.NOTE_NO_FILE if r.full is None else None
+        if r.item is not None and r.full is not None:
+            note = words.NOTE_CODEX_OFF
         if r.item is not None and from_plugin(r.item):
             note = words.NOTE_PLUGIN
         size = len(r.full) if r.full is not None else len(r.sent or "")
@@ -672,7 +685,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     ]
     return _card(
         client,
-        lamp="warn" if bad else "ok",
+        lamp="none" if unknown else "warn" if bad else "ok",
         message=None if checked else words.NO_CHECK,
         fact={
             "date": date,

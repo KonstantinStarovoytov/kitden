@@ -458,6 +458,31 @@ def test_codex_everything_fits_and_a_new_skill_is_not_left_out(home):
     assert {s["name"]: s["side"] for s in cx["skills"]}["gamma"] is None
 
 
+def test_codex_with_no_files_found_gives_no_full_or_cut_verdict(home):
+    codex_home(home, window=272_000)
+    codex_chat(
+        home,
+        [
+            f"- alpha: {CODEX_A[:30]} (file: /gone/alpha/SKILL.md)",
+            f"- beta: {CODEX_B} (file: /gone/beta/SKILL.md)",
+        ],
+        at="2026-10-29T12:00:00Z",
+    )
+    cx = view(home)["codex"]
+    assert (cx["lamp"], cx["checked"], cx["message"]) == ("none", False, NO_CHECK)
+    fact = cx["windows"][0]["result"]
+    assert fact["say"] == (
+        "In your last chat on Oct 29, Codex sent 2 skills. Kitden cannot find all their files, "
+        "so it cannot tell if any were cut."
+    )
+    assert fact["room"] is None
+    assert fact["over"] == {}
+    # No pill on the full or the cut side either.
+    rows = {s["name"]: s for s in cx["skills"] if s["name"] in ("alpha", "beta")}
+    assert {n: r["side"] for n, r in rows.items()} == {"alpha": None, "beta": None}
+    assert rows["alpha"]["note"] == "Kitden cannot find its file, so it cannot tell if it was cut."
+
+
 def test_codex_limit_from_config_toml(home):
     paths = codex_home(home, window=272_000, limit=900)
     codex_chat(

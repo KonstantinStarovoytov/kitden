@@ -189,6 +189,11 @@ CODEX_LEFT_OUT = (
 CODEX_NAMES = (
     "In your last chat on {date}, Codex removed every description. The agent saw only the names."
 )
+# A Codex list whose skill files Kitden cannot all find: no full or cut verdict.
+CODEX_SENT_UNKNOWN = (
+    "In your last chat on {date}, Codex sent {n} skills. Kitden cannot find all their files, so "
+    "it cannot tell if any were cut."
+)
 ROOM_LEFT = "Estimate: about {left} {unit} left before the limit."
 # The short result on a card's face.
 CLAUDE_SHORT_ALL = "All {n} sent"
@@ -196,6 +201,7 @@ CLAUDE_SHORT_NAMES = "{bad} of {n} showed only a name"
 CODEX_SHORT_ALL = "All {n} sent in full"
 CODEX_SHORT_CUT = "{bad} of {n} cut short"
 CODEX_SHORT_OUT = "{out} left out, the rest name only"
+CODEX_SHORT_SENT = "{n} sent"
 WOULD_FIT = "All {n} would fit"
 CLAUDE_WOULD_SHORT = "{bad} of {n} would show only a name"
 CODEX_WOULD_SHORT = "{bad} of {n} would be cut short"
@@ -247,6 +253,7 @@ NOTE_NAME_ONLY = "The agent sees the name, not when to use it."
 NOTE_ONLY_ASKED = "The agent uses it only when you type its name."
 NOTE_CODEX_OFF = "Off frees room, so long descriptions get cut less."
 NOTE_NOT_LISTED = "It was not in the list of your last chat."
+NOTE_NO_FILE = "Kitden cannot find its file, so it cannot tell if it was cut."
 # "How this is counted".
 # "{version}" and "{surface}" each start with a space, or are "" when the log does not say.
 HOW_CLAUDE_LIST = (

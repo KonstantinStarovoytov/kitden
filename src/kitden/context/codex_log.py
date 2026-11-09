@@ -18,12 +18,15 @@ KNOWN_CODEX_VERSION = "0.163.0-alpha.11"
 # (`plugin:skill`). The roots lines of the same block (`- `alias` = `/path``) have no `(file:`.
 # checked 2026-11-09 (real Codex list, cli 0.163.0-alpha.11)
 ENTRY = re.compile(r"^- (?P<name>.+?): (?P<desc>.*?) ?\(file: (?P<path>[^)]*)\)$")
+# A roots line names the folder an alias stands for; a skill's `file:` path may start with that
+# alias (`r2/<skill>/SKILL.md`). checked 2026-11-09 (real Codex list, cli 0.163.0-alpha.11)
+ROOT = re.compile(r"^- `(?P<alias>[^`]+)` = `(?P<folder>[^`]+)`$")
 
 
 @dataclass(frozen=True)
 class CodexSent:
     list: SentList
-    paths: dict[str, str]  # name -> the `file:` path of its line
+    paths: dict[str, str]  # name -> the `file:` path of its line, its root alias resolved
 
 
 def _version(text: object) -> tuple[int, ...] | None:
@@ -45,9 +48,19 @@ def _entries(entry: dict) -> list[tuple[str, str, str]]:
     for part in content if isinstance(content, list) else []:
         text = part.get("text") if isinstance(part, dict) else None
         if isinstance(text, str) and "<skills_instructions>" in text:
-            matches = (ENTRY.match(line) for line in text.splitlines())
-            return [(m["name"], m["desc"], m["path"]) for m in matches if m]
+            lines = text.splitlines()
+            roots = {m["alias"]: m["folder"] for m in map(ROOT.match, lines) if m}
+            matches = (ENTRY.match(line) for line in lines)
+            return [(m["name"], m["desc"], _resolve(m["path"], roots)) for m in matches if m]
     return []
+
+
+def _resolve(path: str, roots: dict[str, str]) -> str:
+    """An absolute path for `alias/rest` when the alias is a root; any other path as it is."""
+    alias, slash, rest = path.partition("/")
+    if path.startswith("/") or not slash or alias not in roots:
+        return path
+    return f"{roots[alias].rstrip('/')}/{rest}"
 
 
 def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
