@@ -57,12 +57,8 @@ export async function changeOutcome(id, verb, body) {
 // waits is left out of the change, so Apply writes the others). `works`: its token was
 // checked and taken. `refused`: { reason } or null. `failure`:
 // { state, error } of an Apply that was not verified, `state` null when its end is not known.
-// `stale`: the files changed since the preview. `slow`: Apply has been writing for SLOW_WRITE ms.
-export const tray = { rows: [], change: null, phase: "idle", refused: null, failure: null, done: 0, total: 0, stale: false, slow: false };
-
-// A write that ends sooner shows no Applying words: Apply goes straight to Applied, so a fast
-// change is one motion and the bar does not change its words and size twice in a blink.
-const SLOW_WRITE = 300;
+// `stale`: the files changed since the preview.
+export const tray = { rows: [], change: null, phase: "idle", refused: null, failure: null, done: 0, total: 0, stale: false };
 
 // The tray's change is being written or has just been: nothing can be added to it or taken out
 // of it now.
@@ -413,14 +409,9 @@ export async function applyTray() {
   const ready = readyRows();
   for (const row of tray.rows) row.status = "";
   ready[0].status = "busy";
-  Object.assign(tray, { phase: "applying", refused: null, failure: null, done: 0, total: 0, slow: false });
+  Object.assign(tray, { phase: "applying", refused: null, failure: null, done: 0, total: 0 });
   setBusy(true);
   notify();
-  const slowly = setTimeout(() => {
-    if (tray.phase !== "applying" || tray.change !== change) return;
-    tray.slow = true;
-    notify();
-  }, SLOW_WRITE);
   const onProgress = (event) => {
     const { id, done, total, row } = event.detail || {};
     if (id !== change.id) return;
@@ -452,7 +443,6 @@ export async function applyTray() {
     }
     notify();
   } finally {
-    clearTimeout(slowly);
     document.removeEventListener("kitden:progress", onProgress);
     setBusy(false);
   }

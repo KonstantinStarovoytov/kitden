@@ -533,6 +533,11 @@ test('drawTray disables Cancel and × while Apply runs, then shows Applied', asy
   const second = tray.rows[1];
   const section = bar();
   const running = button(section, 'Apply all').click();
+  // Until the write takes a while the bar keeps its words; Apply only stops taking presses.
+  const waiting = button(section, 'Apply all');
+  assert.equal(waiting.attributes['aria-disabled'], 'true');
+  assert.equal(named(section, 'tray-head')[0].children[1].textContent, 'Nothing is written until you Apply.');
+  assert.equal(waiting.children[1].dataset.icon, 'arrow-right');
   await sleep(SLOW);
   const apply = button(section, 'Applying…');
   assert.ok(apply, 'the button counts while it works');
