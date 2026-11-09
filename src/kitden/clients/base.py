@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from kitden.clients import version_cache
-from kitden.clients.entries import entry_key, entry_refusal
+from kitden.clients.entries import app_of, entry_key, entry_refusal
 from kitden.clients.versions import is_supported
 from kitden.local_gateway.settings import as_dict
 from kitden.model import (
@@ -224,7 +224,8 @@ def mcp_item(
     enabled: Enabled = Enabled.ON,
 ) -> Item:
     """An MCP server item whose summary is already redacted (FR-006), why the Kitden gateway
-    could not run it, as far as the entry itself says, and the key a move compares it by."""
+    could not run it, as far as the entry itself says, the Mac app it runs from, and the key a
+    move compares it by."""
     entry = entry if isinstance(entry, dict) else {}
     redacted, secret = redact(entry)
     summary = tuple(
@@ -243,6 +244,7 @@ def mcp_item(
         secret_present=secret,
         summary=summary,
         stays_direct=entry_refusal(name, entry),
+        app=app_of(entry),
         entry_key=entry_key(entry),
     )
 

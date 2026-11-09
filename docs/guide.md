@@ -47,6 +47,8 @@ Look at each change first. Apply keeps a backup for Undo. **Show changes** shows
 edit; Apply writes it and checks the result. Open **Changes → Undo** to restore it.
 If Undo would overwrite newer edits, Kitden stops. Changes also offers **Redo…** and
 **See it on the map**.
+If an app such as Pen writes a removed server back, the review warns you first and Changes
+says it is back.
 
 ## Try the sample
 

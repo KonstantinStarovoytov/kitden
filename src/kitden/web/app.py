@@ -152,7 +152,7 @@ from kitden.sign_in import SIGNED_OUT, SignIn, SignIns
 from kitden.system import secret_store_name
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
-from kitden.views.changes_view import change_entries
+from kitden.views.changes_view import came_back, change_entries
 from kitden.views.commands import commands_for
 from kitden.views.effective import project_views
 from kitden.views.explain import explain, with_page_fields
@@ -171,7 +171,7 @@ from kitden.views.library import KINDS, LIST_SHOWS, LIST_TABS, SHOWS, library, l
 from kitden.views.library_map import cursor_imports, library_map
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
-from kitden.views.review import change_target, mark_reach, undo_note
+from kitden.views.review import app_notes, change_target, mark_reach, undo_note
 from kitden.views.setup_server import enable_steps, is_old_entry, setup_server_state
 from kitden.views.skills import (
     library_offers,
@@ -1020,8 +1020,17 @@ def create_app(
         if home is not None and not problem:
             settings = load_settings(home)
             ruled = {p for p, chain in _chains().items() if own_rules(settings, chain)}
+        # A server a change took out that something wrote back since.
+        back = came_back(engine.store.entries(), engine, state.inventory) if engine else []
         answer = overview(
-            state.inventory, _registered(), path, held, adapters, ruled, problem=problem
+            state.inventory,
+            _registered(),
+            path,
+            held,
+            adapters,
+            ruled,
+            problem=problem,
+            came_back=back,
         )
         return JSONResponse(answer)
 
@@ -1504,6 +1513,8 @@ def create_app(
         after = after_words(
             change, state.inventory, cursor_imports=imports, skills=built.copied, home=home
         )
+        # A server a Mac app runs may come back: a note, never a refusal.
+        after += app_notes(change.action, built.items)
         # The review's first sentence: where the steps go (also for the project picked at the
         # top, which may have its own definition of what changes), and what Undo cannot bring
         # back.

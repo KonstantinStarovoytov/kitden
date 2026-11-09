@@ -14,14 +14,20 @@ reason a plugin command is never for "all projects but the picked one".
 import os
 from pathlib import Path
 
-from kitden.changes.actions import PLUGIN_INSTALL
+from kitden.changes.actions import GATEWAY_MOVE, PLUGIN_INSTALL
 from kitden.changes.engine import step_readers
-from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE
+from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE, REMOVE_DIRECT
 from kitden.model import Change, Item, Scope, Step
 from kitden.system import secret_store_name
 from kitden.views.affects import affects
 from kitden.views.effective import effective_view
-from kitden.views.words import KEYCHAIN_UNDO, KEYCHAIN_UNDO_MANY, REMOVE_NOTE, join_words
+from kitden.views.words import (
+    APP_WRITES_BACK,
+    KEYCHAIN_UNDO,
+    KEYCHAIN_UNDO_MANY,
+    REMOVE_NOTE,
+    join_words,
+)
 
 
 def _real(path: str) -> Path:
@@ -150,6 +156,16 @@ def undo_note(change: Change) -> str | None:
         words = KEYCHAIN_UNDO if len(kept) == 1 else KEYCHAIN_UNDO_MANY
         notes.append(words.format(join_words(kept), store=secret_store_name()))
     return " ".join(notes) or None
+
+
+def app_notes(action: str, items: list[Item]) -> list[dict]:
+    """A note for the review's After line for each server a removal or a move takes out of a
+    client while a Mac app runs it: the app may write it back. `items` are the entries the change
+    changes; a move has them only into the Kitden gateway."""
+    if action not in (REMOVE_DIRECT, GATEWAY_MOVE):
+        return []
+    found = dict.fromkeys((i.name, i.app) for i in items if i.app)
+    return [{"note": APP_WRITES_BACK.format(name=name, app=app)} for name, app in found]
 
 
 def mark_reach(change: Change, inventory, item: Item | None, cursor_imports: bool) -> None:

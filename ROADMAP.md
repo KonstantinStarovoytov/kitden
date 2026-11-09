@@ -23,6 +23,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   not check out". Thanks to @chiragjangiir (#25).
 - **The MCP tools say when to use each one:** every tool description names the sibling to
   use instead, and project_path explains what it takes, as Glama's tool quality score asked.
+- **Servers that apps write back:** when a server runs from a Mac app such as Pen, the review
+  says the app may write it back, the Gateway names the app when its entries differ, and
+  Changes and Overview say when a removed server is back.
 
 ### 0.6.1
 

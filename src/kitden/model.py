@@ -151,6 +151,7 @@ class Item:
     change_hint: str | None = None  # where to change it when the tool cannot (FR-028)
     stale_at: str | None = None  # kept from the last good read (ISO time); not part of the id
     stays_direct: str | None = None  # an MCP entry the Kitden gateway cannot run: why
+    app: str | None = None  # the Mac app an MCP entry runs from, which may write it again
     # The settings file (user, project or local) whose rule set `enabled`; None when no rule did.
     state_scope: Scope | None = None
     # A user skill that a project's own settings turn on or off: (project, state, rule file).
