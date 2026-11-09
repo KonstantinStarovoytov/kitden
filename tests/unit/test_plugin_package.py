@@ -1,14 +1,18 @@
 """The plugin package Claude Code and Codex install (feature 003: FR-008 to FR-011, FR-015)."""
 
 import json
+import struct
 from pathlib import Path
 
 import kitden
+from kitden import mcp_server
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "plugins/kitden"
 ENTRY = {"type": "stdio", "command": "kitden", "args": ["mcp"]}
 INSTALL = "uv tool install --python 3.13 kitden"
+# The skills and the MCP server say this in the same words.
+NO_EDITS = "Do not edit client settings files"
 
 
 def _json(path: Path) -> dict:
@@ -40,17 +44,17 @@ def test_both_mcp_files_hold_only_the_read_only_server():
 
 
 def test_the_skill_states_the_four_rules():
-    text = (PLUGIN / "skills/setup/SKILL.md").read_text()
+    text = (PLUGIN / "skills/show-setup/SKILL.md").read_text()
     head, body = text.split("---\n")[1:3]
-    assert "name: setup" in head
+    assert "name: show-setup" in head
     assert "description: Use when" in head
-    for rule in ("show_setup", "kitden open", "Never edit", "kitden --version", INSTALL):
+    for rule in ("show_setup", "kitden open", NO_EDITS, "kitden --version", INSTALL):
         assert rule in body
     assert len(body.split()) < 200
 
 
 def test_the_skill_description_names_what_users_ask_about():
-    head = (PLUGIN / "skills/setup/SKILL.md").read_text().split("---\n")[1]
+    head = (PLUGIN / "skills/show-setup/SKILL.md").read_text().split("---\n")[1]
     for word in ("MCP servers", "skills", "plugins", "hooks", "CLAUDE.md", "Codex", "Cursor"):
         assert word in head
     # A change request must reach the skill, so the agent sends the user to the page.
@@ -64,7 +68,7 @@ def test_the_audit_skill_suggests_and_changes_nothing():
     assert "description: Use when" in head
     for word in ("turn off", "audit", "context"):
         assert word in head
-    for rule in ("show_setup", "list_findings", "kitden open", "Never edit", "not sure"):
+    for rule in ("show_setup", "list_findings", "kitden open", NO_EDITS, "not sure"):
         assert rule in body
     # Kitden's tools do not count use, and the skill must say what it judges by.
     assert "how often" in body
@@ -76,7 +80,8 @@ def test_the_audit_skill_suggests_and_changes_nothing():
 
 def test_the_readmes_say_what_the_server_and_the_plugin_each_give():
     plugin = (PLUGIN / "README.md").read_text()
-    for words in ("## What the MCP server gives", "## What the plugin adds", "`setup`", "`audit`"):
+    headings = ("## What the MCP server gives", "## What the plugin adds")
+    for words in (*headings, "`show-setup`", "`audit`"):
         assert words in plugin
     readme = (ROOT / "README.md").read_text()
     assert "| **MCP server** |" in readme and "| **Plugin** |" in readme
@@ -120,3 +125,15 @@ def test_the_guide_cursor_link_adds_the_same_server():
     for config in {*configs, *plain}:
         decoded = json.loads(base64.b64decode(config))
         assert decoded == {"command": ENTRY["command"], "args": ENTRY["args"]}
+
+
+def test_the_skills_and_the_server_forbid_edits_in_the_same_words():
+    assert NO_EDITS in mcp_server.NO_EDITS
+
+
+def test_the_plugin_has_an_icon_the_directory_accepts():
+    # The directory takes a square PNG of 512 to 2048 px, once, at the first submit (2026-11-09).
+    data = (PLUGIN / "icon.png").read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    width, height = struct.unpack(">II", data[16:24])
+    assert width == height and 512 <= width <= 2048

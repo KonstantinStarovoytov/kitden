@@ -13,8 +13,8 @@ client without the plugin.
 ## What the plugin adds
 
 - One install line for the server, and one line to remove it.
-- The skill `setup`: sends a change to the Kitden page, so the agent does not edit your settings
-  files, and shows the install line when Kitden is missing.
+- The skill `show-setup`: sends a change to the Kitden page, so the agent does not edit your
+  settings files, and shows the install line when Kitden is missing.
 - The skill `audit` (`/kitden:audit` in Claude Code): the agent compares what loads with the
   project you are in and lists what to turn off. It judges by what the project is; Kitden's
   tools do not tell how often an item is used. You make the changes on the page.

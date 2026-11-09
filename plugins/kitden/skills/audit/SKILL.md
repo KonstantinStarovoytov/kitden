@@ -8,7 +8,7 @@ Find what this project loads and does not need. You suggest; the user makes the 
 1. Call the kitden tool `list_findings` with `project_path` set to the current folder. Then call
    `show_setup` with the same path and `client` set to the client you run in: the whole setup is
    too large for one answer. Look at another client only if the user asks. If the tools are
-   missing, follow the kitden `setup` skill and stop.
+   missing, follow the kitden `show-setup` skill and stop.
 2. Learn what the project is: read its README and its manifest (`package.json`,
    `pyproject.toml` and the like), and use what the user asked for in this session. Read no more
    than that.
@@ -23,5 +23,5 @@ Find what this project loads and does not need. You suggest; the user makes the 
    `change_hint`, pass the hint on: only the client itself can change that item.
 6. Say what you judged by. Kitden's tools do not tell how often an item is used, so the list
    comes from what the project is, not from use.
-7. Never edit client settings files. Run `kitden open` and send the user to the page, which
+7. Do not edit client settings files. Run `kitden open` and send the user to the page, which
    previews, backs up and can undo every change.
