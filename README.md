@@ -99,7 +99,6 @@ uv tool install --python 3.13 kitden && kitden
 ```
 
 Or with Homebrew: `brew install konstantinstarovoytov/tap/kitden`, then `kitden`.
-
 Update later with `uv tool upgrade kitden` or `brew upgrade kitden`.
 
 [Guide](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md) ·
