@@ -154,6 +154,7 @@ from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
 from kitden.views.changes_view import came_back, change_entries
 from kitden.views.commands import commands_for
+from kitden.views.context_view import context_view
 from kitden.views.effective import project_views
 from kitden.views.explain import explain, with_page_fields
 from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
@@ -1050,6 +1051,26 @@ def create_app(
         problem = UNREADABLE if settings_unreadable(home) else None
         return held, problem
 
+    def _context(request, project, path):
+        """Context: what each client's last chat sent, and whether its skill list fit. `draft`
+        is the tray's skill states not applied yet, as JSON: client -> skill name -> state."""
+        try:
+            draft = json.loads(request.query_params.get("draft") or "{}")
+        except ValueError:
+            draft = None
+        good = isinstance(draft, dict) and all(
+            isinstance(states, dict) and all(isinstance(v, str) for v in states.values())
+            for states in draft.values()
+        )
+        if not good:
+            return _error("Kitden cannot read the draft.", 422)
+        if home is None:
+            return JSONResponse({"project": project, "clients": []})
+        codex = adapters.get("codex")
+        codex_home = codex.codex_home if codex else home / ".codex"
+        answer = context_view(state.inventory, home, codex_home, path, draft)
+        return JSONResponse({"project": project, **answer})
+
     def _gateway_view(request, project, path):
         held, problem = _kitden(path)
         view = gateway_view(state.inventory, _registered(), path, kitden=held, problem=problem)
@@ -1931,6 +1952,7 @@ def create_app(
             Route("/api/explain", _read_model(_explain)),
             Route("/api/overview", _read_model(_overview)),
             Route("/api/gateway-view", _read_model(_gateway_view)),
+            Route("/api/context", _read_model(_context)),
             Route("/api/events", stream),
             Route("/api/progress", progress),
             Route("/api/about", about),

@@ -153,3 +153,149 @@ PROJECT_SKILL_ALL = "This skill is only in one project; turn it off in that proj
 NO_CLAUDE_FOLDER = "{folder} has no Claude Code settings yet; start Claude Code there once first."
 # A project's own rule removed: the skill or the plugin then follows the shared setup.
 FOLLOWS_SHARED = "Follows all projects"
+
+# The Context screen (spec 2026-11-09 "Do your skills fit?", "States"). Facts say "was";
+# estimates say "would" and start with "Estimate:".
+CONTEXT_LEDE = (
+    "Every chat starts with a list of your skills. The agent reads it to choose the right skill. "
+)
+CONTEXT_LIMITS = {
+    "claude_code": "Claude Code lets this list use 1% of the context window.",
+    "codex": "Codex lets this list use 2% of the context window.",
+    "cursor": "Cursor does not publish a limit for this list.",
+}
+NO_CHAT = "No {client} chat yet. Open one chat, and Kitden will show what {client} sent."
+CANNOT_READ_LOG = (
+    "Kitden cannot read chat logs of {client} {version} yet, so it shows no result and no estimate."
+)
+NOTHING_TO_FIT = "There is nothing to fit."
+CURSOR_CANNOT_SEE = "Kitden cannot see what Cursor sends, so it cannot tell if your skills fit."
+NO_CHECK = "Kitden cannot check its estimate against your last chat, so it shows none."
+# The fact of the last chat, on its window card.
+CLAUDE_ALL_SENT = "In your last chat on {date}, all {n} skills were sent with their descriptions."
+CLAUDE_NAMES_ONLY = (
+    "In your last chat on {date}, {bad} of {n} skills showed only a name. "
+    "The agent may not have used them."
+)
+CODEX_ALL_SENT = "In your last chat on {date}, all {n} skills were sent with full descriptions."
+CODEX_CUT = (
+    "In your last chat on {date}, {bad} of {n} descriptions were cut to {cut} characters. "
+    "The agent saw only their start."
+)
+CODEX_LEFT_OUT = (
+    "In your last chat on {date}, Codex removed every description and left {out} of {n} skills "
+    "out of the list. The agent did not see them at all."
+)
+CODEX_NAMES = (
+    "In your last chat on {date}, Codex removed every description. The agent saw only the names."
+)
+ROOM_LEFT = "Estimate: about {left} {unit} left before the limit."
+# The short result on a card's face.
+CLAUDE_SHORT_ALL = "All {n} sent"
+CLAUDE_SHORT_NAMES = "{bad} of {n} showed only a name"
+CODEX_SHORT_ALL = "All {n} sent in full"
+CODEX_SHORT_CUT = "{bad} of {n} cut short"
+CODEX_SHORT_OUT = "{out} left out, the rest name only"
+WOULD_FIT = "All {n} would fit"
+CLAUDE_WOULD_SHORT = "{bad} of {n} would show only a name"
+CODEX_WOULD_SHORT = "{bad} of {n} would be cut short"
+# An estimate's sentence. "{on}" is ON_WINDOW, or WITH_LIMIT when the window is not known.
+ESTIMATE = "Estimate: {}"
+AFTER_APPLY = "After Apply, estimate: {}"
+ON_WINDOW = "On a {size} window"
+WITH_LIMIT = "With this limit"
+CLAUDE_WOULD_DROP = "{on}, {bad} of {n} skills would show only a name. The agent may not use them."
+CLAUDE_WOULD_KEEP = "{on}, every skill would keep its description."
+CLAUDE_WOULD_KEEP_CHOSEN = "{on}, everything would fit. {chosen} only a name, as you chose."
+CODEX_WOULD_LEAVE_OUT = "{on}, {out} of {n} skills would be left out and no description sent."
+CODEX_WOULD_CUT = "{on}, {bad} of {n} descriptions would be cut to about {cap} characters."
+CODEX_WOULD_DROP_ALL = "{on}, every description would be removed and only the names sent."
+CODEX_WOULD_KEEP = "{on}, every skill would keep its full description."
+# Both sides of a swap after Apply: (one, many).
+GAINS = {
+    "claude_code": ("{} gets a description.", "{} get descriptions."),
+    "codex": ("{} gets its full description.", "{} get their full descriptions."),
+}
+LOSES = {
+    "claude_code": ("{} loses its description.", "{} lose their descriptions."),
+    "codex": ("{} is cut short.", "{} are cut short."),
+}
+# Window cards.
+LAST_CHAT_TAG = "Last chat · {date}"
+ESTIMATE_TAG = "Estimate"
+WINDOW_TITLE = "{size} window"
+UNKNOWN_WINDOW = "Unknown window"
+LIMIT_TITLE = "{n} {unit}"
+CLAUDE_SETTING = "Set in Claude Code settings"
+CODEX_SETTING = "Set in config.toml"
+DEFAULT_LIMIT = "Default limit"
+# The two sides of the picture, and the first side's name when there is no list to read.
+CONTEXT_SIDES = {
+    "claude_code": ("Description sent", "Name only"),
+    "codex": ("Full description", "Cut short"),
+    "cursor": ("The agent can pick it", "Only when you ask"),
+}
+SKILLS_FOUND = "Skills found"
+# One skill's Details line.
+NOTE_BUILT_IN = "Claude Code always sends built-in skills in full."
+NOTE_PLUGIN = "A plugin's skill follows its plugin. Turn the plugin off in the Library."
+NOTE_FREES = "Name only frees {n} characters. The agent no longer sees when to use it."
+NOTE_NO_ROOM = (
+    "No room for its description. Set a skill with a description to Name only or Off to free room."
+)
+NOTE_NAME_ONLY = "The agent sees the name, not when to use it."
+NOTE_ONLY_ASKED = "The agent uses it only when you type its name."
+NOTE_CODEX_OFF = "Off frees room, so long descriptions get cut less."
+NOTE_NOT_LISTED = "It was not in the list of your last chat."
+# "How this is counted".
+# "{version}" and "{surface}" each start with a space, or are "" when the log does not say.
+HOW_CLAUDE_LIST = (
+    "Last chat: the list Claude Code{version} sent on {date}{surface}, read from its chat log."
+)
+HOW_CLAUDE_RULE = (
+    "Estimates use Claude Code's own rule, read from version 2.1.311: 1% of the window, at 3 "
+    "characters per token for new models and 4 for older ones. Built-in skills always keep their "
+    "description; of the rest, the most used in the last weeks go first."
+)
+HOW_CLAUDE_CHECK = (
+    "Before it shows an estimate, Kitden checks that the rule gives the same list as your last "
+    "chat."
+)
+HOW_CLAUDE_CHECKED = "On Nov 7 the rule also matched two test chats with a smaller limit."
+HOW_NOT_MATCHED = "This time it does not."
+HOW_CLAUDE_SETTING = (
+    "The limit is SLASH_COMMAND_TOOL_CHAR_BUDGET from your Claude Code settings. "
+    "A value set in the shell is out of Kitden's sight."
+)
+HOW_CLAUDE_SHELL = "A SLASH_COMMAND_TOOL_CHAR_BUDGET set in the shell is out of Kitden's sight."
+HOW_CLAUDE_SURFACE = "The list in the terminal can differ from the Claude app."
+HOW_CLAUDE_REST = "The rest of the window (system prompt, tools, MCP, the chat) is not measured."
+HOW_CODEX_LIST = "Last chat: the list Codex{version} sent on {date}, read from its chat log."
+HOW_CODEX_RULE = (
+    "Estimates use Codex's rule from its source code: 2% of the window, about 4 bytes per token. "
+    "Each entry also pays for its name and file path."
+)
+HOW_CODEX_CHECK = (
+    "Before it shows an estimate, Kitden checks that the rule cuts the same skills as your last "
+    "chat."
+)
+HOW_CODEX_SAME = "It does: the same {n}."
+HOW_CODEX_DOES = "It does."
+HOW_CODEX_SETTING = "The limit is skills.max_context_tokens in Codex's config.toml."
+HOW_CODEX_SIZES = "Full sizes come from your skill files today. They may have changed since {date}."
+HOW_CODEX_TOKENS = "Tokens here are Codex's own count, not exact model tokens."
+HOW_CURSOR = (
+    "Cursor does not publish a limit for this list, and Kitden found no log that shows what it "
+    "sends. Checked 2026-11-06.",
+    "Sizes and the Only when asked setting come from your skill files.",
+    "Cursor's own built-in skills and one plugin with no local name are not counted.",
+)
+HOW_NO_CHAT = (
+    "Kitden shows a result only after it reads a real chat log. Before that it shows the skills it "
+    "finds on disk."
+)
+HOW_UNREADABLE = (
+    "When the log format changes, Kitden stops showing results until it is updated. It never "
+    "shows an old result as new."
+)
+HOW_NO_SKILLS = "Kitden looks in the same folders and plugins as {client}."
