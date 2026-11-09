@@ -113,6 +113,9 @@ const quietly = async (fn) => {
 
 const { renderContext } = await import('../../src/kitden/web/static/js/context.js');
 const { arrival, data, loadContext, reload, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
+const { cancelTray, CONTEXT_NOTE, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { closePanel } = await import('../../src/kitden/web/static/js/panel.js');
+const { syncTray } = await import('../../src/kitden/web/static/js/details.js');
 
 const STATIC = new URL('../../src/kitden/web/static/', import.meta.url);
 const LEDE = 'Every chat starts with a list of your skills. The agent reads it to choose the right skill.';
@@ -174,6 +177,10 @@ const lampOf = (node) => byClass(node, 'lamp')[0];
 
 async function fresh() {
   reduced = true;
+  // The tray empties while another page shows, so the page reads nothing for it.
+  state.view = 'overview';
+  await cancelTray();
+  closePanel({ instant: true });
   replies.clear();
   asked.length = 0;
   state.view = 'context';
@@ -357,4 +364,182 @@ test('the chips and the window cards are real buttons, named and pressed by clic
   await fire(chipFor('Codex'), 'click');
   assert.equal(chipFor('Codex').getAttribute('aria-pressed'), 'true');
   assert.equal(chipFor('Claude Code').getAttribute('aria-pressed'), 'false');
+});
+
+
+// The picture, the switches and the estimate after Apply ------------------------------------
+
+// A skill as the server gives it (views/context_view.py `_skill`).
+const skill = (name, size, side, extra = {}) => ({
+  name, shown: name, item: `id-${name}`, project: null, source: 'Your skills', size, side, state: 'on',
+  switch: ['on', 'name-only', 'off'], note: 'Name only frees 2 characters. The agent no longer sees when to use it.', ...extra,
+});
+// Claude Code on a 200K window: alpha and beta sent, gamma only a name.
+const TIGHT = {
+  ...CLAUDE, lamp: 'warn',
+  windows: [{
+    title: '200K window', models: 'Sonnet 4.6 · in the terminal', tag: 'Last chat · Nov 7', budget: 8000,
+    result: {
+      short: '1 of 3 showed only a name', say: 'In your last chat on Nov 7, 1 of 3 skills showed only a name. The agent may not have used them.',
+      sent: { alpha: 4000, beta: 2000 }, over: { gamma: 3000 }, used: 6100, size: 9100, room: null, misfit: { kind: 'name', n: 1 },
+    },
+  }],
+  skills: [skill('alpha', 3990, 0), skill('beta', 1990, 0), skill('gamma', 2998, 1)],
+  how: ['Last chat: the list Claude Code 2.1.311 sent on Nov 7 in the terminal, read from its chat log.', 'The rest of the window (system prompt, tools, MCP, the chat) is not measured.'],
+};
+// After Apply with gamma set to Name only (a made-up answer: the page only places it).
+const AFTER = {
+  say: 'After Apply, estimate: On a 200K window, 1 of 3 skills would show only a name. The agent may not use them. beta loses its description.',
+  gets: [], loses: ['beta'],
+  result: { short: '', say: '', sent: { alpha: 4000 }, over: { beta: 1992 }, used: 4200, size: 6192, room: null },
+};
+const DRAFT_URL = `/api/context?draft=${encodeURIComponent(JSON.stringify({ claude_code: { gamma: 'name-only' } }))}`;
+const PREVIEW = '/api/batch/preview';
+const previewed = (id) => (sent) => ({
+  status: 200,
+  json: { id, action: 'skill.rule', state: 'previewed', steps: [], after: [], target: {}, rows: sent.requests.map((r) => ({ id: r.id, kind: r.kind, steps: [], target: {}, after: [] })) },
+});
+
+const pieces = (kind) => byClass(main, 'ctx-seg').filter((n) => n.classList.contains(kind));
+const pieceOf = (name, kind = 'sent') => pieces(kind).find((n) => n.dataset.skill === name);
+const sides = () => byClass(main, 'ctx-side');
+const pills = (root = main) => byClass(root, 'ctx-pill');
+const pillOf = (name) => pills().find((n) => n.dataset.skill === name);
+const width = (node) => parseFloat(node.style.width);
+const drawer = pages['#drawer'];
+const buttonIn = (root, label) => walk(root).find((n) => n.tagName === 'BUTTON' && text(n) === label);
+
+test('the zoom bar has a piece per skill as wide as what was sent, the limit and the hatched rest', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(TIGHT, CODEX, CURSOR));
+  // The scale is the limit plus what did not fit: 8,000 + 3,000.
+  assert.equal(width(pieceOf('alpha')).toFixed(3), (4000 / 11000 * 100).toFixed(3));
+  assert.equal((width(pieceOf('alpha')) / width(pieceOf('beta'))).toFixed(3), '2.000');
+  assert.equal(pieceOf('gamma'), undefined);
+  // The names (the list's other characters) are one piece: 6,100 - 6,000.
+  assert.equal(width(pieces('names')[0]).toFixed(3), (100 / 11000 * 100).toFixed(3));
+  const over = pieceOf('gamma', 'over');
+  assert.equal(parseFloat(over.style.left).toFixed(3), (8000 / 11000 * 100).toFixed(3));
+  const limit = byClass(main, 'ctx-limit')[0];
+  assert.equal(parseFloat(limit.style.left).toFixed(3), (8000 / 11000 * 100).toFixed(3));
+  assert.equal(text(byClass(main, 'ctx-flag')[0]), 'Limit: 8,000 characters');
+  assert.deepEqual(byClass(main, 'ctx-chip').map(text), ['Sent', 'Over the limit: not sent']);
+  // Codex cuts the rest off; a list that fits has room left.
+  state.selected = { kind: 'client', name: 'codex' };
+  show(answer(TIGHT, { ...CODEX, windows: [{ ...CODEX.windows[0], result: { ...CODEX.windows[0].result, sent: { a: 100 }, over: { a: 40 }, used: 300 } }] }, CURSOR));
+  assert.equal(text(byClass(main, 'ctx-flag')[0]), 'Limit: 5,440 tokens');
+  assert.deepEqual(byClass(main, 'ctx-chip').map(text), ['Sent', 'Over the limit: cut off']);
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show();
+  assert.deepEqual(byClass(main, 'ctx-chip').map(text), ['Sent', 'Free']);
+  assert.equal(pieces('over').length, 0);
+});
+
+test('a client with no window shows no picture, only its two sides', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'cursor' };
+  show(answer(CLAUDE, CODEX, { ...CURSOR, skills: [skill('pdf', 300, 0, { switch: [] }), skill('xlsx', 200, 1, { switch: [] })] }));
+  assert.equal(byClass(main, 'ctx-zoom').length, 0);
+  assert.deepEqual(sides().map((n) => text(n.children[0])), ['The agent can pick it', 'Only when you ask']);
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['pdf'], ['xlsx']]);
+});
+
+test('the two sides list the pills by side, and hovering one lights its piece and the other way', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(TIGHT, CODEX, CURSOR));
+  assert.deepEqual(sides().map((n) => text(n.children[0])), ['Description sent', 'Name only']);
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'beta'], ['gamma']]);
+  assert.equal(text(pillOf('alpha')), 'alpha3,990');
+  await fire(pillOf('beta'), 'mouseenter');
+  assert.equal(pieceOf('beta').classList.contains('hot'), true);
+  assert.equal(pillOf('beta').classList.contains('hot'), true);
+  await fire(pillOf('beta'), 'mouseleave');
+  assert.equal(pieceOf('beta').classList.contains('hot'), false);
+  await fire(pieceOf('gamma', 'over'), 'mouseenter');
+  assert.equal(pillOf('gamma').classList.contains('hot'), true);
+  // One lit at a time.
+  await fire(pieceOf('alpha'), 'mouseenter');
+  assert.deepEqual(pills().filter((p) => p.classList.contains('hot')).map((p) => p.dataset.skill), ['alpha']);
+});
+
+test('a pill opens Details with the size, the source and the switch; Name only joins the tray', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(TIGHT, CODEX, CURSOR));
+  await fire(pillOf('gamma'), 'click');
+  assert.match(text(drawer), /Size2,998 characters/);
+  assert.match(text(drawer), /SourceYour skills/);
+  assert.match(text(drawer), /Name only frees 2 characters\./);
+  const switches = walk(drawer).filter((n) => n.dataset && n.dataset.state);
+  assert.deepEqual(switches.map(text), ['On', 'Name only', 'Off']);
+  assert.deepEqual(switches.map((n) => n.getAttribute('aria-pressed')), ['true', 'false', 'false']);
+  assert.equal(pillOf('gamma').classList.contains('sel'), true);
+  queue(PREVIEW, previewed('c1'));
+  queue(DRAFT_URL, { status: 200, json: answer({ ...TIGHT, after: AFTER }, CODEX, CURSOR) });
+  state.view = 'context';
+  await fire(buttonIn(drawer, 'Name only'), 'click');
+  await flush();
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual([sent.kind, sent.targets, sent.params], ['skill.rule', [{ client: 'claude_code', item: 'id-gamma' }], { scope: 'all', state: 'name-only' }]);
+  assert.equal(tray.rows[0].note, CONTEXT_NOTE);
+  // The tray change asks for the estimate after Apply, and the page shows it.
+  assert.equal(asked.some((a) => a.url === DRAFT_URL), true);
+  assert.equal(text(verdict()), AFTER.say);
+  assert.equal(text(byClass(verdict(), 'ctx-est')[0]), 'After Apply, estimate:');
+  assert.equal(pillOf('beta').classList.contains('lost'), true);
+  assert.equal(pillOf('gamma').classList.contains('chg'), true);
+  // The bar and the sides follow the estimate: beta is now past the limit, gamma only a name.
+  assert.equal(pieceOf('beta'), undefined);
+  assert.notEqual(pieceOf('beta', 'over'), undefined);
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha'], ['beta', 'gamma']]);
+  // The switch shows the state waiting in the tray (the panel syncs it on each tray change).
+  syncTray();
+  const now = walk(drawer).filter((n) => n.dataset && n.dataset.state);
+  assert.deepEqual(now.map((n) => n.getAttribute('aria-pressed')), ['false', 'true', 'false']);
+});
+
+test('a project\'s own skill asks for a rule in its project', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, skills: [skill('alpha', 3990, 0, { project: 'p9', source: 'Project a' }), skill('beta', 1990, 0), skill('gamma', 2998, 1)] }, CODEX, CURSOR));
+  await fire(pillOf('alpha'), 'click');
+  assert.match(text(drawer), /SourceProject a/);
+  const shown = answer({ ...TIGHT, skills: [skill('alpha', 3990, 0, { project: 'p9' }), skill('beta', 1990, 0), skill('gamma', 2998, 1)] }, CODEX, CURSOR);
+  queue(PREVIEW, previewed('c2'));
+  queue(`/api/context?draft=${encodeURIComponent(JSON.stringify({ claude_code: { alpha: 'off' } }))}`, { status: 200, json: shown });
+  state.view = 'context';
+  await fire(buttonIn(drawer, 'Off'), 'click');
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual(sent.params, { scope: 'project', project: 'p9', state: 'off' });
+  // The state it has now takes the row out again.
+  queue('/api/context', { status: 200, json: shown });
+  await fire(buttonIn(drawer, 'On'), 'click');
+  await flush();
+  assert.equal(tray.rows.length, 0);
+});
+
+test('How this is counted is folded, with the lines the server wrote', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(TIGHT, CODEX, CURSOR));
+  const how = walk(main).find((n) => n.tagName === 'DETAILS');
+  assert.equal(text(how.children[0]), 'How this is counted');
+  assert.deepEqual(walk(how).filter((n) => n.tagName === 'LI').map(text), TIGHT.how);
+  show(answer({ ...TIGHT, how: [] }, CODEX, CURSOR));
+  assert.equal(walk(main).some((n) => n.tagName === 'DETAILS'), false);
+});
+
+test('with the check failed there is no estimate card and no After Apply', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const unchecked = { ...TIGHT, checked: false, message: NO_CHECK, windows: [TIGHT.windows[0], CLAUDE.windows[1]], after: AFTER };
+  show(answer(unchecked, CODEX, CURSOR));
+  assert.equal(cards().length, 1);
+  assert.equal(text(main).includes('After Apply'), false);
+  assert.equal(text(verdict()), TIGHT.windows[0].result.say);
+  assert.equal(pillOf('beta').classList.contains('lost'), false);
 });

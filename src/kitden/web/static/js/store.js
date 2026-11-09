@@ -350,11 +350,20 @@ export async function loadMap() {
   await guarded("map", `/api/map${query({ project })}`, (v) => { data.map = v; }, project);
 }
 
+// The tray's skill states not applied yet (client -> skill name -> state), so Context can show
+// the estimate after Apply; context.js gives it. Null or empty: none.
+let contextDraft = () => null;
+export function setContextDraft(fn) { contextDraft = fn; }
+let contextReads = 0;
+
 // What each client's last chat sent, read from the chat logs: only while Context shows (reload)
-// and when it opens (openContext).
+// and when it opens (openContext). An answer to an older read is dropped.
 export async function loadContext() {
   const { project } = state;
-  await guarded("context", `/api/context${query({ project })}`, (v) => { data.context = v; }, project);
+  const found = contextDraft();
+  const draft = found && Object.keys(found).length ? JSON.stringify(found) : "";
+  const read = ++contextReads;
+  await guarded("context", `/api/context${query({ project, draft })}`, (v) => { data.context = v; }, project, () => read !== contextReads);
 }
 
 async function loadGateway() {

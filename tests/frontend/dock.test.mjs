@@ -140,7 +140,7 @@ const posted = () => calls.filter((call) => call.method === 'POST').map((call) =
 const dockPath = '../../src/kitden/web/static/js/dock.js';
 const { appliedToast, barWords, drawTray, initDock, outcomeLine, rowWords, setCancelFocus, writingLine } = await import(dockPath);
 const { changeWords, detailsAgain, undoChange } = await import('../../src/kitden/web/static/js/review.js');
-const { addToTray, cancelTray, endApplied, takeOut, tray, tryAgain } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, cancelTray, CONTEXT_NOTE, endApplied, takeOut, tray, tryAgain } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, render, setBusy, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { closePanel, hideToast, isPanelOpen, keepFrom, offNote, openPanel, panelState, toast } = await import('../../src/kitden/web/static/js/panel.js');
 initDock();
@@ -415,6 +415,22 @@ test('appliedToast says Applied 3 changes with Undo all, and Undo all undoes the
     });
     assert.deepEqual(posted().filter((url) => url.endsWith('/undo')), ['/api/changes/c9/undo']);
     assert.equal(busy.change, false);
+  } finally {
+    hideToast();
+  }
+});
+
+test('rows added on the Context page get its own toast; any other row keeps the usual words', async () => {
+  await fresh();
+  const row = (key, note = CONTEXT_NOTE) => ({ part: remove, body: {}, key, note });
+  const words = 'The backup is in Changes. Your next chat will show the real list.';
+  try {
+    appliedToast({ change: { id: 'c1' }, rows: [row('k1'), row('k2')] });
+    assert.deepEqual(toastParts(), [['span', ''], ['span', `Applied 2 changes. ${words}`], ['button', 'Undo all']]);
+    appliedToast({ change: { id: 'c2' }, rows: [row('k1')] });
+    assert.deepEqual(toastParts(), [['span', ''], ['span', `Applied 1 change. ${words}`], ['button', 'Undo']]);
+    appliedToast({ change: { id: 'c3' }, rows: [row('k1'), row('k2', null)] });
+    assert.deepEqual(toastParts(), [['span', ''], ['span', 'Applied 2 changes'], ['button', 'Undo all']]);
   } finally {
     hideToast();
   }
