@@ -186,7 +186,10 @@ def _no_list(client: str, items: list[Item], found: Unreadable | None) -> dict:
     """The card when there is no list to read: a log Kitden cannot read, or no chat yet."""
     name = CLIENT_WORDS[client]
     if isinstance(found, Unreadable):
-        message = words.CANNOT_READ_LOG.format(client=name, version=found.version)
+        which = words.THIS_VERSION.format(client=name)
+        if found.version:
+            which = f"{name} {found.version}"
+        message = words.CANNOT_READ_LOG.format(client=which)
         return _disk_card(client, items, message, [words.HOW_UNREADABLE])
     if items:
         return _disk_card(client, items, words.NO_CHAT.format(client=name), [words.HOW_NO_CHAT])
@@ -202,6 +205,19 @@ def _when(at: str) -> tuple[str, int]:
     except ValueError:
         return "", int(datetime.now().timestamp() * 1000)
     return f"{MONTHS[moment.month - 1]} {moment.day}", int(moment.timestamp() * 1000)
+
+
+def _on_date(date: str) -> str:
+    """ " on Nov 6", or "" when the log's time did not parse."""
+    return words.ON_DATE.format(date=date) if date else ""
+
+
+def _tag(date: str) -> str:
+    return words.LAST_CHAT_TAG.format(date=date) if date else words.LAST_CHAT
+
+
+def _many(n: int, one: str, many: str) -> str:
+    return one if n == 1 else many
 
 
 def _size(window: int) -> str:
@@ -249,13 +265,18 @@ def _window_card(title: str, models: str, tag: str, budget: int | None, result: 
 # Claude Code
 
 
-def _claude_setting(home: Path, folder: str | None) -> int | None:
-    """The limit set in Claude Code's settings files, when it is a whole number."""
-    read = Reader("claude_code")
+def _claude_files(home: Path, folder: str | None) -> list[Path]:
+    """Claude Code's settings files for a chat in `folder`, the winning one last."""
     files = [home / ".claude/settings.json"]
     if folder:
         project = Path(folder)
         files += [project / ".claude/settings.json", *local_files(project, home)]
+    return files
+
+
+def _claude_setting(files: list[Path]) -> int | None:
+    """The limit set in Claude Code's settings files, when it is a whole number."""
+    read = Reader("claude_code")
     for path in reversed(files):
         env = as_dict(as_dict(read.json(path)).get("env"))
         if BUDGET_KEY not in env:
@@ -303,9 +324,44 @@ def _claude_run(rows, states, weights, budget) -> tuple[list[ClaudeSkill], Claud
         return None
 
 
-def _claude_fact(rows: list[_Row], date: str) -> dict:
+def _unchanged(files: list[Path], at_ms: int) -> bool:
+    """No settings file changed after the chat, so the skills' states today were its states.
+    A file removed since is not seen."""
+    for path in files:
+        try:
+            if path.stat().st_mtime * 1000 > at_ms:
+                return False
+        except OSError:  # no such file
+            continue
+    return True
+
+
+def _chosen(rows, states, weights, budget, checked: bool, settled: bool) -> tuple[set[str], bool]:
+    """The skills that showed only a name because they were set to Name only, not because of
+    the limit; and True when Kitden can tell only that they are set so now.
+
+    Kitden cannot see past settings. It knows a skill was Name only at the chat when no settings
+    file changed since (`settled`), or when the rule, with that skill on, would not rebuild the
+    list: only its setting explains it. When the limit alone explains it, it stays a misfit.
+    Without a check Kitden says only that it is set to Name only now."""
+    named = {r.name for r in rows if r.sent is None and states[r.name] == "name-only"}
+    if not named or settled:
+        return named, False
+    if not checked:
+        return named, True
+    sent_full = frozenset(r.name for r in rows if r.sent is not None)
+    needed = set()
+    for name in named:
+        run = _claude_run(rows, states | {name: "on"}, weights, budget)
+        if run is not None and run[1].full != sent_full:
+            needed.add(name)
+    return needed, False
+
+
+def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool) -> dict:
     """What the last chat sent: characters per skill sent, and those of descriptions not sent.
-    Only the log counts, not the skills' states today."""
+    Only the log counts. `chosen` showed only a name by their setting (see `_chosen`): they are
+    told apart and are no misfit."""
     sent: dict[str, int] = {}
     over: dict[str, int] = {}
     names = 0
@@ -314,18 +370,30 @@ def _claude_fact(rows: list[_Row], date: str) -> dict:
             sent[r.name] = len(r.name) + 4 + min(len(r.sent), CLAUDE_DESCRIPTION_CAP)
             continue
         names += len(r.name) + 2
-        if r.full is not None:
+        if r.full is not None and r.name not in chosen:
             over[r.name] = min(len(r.full), CLAUDE_DESCRIPTION_CAP) + 2
     used = sum(sent.values()) + names + max(0, len(rows) - 1)
-    n, bad = len(rows), len(rows) - len(sent)
+    n, picked = len(rows), len(chosen)
+    bad = n - len(sent) - picked
     misfit = None
     if bad:
         short = words.CLAUDE_SHORT_NAMES.format(bad=bad, n=n)
-        say = words.CLAUDE_NAMES_ONLY.format(date=date, bad=bad, n=n)
+        skills, them = _many(n, "skill", "skills"), _many(bad, "it", "them")
+        say = words.CLAUDE_NAMES_ONLY.format(when=when, bad=bad, n=n, skills=skills, them=them)
         misfit = {"kind": "name", "n": bad}
     else:
         short = words.CLAUDE_SHORT_ALL.format(n=n)
-        say = words.CLAUDE_ALL_SENT.format(date=date, n=n)
+        say = _many(n, words.CLAUDE_ONE_SENT, words.CLAUDE_ALL_SENT).format(when=when, n=n)
+    if picked:
+        count = words.CLAUDE_MORE.format(n=picked) if bad else str(picked)
+        rest = (words.CLAUDE_SET_NOW if now else words.CLAUDE_CHOSEN).format(
+            chosen=count, are=_many(picked, "is", "are")
+        )
+        if bad:
+            say = f"{say} {rest}"
+        else:
+            but = _many(n, words.CLAUDE_ONE_SENT_BUT, words.CLAUDE_ALL_SENT_BUT)
+            say = but.format(when=when, n=n, rest=rest)
     result = {"short": short, "say": say, "sent": sent, "over": over, "used": used}
     return result | {"size": used + sum(over.values()), "room": None, "misfit": misfit}
 
@@ -396,7 +464,8 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     states = {r.name: _state(r.item) for r in rows}
     weights = _claude_weights(home, at_ms)
 
-    setting = _claude_setting(home, found.folder)
+    files = _claude_files(home, found.folder)
+    setting = _claude_setting(files)
     model = CLAUDE_WINDOWS.get(found.model or "")
     window = model[0] if model else None
     budget = setting if setting is not None else (claude_budget(*model) if model else None)
@@ -404,9 +473,12 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
     checked = base is not None and base[1].full == sent_full
 
-    fact = _claude_fact(rows, date)
-    names_only = any(r.sent is None for r in rows)
-    if checked and not names_only:
+    when = _on_date(date)
+    settled = bool(date) and _unchanged(files, at_ms)
+    chosen, now = _chosen(rows, states, weights, budget, checked, settled)
+    fact = _claude_fact(rows, when, chosen, now)
+    misfit = fact["misfit"] is not None
+    if checked and not misfit:
         left = f"{budget - fact['used']:,}"
         fact["room"] = words.ROOM_LEFT.format(left=left, unit="characters")
     if setting is not None:
@@ -415,8 +487,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     else:
         title = words.WINDOW_TITLE.format(size=_size(window)) if window else words.UNKNOWN_WINDOW
         models = " · ".join(p for p in (_model_name(found.model), found.surface) if p)
-    tag = words.LAST_CHAT_TAG.format(date=date)
-    windows = [_window_card(title, models, tag, budget, fact)]
+    windows = [_window_card(title, models, _tag(date), budget, fact)]
     if checked and setting is None and window in CLAUDE_OTHER_WINDOW:
         other, per_token, shown = CLAUDE_OTHER_WINDOW[window]
         limit = claude_budget(other, per_token)
@@ -454,9 +525,12 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
 
     version = f" {found.version}" if found.version else ""
     surface = f" {found.surface}" if found.surface else ""
-    check = words.HOW_CLAUDE_CHECKED if checked else words.HOW_NOT_MATCHED
+    if checked:
+        check = words.HOW_CLAUDE_CHECKED
+    else:
+        check = words.HOW_NOT_MATCHED if base is not None else words.HOW_NOT_RUN
     how = [
-        words.HOW_CLAUDE_LIST.format(version=version, date=date, surface=surface),
+        words.HOW_CLAUDE_LIST.format(version=version, when=when, surface=surface),
         words.HOW_CLAUDE_RULE,
         f"{words.HOW_CLAUDE_CHECK} {check}",
         words.HOW_CLAUDE_SETTING if setting is not None else words.HOW_CLAUDE_SHELL,
@@ -465,7 +539,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     ]
     return _card(
         client,
-        lamp="warn" if names_only else "ok",
+        lamp="warn" if misfit else "ok",
         message=None if checked else words.NO_CHECK,
         fact={
             "date": date,
@@ -514,7 +588,7 @@ def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
     return names_only or not cuts or min(cuts) <= fit.cap <= max(cuts)
 
 
-def _codex_fact(rows: list[_Row], names_only: bool, date: str) -> dict:
+def _codex_fact(rows: list[_Row], names_only: bool, when: str) -> dict:
     """What the last chat sent: tokens per line sent, and those of the parts not sent."""
     sent: dict[str, int] = {}
     over: dict[str, int] = {}
@@ -535,23 +609,35 @@ def _codex_fact(rows: list[_Row], names_only: bool, date: str) -> dict:
     # Full or cut only for skills whose full size is known; else only what the log shows.
     unknown = any(r.sent is not None and r.full is None for r in rows)
     misfit = {"kind": "out", "n": out} if out else {"kind": "cut", "n": len(cuts)} if cuts else None
+    skills = _many(n, "skill", "skills")
     if out:
         short = words.CODEX_SHORT_OUT.format(out=out)
-        say = words.CODEX_LEFT_OUT.format(date=date, out=out, n=n)
+        them = _many(out, "it", "them")
+        say = words.CODEX_LEFT_OUT.format(when=when, out=out, n=n, skills=skills, them=them)
     elif unknown:
         short = words.CODEX_SHORT_SENT.format(n=n)
-        say = words.CODEX_SENT_UNKNOWN.format(date=date, n=n)
+        their = _many(n, "its", "their")
+        say = words.CODEX_SENT_UNKNOWN.format(when=when, n=n, skills=skills, their=their)
     elif cuts and names_only:
         short = words.CODEX_SHORT_CUT.format(bad=len(cuts), n=n)
-        say = words.CODEX_NAMES.format(date=date)
+        say = words.CODEX_NAMES.format(when=when)
     elif cuts:
         low, high = min(cuts), max(cuts)
         cut = f"{low:,}" if low == high else f"{low:,}–{high:,}"
-        short = words.CODEX_SHORT_CUT.format(bad=len(cuts), n=n)
-        say = words.CODEX_CUT.format(date=date, bad=len(cuts), n=n, cut=cut)
+        bad = len(cuts)
+        short = words.CODEX_SHORT_CUT.format(bad=bad, n=n)
+        say = words.CODEX_CUT.format(
+            when=when,
+            bad=bad,
+            n=n,
+            cut=cut,
+            descriptions=_many(n, "description", "descriptions"),
+            were=_many(bad, "was", "were"),
+            their=_many(bad, "its", "their"),
+        )
     else:
         short = words.CODEX_SHORT_ALL.format(n=n)
-        say = words.CODEX_ALL_SENT.format(date=date, n=n)
+        say = _many(n, words.CODEX_ONE_SENT, words.CODEX_ALL_SENT).format(when=when, n=n)
     result = {"short": short, "say": say, "sent": sent, "over": over, "used": used}
     return result | {
         "size": used + sum(over.values()),
@@ -598,6 +684,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     if not sent_list.skills:
         return _disk_card(client, [], words.NOTHING_TO_FIT, [])
     date, _ = _when(sent_list.at)
+    when = _on_date(date)
     items = _skills(inventory, client, sent_list.folder)
     by_path = {os.path.realpath(i.source.path): i for i in items if i.source.path}
     by_name = {i.name: i for i in items}
@@ -630,7 +717,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     base = run(states) if budget and known else None
     checked = base is not None and _codex_same(rows, base[1], names_only)
 
-    fact = _codex_fact(rows, names_only, date)
+    fact = _codex_fact(rows, names_only, when)
     bad = fact.pop("bad")
     unknown = fact.pop("unknown")
     if checked and not bad:
@@ -643,7 +730,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     else:
         title = words.WINDOW_TITLE.format(size=_size(window)) if window else words.UNKNOWN_WINDOW
         models = sent_list.model or ""
-    windows = [_window_card(title, models, words.LAST_CHAT_TAG.format(date=date), budget, fact)]
+    windows = [_window_card(title, models, _tag(date), budget, fact)]
     if checked:
         other = None
         if limit is not None and window:
@@ -697,13 +784,13 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     if checked:
         check = words.HOW_CODEX_SAME.format(n=bad) if bad else words.HOW_CODEX_DOES
     else:
-        check = words.HOW_NOT_MATCHED
+        check = words.HOW_NOT_MATCHED if base is not None else words.HOW_NOT_RUN
     how = [
-        words.HOW_CODEX_LIST.format(version=version, date=date),
+        words.HOW_CODEX_LIST.format(version=version, when=when),
         words.HOW_CODEX_RULE,
         f"{words.HOW_CODEX_CHECK} {check}",
         *([words.HOW_CODEX_SETTING] if limit is not None else []),
-        words.HOW_CODEX_SIZES.format(date=date),
+        words.HOW_CODEX_SIZES.format(when=when),
         words.HOW_CODEX_TOKENS,
     ]
     return _card(

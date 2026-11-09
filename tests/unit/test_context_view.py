@@ -1,6 +1,8 @@
 """The Context read model, from sandbox homes with small fixture chat logs (spec "States")."""
 
 import json
+import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -8,6 +10,7 @@ import pytest
 from kitden.context.rules import CodexSkill, codex_rule
 from kitden.views.context_view import context_view
 from kitden.views.inventory import build_inventory
+from kitden.views.overview import overview
 from tests.unit.test_context_claude_log import assistant, list_entry, write_chat
 from tests.unit.test_context_codex_log import meta, turn, write_log
 from tests.unit.test_context_codex_log import skills as codex_list_entry
@@ -172,6 +175,136 @@ def test_skills_set_to_name_only_after_the_chat_keep_the_last_chat_result(home):
     assert result["room"] is None
 
 
+def before_the_chat(path: Path) -> None:
+    """The settings file last changed on Nov 1, before the chats of these tests (Nov 6)."""
+    when = datetime(2026, 11, 1, tzinfo=UTC).timestamp()
+    os.utime(path, (when, when))
+
+
+def chosen_home(home, overrides):
+    """Four long skills, a limit of 2,100 characters, and these skills set to Name only."""
+    own = home / ".claude/skills"
+    for name in ("alpha", "beta", "gamma", "delta"):
+        skill(own, name, LONG[:1000])
+    settings = {"env": {"SLASH_COMMAND_TOOL_CHAR_BUDGET": "2100"}, "skillOverrides": overrides}
+    write_json(home / ".claude/settings.json", settings)
+    usage(home, {"alpha": 9, "beta": 5, "gamma": 2, "delta": 1})
+
+
+def test_skills_set_to_name_only_before_the_chat_are_a_choice_not_a_misfit(home):
+    chosen_home(home, {"gamma": "name-only", "delta": "name-only"})
+    before_the_chat(home / ".claude/settings.json")
+    claude_chat(home, {"alpha": LONG[:1000], "beta": LONG[:1000], "gamma": None, "delta": None})
+    cc = view(home)["claude_code"]
+    result = cc["windows"][0]["result"]
+    assert result["say"] == (
+        "In your last chat on Nov 6, all 4 skills were sent; 2 showed only a name, as you chose."
+    )
+    assert (cc["lamp"], result["misfit"], result["over"]) == ("ok", None, {})
+    assert result["short"] == "All 4 sent"
+    assert result["room"] is not None
+    # The Overview has no card for a choice.
+    clients = context_view(build_inventory(home), home, home / ".codex", None, {})["clients"]
+    cards = overview(build_inventory(home), [], None, context_cards=clients)["cards"]
+    assert not [c for c in cards if c["icon"] == "gauge"]
+
+
+def test_a_choice_and_a_misfit_are_told_apart(home):
+    chosen_home(home, {"delta": "name-only"})
+    before_the_chat(home / ".claude/settings.json")
+    claude_chat(home, {"alpha": LONG[:1000], "beta": LONG[:1000], "gamma": None, "delta": None})
+    cc = view(home)["claude_code"]
+    result = cc["windows"][0]["result"]
+    assert result["say"] == (
+        "In your last chat on Nov 6, 1 of 4 skills showed only a name. The agent may not have "
+        "used it. 1 more showed only a name, as you chose."
+    )
+    assert (cc["lamp"], result["misfit"], result["over"]) == (
+        "warn",
+        {"kind": "name", "n": 1},
+        {"gamma": 1002},
+    )
+
+
+def test_name_only_the_rule_needs_to_rebuild_the_list_is_a_choice(home):
+    # The settings changed after the chat, but with gamma on, the rule would have sent its
+    # description: only its Name only setting explains the list.
+    own = home / ".claude/skills"
+    for name in ("alpha", "beta", "gamma"):
+        skill(own, name, f"Does {name}.")
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"gamma": "name-only"}})
+    claude_chat(home, {"alpha": "Does alpha.", "beta": "Does beta.", "gamma": None})
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is True
+    assert cc["windows"][0]["result"]["say"] == (
+        "In your last chat on Nov 6, all 3 skills were sent; 1 showed only a name, as you chose."
+    )
+    assert cc["lamp"] == "ok"
+
+
+def test_without_a_check_name_only_is_told_as_set_now(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    skill(home / ".claude/skills", "beta", "Does beta.")
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"beta": "name-only"}})
+    claude_chat(home, {"alpha": "Does alpha.", "beta": None}, model="claude-new-9")
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is False
+    result = cc["windows"][0]["result"]
+    assert result["say"] == (
+        "In your last chat on Nov 6, all 2 skills were sent; 1 showed only a name and is set to "
+        "Name only now."
+    )
+    assert (cc["lamp"], result["misfit"]) == ("ok", None)
+
+
+def test_the_check_that_never_ran_is_not_called_a_mismatch(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"alpha": "Does alpha."}, model="claude-new-9")
+    how = view(home)["claude_code"]["how"]
+    assert how[2].endswith("This time Kitden could not run the check.")
+
+
+def test_a_check_that_ran_and_differs_says_so(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    skill(home / ".claude/skills", "beta", "Does beta.")
+    claude_chat(home, {"alpha": "Does alpha.", "beta": None})
+    how = view(home)["claude_code"]["how"]
+    assert how[2].endswith("This time it does not.")
+
+
+def test_one_skill_and_a_bad_timestamp_read_plainly(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"alpha": "Does alpha."}, at="not a time")
+    cc = view(home)["claude_code"]
+    [fact, *_] = cc["windows"]
+    assert fact["result"]["say"] == (
+        "In your last chat, your one skill was sent with its description."
+    )
+    assert fact["tag"] == "Last chat"
+    assert cc["how"][0] == (
+        "Last chat: the list Claude Code 2.1.311 sent in the Claude app, read from its chat log."
+    )
+
+
+def test_one_skill_with_only_a_name(home):
+    claude_chat(home, {"alpha": None})
+    say = view(home)["claude_code"]["windows"][0]["result"]["say"]
+    assert say == (
+        "In your last chat on Nov 6, 1 of 1 skill showed only a name. The agent may not have "
+        "used it."
+    )
+
+
+def test_an_unreadable_log_with_no_version_names_no_version(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    entry = list_entry(["alpha"], "- alpha: A.", version=None, isInitial=False)
+    write_chat(home, "p", "chat", [entry], 100)
+    assert view(home)["claude_code"]["message"] == (
+        "Kitden cannot read chat logs of this version of Claude Code yet, so it shows no result "
+        "and no estimate."
+    )
+
+
 def test_a_second_window_that_drops_skills(home):
     own = home / ".claude/skills"
     names = [f"s{i}" for i in range(1, 9)]
@@ -279,7 +412,7 @@ def test_a_model_not_in_the_table_gets_the_fact_and_no_estimate(home):
     [fact] = cc["windows"]
     assert fact["budget"] is None
     assert fact["result"]["say"] == (
-        "In your last chat on Nov 6, all 1 skills were sent with their descriptions."
+        "In your last chat on Nov 6, your one skill was sent with its description."
     )
     assert fact["result"]["room"] is None
 
@@ -469,7 +602,7 @@ def test_codex_left_out(home):
     fact = cx["windows"][0]
     assert fact["result"]["say"] == (
         "In your last chat on Nov 7, Codex removed every description and left 1 of 3 skills out "
-        "of the list. The agent did not see them at all."
+        "of the list. The agent did not see it at all."
     )
     assert fact["result"]["short"] == "1 left out, the rest name only"
     assert fact["result"]["misfit"] == {"kind": "out", "n": 1}
@@ -495,6 +628,31 @@ def test_codex_everything_fits_and_a_new_skill_is_not_left_out(home):
     assert fact["result"]["room"].startswith("Estimate: about ")
     assert fact["result"]["room"].endswith(" tokens left before the limit.")
     assert {s["name"]: s["side"] for s in cx["skills"]}["gamma"] is None
+
+
+def test_codex_one_skill_and_a_bad_timestamp_read_plainly(home):
+    paths = codex_home(home, window=272_000)
+    codex_chat(home, [f"- alpha: {CODEX_A} (file: {paths['alpha']})"], at="not a time")
+    cx = view(home)["codex"]
+    fact = cx["windows"][0]
+    assert fact["result"]["say"] == (
+        "In your last chat, your one skill was sent with its full description."
+    )
+    assert fact["tag"] == "Last chat"
+    assert cx["how"][0] == (
+        "Last chat: the list Codex 0.163.0-alpha.11 sent, read from its chat log."
+    )
+    assert cx["how"][-2] == (
+        "Full sizes come from your skill files today. They may have changed since the chat."
+    )
+
+
+def test_codex_check_that_never_ran_is_not_called_a_mismatch(home):
+    paths = codex_home(home)  # the model cache gives no window: no limit to run the rule with
+    codex_chat(home, [f"- alpha: {CODEX_A} (file: {paths['alpha']})"])
+    cx = view(home)["codex"]
+    assert cx["checked"] is False
+    assert cx["how"][2].endswith("This time Kitden could not run the check.")
 
 
 def test_codex_with_no_files_found_gives_no_full_or_cut_verdict(home):

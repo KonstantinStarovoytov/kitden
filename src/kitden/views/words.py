@@ -174,33 +174,48 @@ CONTEXT_LIMITS = {
     "cursor": "Cursor does not publish a limit for this list.",
 }
 NO_CHAT = "No {client} chat yet. Open one chat, and Kitden will show what {client} sent."
+# "{client}" is "Claude Code 2.2.0", or "this version of Claude Code" when the log names none.
 CANNOT_READ_LOG = (
-    "Kitden cannot read chat logs of {client} {version} yet, so it shows no result and no estimate."
+    "Kitden cannot read chat logs of {client} yet, so it shows no result and no estimate."
 )
+THIS_VERSION = "this version of {client}"
 NOTHING_TO_FIT = "There is nothing to fit."
 CURSOR_CANNOT_SEE = "Kitden cannot see what Cursor sends, so it cannot tell if your skills fit."
 NO_CHECK = "Kitden cannot check its estimate against your last chat, so it shows none."
-# The fact of the last chat, on its window card.
-CLAUDE_ALL_SENT = "In your last chat on {date}, all {n} skills were sent with their descriptions."
+# The fact of the last chat, on its window card. "{when}" is " on Nov 6", or "" when the log's
+# time does not parse; the words in () are the forms for one.
+ON_DATE = " on {date}"
+CLAUDE_ALL_SENT = "In your last chat{when}, all {n} skills were sent with their descriptions."
+CLAUDE_ONE_SENT = "In your last chat{when}, your one skill was sent with its description."
 CLAUDE_NAMES_ONLY = (
-    "In your last chat on {date}, {bad} of {n} skills showed only a name. "
-    "The agent may not have used them."
+    "In your last chat{when}, {bad} of {n} {skills} showed only a name. "
+    "The agent may not have used {them}."
 )
-CODEX_ALL_SENT = "In your last chat on {date}, all {n} skills were sent with full descriptions."
+# Skills that showed only a name because they were set to Name only: a choice, not a misfit.
+# "{rest}" is CLAUDE_CHOSEN or CLAUDE_SET_NOW.
+CLAUDE_ALL_SENT_BUT = "In your last chat{when}, all {n} skills were sent; {rest}"
+CLAUDE_ONE_SENT_BUT = "In your last chat{when}, your one skill was sent; {rest}"
+CLAUDE_MORE = "{n} more"
+# Kitden can tell it was the setting at that chat (see context_view._chosen).
+CLAUDE_CHOSEN = "{chosen} showed only a name, as you chose."
+# Kitden cannot tell: it says only what the setting is today.
+CLAUDE_SET_NOW = "{chosen} showed only a name and {are} set to Name only now."
+CODEX_ALL_SENT = "In your last chat{when}, all {n} skills were sent with full descriptions."
+CODEX_ONE_SENT = "In your last chat{when}, your one skill was sent with its full description."
 CODEX_CUT = (
-    "In your last chat on {date}, {bad} of {n} descriptions were cut to {cut} characters. "
-    "The agent saw only their start."
+    "In your last chat{when}, {bad} of {n} {descriptions} {were} cut to {cut} characters. "
+    "The agent saw only {their} start."
 )
 CODEX_LEFT_OUT = (
-    "In your last chat on {date}, Codex removed every description and left {out} of {n} skills "
-    "out of the list. The agent did not see them at all."
+    "In your last chat{when}, Codex removed every description and left {out} of {n} {skills} "
+    "out of the list. The agent did not see {them} at all."
 )
 CODEX_NAMES = (
-    "In your last chat on {date}, Codex removed every description. The agent saw only the names."
+    "In your last chat{when}, Codex removed every description. The agent saw only the names."
 )
 # A Codex list whose skill files Kitden cannot all find: no full or cut verdict.
 CODEX_SENT_UNKNOWN = (
-    "In your last chat on {date}, Codex sent {n} skills. Kitden cannot find all their files, so "
+    "In your last chat{when}, Codex sent {n} {skills}. Kitden cannot find all {their} files, so "
     "it cannot tell if any were cut."
 )
 ROOM_LEFT = "Estimate: about {left} {unit} left before the limit."
@@ -236,6 +251,7 @@ LOSES = {
 }
 # Window cards.
 LAST_CHAT_TAG = "Last chat · {date}"
+LAST_CHAT = "Last chat"
 ESTIMATE_TAG = "Estimate"
 WINDOW_TITLE = "{size} window"
 UNKNOWN_WINDOW = "Unknown window"
@@ -268,9 +284,10 @@ NOTE_CODEX_OFF = "Off frees room, so long descriptions get cut less."
 NOTE_NOT_LISTED = "It was not in the list of your last chat."
 NOTE_NO_FILE = "Kitden cannot find its file, so it cannot tell if it was cut."
 # "How this is counted".
-# "{version}" and "{surface}" each start with a space, or are "" when the log does not say.
+# "{version}", "{when}" and "{surface}" each start with a space, or are "" when the log does not
+# say.
 HOW_CLAUDE_LIST = (
-    "Last chat: the list Claude Code{version} sent on {date}{surface}, read from its chat log."
+    "Last chat: the list Claude Code{version} sent{when}{surface}, read from its chat log."
 )
 HOW_CLAUDE_RULE = (
     "Estimates use Claude Code's own rule, read from version 2.1.311: 1% of the window, at 3 "
@@ -283,6 +300,8 @@ HOW_CLAUDE_CHECK = (
 )
 HOW_CLAUDE_CHECKED = "On Nov 7 the rule also matched two test chats with a smaller limit."
 HOW_NOT_MATCHED = "This time it does not."
+# The rule could not run: no limit known, or a size not known.
+HOW_NOT_RUN = "This time Kitden could not run the check."
 HOW_CLAUDE_SETTING = (
     "The limit is SLASH_COMMAND_TOOL_CHAR_BUDGET from your Claude Code settings. "
     "A value set in the shell is out of Kitden's sight."
@@ -290,7 +309,7 @@ HOW_CLAUDE_SETTING = (
 HOW_CLAUDE_SHELL = "A SLASH_COMMAND_TOOL_CHAR_BUDGET set in the shell is out of Kitden's sight."
 HOW_CLAUDE_SURFACE = "The list in the terminal can differ from the Claude app."
 HOW_CLAUDE_REST = "The rest of the window (system prompt, tools, MCP, the chat) is not measured."
-HOW_CODEX_LIST = "Last chat: the list Codex{version} sent on {date}, read from its chat log."
+HOW_CODEX_LIST = "Last chat: the list Codex{version} sent{when}, read from its chat log."
 HOW_CODEX_RULE = (
     "Estimates use Codex's rule from its source code: 2% of the window, about 4 bytes per token. "
     "Each entry also pays for its name and file path."
@@ -302,7 +321,9 @@ HOW_CODEX_CHECK = (
 HOW_CODEX_SAME = "It does: the same {n}."
 HOW_CODEX_DOES = "It does."
 HOW_CODEX_SETTING = "The limit is skills.max_context_tokens in Codex's config.toml."
-HOW_CODEX_SIZES = "Full sizes come from your skill files today. They may have changed since {date}."
+HOW_CODEX_SIZES = (
+    "Full sizes come from your skill files today. They may have changed since the chat{when}."
+)
 HOW_CODEX_TOKENS = "Tokens here are Codex's own count, not exact model tokens."
 HOW_CURSOR = (
     "Cursor does not publish a limit for this list, and Kitden found no log that shows what it "

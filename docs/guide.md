@@ -30,7 +30,7 @@ to size and check that list; it keeps none of it and sends nothing. Estimates fo
 window, or for a change you are about to make, show only while Kitden's rule rebuilds that last
 list. Cursor gets no verdict, because Kitden cannot see what Cursor sends. In a skill's
 **Details**, switch it to **On**, **Name only** (Claude Code) or **Off** where the client
-allows it; built-in skills and Cursor have no switch. The change goes through preview,
+allows it; built-in skills, Claude Code plugin skills and Cursor have no switch. The change goes through preview,
 **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
 did not fit.
 
