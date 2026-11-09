@@ -112,7 +112,8 @@ def test_outside_rows_name_their_columns_and_why_they_stay(tmp_path):
         page.post("/api/rescan", headers=POST)
         moves = page.get("/api/gateway-view").json()["groups"]["move"]
     row = next(r for r in moves if r["name"] == "github")
-    assert row["stays"] == "github reads values from your shell; it stays direct for now."
+    fills = "github needs values its client fills in when it starts; it stays direct for now."
+    assert row["stays"] == fills
 
 
 def test_a_name_set_up_differently_in_one_group_stays_with_the_moves_own_words(tmp_path):
