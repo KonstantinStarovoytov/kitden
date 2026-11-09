@@ -24,6 +24,7 @@ BUNDLE = "{} comes as a bundle; Kitden can't run it yet."
 CANNOT_FILL = "{} needs values its client fills in when it starts."
 OWN_FOLDER = "{} must start in a folder of its own."
 OWN_FOLDER_NAMED = "{} must start in its own folder, tool."
+NO_FOLDER = "{} must start in its own folder, tool, which is not on this computer."
 UNREADABLE = "{} could not be read from its file."
 IN_FOLDER = "{} runs a file inside its plugin folder; Kitden can't run it from the gateway."
 ORIGIN = "http://127.0.0.1:47800"
@@ -110,7 +111,8 @@ def test_entries_the_gateway_cannot_run_are_refused(home, entry, why):
             {"command": "node", "args": ["dist/index.js"], "cwd": "${CLAUDE_PLUGIN_ROOT}"},
             OWN_FOLDER,
         ),
-        ({"command": "uvx", "cwd": "/srv/tool"}, OWN_FOLDER_NAMED),
+        ({"command": "uvx", "cwd": "tool"}, OWN_FOLDER_NAMED),
+        ({"command": "uvx", "cwd": "/srv/tool"}, NO_FOLDER),
         ({"command": "uvx", "args": "mcp-x"}, UNREADABLE),
         ({"command": "uvx", "env": ["A=1"]}, UNREADABLE),
         ({"command": 5}, UNREADABLE),

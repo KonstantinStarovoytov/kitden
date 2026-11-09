@@ -335,9 +335,12 @@ def test_project_file_entries_and_shell_values_are_refused_with_reasons(home):
     ):
         refused(home, (client, name), shell.format(name))
 
-    add_codex(home, "folder", 'command = "npx"\ncwd = "/opt/app"')
+    add_codex(home, "folder", 'command = "npx"\ncwd = "app"')
     own = "folder must start in its own folder, app; it stays direct for now."
     refused(home, ("codex", "folder"), own)
+    add_codex(home, "gone", 'command = "npx"\ncwd = "/opt/gone"')
+    gone = "gone must start in its own folder, gone, which is not on this computer; "
+    refused(home, ("codex", "gone"), gone + "it stays direct for now.")
 
     add_claude(home, "stream", {"type": "sse", "url": "https://s.invalid/sse"})
     refused(
@@ -360,6 +363,16 @@ def test_project_file_entries_and_shell_values_are_refused_with_reasons(home):
     add_cursor(home, "per-project", {"command": "npx", "args": ["p-mcp", "${workspaceFolder}"]})
     steps = move(home, ("cursor", "per-project"))
     assert steps[0].edit.after == {"command": "npx", "args": ["p-mcp", "${workspaceFolder}"]}
+
+
+def test_a_server_with_a_start_folder_on_this_computer_moves_with_it(home):
+    # Cursor has no start folder setting, so the gateway is where such a server can run.
+    folder = home / "work/agents"
+    folder.mkdir(parents=True)
+    entry = {"command": "uv", "args": ["run", "python", "run_mcp.py"], "cwd": str(folder)}
+    add_cursor(home, "agents", entry)
+    steps = move(home, ("cursor", "agents"))
+    assert steps[0].edit.after == entry
 
 
 def test_two_different_entries_with_one_name_are_refused(home):

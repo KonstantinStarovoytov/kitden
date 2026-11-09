@@ -5,8 +5,8 @@ Kitden's own read-only tools and the tools turned on for the session's project, 
 are unique, the same in every project, and short enough for every client. It finds the session's
 folder, its projects and the tool list at the first `tools/list` and keeps them for the session.
 On each call of an upstream tool it reads the rules again and refuses a tool that is off now.
-A local server starts in that folder when one of its tools is first called, or at that first
-`tools/list` when its tool list is not known yet.
+A local server starts in that folder (or in its own start folder, `cwd`) when one of its tools
+is first called, or at that first `tools/list` when its tool list is not known yet.
 
 MCP SDK facts this relies on (mcp 2.3.0, checked 2026-10-21):
 - `MCPServer` keeps its low-level server in a private attribute. So the gateway is its own
@@ -414,7 +414,9 @@ class Upstreams:
             command=entry["command"],
             args=[fill_placeholders(str(arg), folder) for arg in entry.get("args") or []],
             env=self._env(entry),
-            cwd=folder,
+            # A server with a start folder of its own starts there; a project folder in its
+            # arguments is still the session's.
+            cwd=entry.get("cwd") or folder,
         )
 
     def _env(self, entry: dict) -> dict[str, str]:
