@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-11-08
+Last updated: 2026-11-09
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -16,6 +16,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **The toast names the client that refused a change:** when a client's own command fails,
   "Nothing was changed" now says "Claude Code refused the change" instead of "The change did
   not check out". Thanks to @chiragjangiir (#25).
+- **The MCP tools say when to use each one:** every tool description names the sibling to
+  use instead, and project_path explains what it takes, as Glama's tool quality score asked.
 
 ### 0.6.1
 

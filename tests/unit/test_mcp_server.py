@@ -66,6 +66,20 @@ async def test_only_read_only_tools_are_offered(home):
         assert "Do not edit client settings files" in tool.description
 
 
+async def test_each_tool_says_when_to_use_it_and_what_project_path_takes(home):
+    # Glama's TDQS (2026-11-09) marked two gaps: no word on when to pick a tool over its
+    # siblings, and project_path with no description in the schema.
+    async with Client(server_for(home)) as client:
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+    for name, tool in tools.items():
+        others = TOOLS - {name}
+        assert any(o in tool.description for o in others), name
+        properties = tool.input_schema.get("properties", {})
+        if "project_path" in properties:
+            words = properties["project_path"]["description"]
+            assert "relative" in words and "current folder" in words, name
+
+
 async def test_show_setup_matches_the_page_project_view(home):
     website = str(home / "work/website")
     data = await call(server_for(home), "show_setup", project_path=website)
