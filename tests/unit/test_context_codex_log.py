@@ -81,6 +81,23 @@ def test_a_plugin_skill_keeps_its_prefix(tmp_path):
     assert got.paths == {"plugin:skill": "/p/b/SKILL.md", "plugin:other": "/p/o/SKILL.md"}
 
 
+def test_a_name_may_have_spaces(tmp_path):
+    text = (
+        "<skills_instructions>\n"
+        "- Word Word Word: Does C: with a colon. (file: /s/c/SKILL.md)\n"
+        "- Name With Spaces: (file: /s/n/SKILL.md)\n"
+        "- `alias` = `/Users/x/.codex/skills`\n"
+        "</skills_instructions>"
+    )
+    write_log(tmp_path, "a", [meta(), skills(text)], 100)
+    got = last_codex_list(tmp_path, None)
+    assert got.list.skills == (
+        ("Word Word Word", "Does C: with a colon."),
+        ("Name With Spaces", ""),
+    )
+    assert got.paths == {"Word Word Word": "/s/c/SKILL.md", "Name With Spaces": "/s/n/SKILL.md"}
+
+
 def test_roots_lines_are_ignored(tmp_path):
     text = (
         "<skills_instructions>\n"

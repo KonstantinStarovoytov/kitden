@@ -14,10 +14,10 @@ CLIENT = "codex"
 KNOWN_CODEX_VERSION = "0.163.0-alpha.11"
 
 # `- name: description (file: path)`; a name-only line is `- name: (file: path)`. The name is
-# everything up to the first ": " and has no spaces, so a plugin skill keeps its prefix
+# everything up to the first ": " (it may contain spaces), so a plugin skill keeps its prefix
 # (`plugin:skill`). The roots lines of the same block (`- `alias` = `/path``) have no `(file:`.
 # checked 2026-11-09 (real Codex list, cli 0.163.0-alpha.11)
-ENTRY = re.compile(r"^- (?P<name>\S+?): (?P<desc>.*?) ?\(file: (?P<path>[^)]*)\)$")
+ENTRY = re.compile(r"^- (?P<name>.+?): (?P<desc>.*?) ?\(file: (?P<path>[^)]*)\)$")
 
 
 @dataclass(frozen=True)
