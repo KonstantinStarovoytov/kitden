@@ -25,6 +25,9 @@ Keep each pull request focused on one problem. Use short, plain English for code
 and documentation. Follow the [design guide](docs/design.md) for interface changes and
 [AGENTS.md](AGENTS.md) when working with a coding agent.
 
+Changes are judged against [PRINCIPLES.md](PRINCIPLES.md). Read the [AI policy](AI_POLICY.md)
+if you used AI or want to know what the review bots do.
+
 Every change to client settings must go through preview → Apply with a backup → verify →
 Undo. Tests must use sandbox homes, never your real settings.
 
