@@ -17,14 +17,14 @@ Every change is judged against these. Reviewers read this file.
 - **Super simple and visual.** People should want to press the buttons. The main page shows a
   name, the client and an action; paths, addresses and commands stay behind Details.
 - **Fast to open.**
-- **Local only and secure.** Everything stays on the computer. A token never leaves it, except
-  to the server it belongs to.
+- **Local only and secure.** Nothing leaves the computer except what the person asks for (a
+  catalog, a remote server). A token goes only to its own server.
 - **Safe to change.** Every change to a client's settings goes through preview, Apply with a
   backup, verify and Undo.
 
 ## What we do not do
 
-<!-- Draft: the owner edits this list. -->
+<!-- Draft: the maintainer edits this list. -->
 
 - No cloud account.
 - No telemetry.
@@ -33,5 +33,6 @@ Every change is judged against these. Reviewers read this file.
 
 ## What counts as new
 
-A route, a CLI command, a setting, a page element or a dependency goes to the owner before it
-is built. Open an issue and wait for a yes.
+A route, a CLI command, a setting, a page element or a dependency goes to the maintainer
+before it is built. Open an issue first and wait for a yes. If a diff adds one of these, the
+reviewers say so in their summary.

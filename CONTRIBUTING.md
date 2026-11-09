@@ -1,8 +1,10 @@
 # Contributing to Kitden
 
-Bug reports, documentation fixes and small improvements are welcome. For a larger feature,
-[open an issue](https://github.com/KonstantinStarovoytov/kitden/issues) before starting so we
-can agree on the scope. The [roadmap](ROADMAP.md) shows current plans.
+Bug reports, documentation fixes and other small fixes are welcome directly. Anything new a
+user can see or set (a route, a command, a setting, a page element, a dependency; see
+[PRINCIPLES.md](PRINCIPLES.md)) needs an
+[issue](https://github.com/KonstantinStarovoytov/kitden/issues) first, so the maintainer can
+agree to it. The [roadmap](ROADMAP.md) shows current plans.
 
 ## Set up
 

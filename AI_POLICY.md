@@ -7,13 +7,13 @@ send and answer questions about it yourself.
 
 ## Automated reviewers
 
-Two bots read each pull request: `claude` and `luna`. They judge it against
-[PRINCIPLES.md](PRINCIPLES.md).
+Two bots review pull requests: `claude` and `luna`. They look for bugs and check the change
+against [PRINCIPLES.md](PRINCIPLES.md).
 
 - Each one only comments. It never approves, requests changes, pushes or merges.
 - Each comment starts with: "Automated review by Kitden's {reviewer} reviewer ({model}).
   👍 useful · 👎 wrong"
 - Pull requests from forks get no automatic review for now.
 
-Press 👍 or 👎 on a comment to say if it helped. To reach a person, mention the maintainer
-(`@KonstantinStarovoytov`) in a comment.
+Only the maintainer's 👍 or 👎 on a comment is counted. To reach the maintainer, mention
+`@KonstantinStarovoytov` in a comment.
