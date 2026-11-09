@@ -7,7 +7,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
-### Not released yet
+### 0.6.5
 
 - **A server that starts in its own folder can move into the gateway:** the gateway starts it
   in that folder, so it works in every client, also in Cursor, which has no start folder setting. A folder
