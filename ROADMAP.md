@@ -9,6 +9,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **A fast Apply no longer flickers:** when the write ends within 300 ms, the bar keeps its
+  words and goes straight to Applied, instead of flashing "Applying…" and resizing twice.
 - **Remove works for plugins when Claude Code was started in the home folder:** Kitden no
   longer reads `~/.claude/settings.json` a second time as that "project's" file, so a user
   plugin, hook or skill has no project copy. Remove ran `uninstall -s project` on that copy,
@@ -16,6 +18,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **The toast names the client that refused a change:** when a client's own command fails,
   "Nothing was changed" now says "Claude Code refused the change" instead of "The change did
   not check out". Thanks to @chiragjangiir (#25).
+- **The MCP tools say when to use each one:** every tool description names the sibling to
+  use instead, and project_path explains what it takes, as Glama's tool quality score asked.
 - **Servers that apps write back:** when a server runs from a Mac app such as Pen, the review
   says the app may write it back, the Gateway names the app when its entries differ, and
   Changes and Overview say when a removed server is back.

@@ -8,10 +8,11 @@ When servers are moved into the Kitden gateway, it also offers their tools (loca
 import os
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server.mcpserver import MCPServer
 from mcp_types import ToolAnnotations
+from pydantic import Field
 
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
@@ -34,6 +35,17 @@ NO_EDITS = (
     "change on the local page (run `kitden open`), which previews, backs up and can undo it."
 )
 NO_CHANGES = "Read-only: this tool cannot change settings. " + NO_EDITS
+# The same words for project_path on every tool that takes one (Glama's TDQS asked, 2026-11-09).
+ProjectPath = Annotated[
+    str | None,
+    Field(
+        description=(
+            "A folder, absolute or relative to the current folder; the current folder by "
+            "default. The project is the known project that is or contains the folder. Outside "
+            "any known project the answer shows the user-level setup."
+        )
+    ),
+]
 ABOUT = (
     "Shows which MCP servers, skills, plugins, hooks, marketplaces and instruction files "
     "(CLAUDE.md, AGENTS.md, rules, commands, agents) Claude Code, Codex and Cursor have on this "
@@ -87,12 +99,12 @@ def create_server(
         description=(
             "Show what each AI coding client loads for a project: MCP servers, skills, plugins, "
             "hooks, marketplaces and instruction files, with source, scope and on/off state. "
-            "project_path defaults "
-            "to the current folder; client (claude_code, claude_desktop_code_tab, codex, cursor) "
-            "defaults to all. " + NO_CHANGES
+            "Start here for the full picture; use list_findings for problems only and "
+            "explain_item for one name. client (claude_code, claude_desktop_code_tab, codex, "
+            "cursor) defaults to all. " + NO_CHANGES
         ),
     )
-    def show_setup(project_path: str | None = None, client: str | None = None) -> dict[str, Any]:
+    def show_setup(project_path: ProjectPath = None, client: str | None = None) -> dict[str, Any]:
         inventory, project, path = where(project_path)
         if client is not None and client not in found_clients(inventory):
             raise ValueError(f"Unknown or missing client: {client}")
@@ -115,11 +127,12 @@ def create_server(
         description=(
             "List problems for a project: duplicates, items loaded from another client's folder, "
             "the same name from another source, overrides, unknown states, untested versions, "
-            "and MCP servers that bypass the gateway. Each names its clients. project_path "
-            "defaults to the current folder. " + NO_CHANGES
+            "and MCP servers that bypass the gateway. Each names its clients. Use it to check a "
+            "setup for problems; show_setup lists everything that loads, and explain_item follows "
+            "one name. " + NO_CHANGES
         ),
     )
-    def list_findings(project_path: str | None = None) -> dict[str, Any]:
+    def list_findings(project_path: ProjectPath = None) -> dict[str, Any]:
         inventory, project, path = where(project_path)
         found = find_findings(inventory, path) + find_bypasses(inventory, path)
         return {"project": _project_dict(project), "findings": [finding_dict(f) for f in found]}
@@ -128,12 +141,13 @@ def create_server(
         annotations=READ_ONLY,
         description=(
             "Explain one name: every definition across clients and scopes, which one loads in "
-            "the project, and why. kind is optional (mcp_server, skill, plugin, hook, "
+            "the project, and why. Use it after show_setup or list_findings names an item; "
+            "show_setup lists everything. kind is optional (mcp_server, skill, plugin, hook, "
             "marketplace, instructions). " + NO_CHANGES
         ),
     )
     def explain_item(
-        name: str, kind: str | None = None, project_path: str | None = None
+        name: str, kind: str | None = None, project_path: ProjectPath = None
     ) -> dict[str, Any]:
         inventory, project, path = where(project_path)
         # An agent's answer leaves this computer: a file's first lines stay on the local page.
@@ -144,7 +158,8 @@ def create_server(
         annotations=READ_ONLY,
         description=(
             "List the projects the clients know, which clients know each one, and whether the "
-            "folder still exists. " + NO_CHANGES
+            "folder still exists. Use it to find a project_path for show_setup, list_findings "
+            "and explain_item. " + NO_CHANGES
         ),
     )
     def list_projects() -> dict[str, Any]:
