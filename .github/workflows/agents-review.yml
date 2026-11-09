@@ -21,7 +21,7 @@ jobs:
       && !endsWith(github.actor, '[bot]')
       && !github.event.pull_request.draft
       && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
-    uses: KonstantinStarovoytov/kitden-agents/.github/workflows/review-claude.yml@dc9685e70d70c57327399ae61e34d19e6097ffda
+    uses: KonstantinStarovoytov/kitden-agents/.github/workflows/review-claude.yml@eb15727477cc0a28d8bd3386e57542954071d50a
     permissions:
       contents: read # the reviewer reads the code
       pull-requests: write # it posts comments
@@ -30,3 +30,19 @@ jobs:
       model: claude-sonnet-5-5
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  luna:
+    # Same conditions as the claude job above.
+    if: >-
+      vars.AGENTS_ENABLED == 'true'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && !endsWith(github.actor, '[bot]')
+      && !github.event.pull_request.draft
+      && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
+    uses: KonstantinStarovoytov/kitden-agents/.github/workflows/review-luna.yml@eb15727477cc0a28d8bd3386e57542954071d50a
+    permissions:
+      contents: read # the reviewer reads the code
+      pull-requests: write # it posts comments
+      actions: read # it counts today's runs
+    secrets:
+      openai_api_key: ${{ secrets.OPENAI_API_KEY }}
