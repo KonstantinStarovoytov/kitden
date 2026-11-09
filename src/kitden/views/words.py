@@ -250,6 +250,11 @@ CONTEXT_SIDES = {
     "cursor": ("The agent can pick it", "Only when you ask"),
 }
 SKILLS_FOUND = "Skills found"
+# Where a skill comes from, in its Details.
+SOURCE_BUILT_IN = "Built into Claude Code"
+SOURCE_PLUGIN = "Plugin {}"
+SOURCE_PROJECT = "Project {}"
+SOURCE_OWN = "Your skills"
 # One skill's Details line.
 NOTE_BUILT_IN = "Claude Code always sends built-in skills in full."
 NOTE_PLUGIN = "A plugin's skill follows its plugin. Turn the plugin off in the Library."

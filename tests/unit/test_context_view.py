@@ -670,3 +670,27 @@ def test_cursor_skills_have_no_switch(home):
     [row] = view(home)["cursor"]["skills"]
     assert row["switch"] == []
     assert row["item"] is not None
+
+
+def test_a_skill_says_its_source_and_a_project_skill_names_its_project(home, tmp_path):
+    # A rule for a project's own skill must name that project (changes/actions.py), so the page
+    # gets its id; a user skill has none.
+    from kitden.model import Project
+
+    project = tmp_path / "work/a"
+    write_json(home / ".claude.json", {"projects": {str(project): {}}})
+    skill(project / ".claude/skills", "local", "Does local.")
+    skill(home / ".claude/skills", "own", "Does own.")
+    install = home / ".claude/plugins/cache/market/plug/1.0.0"
+    skill(install / "skills", "tool", "Does tool.")
+    write_json(
+        home / ".claude/plugins/installed_plugins.json",
+        {"plugins": {"plug@market": [{"installPath": str(install)}]}},
+    )
+    sent = {"local": "Does local.", "own": "Does own.", "plug:tool": "Does tool.", "dataviz": "x"}
+    claude_chat(home, sent, folder=str(project))
+    rows = {s["name"]: (s["project"], s["source"]) for s in view(home)["claude_code"]["skills"]}
+    assert rows["local"] == (Project(str(project), True).id, "Project a")
+    assert rows["own"] == (None, "Your skills")
+    assert rows["plug:tool"] == (None, "Plugin plug")
+    assert rows["dataviz"] == (None, "Built into Claude Code")

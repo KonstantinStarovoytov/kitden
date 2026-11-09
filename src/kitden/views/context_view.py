@@ -38,7 +38,7 @@ from kitden.context.tables import (
     CODEX_FIXED_TOKENS,
 )
 from kitden.local_gateway.settings import as_dict
-from kitden.model import CLIENT_WORDS, Item, ItemKind, Scope
+from kitden.model import CLIENT_WORDS, Item, ItemKind, Project, Scope
 from kitden.views import words
 from kitden.views.effective import effective_view
 from kitden.views.match import plugin_of
@@ -138,16 +138,32 @@ def _skill(
     # Claude Code's skillOverrides does not touch a plugin's skills (spec "Switches per client").
     plugin = client == "claude_code" and item is not None and from_plugin(item)
     switch = [] if item is None or plugin else SWITCHES.get(client, [])
+    # Claude Code takes a rule for a project's own skill only in that project (changes/actions.py).
+    project = item.project if client == "claude_code" and item and not plugin else None
     return {
         "name": name,
         "shown": name.split(":")[-1],
         "item": item.id if item else None,
+        "project": Project(project, True).id if project else None,
+        "source": _source(client, name, item),
         "size": size,
         "side": side,
         "state": _state(item),
         "switch": list(switch),
         "note": note,
     }
+
+
+def _source(client: str, name: str, item: Item | None) -> str | None:
+    if item is None:
+        built_in = client == "claude_code" and name in CLAUDE_ALWAYS_FULL
+        return words.SOURCE_BUILT_IN if built_in else None
+    if from_plugin(item):
+        plugin = plugin_of(item)
+        return words.SOURCE_PLUGIN.format(plugin.split("@")[0]) if plugin else None
+    if item.project:
+        return words.SOURCE_PROJECT.format(Path(item.project).name)
+    return words.SOURCE_OWN
 
 
 def _disk_card(client: str, items: list[Item], message: str, how: list[str]) -> dict:
