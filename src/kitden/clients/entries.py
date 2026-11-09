@@ -7,6 +7,7 @@ reading any file again. A move asks the same checks before its review.
 import hashlib
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 from kitden.local_gateway.settings import fill_placeholders
@@ -69,9 +70,14 @@ def entry_refusal(name: str, entry: dict) -> str | None:
     """Why the Kitden gateway cannot run this entry, so it stays direct; None when it can."""
     server = gateway_entry(entry)
     if reads_elsewhere(entry, server):
-        return f"{name} reads values from your shell; it stays direct for now."
+        # A variable, an env file or a helper command the client reads as it starts the server.
+        return f"{name} needs values its client fills in when it starts; it stays direct for now."
     if "cwd" in entry:
-        return f"{name} starts in its own folder; it stays direct for now."
+        # The gateway starts a local server in the project or home folder instead. A plain folder
+        # is named by its base name; one the client fills in ("${CLAUDE_PLUGIN_ROOT}") is not.
+        folder = str(entry["cwd"])
+        where = "a folder of its own" if "${" in folder else f"its own folder, {Path(folder).name}"
+        return f"{name} must start in {where}; it stays direct for now."
     # The gateway speaks streamable HTTP; Claude Code also has `sse` and `ws` (checked
     # 2026-10-21). Without a type, an address that ends in /sse is SSE, as Cursor reads it.
     kind = entry.get("type")

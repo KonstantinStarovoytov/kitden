@@ -313,7 +313,7 @@ def test_project_file_entries_and_shell_values_are_refused_with_reasons(home):
     for client, name in (("claude_code", "docs"), ("cursor", "site-db"), ("codex", "api-docs")):
         refused(home, (client, name), f"{name} is in the project's own files; it stays there.")
 
-    shell = "{} reads values from your shell; it stays direct for now."
+    shell = "{} needs values its client fills in when it starts; it stays direct for now."
     api = {"type": "http", "url": "https://api.invalid/mcp"}
     add_claude(home, "api", {**api, "headers": {"Authorization": "Bearer ${API_KEY}"}})
     add_claude(home, "helped", {**api, "headersHelper": "/opt/bin/headers.sh"})
@@ -336,7 +336,8 @@ def test_project_file_entries_and_shell_values_are_refused_with_reasons(home):
         refused(home, (client, name), shell.format(name))
 
     add_codex(home, "folder", 'command = "npx"\ncwd = "/opt/app"')
-    refused(home, ("codex", "folder"), "folder starts in its own folder; it stays direct for now.")
+    own = "folder must start in its own folder, app; it stays direct for now."
+    refused(home, ("codex", "folder"), own)
 
     add_claude(home, "stream", {"type": "sse", "url": "https://s.invalid/sse"})
     refused(
