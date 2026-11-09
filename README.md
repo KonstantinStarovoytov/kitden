@@ -17,6 +17,10 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
 </p>
 
+<p align="center">
+  <a href="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden"><img width="380" height="200" src="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden/badge" alt="Kitden on Glama"></a>
+</p>
+
 ### Everything your agents load, on one map
 
 Claude Code, Codex and Cursor each keep their own settings. Kitden puts their plugins, skills,
