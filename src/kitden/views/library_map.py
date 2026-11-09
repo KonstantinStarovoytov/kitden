@@ -399,6 +399,9 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             entry["skill"] = skill["id"]
         if row.kind is ItemKind.SKILL:
             entry["off_in"] = _off_in(inventory, own)
+            states = [i.skill_state for i in own if i.skill_state and i.skill_state != "off"]
+            if states:
+                entry["skill_state"] = states[0]
         technical: dict[str, str] = {}
         if row.kind is ItemKind.PLUGIN:
             entry["plugin"] = row.lookup

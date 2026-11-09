@@ -136,6 +136,17 @@ def skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
     return found
 
 
+def waits_to_be_asked(client: str, skill_md: Path) -> str | None:
+    """"only-asked" when Claude Code or Cursor reads `disable-model-invocation: true` in SKILL.md.
+    The field comes from the task ruling, not re-checked against the docs on 2026-11-09."""
+    from kitden.views.skills import front_matter  # views.skills imports this module
+
+    if client not in ("claude_code", "cursor"):
+        return None
+    asked = front_matter(skill_md).get("disable-model-invocation", "")
+    return "only-asked" if asked.lower() == "true" else None
+
+
 def skill_items(
     client: str,
     folder: Path,
@@ -159,6 +170,7 @@ def skill_items(
                 scope=scope,
                 project=project,
                 enabled=enabled,
+                skill_state=waits_to_be_asked(client, real),
             )
         )
     return items

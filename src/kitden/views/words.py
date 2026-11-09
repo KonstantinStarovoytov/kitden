@@ -20,6 +20,13 @@ STATE_WORDS: dict[str, str] = {
     "missing": "Not installed",
 }
 
+# A skill's own state besides On and Off (`Item.skill_state`), as Details says it.
+SKILL_STATE_WORDS: dict[str, str] = {
+    "name-only": "Name only",
+    "user-invocable-only": "Only when you ask",
+    "only-asked": "Only when you ask",
+}
+
 # What Kitden could not read: a whole client, or one file on its first read. An add or a change
 # into such a file is refused, in words that follow the action.
 CLIENT_UNREAD = "Could not read {}."

@@ -216,6 +216,19 @@ def test_a_skill_says_which_projects_turn_it_off_already(tmp_path):
     assert items["release-notes"]["off_in"] == []
 
 
+def test_a_skill_says_its_own_state_for_details(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    _write(
+        home / ".claude/settings.json",
+        {"skillOverrides": {"brandkit": "name-only", "release-notes": "off"}},
+    )
+    items = _items(_map(home))
+    assert items["brandkit"]["skill_state"] == "name-only"
+    # Off is the State fact already; a skill with no state says nothing more.
+    assert "skill_state" not in items["release-notes"]
+    assert not any(i["kind"] != "skill" and "skill_state" in i for i in items.values())
+
+
 def test_a_codex_skill_in_one_project_can_turn_off_that_copy(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     items = _items(_map(home, str(home / "work/atlas")))

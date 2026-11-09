@@ -313,6 +313,17 @@ test('an inside item says Follows its plugin and has no switch', async () => {
   assert.match(here.after.className, /ghost/);
 });
 
+test("a skill with its own state says it as a fact after State", async () => {
+  await reset();
+  const skill = MEDIUM.groups[1].items[0];
+  const said = (state) => facts(details.skillCard({ ...skill, skill_state: state }, c())).filter(([label]) => label === 'Loads');
+  assert.deepEqual(said('name-only'), [['Loads', 'Name only']]);
+  assert.deepEqual(said('user-invocable-only'), [['Loads', 'Only when you ask']]);
+  assert.deepEqual(said('only-asked'), [['Loads', 'Only when you ask']]);
+  assert.deepEqual(said(undefined), []);
+  assert.deepEqual(facts(details.skillCard({ ...skill, skill_state: 'name-only' }, c())).map(([label]) => label).slice(0, 3), ['Plugin', 'State', 'Loads']);
+});
+
 test("a skill's Turn off for all projects adds one skill.rule row per client that can", async () => {
   await reset();
   const skill = MEDIUM.groups[1].items[0];

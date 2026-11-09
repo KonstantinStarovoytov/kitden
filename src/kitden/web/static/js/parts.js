@@ -289,6 +289,8 @@ export const STATE_WORDS = {
   missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
   unread: "Could not read",
 };
+// The twin of views/words.py SKILL_STATE_WORDS: a skill's own state beyond On and Off.
+export const SKILL_STATE_WORDS = { "name-only": "Name only", "user-invocable-only": "Only when you ask", "only-asked": "Only when you ask" };
 // The twin of views/words.py ORIGIN_WORDS: the tag of a cell in a project view. "This project":
 // the project's own settings decide the cell. "Only this project": only that project has the item.
 export const ORIGIN_WORDS = { override: "This project", project: "Only this project" };

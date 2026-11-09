@@ -121,7 +121,8 @@ def _skill_rules(layers: list[tuple[Scope, dict]]) -> dict[str, tuple[str, Scope
 def _apply_rules(
     items: list[Item], rules: dict[str, tuple[str, Scope]], known: bool = True
 ) -> list[Item]:
-    """Mark the skills a rule turns off. A rule that keeps a skill on only records its file.
+    """Mark the skills a rule turns off. A rule that keeps a skill on only records its file; one
+    that narrows it ("name-only") is kept as the skill's state, and wins over its file.
     When a settings file could not be read (`known` is False) the skills' state is unknown."""
     ruled = []
     for item in items:
@@ -133,7 +134,10 @@ def _apply_rules(
         elif rule:
             state, scope = rule
             item = replace(
-                item, enabled=Enabled.OFF if state == "off" else Enabled.ON, state_scope=scope
+                item,
+                enabled=Enabled.OFF if state == "off" else Enabled.ON,
+                state_scope=scope,
+                skill_state=None if state == "on" else state,
             )
         ruled.append(item)
     return ruled

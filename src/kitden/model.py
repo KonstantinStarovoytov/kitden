@@ -154,6 +154,10 @@ class Item:
     app: str | None = None  # the Mac app an MCP entry runs from, which may write it again
     # The settings file (user, project or local) whose rule set `enabled`; None when no rule did.
     state_scope: Scope | None = None
+    # A skill's own state, beyond On and Off: Claude Code's `skillOverrides` value ("name-only",
+    # "user-invocable-only" or "off"), or "only-asked" when SKILL.md says
+    # `disable-model-invocation: true` (Claude Code and Cursor). None: loaded as usual.
+    skill_state: str | None = None
     # A user skill that a project's own settings turn on or off: (project, state, rule file).
     # The effective view applies the one for its project; the item itself shows the user's rule.
     project_rules: tuple[tuple[str, Enabled, Scope], ...] = ()

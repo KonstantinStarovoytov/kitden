@@ -32,7 +32,7 @@ def summary_line(item: Item) -> str:
 
 def brief(item: Item) -> dict[str, Any]:
     """An item as shown outside the inventory: redacted fields, without the raw summary."""
-    return {
+    out = {
         "id": item.id,
         "client": item.client,
         "kind": str(item.kind),
@@ -50,6 +50,9 @@ def brief(item: Item) -> dict[str, Any]:
         "summary": summary_line(item) or None,
         "category": category_of(item),
     }
+    if item.skill_state:
+        out["skill_state"] = item.skill_state
+    return out
 
 
 # Details shows this many first lines of an instruction file, each cut at this many characters.

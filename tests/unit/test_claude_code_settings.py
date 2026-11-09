@@ -3,6 +3,7 @@
 import json
 
 import kitden.clients.claude_code as claude_code
+from kitden.clients.base import skill_items
 from kitden.clients.claude_code import ClaudeCodeAdapter, git_root
 from kitden.model import Enabled, ItemKind, Scope
 from kitden.views.effective import effective_view
@@ -327,3 +328,56 @@ def test_the_home_folder_as_a_project_does_not_read_the_user_settings_twice(tmp_
     _write(home / ".claude/settings.local.json", {"enabledPlugins": {PLUGIN: True}})
     rows = _plugin_rows(_scan(home, no_version))
     assert rows == {("user", "off", "user"), ("local", "on", "local")}
+
+
+def _state(items, name, scope):
+    (item,) = [i for i in items if i.kind is ItemKind.SKILL and i.name == name and i.scope is scope]
+    return item.skill_state
+
+
+def test_name_only_is_kept_as_the_skills_state(tmp_path, no_version):
+    home, _ = _home(
+        tmp_path,
+        user={"skillOverrides": {"deploy": "name-only", "review": "user-invocable-only"}},
+        local={"skillOverrides": {"review": "off"}},
+    )
+    items = _scan(home, no_version)
+    assert _skill_state(items, "deploy", Scope.USER) == (Enabled.ON, Scope.USER)
+    assert _state(items, "deploy", Scope.USER) == "name-only"
+    # The most specific file wins for a project skill, and an off skill keeps "off".
+    assert _state(items, "review", Scope.PROJECT) == "off"
+    # A skill with no rule, or a rule that says "on", has no state of its own.
+    assert _state(_scan(_home(tmp_path / "two")[0], no_version), "deploy", Scope.USER) is None
+    home, _ = _home(tmp_path / "three", user={"skillOverrides": {"deploy": "on"}})
+    assert _state(_scan(home, no_version), "deploy", Scope.USER) is None
+
+
+def test_a_skill_that_waits_to_be_asked_says_so(tmp_path, no_version):
+    home, _ = _home(tmp_path)
+    (home / ".claude/skills/deploy/SKILL.md").write_text(
+        "---\nname: deploy\ndisable-model-invocation: true\n---\n"
+    )
+    assert _state(_scan(home, no_version), "deploy", Scope.USER) == "only-asked"
+    # A value in skillOverrides wins over the skill file.
+    _write(home / ".claude/settings.json", {"skillOverrides": {"deploy": "name-only"}})
+    assert _state(_scan(home, no_version), "deploy", Scope.USER) == "name-only"
+    _write(home / ".claude/settings.json", {"skillOverrides": {"deploy": "on"}})
+    assert _state(_scan(home, no_version), "deploy", Scope.USER) is None
+
+
+def test_only_claude_code_and_cursor_read_the_skill_file_for_it(tmp_path):
+    _skill(tmp_path, "deploy")
+    (tmp_path / "deploy/SKILL.md").write_text("---\ndisable-model-invocation: true\n---\n")
+    _skill(tmp_path, "plain")
+    states = {}
+    for client in ("claude_code", "cursor", "codex"):
+        for item in skill_items(client, tmp_path, Scope.USER, client):
+            states[client, item.name] = item.skill_state
+    assert states == {
+        ("claude_code", "deploy"): "only-asked",
+        ("claude_code", "plain"): None,
+        ("cursor", "deploy"): "only-asked",
+        ("cursor", "plain"): None,
+        ("codex", "deploy"): None,
+        ("codex", "plain"): None,
+    }
