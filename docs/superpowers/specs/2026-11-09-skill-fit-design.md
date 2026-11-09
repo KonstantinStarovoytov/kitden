@@ -183,9 +183,10 @@ All checked on one Mac, Claude Code 2.1.311 and the Codex app, 2026-11-06 to 202
 - **Last list.** Chat logs are JSONL files under `~/.codex/sessions/YYYY/MM/DD/`. Seen on
   2026-11-09 (Codex app, `cli_version` 0.163.0-alpha.11): the first entry is `session_meta`
   with `timestamp`, `cwd`, `originator`, `source`, `thread_source` (`user` for a person's
-  chat), `cli_version` and `context_window`; `turn_context` entries carry `model`. The sent
-  list is the `<skills_instructions>` text inside a `response_item` message with role
-  `developer`. Kitden reads only these.
+  chat), `cli_version` and `context_window` (only an id, not a size); `turn_context` entries
+  carry `model`. The sent list is the `<skills_instructions>` text inside a `response_item`
+  message with role `developer`. A skill's `file:` path is relative to a root alias defined in
+  the same block (``- `r2` = `/abs/path` ``, checked 2026-11-09). Kitden reads only these.
 - **Which chat.** As for Claude Code: the newest log by its last write that holds a list and
   has `thread_source` `user`. One thread can run for days, so the date is the list entry's.
 - **Compressed logs.** 110 of 114 logs here are `.zst`, but only older ones; the newest are
@@ -195,10 +196,10 @@ All checked on one Mac, Claude Code 2.1.311 and the Codex app, 2026-11-06 to 202
   of the window, at about 4 bytes per token. Each line pays for its name and path. When too
   long, Codex cuts every long description to one shared length; when even that fails, it
   removes all descriptions and drops skills.
-- **Window.** `context_window` in `session_meta`, else Codex's model cache (272K for the
-  default model on 2026-11-06). The 2% applies to 272K, not the 258,400 in the logs: only that
-  rebuilds the real list size (5,440 tokens). The builder checks which number
-  `context_window` holds.
+- **Window.** `session_meta.context_window` holds only an id. The window comes from Codex's
+  `models_cache.json`: `models[].slug` of the chat's model → `context_window` (checked
+  2026-11-09). That was 272K for the default model on 2026-11-06. The 2% applies to 272K, not
+  the 258,400 in the logs: only that rebuilds the real list size (5,440 tokens).
 - **Limit setting.** `skills.max_context_tokens` in `config.toml`, up to 10,000 tokens
   (Codex docs). When set, it is the limit.
 - The real list of 2026-10-30: 27 of 58 descriptions cut to 366–370 characters; the rule gave
@@ -274,7 +275,7 @@ list at all from a known version is just skipped (see "Which chat"). (call)
 
 - The parser for each log, and how it detects a format it does not know.
 - How the rule code is split per client, and how the window table is kept.
-- How the new page is wired into the rail, the router and the address (`#context?client=codex`).
+- How the new page is wired into the rail, the router and the address (`#context?sel=client:<id>`).
 - Motion details within `docs/design.md`.
 
 ## Decided with the owner on 2026-11-09
