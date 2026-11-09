@@ -19,4 +19,5 @@
 - Pull request titles say what changes for the user, in plain English, with no `fix:` or
   `feat(...)` prefix and no issue number. Fill in the checklist in the pull request form;
   see [CONTRIBUTING.md](CONTRIBUTING.md).
-- Earlier specs and research live in the git tag `dev-notes-2026-10-19`.
+- Earlier plans, specs and research live in the git tags `dev-notes-2026-10-19` and
+  `dev-notes-2026-11-09`, not in the tree.

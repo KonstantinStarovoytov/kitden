@@ -15,6 +15,7 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml"><img src="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml/badge.svg?branch=main" alt="Checks on main"></a>
   <a href="https://github.com/KonstantinStarovoytov/kitden/releases/latest"><img src="https://img.shields.io/github/v/release/KonstantinStarovoytov/kitden?label=latest%20release" alt="Latest release"></a>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
+  <a href="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden"><img src="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden/badges/score.svg" alt="Kitden on Glama"></a>
 </p>
 
 ### Everything your agents load, on one map
@@ -98,7 +99,6 @@ uv tool install --python 3.13 kitden && kitden
 ```
 
 Or with Homebrew: `brew install konstantinstarovoytov/tap/kitden`, then `kitden`.
-
 Update later with `uv tool upgrade kitden` or `brew upgrade kitden`.
 
 [Guide](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md) ·

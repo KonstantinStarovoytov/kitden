@@ -14,4 +14,5 @@ Kitden looks, moves and behaves. It is a reference only: nothing here ships.
   change the mockup.
 - The same design as frames: `design/kitden.pen` (the owner's file, not tracked).
 
-The plan that moves the product to it: [2026-10-24-mockup-alignment.md](../superpowers/plans/2026-10-24-mockup-alignment.md).
+The plan that moved the product to it, `2026-10-24-mockup-alignment.md`, is in
+the git tag `dev-notes-2026-11-09`.

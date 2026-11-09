@@ -1,7 +1,7 @@
 # Gateway page in the mockup: notes for the build (Calm only)
 
 Sources read in full: `docs/mockup/kitden-motion.html` (v11), `docs/mockup/motion-spec.md` M0-M6, decisions D1-D28 in
-`docs/superpowers/plans/2026-10-24-mockup-alignment.md`. Line numbers are in `kitden-motion.html` unless marked.
+`2026-10-24-mockup-alignment.md` (the git tag `dev-notes-2026-11-09`). Line numbers are in `kitden-motion.html` unless marked.
 "Calm" = `S.rich` false. `D(ms)` = 0 under reduced motion. Default Web Animation ease = CALM `cubic-bezier(.2,.8,.2,1)`,
 fill `backwards`, default duration 300. OUT3 = 1-(1-t)^3, IN3 = t^3 (map tweens, `E.out` / `E.in`, line 465).
 

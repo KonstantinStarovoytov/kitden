@@ -411,29 +411,16 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Planned
 
-The two reviews of 2026-10-21 (`docs/research/`) led to one approved design,
-[docs/superpowers/specs/2026-10-21-review-follow-up-design.md](docs/superpowers/specs/2026-10-21-review-follow-up-design.md),
-and a master plan with one plan per part,
-[docs/superpowers/plans/2026-10-21-review-follow-up.md](docs/superpowers/plans/2026-10-21-review-follow-up.md).
-The parts, in order:
+What is left of the design that followed the two reviews of 2026-10-21 (the reviews, the design
+and its plans are in the git tag `dev-notes-2026-11-09`):
 
-- **Part 5, logins in one place,** so OAuth servers move into the gateway too. Its Keychain part
+- **Logins in one place,** so OAuth servers move into the gateway too. Its Keychain part
   is done.
-- **Part 7, Linux and Windows.** Linux is done (0.5.0) and checked on Ubuntu; reports from
+- **Linux and Windows.** Linux is done (0.5.0) and checked on Ubuntu; reports from
   other systems are welcome ([#16](https://github.com/KonstantinStarovoytov/kitden/issues/16)). Windows is next ([#17](https://github.com/KonstantinStarovoytov/kitden/issues/17)).
 - **A Usage tab** (asked for on 2026-11-05, no design yet): for each MCP server and each of its
   tools, how many tokens it takes, how often it is called and by which client. The same for
   skills and plugins.
-
-Part 6, the Instructions tab and tool counts, is done.
-
-The add, group drag and sign-in design of 2026-11-01,
-[docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md](docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md),
-in order: the add button (done), selecting several servers and dragging them together (done), a token
-step checked before Apply (done: a server that needs access waits in preview, amber, with one token
-field checked against the server; Apply writes the rest), and browser sign-in (done: Sign in opens
-the server's page, the tokens are checked before Apply, kept in the Keychain and refreshed by the
-gateway).
 
 ## Proposals, not built
 
@@ -494,9 +481,7 @@ Left for later in the alignment plan's phase notes:
 ## Later
 
 - Skills per project: turn skills on or off for one project, as tools are today.
-- A living map with connected comparison and access views. See the
-  [visual management UX concept](docs/research/visual-management-ux-concept-2026-10-22.md)
-  and the [final design](docs/research/visual-redesign-final-2026-10-23.md) in
-  `design/kitden.pen`; prototype and test it before implementation.
+- A living map with connected comparison and access views, as designed in `design/kitden.pen`;
+  prototype and test it before implementation.
 - A shared setup for a small team.
 

@@ -1,10 +1,10 @@
 # Online sources
 
-In Library, open **+ Add** for plugins and skills. In Gateway, open **+ Add** for MCP servers.
-**Catalogs** opens first; **On this Mac** browses local sources. Pick a visible source button,
-search, then open a result. Filters and sources use buttons, not drop-down menus.
-**Source details** shows the source, available version and the skill text or MCP configuration.
-Choose clients explicitly and Preview. Back to search keeps the query and results. Nothing changes in a client until Apply. Undo uses the same
+Which catalogs **+ Add** searches, what Kitden can add from them and where the limits are.
+The steps are in the [guide](guide.md#add-from-the-catalogs).
+
+Open a result to read its **Source details**: the source, the available version and the skill
+text or MCP configuration. Nothing changes in a client until Apply, and Undo uses the same
 backups and checks as a local add.
 
 ## Sources
