@@ -21,8 +21,10 @@ const OLD_KINDS = { mcp_server: { view: "gateway", mode: "list" }, hook: { mode:
 // With no choice in the address, a page opens in List past this many blocks in its middle column.
 export const MAP_AT = 15;
 // The kinds of item the address can select: `sel=mcp_server:github`, `sel=tool:github/push_files`,
-// `sel=client:codex`, `sel=group:outside` (a map's group block, its id without `group:`).
-const SEL_KINDS = ["mcp_server", "plugin", "skill", "hook", "marketplace", "instructions", "tool", "client", "group"];
+// `sel=client:codex`, `sel=group:outside` (a map's group block, its id without `group:`), and
+// `sel=direct:pencil`: a server's entries outside the gateway, also when the gateway holds a
+// server of the same name (an Overview card about entries an app wrote back).
+const SEL_KINDS = ["mcp_server", "direct", "plugin", "skill", "hook", "marketplace", "instructions", "tool", "client", "group"];
 // `selected` is the item picked on any page, { kind, name }, or null. `mode`: "map", "list" or
 // "" (no choice).
 export const state = {

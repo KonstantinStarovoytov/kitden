@@ -55,14 +55,15 @@ const MAP_HINT = "Point at a link and press × to remove it · click anything fo
 
 // What an arrival with a selection (Back, Forward or a link) opens, once: a server the Kitden
 // gateway holds (`held`, and `tool` for one of its tools), a server outside it by its name (its
-// row, `outside`, and its `group`), a client or a List group. Null for anything else (it stays in
+// row, `outside`, and its `group`; `direct:` skips a held server of that name), a client or a List
+// group. Null for anything else (it stays in
 // the address for the next page), and while a panel is open, so it never replaces what the person
 // opened. Everything is found in the Gateway's own model: the Library's /api/map is never read.
 export async function arrivalServer(view) {
   const selected = takeArrival();
   if (!selected || isPanelOpen()) return null;
-  if (selected.kind === "mcp_server") {
-    const held = heldServer(view, selected);
+  if (selected.kind === "mcp_server" || selected.kind === "direct") {
+    const held = selected.kind === "mcp_server" && heldServer(view, selected);
     if (held) return { held };
     for (const group of OUTSIDE_GROUPS) {
       const row = (view.groups[group] || []).find((r) => r.name === selected.name);
@@ -1591,6 +1592,7 @@ function selectedRow(rows, byId) {
   const matches = rows.filter((row) => {
     const block = byId.get(row.id);
     if (selected.kind === "mcp_server") return (row.kind === "outside" || (row.kind === "held" && block.gateway.kind === "kitden")) && row.name === selected.name;
+    if (selected.kind === "direct") return row.kind === "outside" && row.name === selected.name;
     if (selected.kind === "tool") return row.id === `tool:${selected.name}`;
     return selected.kind === "client" && row.id === `client:${selected.name}`;
   });

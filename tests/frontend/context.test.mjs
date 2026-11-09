@@ -101,6 +101,18 @@ test("the person's own pick wins over an arrival that comes late", async () => {
   closePanel({ focus: false });
 });
 
+test('a direct entry with the name of a held server opens its own row, not the held one', async () => {
+  // files is in the Kitden gateway and, written back by an app, in Claude Code too.
+  const both = { ...model, groups: { ...model.groups, local: [{ name: 'files', clients: ['claude_code'], columns: ['claude_code'], items: ['f'], stays: null }] } };
+  goTo('gateway', files);
+  assert.equal((await arrivalServer(both)).held.name, 'files');
+  goTo('gateway', { kind: 'direct', name: 'files' });
+  assert.deepEqual(await arrivalServer(both), { outside: both.groups.local[0], group: 'local' });
+  // A name with no direct entry opens nothing.
+  goTo('gateway', { kind: 'direct', name: 'github-x' });
+  assert.equal(await arrivalServer(both), null);
+});
+
 test('the Gateway opens a held server in its own panel, and never over a panel', async () => {
   goTo('gateway', files);
   assert.equal((await arrivalServer(model)).held.name, 'files');
