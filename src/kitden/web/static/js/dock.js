@@ -80,7 +80,8 @@ export function barWords(t, { onMap = false } = {}) {
     ...base,
   };
   waitWords(t, words);
-  if (t.phase === "asking") words.applyWaits = true;
+  // A fast Apply keeps the words it had (tray.js SLOW_WRITE); a slow one says what it writes.
+  if (t.phase === "asking" || (t.phase === "applying" && !t.slow)) words.applyWaits = true;
   else if (t.phase === "ready" && t.stale) Object.assign(words, { line: STALE, apply: "Preview again", retry: true });
   else if (t.phase === "applying") Object.assign(words, { line: writingLine(t.change.steps), apply: stepText("Applying", t.done, t.total), applyWaits: true });
   else if (t.phase === "applied") Object.assign(words, { apply: many ? "All applied" : "Applied", applyWaits: true });
@@ -132,6 +133,13 @@ let carried = null;
 let growing = null;
 // The refusal or failure the bar last answered with a shake, so each is answered once.
 let reacted = null;
+// A write that ends sooner shows no Applying words: Apply goes straight to Applied, so a fast
+// change is one motion and the bar does not change its words and size twice in a blink. The
+// change being written, whether it has taken that long yet, and the clock that says so.
+const SLOW_WRITE = 300;
+let beingWritten = null;
+let slow = false;
+let writeClock = null;
 
 const later = (fn, ms) => (ms > 0 ? setTimeout(fn, ms) : fn());
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -370,8 +378,9 @@ function patchApply(view) {
   const other = busy.change && t.phase !== "applying" && !applied;
   showWaits(apply, other);
   if (words.applyWaits) apply.setAttribute("aria-disabled", "true");
-  setApplyIcon(applied ? "check" : t.phase === "applying" ? "spin" : words.retry ? "again" : "arrow-right");
-  setMeter(applied ? 1 : t.phase === "applying" && t.total > 0 ? t.done / t.total : 0);
+  const writes = t.phase === "applying" && t.slow;
+  setApplyIcon(applied ? "check" : writes ? "spin" : words.retry ? "again" : "arrow-right");
+  setMeter(applied ? 1 : writes && t.total > 0 ? t.done / t.total : 0);
 }
 
 // Put the words and states of `view` into the parts of the bar. `known`: the rows that were drawn
@@ -530,6 +539,28 @@ export function drawTray(t = tray, { toastStays = false } = {}) {
   if (handOn) ((shown && (shown.apply || shown.cancel)) || $("#main")).focus({ preventScroll: true });
 }
 
+// Whether the change being written has taken SLOW_WRITE ms yet. The first draw of a write starts
+// the clock; when it runs out the bar is drawn again, now with the Applying words.
+function slowWrite(t) {
+  if (t.phase !== "applying") {
+    clearTimeout(writeClock);
+    writeClock = null;
+    beingWritten = null;
+    slow = false;
+    return false;
+  }
+  if (beingWritten !== t.change) {
+    clearTimeout(writeClock);
+    beingWritten = t.change;
+    slow = false;
+    writeClock = setTimeout(() => {
+      slow = true;
+      drawTray(tray, { toastStays: true });
+    }, SLOW_WRITE);
+  }
+  return slow;
+}
+
 function drawBar(t) {
   const rows = t.rows.filter((row) => row.part || row.waits);
   // A row that waits shows in the list, where its Add token is.
@@ -546,7 +577,8 @@ function drawBar(t) {
   // A toast took the dock's place while the tray still had rows: the bar is drawn again, and it
   // takes the place of the toast.
   if (bar && !bar.isConnected) forgetBar();
-  const view = { t, rows, kind, words: barWords({ ...t, rows }, { onMap: onTheMap() }) };
+  const marked = { ...t, rows, slow: slowWrite(t) };
+  const view = { t: marked, rows, kind, words: barWords(marked, { onMap: onTheMap() }) };
   if (!bar) {
     enterBar(view);
     return;

@@ -9,6 +9,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **A fast Apply no longer flickers:** when the write ends within 300 ms, the bar keeps its
+  words and goes straight to Applied, instead of flashing "Applying…" and resizing twice.
 - **Clearer reasons a server stays outside the gateway:** "needs values its client fills in
   when it starts" instead of "reads values from your shell", and "must start in its own folder,
   Openwebui" instead of "starts in its own folder".
