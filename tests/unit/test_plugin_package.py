@@ -8,6 +8,7 @@ import kitden
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "plugins/kitden"
 ENTRY = {"type": "stdio", "command": "kitden", "args": ["mcp"]}
+INSTALL = "uv tool install --python 3.13 kitden"
 
 
 def _json(path: Path) -> dict:
@@ -43,9 +44,32 @@ def test_the_skill_states_the_four_rules():
     head, body = text.split("---\n")[1:3]
     assert "name: setup" in head
     assert "description: Use when" in head
-    for rule in ("show_setup", "kitden open", "Never edit", "install line"):
+    for rule in ("show_setup", "kitden open", "Never edit", "kitden --version", INSTALL):
         assert rule in body
     assert len(body.split()) < 200
+
+
+def test_the_skill_description_names_what_users_ask_about():
+    head = (PLUGIN / "skills/setup/SKILL.md").read_text().split("---\n")[1]
+    for word in ("MCP servers", "skills", "plugins", "hooks", "CLAUDE.md", "Codex", "Cursor"):
+        assert word in head
+    # A change request must reach the skill, so the agent sends the user to the page.
+    assert "turn one on or off" in head and "remove" in head
+
+
+def test_the_install_line_is_the_one_in_the_readme():
+    assert INSTALL in (ROOT / "README.md").read_text()
+    assert INSTALL in (PLUGIN / "README.md").read_text()
+
+
+def test_every_description_says_kitden_must_be_installed():
+    texts = {
+        _json(PLUGIN / ".claude-plugin/plugin.json")["description"],
+        _json(PLUGIN / "plugin.json")["description"],
+        _json(ROOT / ".claude-plugin/marketplace.json")["plugins"][0]["description"],
+    }
+    assert len(texts) == 1
+    assert "Needs Kitden installed" in texts.pop()
 
 
 def test_the_plugin_adds_nothing_that_runs_by_itself():
