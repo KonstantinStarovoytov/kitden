@@ -1,6 +1,7 @@
 """Claude Code's last skill list, read from the newest chat log."""
 
 import json
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -13,6 +14,10 @@ INTERACTIVE = {"claude-desktop": "in the Claude app", "cli": "in the terminal"}
 # checked 2026-11-09 (real logs, Claude Code 2.1.311): the newest version whose list entry shape
 # is known.
 KNOWN_VERSIONS = "2.1.311"
+
+
+ASSISTANT = re.compile(r'"type"\s*:\s*"assistant"')
+MODEL = re.compile(r'"model"\s*:\s*"([^"]*)"')
 
 
 @dataclass(frozen=True)
@@ -86,8 +91,17 @@ def _full(attachment: dict) -> bool:
     )
 
 
+def _skipped(entry: dict, folder: str | None) -> bool:
+    """Not a person's chat (a sidechain, claude -p, the Agent SDK), or not the picked folder."""
+    entrypoint = entry.get("entrypoint")
+    if entry.get("isSidechain") or (isinstance(entrypoint, str) and entrypoint.startswith("sdk")):
+        return True
+    return folder is not None and entry.get("cwd") != folder
+
+
 def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
-    """The last list this chat sent, or None. Only lines with a list or a model are parsed.
+    """The last list this chat sent, or None. A chat with no full list, from a client newer than
+    KNOWN_VERSIONS, is Unreadable. Only lines with a list, a model or the first version are parsed.
 
     # checked 2026-11-09 (real logs, Claude Code 2.1.309): entry fields timestamp, version,
     # entrypoint, cwd, isSidechain; attachment fields type, isInitial, skillCount, names, content;
@@ -95,52 +109,48 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
     """
     result: SentList | Unreadable | None = None
     model = None
+    first: dict | None = None  # the first entry that names a version: the chat's client
     with path.open(encoding="utf-8", errors="replace") as lines:
         for line in lines:
-            is_list = '"skill_listing"' in line
-            if not is_list and '"model"' not in line:
-                continue
-            try:
-                entry = json.loads(line)
-            except ValueError:  # a line still being written
-                continue
-            if not isinstance(entry, dict):
-                continue
-            if not is_list:
-                message = entry.get("message")
-                name = message.get("model") if isinstance(message, dict) else None
-                if (
-                    entry.get("type") == "assistant"
-                    and isinstance(name, str)
-                    and not name.startswith("<")
-                ):
-                    model = name
-                continue
-            attachment = entry.get("attachment")
-            if not isinstance(attachment, dict) or attachment.get("type") != "skill_listing":
-                continue
-            entrypoint = entry.get("entrypoint")
-            if (
-                entry.get("isSidechain")
-                or not isinstance(entrypoint, str)
-                or entrypoint.startswith("sdk")
-            ):
-                return None
-            if folder is not None and entry.get("cwd") != folder:
-                return None
-            version = entry.get("version")
-            if _full(attachment):
-                result = SentList(
-                    CLIENT,
-                    str(entry.get("timestamp", "")),
-                    str(version),
-                    INTERACTIVE.get(entrypoint),
-                    None,
-                    entry.get("cwd"),
-                    _split(attachment["names"], attachment["content"]),
-                )
-            elif _newer_than_known(version):
-                result = Unreadable(CLIENT, str(version))
+            if '"skill_listing"' in line:
+                try:
+                    entry = json.loads(line)
+                except ValueError:  # a line still being written
+                    continue
+                attachment = entry.get("attachment") if isinstance(entry, dict) else None
+                if not isinstance(attachment, dict) or attachment.get("type") != "skill_listing":
+                    continue
+                if _skipped(entry, folder):
+                    return None
+                entrypoint = entry.get("entrypoint")
+                version = entry.get("version")
+                version = version if isinstance(version, str) else ""
+                if _full(attachment):
+                    result = SentList(
+                        CLIENT,
+                        str(entry.get("timestamp", "")),
+                        version,
+                        INTERACTIVE.get(entrypoint) if isinstance(entrypoint, str) else None,
+                        None,
+                        entry.get("cwd"),
+                        _split(attachment["names"], attachment["content"]),
+                    )
+                elif _newer_than_known(version):
+                    result = Unreadable(CLIENT, version)
+            elif '"model"' in line and ASSISTANT.search(line):
+                found = MODEL.search(line)  # a regex: no need to parse a large assistant line
+                if found and not found[1].startswith("<"):
+                    model = found[1]
+            elif first is None and '"version"' in line:
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(entry, dict) and isinstance(entry.get("version"), str):
+                    first = entry
+    newer = first is not None and _newer_than_known(first["version"])
+    if result is None and newer and not _skipped(first, folder):
+        return Unreadable(CLIENT, first["version"])
     if isinstance(result, SentList):
         result = replace(result, model=model)
     return result
@@ -148,13 +158,17 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
 
 def last_claude_list(home: Path, folder: str | None) -> SentList | Unreadable | None:
     """The list from the newest chat that has one. With a folder, only that folder's chats."""
-    files = sorted(
-        (home / ".claude/projects").glob("*/*.jsonl"),  # not */*/subagents/*
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    for path in files:
-        found = _read_chat(path, folder)
+    files = []
+    for path in (home / ".claude/projects").glob("*/*.jsonl"):  # not */*/subagents/*
+        try:
+            files.append((path.stat().st_mtime, path))
+        except OSError:  # gone since the folder was listed
+            continue
+    for _, path in sorted(files, reverse=True):
+        try:
+            found = _read_chat(path, folder)
+        except OSError:  # removed or unreadable: this chat only
+            continue
         if found is not None:
             return found
     return None

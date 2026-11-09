@@ -168,10 +168,65 @@ def test_only_list_lines_are_parsed(tmp_path):
     path = tmp_path / ".claude/projects/p/big.jsonl"
     path.parent.mkdir(parents=True)
     other = json.dumps({"type": "user", "message": {"content": "x" * 200}})
-    lines = [other] * 50_000
+    big = json.dumps(
+        {
+            "type": "assistant",
+            "version": "2.1.311",
+            "message": {"model": "claude-opus-5-5", "content": [{"text": "y" * 20_000}]},
+        }
+    )
+    lines = [other] * 50_000 + [big] * 2_000
     lines.insert(25_000, json.dumps(list_entry(["a"], "- a: Hi.")))
     path.write_text("\n".join(lines) + "\n")
     start = time.perf_counter()
     got = last_claude_list(tmp_path, None)
     assert time.perf_counter() - start < 1
     assert got.skills == (("a", "Hi."),)
+    assert got.model == "claude-opus-5-5"
+
+
+def newer_chat(version="2.2.0", **fields):
+    return {"type": "user", "version": version, "cwd": "/work/a", "isSidechain": False, **fields}
+
+
+def test_a_newer_chat_with_no_list_is_unreadable_not_the_older_chat(tmp_path):
+    write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
+    write_chat(tmp_path, "p", "new", [newer_chat(), assistant()], 200)
+    assert last_claude_list(tmp_path, None) == Unreadable("claude_code", "2.2.0")
+
+
+def test_a_known_version_chat_with_no_list_is_still_skipped(tmp_path):
+    write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
+    write_chat(tmp_path, "p", "new", [newer_chat("2.1.311")], 200)
+    assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
+
+
+def test_a_newer_chat_that_is_not_a_person_chat_or_folder_is_skipped(tmp_path):
+    write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
+    write_chat(tmp_path, "p", "sdk", [newer_chat(entrypoint="sdk-cli")], 200)
+    write_chat(tmp_path, "p", "side", [newer_chat(isSidechain=True)], 300)
+    write_chat(tmp_path, "p", "elsewhere", [newer_chat(cwd="/work/b")], 400)
+    assert last_claude_list(tmp_path, "/work/a").skills == (("a", "Old."),)
+
+
+def test_a_file_that_cannot_be_read_is_skipped(tmp_path):
+    write_chat(tmp_path, "p", "ok", [list_entry(["a"], "- a: Fine.")], 100)
+    (tmp_path / ".claude/projects/p/dir.jsonl").mkdir()  # opening it fails
+    (tmp_path / ".claude/projects/p/gone.jsonl").symlink_to(tmp_path / "missing")  # stat fails
+    assert last_claude_list(tmp_path, None).skills == (("a", "Fine."),)
+
+
+def test_a_list_with_no_entrypoint_is_read_without_a_surface(tmp_path):
+    entry = list_entry(["a"], "- a: Hi.")
+    del entry["entrypoint"]
+    write_chat(tmp_path, "p", "chat", [entry], 100)
+    got = last_claude_list(tmp_path, None)
+    assert got.surface is None
+    assert got.skills == (("a", "Hi."),)
+
+
+def test_a_list_with_no_version_has_an_empty_version(tmp_path):
+    entry = list_entry(["a"], "- a: Hi.")
+    del entry["version"]
+    write_chat(tmp_path, "p", "chat", [entry], 100)
+    assert last_claude_list(tmp_path, None).version == ""
