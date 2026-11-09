@@ -105,6 +105,8 @@ test('a project no longer on the list stays picked and is said', async () => {
 test('parseSel takes only kind:name', () => {
   assert.deepEqual(parseSel('mcp_server:github'), { kind: 'mcp_server', name: 'github' });
   assert.deepEqual(parseSel('mcp_server:a:b'), { kind: 'mcp_server', name: 'a:b' });
+  // A server's entry outside the gateway, when the gateway holds one of the same name too.
+  assert.deepEqual(parseSel('direct:pencil'), { kind: 'direct', name: 'pencil' });
   for (const bad of [null, '', 'nope', 'mcp_server:', 'wizard:x', ':github']) assert.equal(parseSel(bad), null);
   assert.equal(selFor(null), '');
   assert.equal(selFor({ kind: 'skill', name: 'tidy' }), 'skill:tidy');
