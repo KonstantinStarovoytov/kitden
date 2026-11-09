@@ -135,7 +135,9 @@ def _description(path: str | None) -> str | None:
 def _skill(
     client: str, name: str, item: Item | None, size: int, side: int | None, note: str | None
 ) -> dict:
-    switch = [] if item is None or from_plugin(item) else SWITCHES.get(client, [])
+    # Claude Code's skillOverrides does not touch a plugin's skills (spec "Switches per client").
+    plugin = client == "claude_code" and item is not None and from_plugin(item)
+    switch = [] if item is None or plugin else SWITCHES.get(client, [])
     return {
         "name": name,
         "shown": name.split(":")[-1],
@@ -285,8 +287,9 @@ def _claude_run(rows, states, weights, budget) -> tuple[list[ClaudeSkill], Claud
         return None
 
 
-def _claude_fact(rows: list[_Row], states: dict[str, str], date: str) -> dict:
-    """What the last chat sent: characters per skill sent, and those of descriptions not sent."""
+def _claude_fact(rows: list[_Row], date: str) -> dict:
+    """What the last chat sent: characters per skill sent, and those of descriptions not sent.
+    Only the log counts, not the skills' states today."""
     sent: dict[str, int] = {}
     over: dict[str, int] = {}
     names = 0
@@ -295,7 +298,7 @@ def _claude_fact(rows: list[_Row], states: dict[str, str], date: str) -> dict:
             sent[r.name] = len(r.name) + 4 + min(len(r.sent), CLAUDE_DESCRIPTION_CAP)
             continue
         names += len(r.name) + 2
-        if r.full is not None and states[r.name] != "name-only":
+        if r.full is not None:
             over[r.name] = min(len(r.full), CLAUDE_DESCRIPTION_CAP) + 2
     used = sum(sent.values()) + names + max(0, len(rows) - 1)
     n, bad = len(rows), len(rows) - len(sent)
@@ -383,9 +386,9 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
     checked = base is not None and base[1].full == sent_full
 
-    fact = _claude_fact(rows, states, date)
-    dropped = [r for r in rows if r.sent is None and states[r.name] != "name-only"]
-    if checked and not dropped:
+    fact = _claude_fact(rows, date)
+    names_only = any(r.sent is None for r in rows)
+    if checked and not names_only:
         left = f"{budget - fact['used']:,}"
         fact["room"] = words.ROOM_LEFT.format(left=left, unit="characters")
     if setting is not None:
@@ -444,7 +447,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     ]
     return _card(
         client,
-        lamp="warn" if dropped else "ok",
+        lamp="warn" if names_only else "ok",
         message=None if checked else words.NO_CHECK,
         fact={
             "date": date,
@@ -552,10 +555,10 @@ def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str
     n = len(skills)
     out = sum(fit.sent.get(s.name) is None for s in skills)
     bad = sum(_codex_kind(fit.sent.get(s.name), len(s.description)) != "full" for s in skills)
+    # The rule removes every description only when the names alone do not fit, so then at least
+    # one skill is left out: `fit.cap` is a number in the branches below.
     if out:
         body = words.CODEX_WOULD_LEAVE_OUT.format(on=on, out=out, n=n)
-    elif fit.cap is None:
-        body = words.CODEX_WOULD_DROP_ALL.format(on=on)
     elif bad:
         cap = f"{round(fit.cap / 10) * 10:,}"
         body = words.CODEX_WOULD_CUT.format(on=on, bad=bad, n=n, cap=cap)

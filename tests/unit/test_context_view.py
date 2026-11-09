@@ -151,6 +151,42 @@ def test_claude_too_many_names_the_count(home):
     }
 
 
+def test_skills_set_to_name_only_after_the_chat_keep_the_last_chat_result(home):
+    own = home / ".claude/skills"
+    for name in ("alpha", "beta", "gamma", "delta"):
+        skill(own, name, LONG[:1000])
+    settings = {
+        "env": {"SLASH_COMMAND_TOOL_CHAR_BUDGET": "2100"},
+        "skillOverrides": {"gamma": "name-only", "delta": "name-only"},
+    }
+    write_json(home / ".claude/settings.json", settings)
+    usage(home, {"alpha": 9, "beta": 5, "gamma": 2, "delta": 1})
+    claude_chat(home, {"alpha": LONG[:1000], "beta": LONG[:1000], "gamma": None, "delta": None})
+    cc = view(home)["claude_code"]
+    # The fact, the lamp, the hatched part and the room all come from the last chat.
+    result = cc["windows"][0]["result"]
+    assert result["say"].startswith("In your last chat on Nov 6, 2 of 4 skills showed only a name.")
+    assert cc["lamp"] == "warn"
+    assert result["over"] == {"gamma": 1002, "delta": 1002}
+    assert result["room"] is None
+
+
+def test_a_second_window_that_drops_skills(home):
+    own = home / ".claude/skills"
+    names = [f"s{i}" for i in range(1, 9)]
+    for name in names:
+        skill(own, name, LONG[:1000])
+    claude_chat(home, dict.fromkeys(names, LONG[:1000]))
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is True
+    other = cc["windows"][1]["result"]
+    assert other["say"] == (
+        "Estimate: On a 200K window, 1 of 8 skills would show only a name. "
+        "The agent may not use them."
+    )
+    assert other["short"] == "1 of 8 would show only a name"
+
+
 def test_a_rule_that_does_not_rebuild_the_list_shows_no_estimate(home):
     own = home / ".claude/skills"
     skill(own, "alpha", "Does alpha.")
@@ -481,6 +517,82 @@ def test_codex_with_no_files_found_gives_no_full_or_cut_verdict(home):
     rows = {s["name"]: s for s in cx["skills"] if s["name"] in ("alpha", "beta")}
     assert {n: r["side"] for n, r in rows.items()} == {"alpha": None, "beta": None}
     assert rows["alpha"]["note"] == "Kitden cannot find its file, so it cannot tell if it was cut."
+
+
+def a_small_window(home, paths, wanted):
+    """A 272K last chat that sent everything in full, and a small second window whose rule
+    result passes `wanted`."""
+    budget = a_budget(paths, wanted)
+    small = window_for(budget)
+    models = [
+        {"slug": "gpt-6-astra", "display_name": "gpt-6-astra", "context_window": 272_000},
+        {"slug": "gpt-tiny", "display_name": "gpt-tiny", "context_window": small},
+    ]
+    write_json(home / ".codex/models_cache.json", {"models": models})
+    codex_chat(home, [f"- {s.name}: {s.description} (file: {s.path})" for s in rule_skills(paths)])
+    cx = view(home)["codex"]
+    assert cx["checked"] is True
+    return codex_rule(rule_skills(paths), budget), _size_of(small), cx["windows"][1]["result"]
+
+
+def _size_of(window):
+    return f"{round(window / 1000)}K"
+
+
+def test_codex_estimate_cut(home):
+    paths = codex_home(home)
+    fit, size, other = a_small_window(home, paths, lambda f: f.cap is not None and f.cap >= 30)
+    about = round(fit.cap / 10) * 10
+    assert other["say"] == (
+        f"Estimate: On a {size} window, 2 of 3 descriptions would be cut to about {about} "
+        "characters."
+    )
+    assert other["short"] == "2 of 3 would be cut short"
+
+
+def test_codex_estimate_left_out(home):
+    paths = codex_home(home)
+    wanted = {"alpha": 0, "beta": 0, "gamma": None}
+    _, size, other = a_small_window(home, paths, lambda f: f.sent == wanted)
+    assert other["say"] == (
+        f"Estimate: On a {size} window, 1 of 3 skills would be left out and no description sent."
+    )
+
+
+def test_codex_names_only_with_nothing_left_out(home):
+    paths = codex_home(home, window=272_000)
+    codex_chat(home, [f"- {n}: (file: {paths[n]})" for n in ("alpha", "beta", "gamma")])
+    fact = view(home)["codex"]["windows"][0]["result"]
+    assert fact["say"] == (
+        "In your last chat on Oct 30, Codex removed every description. The agent saw only the "
+        "names."
+    )
+
+
+def test_codex_unreadable_log(home):
+    codex_home(home, window=272_000)
+    write_log(home / ".codex", "a", [meta(version="0.200.0"), turn()], 100)
+    cx = view(home)["codex"]
+    assert cx["message"] == (
+        "Kitden cannot read chat logs of Codex 0.200.0 yet, so it shows no result and no estimate."
+    )
+    assert (cx["lamp"], cx["fact"], cx["windows"]) == ("none", None, [])
+
+
+def test_a_codex_plugin_skill_from_the_log_has_no_item_to_switch(home):
+    # Codex's scan has no plugin skill items, and skill.rule refuses a plugin-scope Codex skill,
+    # so a plugin skill of the list has no switch; its own skills have On and Off.
+    paths = codex_home(home, window=272_000)
+    codex_chat(
+        home,
+        [
+            f"- alpha: {CODEX_A} (file: {paths['alpha']})",
+            "- plug:tool: Does tool. (file: /p/tool/SKILL.md)",
+        ],
+    )
+    rows = {s["name"]: s for s in view(home)["codex"]["skills"]}
+    assert (rows["plug:tool"]["item"], rows["plug:tool"]["switch"]) == (None, [])
+    assert rows["alpha"]["switch"] == ["on", "off"]
 
 
 def test_codex_limit_from_config_toml(home):

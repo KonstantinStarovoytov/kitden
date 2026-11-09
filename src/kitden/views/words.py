@@ -215,7 +215,6 @@ CLAUDE_WOULD_KEEP = "{on}, every skill would keep its description."
 CLAUDE_WOULD_KEEP_CHOSEN = "{on}, everything would fit. {chosen} only a name, as you chose."
 CODEX_WOULD_LEAVE_OUT = "{on}, {out} of {n} skills would be left out and no description sent."
 CODEX_WOULD_CUT = "{on}, {bad} of {n} descriptions would be cut to about {cap} characters."
-CODEX_WOULD_DROP_ALL = "{on}, every description would be removed and only the names sent."
 CODEX_WOULD_KEEP = "{on}, every skill would keep its full description."
 # Both sides of a swap after Apply: (one, many).
 GAINS = {
