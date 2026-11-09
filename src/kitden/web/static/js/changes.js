@@ -47,6 +47,22 @@ export function backupWords({ state, backup }) {
   return "Kept · not everything was put back";
 }
 
+// A server the change took out of a client that is back there now (views/changes_view.py
+// `came_back`): its app wrote it again, or something else did. The twin of views/words.py BACK_IN.
+export function cameBackWords({ name, client, app }) {
+  const why = app ? `The ${app} app wrote it again; change it there.` : "Something else on this computer wrote it again.";
+  return `${name} is back in ${CLIENT_NAMES[client] || client}. ${why}`;
+}
+
+// The lines under the facts: the backup's secret note, then each server that is back.
+function whyLines(entry) {
+  const lines = [backupNote(entry), ...(entry.came_back || []).map(cameBackWords)].filter(Boolean);
+  if (lines.length < 2) return lines[0] || null;
+  const box = el("div");
+  box.append(...lines.map((line) => el("p", "why", line)));
+  return box;
+}
+
 // A date as "2026-10-27" in local time, as the server gives a change's `day`.
 const pad = (n) => String(n).padStart(2, "0");
 const localDay = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -322,7 +338,8 @@ function drawChange(id) {
 }
 
 // The kind and title with the day and time under it, the facts, every tray row's title when there
-// were several, the backup's secret note, the actions, and the paths under Technical details.
+// were several, the backup's secret note and the servers that are back, the actions, and the
+// paths under Technical details.
 function changeCard(entry) {
   const status = el("p", "gone-note");
   status.setAttribute("role", "status");
@@ -333,7 +350,7 @@ function changeCard(entry) {
     id: `${dayWords(entry.day)} ${clock(entry.time)}`,
     facts: changeFacts(entry),
     list: rowTitles(entry.rows),
-    why: backupNote(entry),
+    why: whyLines(entry),
     actions: changeActions(entry, status),
     after: entry.map ? status : null,
     technical: tech.length ? technical(tech) : null,

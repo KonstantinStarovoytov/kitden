@@ -32,7 +32,7 @@ from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.library_map import library_map
 from kitden.views.setup_server import ENABLE_KEYS, kitden_on, setup_server_state
-from kitden.views.words import join_words
+from kitden.views.words import BACK_BY_APP, BACK_BY_OTHER, BACK_IN, join_words
 
 READ_PROBLEMS = {
     UnknownReason.UNRECOGNIZED_FORMAT: "The file format is not recognized",
@@ -158,6 +158,23 @@ def _old_entries(inventory) -> list[dict]:
     action = {"label": "Update…", "body": body}
     card_id = _hash("old-entries", where)
     return [_card(card_id, "attention", "house", title, text, ids, action, "gateway")]
+
+
+def _came_back(back: list[dict]) -> list[dict]:
+    """A card per server a change took out of a client that is back there now (changes_view.py
+    `came_back`): an app, or something else, wrote it again. "Show…" opens it on the Gateway."""
+    cards = []
+    for server in back:
+        name, client, app = server["name"], server["client"], server["app"]
+        title = BACK_IN.format(name=name, client=CLIENT_WORDS.get(client, client))
+        line = BACK_BY_APP.format(app=app) if app else BACK_BY_OTHER
+        go = {"view": "gateway", "sel": f"{ItemKind.MCP_SERVER}:{name}"}
+        action = {"label": "Show…", "go": go}
+        card_id = _hash("came-back", client, name)
+        cards.append(
+            _card(card_id, "attention", "server", title, line, [client], action, "gateway")
+        )
+    return cards
 
 
 def _move_ins(groups: dict) -> list[dict]:
@@ -301,12 +318,14 @@ def overview(
     adapters: dict | None = None,
     gateway_rules: set[str] | frozenset[str] = frozenset(),
     problem: str | None = None,
+    came_back: list[dict] | None = None,
 ) -> dict:
     """The Overview page's `cards`, `notes` (how many rows the folded notes draw), `map` (the
     "Your setup" map) and `counts` (for the lede). `held` are the servers the Kitden gateway
     holds (None: no Kitden gateway here), `adapters` the clients' adapters, for the Library's
-    counts, `gateway_rules` the known projects with gateway rules of their own, and `problem`
-    why the Kitden gateway settings could not be read (None: they could)."""
+    counts, `gateway_rules` the known projects with gateway rules of their own, `problem`
+    why the Kitden gateway settings could not be read (None: they could), and `came_back` the
+    servers a change took out of a client that are back there now (changes_view.py)."""
     findings = find_findings(inventory, project)
     cards = (
         _unreadable(inventory)
@@ -314,6 +333,7 @@ def overview(
         + _untested(inventory)
         + _old_entries(inventory)
         + _duplicates(inventory, findings)
+        + _came_back(came_back or [])
     )
     # Servers outside the gateway and clients not connected are options, not problems. The rows
     # are the Gateway page's, so a server in two clients is one card. Nothing moves into a gateway

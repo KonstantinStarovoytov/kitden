@@ -4,20 +4,33 @@ import json
 from datetime import datetime
 from types import SimpleNamespace
 
+from kitden.changes.json_splice import ABSENT
 from kitden.gateways import data_dir
-from kitden.model import ItemKind
+from kitden.model import (
+    Change,
+    ChangeState,
+    FileEdit,
+    Item,
+    ItemKind,
+    Scope,
+    Source,
+    SourceKind,
+    Step,
+)
 from kitden.views.changes_view import _map, change_entries
 from tests.unit.test_api_batch import (
     POST,
     _apply,
     _hold,
     _ids,
+    _move,
     _page,
     _preview,
     _projects,
     _remove,
     _rule,
 )
+from tests.unit.test_gateway_access import add_pencil
 
 RESTORED = "The original settings were restored."
 NO_ENGINE = SimpleNamespace(changes={})
@@ -308,3 +321,92 @@ def test_entries_hold_no_paths_outside_technical(tmp_path):
     assert alone["project"] == "website"
     assert alone["title_parts"]["target"]["project"] == "website"
     assert alone["title_parts"]["rule"]["project"] == "website"
+
+
+CURSOR_FILE = "/h/.cursor/mcp.json"
+
+
+def _step_line(name, client="cursor"):
+    return {"client": client, "name": name, "scope": "user", "path": CURSOR_FILE}
+
+
+def _record(change_id, action, name, after, state="verified"):
+    """A change's record with one step on Cursor's file: `after` ABSENT takes the entry out."""
+    edit = FileEdit(path=CURSOR_FILE, fmt="json", key=("mcpServers", name), after=after)
+    step = Step(client="cursor", scope=Scope.USER, name=name, edit=edit)
+    return Change(action=action, state=ChangeState(state), id=change_id, steps=[step])
+
+
+def _server(name, app=None, path=CURSOR_FILE):
+    source = Source(kind=SourceKind.FILE, path=path, owner_client="cursor")
+    return Item("cursor", ItemKind.MCP_SERVER, name, source, Scope.USER, app=app)
+
+
+def _back(lines, records, items):
+    """Each entry's `came_back`, by id; `lines` oldest first."""
+    engine = SimpleNamespace(changes={r.id: r for r in records})
+    entries = change_entries(list(reversed(lines)), engine, SimpleNamespace(items=items))
+    return {e["id"]: e["came_back"] for e in entries}
+
+
+def test_a_removed_server_that_is_there_again_came_back():
+    a, b = "20261108T090000Z-aaaaaa", "20261108T100000Z-bbbbbb"
+    remove = _line(a, "2026-11-08T09:00:10+00:00", "verified", steps=[_step_line("pencil")])
+    removed = _record(a, "mcp.remove_direct", "pencil", ABSENT)
+    pencil = _server("pencil", app="Pen")
+    assert _back([remove], [removed], [pencil])[a] == [
+        {"name": "pencil", "client": "cursor", "app": "Pen"}
+    ]
+    # Gone still, or back in another file: it did not come back.
+    assert _back([remove], [removed], [])[a] == []
+    assert _back([remove], [removed], [_server("pencil", path="/w/.cursor/mcp.json")])[a] == []
+    # Undone: Kitden put it back itself.
+    undone = {**remove, "time": "2026-11-08T09:30:00+00:00", "state": "undone"}
+    assert _back([remove, undone], [removed], [pencil])[a] == []
+    # A later Kitden change that adds it again is the latest: not came back. Undone, it counts
+    # for nothing.
+    add = _line(b, "2026-11-08T10:00:10+00:00", "verified", action="mcp.add")
+    add["steps"] = [_step_line("pencil")]
+    added = _record(b, "mcp.add", "pencil", {"command": "pencil-mcp"})
+    assert _back([remove, add], [removed, added], [pencil]) == {a: [], b: []}
+    add_undone = {**add, "time": "2026-11-08T10:30:00+00:00", "state": "undone"}
+    back = _back([remove, add, add_undone], [removed, added], [pencil])
+    assert back[a] == [{"name": "pencil", "client": "cursor", "app": "Pen"}]
+    # Only a removal or a move counts; a change Kitden has no record of says nothing.
+    other = _record(a, "client.disconnect", "pencil", ABSENT)
+    assert _back([remove], [other], [pencil])[a] == []
+    assert _back([remove], [], [pencil])[a] == []
+
+
+def test_changes_and_overview_say_when_a_server_is_back(tmp_path):
+    with _page(tmp_path) as page:
+        add_pencil(page.home, "codex")
+        page.post("/api/rescan", headers=POST)
+        pencil = next(i for n, i in _ids(page, "codex").items() if n == "pencil")
+        n8n = _ids(page, "cursor")["n8n"]
+        removal = _preview(page, _remove("a", pencil)).json()
+        assert _apply(page, removal["id"]).json()["state"] == "verified"
+        move = _preview(page, _move("b", n8n)).json()
+        assert _apply(page, move["id"]).json()["state"] == "verified"
+        before = {e["id"]: e["came_back"] for e in page.get("/api/changes").json()}
+        # Pen writes pencil again when it starts; something writes n8n back into Cursor.
+        add_pencil(page.home, "codex")
+        cursor = page.home / ".cursor/mcp.json"
+        data = json.loads(cursor.read_text())
+        data["mcpServers"]["n8n"] = {"command": "npx", "args": ["n8n-mcp"]}
+        cursor.write_text(json.dumps(data))
+        page.post("/api/rescan", headers=POST)
+        after = {e["id"]: e["came_back"] for e in page.get("/api/changes").json()}
+        cards = page.get("/api/overview").json()["cards"]
+    assert before == {removal["id"]: [], move["id"]: []}
+    assert after[removal["id"]] == [{"name": "pencil", "client": "codex", "app": "Pen"}]
+    assert after[move["id"]] == [{"name": "n8n", "client": "cursor", "app": None}]
+    back = {c["name"]: c for c in cards if " is back in " in c["name"]}
+    assert back["pencil is back in Codex"]["line"] == "The Pen app wrote it again; change it there."
+    n8n_card = back["n8n is back in Cursor"]
+    assert n8n_card["line"] == "Something else on this computer wrote it again."
+    assert (n8n_card["group"], n8n_card["clients"]) == ("attention", ["cursor"])
+    assert n8n_card["action"] == {
+        "label": "Show…",
+        "go": {"view": "gateway", "sel": "mcp_server:n8n"},
+    }

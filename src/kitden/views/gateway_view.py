@@ -133,7 +133,8 @@ def gateway_view(
             row["client_items"].setdefault(column_of(item.client), []).append(item.id)
             first = firsts.setdefault((group, item.name), item)
             if item.entry_key != first.entry_key:
-                why = set_up_differently(item.name, first.client, item.client)
+                app = first.app or item.app
+                why = set_up_differently(item.name, first.client, item.client, app)
                 row["stays"] = row["stays"] or why
     for rows in groups.values():
         for row in rows.values():
