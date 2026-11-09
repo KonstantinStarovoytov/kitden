@@ -86,6 +86,15 @@ BACK_IN = "{name} is back in {client}"
 BACK_BY_APP = "The {app} app wrote it again; change it there."
 BACK_BY_OTHER = "Something else on this computer wrote it again."
 
+# The Overview card for a client whose last chat did not fit its skill list: its name and its
+# line, by what happened ("name": descriptions showed only a name, "cut", "out": left out).
+SKILL_LIST_IN = "Skill list in {client}"
+CONTEXT_CARD_LINES = {
+    "name": "{skills} showed only a name in your last {client} chat",
+    "cut": "{skills} {were} cut short in your last {client} chat",
+    "out": "{skills} {were} left out of your last {client} chat",
+}
+
 # The tag a cell carries in a project view: "This project" when the project's own settings
 # decide it (a project item that wins over a shared one), "Only this project" for an item only
 # that project has. A cell that follows the shared setup carries none, and so does every cell

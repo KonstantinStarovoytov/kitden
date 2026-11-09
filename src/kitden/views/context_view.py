@@ -302,14 +302,16 @@ def _claude_fact(rows: list[_Row], date: str) -> dict:
             over[r.name] = min(len(r.full), CLAUDE_DESCRIPTION_CAP) + 2
     used = sum(sent.values()) + names + max(0, len(rows) - 1)
     n, bad = len(rows), len(rows) - len(sent)
+    misfit = None
     if bad:
         short = words.CLAUDE_SHORT_NAMES.format(bad=bad, n=n)
         say = words.CLAUDE_NAMES_ONLY.format(date=date, bad=bad, n=n)
+        misfit = {"kind": "name", "n": bad}
     else:
         short = words.CLAUDE_SHORT_ALL.format(n=n)
         say = words.CLAUDE_ALL_SENT.format(date=date, n=n)
     result = {"short": short, "say": say, "sent": sent, "over": over, "used": used}
-    return result | {"size": used + sum(over.values()), "room": None}
+    return result | {"size": used + sum(over.values()), "room": None, "misfit": misfit}
 
 
 def _claude_estimate(skills: list[ClaudeSkill], fit: ClaudeFit, on: str, frame: str) -> dict:
@@ -516,6 +518,7 @@ def _codex_fact(rows: list[_Row], names_only: bool, date: str) -> dict:
     ]
     # Full or cut only for skills whose full size is known; else only what the log shows.
     unknown = any(r.sent is not None and r.full is None for r in rows)
+    misfit = {"kind": "out", "n": out} if out else {"kind": "cut", "n": len(cuts)} if cuts else None
     if out:
         short = words.CODEX_SHORT_OUT.format(out=out)
         say = words.CODEX_LEFT_OUT.format(date=date, out=out, n=n)
@@ -537,6 +540,7 @@ def _codex_fact(rows: list[_Row], names_only: bool, date: str) -> dict:
     return result | {
         "size": used + sum(over.values()),
         "room": None,
+        "misfit": misfit,
         "bad": out + len(cuts),
         "unknown": unknown and not out,
     }

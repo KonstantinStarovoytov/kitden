@@ -8,15 +8,31 @@ import pytest
 
 from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.clients import version_cache
+from kitden.context.rules import codex_rule
 from kitden.demo import build_demo_home
 from kitden.gateways import add_gateway
 from kitden.model import FindingType, Gateway
+from kitden.views.context_view import context_view
 from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.views.load_map import load_map
 from kitden.views.overview import overview
 from tests.conftest import cursor_db, make_home, write_cursor_fixture_state
+from tests.unit.test_context_view import (
+    CODEX_A,
+    CODEX_B,
+    CODEX_C,
+    a_budget,
+    claude_chat,
+    codex_chat,
+    codex_home,
+    rule_skills,
+    skill,
+    view,
+    window_for,
+    write_json,
+)
 from tests.unit.test_demo_mode import demo_page
 from tests.unit.test_local_gateway_views import page_for
 
@@ -632,3 +648,136 @@ def test_unreadable_gateway_settings_need_attention_and_claim_nothing(home):
     assert data["map"]["gateway"] == {"servers": None, "tools": None, "unread": True}
     assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Move in…"]
     assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]
+
+
+# Context: a card when the last chat's skill list did not fit
+
+LONG = "Use it when the task needs a careful plan. " * 30
+
+
+def _context_home(tmp_path):
+    home = tmp_path / "home"
+    for root in (".claude", ".codex", ".cursor"):
+        (home / root).mkdir(parents=True)
+    return home
+
+
+def _context_cards(home, project=None, **kwargs):
+    """The gauge cards of the Overview on `home`, given the Context page's client cards."""
+    inventory = build_inventory(home)
+    folder = str(project) if project else None
+    clients = context_view(inventory, home, home / ".codex", folder, {})["clients"]
+    data = overview(inventory, [], folder, context_cards=clients, **kwargs)
+    return [c for c in data["cards"] if c["icon"] == "gauge"]
+
+
+def _claude_chat_with_names_only(home, folder="/work/a"):
+    """A chat of four skills where two showed only a name (a budget of 2,100 characters)."""
+    for name in ("alpha", "beta", "gamma", "delta"):
+        skill(home / ".claude/skills", name, LONG[:1000])
+    write_json(home / ".claude/settings.json", {"env": {"SLASH_COMMAND_TOOL_CHAR_BUDGET": "2100"}})
+    sent = {"alpha": LONG[:1000], "beta": LONG[:1000], "gamma": None, "delta": None}
+    claude_chat(home, sent, model="claude-sonnet-4-6", folder=folder)
+
+
+def _codex_chat(home, kind):
+    """A Codex chat where two descriptions were cut short, or one skill was left out."""
+    paths = codex_home(home, window=1)
+    if kind == "cut":
+        budget = a_budget(paths, lambda fit: fit.cap is not None and fit.cap >= 30)
+        cap = codex_rule(rule_skills(paths), budget).cap
+        lines = [
+            f"- alpha: {CODEX_A[:cap]} (file: {paths['alpha']})",
+            f"- beta: {CODEX_B[: cap - 1]} (file: {paths['beta']})",
+            f"- gamma: {CODEX_C} (file: {paths['gamma']})",
+        ]
+    else:
+        budget = a_budget(paths, lambda fit: fit.sent == {"alpha": 0, "beta": 0, "gamma": None})
+        lines = [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"]
+    codex_home(home, window=window_for(budget))
+    codex_chat(home, lines)
+
+
+def test_a_claude_list_that_showed_only_names_gets_a_card(tmp_path):
+    home = _context_home(tmp_path)
+    _claude_chat_with_names_only(home)
+    [card] = _context_cards(home)
+    assert card["group"] == "attention"
+    assert card["line"] == "2 skills showed only a name in your last Claude Code chat"
+    assert card["clients"] == ["claude_code"]
+    assert card["action"] == {
+        "label": "Show…",
+        "go": {"view": "context", "sel": "client:claude_code"},
+    }
+
+
+def test_a_codex_list_that_was_cut_gets_a_card(tmp_path):
+    home = _context_home(tmp_path)
+    _codex_chat(home, "cut")
+    [card] = _context_cards(home)
+    assert card["line"] == "2 skills were cut short in your last Codex chat"
+    assert card["clients"] == ["codex"]
+    assert card["action"]["go"] == {"view": "context", "sel": "client:codex"}
+
+
+def test_a_codex_list_that_left_a_skill_out_says_so(tmp_path):
+    home = _context_home(tmp_path)
+    _codex_chat(home, "out")
+    [card] = _context_cards(home)
+    assert card["line"] == "1 skill was left out of your last Codex chat"
+
+
+def test_a_list_that_fits_gets_no_card(tmp_path):
+    home = _context_home(tmp_path)
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"alpha": "Does alpha."})
+    paths = codex_home(home, window=272_000)
+    codex_chat(home, [f"- alpha: {CODEX_A} (file: {paths['alpha']})"])
+    assert _context_cards(home) == []
+
+
+def test_cursor_and_clients_without_a_chat_get_no_card(tmp_path):
+    home = _context_home(tmp_path)
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    skill(home / ".cursor/skills-cursor", "beta", "Does beta.")
+    assert _context_cards(home) == []
+
+
+def test_the_cards_come_after_the_came_back_cards(tmp_path):
+    home = _context_home(tmp_path)
+    _claude_chat_with_names_only(home)
+    back = [{"name": "docs", "client": "codex", "app": None}]
+    data = overview(
+        build_inventory(home),
+        [],
+        None,
+        came_back=back,
+        context_cards=view(home).values(),
+    )
+    assert [c["icon"] for c in data["cards"]] == ["server", "gauge"]
+    assert data["counts"]["attention"] == 2
+
+
+def test_a_picked_project_gets_the_card_of_its_own_last_chat(tmp_path):
+    home = _context_home(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    _claude_chat_with_names_only(home, folder=str(project))
+    assert [c["line"] for c in _context_cards(home, project)] == [
+        "2 skills showed only a name in your last Claude Code chat"
+    ]
+    # Another project has no chat of its own.
+    other = tmp_path / "other"
+    other.mkdir()
+    assert _context_cards(home, other) == []
+
+
+def test_the_page_passes_the_context_cards_to_the_overview(tmp_path):
+    from tests.unit.test_local_gateway_views import page_for
+
+    home = _context_home(tmp_path)
+    _claude_chat_with_names_only(home)
+    with page_for(home) as page:
+        cards = page.get("/api/overview").json()["cards"]
+    [card] = [c for c in cards if c["icon"] == "gauge"]
+    assert card["line"] == "2 skills showed only a name in your last Claude Code chat"

@@ -1032,6 +1032,7 @@ def create_app(
             ruled,
             problem=problem,
             came_back=back,
+            context_cards=_context_clients(path),
         )
         return JSONResponse(answer)
 
@@ -1064,12 +1065,15 @@ def create_app(
         )
         if not good:
             return _error("Kitden cannot read the draft.", 422)
+        return JSONResponse({"project": project, "clients": _context_clients(path, draft)})
+
+    def _context_clients(path, draft=None):
+        """The Context page's client cards; none without a home folder."""
         if home is None:
-            return JSONResponse({"project": project, "clients": []})
+            return []
         codex = adapters.get("codex")
         codex_home = codex.codex_home if codex else home / ".codex"
-        answer = context_view(state.inventory, home, codex_home, path, draft)
-        return JSONResponse({"project": project, **answer})
+        return context_view(state.inventory, home, codex_home, path, draft or {})["clients"]
 
     def _gateway_view(request, project, path):
         held, problem = _kitden(path)

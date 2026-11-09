@@ -140,6 +140,7 @@ def test_claude_too_many_names_the_count(home):
         "The agent may not have used them."
     )
     assert fact["result"]["short"] == "2 of 4 showed only a name"
+    assert fact["result"]["misfit"] == {"kind": "name", "n": 2}
     assert fact["result"]["room"] is None
     assert set(fact["result"]["sent"]) == {"alpha", "beta"}
     assert fact["result"]["over"] == {"gamma": 1002, "delta": 1002}
@@ -436,6 +437,7 @@ def test_codex_cut_short(home):
         "characters. The agent saw only their start."
     )
     assert fact["result"]["short"] == "2 of 3 cut short"
+    assert fact["result"]["misfit"] == {"kind": "cut", "n": 2}
     assert set(fact["result"]["over"]) == {"alpha", "beta"}
     other = cx["windows"][1]
     assert (other["title"], other["tag"], other["budget"]) == ("500K window", "Estimate", 10_000)
@@ -470,6 +472,7 @@ def test_codex_left_out(home):
         "of the list. The agent did not see them at all."
     )
     assert fact["result"]["short"] == "1 left out, the rest name only"
+    assert fact["result"]["misfit"] == {"kind": "out", "n": 1}
     assert "gamma" not in fact["result"]["sent"]
     assert {s["name"]: s["side"] for s in cx["skills"]}["gamma"] == 1
 
