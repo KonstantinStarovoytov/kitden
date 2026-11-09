@@ -179,7 +179,7 @@ def test_a_local_rule_turns_a_user_skill_off_in_that_project_only(tmp_path, no_v
     outside = effective_view(inventory, "claude_code", None)
     assert "deploy" in {i.name for i in outside.items}
     # The rule source in that project is the local file.
-    assert user_skill.project_rules == ((str(root), Enabled.OFF, Scope.LOCAL),)
+    assert user_skill.project_rules == ((str(root), Enabled.OFF, Scope.LOCAL, "off"),)
 
 
 def test_a_project_off_plugin_with_a_local_off_shows_on_under_all_projects(tmp_path, no_version):
@@ -260,7 +260,10 @@ def test_a_project_in_a_subfolder_of_a_repository_reads_the_roots_local_file(tmp
     )
     inventory = build_inventory(home)
     state, item = _state_in(home, str(web), "deploy")
-    assert (state, item.project_rules) == (Enabled.OFF, ((str(web), Enabled.OFF, Scope.LOCAL),))
+    assert (state, item.project_rules) == (
+        Enabled.OFF,
+        ((str(web), Enabled.OFF, Scope.LOCAL, "off"),),
+    )
     # The key only the starting folder's file has still counts.
     assert _skill_state(inventory.items, "review", Scope.PROJECT) == (Enabled.OFF, Scope.LOCAL)
     # The plugin: one local entry, the root's, off.
@@ -381,3 +384,30 @@ def test_only_claude_code_and_cursor_read_the_skill_file_for_it(tmp_path):
         ("codex", "deploy"): None,
         ("codex", "plain"): None,
     }
+
+
+def _skill_in(home, project):
+    view = effective_view(build_inventory(home), "claude_code", project)
+    (item,) = [i for i in view.items if i.kind is ItemKind.SKILL and i.name == "deploy"]
+    return item
+
+
+def test_a_local_name_only_rule_sets_the_skill_state_in_that_project(tmp_path, no_version):
+    home, root = _home(tmp_path, local={"skillOverrides": {"deploy": "name-only"}})
+    assert _skill_in(home, str(root)).skill_state == "name-only"
+    assert _skill_in(home, None).skill_state is None
+
+
+def test_a_local_on_rule_clears_a_user_name_only_in_that_project(tmp_path, no_version):
+    home, root = _home(
+        tmp_path,
+        user={"skillOverrides": {"deploy": "name-only"}},
+        local={"skillOverrides": {"deploy": "on"}},
+    )
+    inside = _skill_in(home, str(root))
+    assert (inside.skill_state, inside.enabled, inside.state_scope) == (
+        None,
+        Enabled.ON,
+        Scope.LOCAL,
+    )
+    assert _skill_in(home, None).skill_state == "name-only"

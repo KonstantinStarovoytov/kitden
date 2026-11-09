@@ -153,7 +153,8 @@ def _project_rules(
         for path, rules in by_project.items():
             rule = rules.get(item.name)
             if item.kind is ItemKind.SKILL and rule and rule[1] is not Scope.USER:
-                found.append((path, Enabled.OFF if rule[0] == "off" else Enabled.ON, rule[1]))
+                state = rule[0]
+                found.append((path, Enabled.OFF if state == "off" else Enabled.ON, rule[1], state))
         ruled.append(replace(item, project_rules=tuple(found)) if found else item)
     return ruled
 

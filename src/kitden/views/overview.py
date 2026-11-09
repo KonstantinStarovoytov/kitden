@@ -283,7 +283,7 @@ def _ruled_projects(inventory, adapters) -> set[str]:
     an item of its own, or a rule for a user skill, can: the Library map is read for those."""
     kinds = (ItemKind.PLUGIN, ItemKind.SKILL)
     maybe = {i.project for i in inventory.items if i.kind in kinds and i.project}
-    maybe |= {p for i in inventory.items if i.kind in kinds for p, _, _ in i.project_rules}
+    maybe |= {p for i in inventory.items if i.kind in kinds for p, *_ in i.project_rules}
     known = [p.path for p in inventory.projects if p.path in maybe]
     return {p for p in known if _library_rules(library_map(inventory, adapters, p))}
 

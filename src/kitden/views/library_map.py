@@ -232,7 +232,7 @@ def _off_in(inventory, own: list[Item]) -> list[str]:
         path
         for item in own
         if item.client == "claude_code"
-        for path, enabled, _ in item.project_rules
+        for path, enabled, *_ in item.project_rules
         if enabled is Enabled.OFF
     }
     return [p.id for p in inventory.projects if p.path in paths]
