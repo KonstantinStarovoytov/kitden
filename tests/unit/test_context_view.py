@@ -694,3 +694,21 @@ def test_a_skill_says_its_source_and_a_project_skill_names_its_project(home, tmp
     assert rows["own"] == (None, "Your skills")
     assert rows["plug:tool"] == (None, "Plugin plug")
     assert rows["dataviz"] == (None, "Built into Claude Code")
+
+
+def test_a_codex_skill_that_is_off_has_no_on_to_offer(home):
+    # Codex only writes `enabled = false`; turning it back on stays an Undo in Changes. A skill
+    # that is off is not loaded, so it has no item here, and so no switch (no On to press).
+    paths = codex_home(home, window=272_000)
+    with (home / ".codex/config.toml").open("a") as config:
+        config.write(f'\n[[skills.config]]\npath = "{paths["beta"]}"\nenabled = false\n')
+    codex_chat(
+        home,
+        [
+            f"- alpha: {CODEX_A} (file: {paths['alpha']})",
+            f"- beta: {CODEX_B} (file: {paths['beta']})",
+        ],
+    )
+    rows = {s["name"]: s for s in view(home)["codex"]["skills"]}
+    assert (rows["beta"]["item"], rows["beta"]["switch"]) == (None, [])
+    assert rows["alpha"]["switch"] == ["on", "off"]

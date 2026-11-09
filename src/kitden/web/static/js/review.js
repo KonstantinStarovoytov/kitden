@@ -132,6 +132,9 @@ export function changeWords(change, previewBody) {
   // A skill set to Name only is neither off nor back to the shared rule.
   const nameOnly = change.action === "skill.rule" && ruleState(previewBody && previewBody.params) === "name-only";
   if (nameOnly) title = `Set ${short} to Name only`;
+  // On for all projects takes the user's own rule out: the skill is on again.
+  const onForAll = change.action === "skill.rule" && !off && previewBody && (previewBody.params || {}).scope === "all";
+  if (onForAll) title = `Turn on ${short}`;
   const verb = DONE_WORDS[change.action] || change.action;
   let what = `${verb} ${short} ${REMOVES.includes(change.action) ? "from" : "in"} ${clients}`;
   // Never "removed" alone for a client that still loads another copy of the skill.
@@ -166,7 +169,7 @@ export function changeWords(change, previewBody) {
   } else if (change.action === "gateway.add") {
     what = `${verb} ${added} to the Kitden gateway`;
   } else if (change.action === "skill.rule") {
-    what = nameOnly ? `${short} is Name only` : off ? `${verb} ${short}` : `${short} uses the shared rule`;
+    what = nameOnly ? `${short} is Name only` : off ? `${verb} ${short}` : onForAll ? `Turned on ${short}` : `${short} uses the shared rule`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   } else if (change.action === "project.align") {

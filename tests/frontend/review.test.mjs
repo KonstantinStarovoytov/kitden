@@ -208,6 +208,8 @@ test('a skill rule says what it turns off and where', () => {
   // Name only is not Off.
   assert.deepEqual(changeWords(off(target('all')), body({ scope: 'all', state: 'name-only' })), { title: 'Set deploy to Name only for all projects', done: 'deploy is Name only for all projects' });
   assert.equal(changeWords(off(here), body({ scope: 'project', project: 'p1', state: 'on' })).title, 'Use the shared rule for deploy in website');
+  // On for all projects: the user's own key goes, and the skill is on again.
+  assert.deepEqual(changeWords(off(target('all')), body({ scope: 'all', state: 'on' })), { title: 'Turn on deploy for all projects', done: 'Turned on deploy for all projects' });
   // Back to the shared rule: the project's own key goes.
   assert.deepEqual(changeWords(off(here), body({ scope: 'project', project: 'p1', off: false })), { title: 'Use the shared rule for deploy in website', done: 'deploy uses the shared rule in website' });
 });

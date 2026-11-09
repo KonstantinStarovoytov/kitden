@@ -141,7 +141,7 @@ export function renderContext(main, { again = false } = {}) {
   if (windows.length && card.message) main.append(el("p", "ctx-note", card.message));
   const result = shown ? (after ? after.result : shown.result) : null;
   if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`));
-  if (card.skills.length) main.append(sidesFor(card, result, after));
+  if (card.skills.length) main.append(sidesFor(card, result, after, Boolean(after) || index > 0));
   if (card.how.length) main.append(howFor(card.how));
   markAll();
   followDraft();
@@ -253,16 +253,17 @@ function moveFrom(at, spots) {
 
 // The two sides --------------------------------------------------------------------------------
 
-// A skill's side: the server's, from the last chat; after Apply, from the estimate (Claude Code: a
-// skill whose description is sent; Codex: one with nothing cut off). A skill on no side (not in the
-// last list, or Kitden cannot tell) stays apart.
-function sideOf(card, skill, result, after) {
-  if (skill.side === null || skill.side === undefined || !after) return skill.side;
+// A skill's side: on the last chat's window, the server's; on an estimate (another window, or
+// after Apply), from that estimate (Claude Code: a skill whose description is sent; Codex: one
+// with nothing cut off). A skill on no side (not in the last list, or Kitden cannot tell) stays
+// apart.
+function sideOf(card, skill, result, estimate) {
+  if (skill.side === null || skill.side === undefined || !estimate) return skill.side;
   if (card.client === "codex") return skill.name in (result.over || {}) ? 1 : 0;
   return skill.name in (result.sent || {}) ? 0 : 1;
 }
 
-function sidesFor(card, result, after) {
+function sidesFor(card, result, after, estimate) {
   const states = draftFrom(current("context"))[card.client] || {};
   const box = el("div", "ctx-sides");
   const clouds = card.sides.map((name, i) => {
@@ -279,7 +280,7 @@ function sidesFor(card, result, after) {
   for (const skill of card.skills) {
     // A skill the tray turns off leaves the list.
     if (states[skill.name] === "off") continue;
-    const side = sideOf(card, skill, result, after);
+    const side = sideOf(card, skill, result, estimate);
     (clouds[side] || apart).append(pillFor(card, skill, states, after));
   }
   const wrap = el("div");
@@ -368,7 +369,10 @@ function switchFor(card, skill) {
   box.setAttribute("role", "group");
   box.setAttribute("aria-label", "State");
   const key = keyFor(ruleBody(card, skill, "off"));
-  const parts = skill.switch.map((value) => {
+  // Codex writes only `enabled = false`: a Codex skill that is off comes back by Undo in Changes,
+  // so its switch shows Off and no On.
+  const values = card.client === "codex" && skill.state === "off" ? skill.switch.filter((v) => v !== "on") : skill.switch;
+  const parts = values.map((value) => {
     const node = button(STATES[value] || value, () => choose(card, skill, value), "");
     node.dataset.state = value;
     node.dataset.focus = `state:${value}`;

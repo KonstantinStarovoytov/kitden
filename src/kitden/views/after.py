@@ -807,7 +807,10 @@ def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
         if new_file and edit.after is not ABSENT and edit.path not in made:
             made.add(edit.path)
             notes.append(NEW_LOCAL_FILE.format(folder=Path(edit.path).parent.parent.name))
-        if edit.after is ABSENT:
+        if edit.after is ABSENT and step.scope is Scope.USER:
+            # The user's own key taken out: on for all projects.
+            entry = {"client": client, "state": "on", "word": STATE_WORDS["on"]}
+        elif edit.after is ABSENT:
             key = edit.key[0]
             project = Path(step.cwd) if step.cwd else Path(edit.path).parent.parent
             shared = [home / ".claude/settings.json", project / ".claude/settings.json"]

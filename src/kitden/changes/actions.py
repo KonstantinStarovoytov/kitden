@@ -27,7 +27,7 @@ from kitden.clients.base import (
     SKILL_REMOVE,
     ClientAdapter,
 )
-from kitden.clients.claude_code import rule_file
+from kitden.clients.claude_code import holds, rule_file
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
 from kitden.gateway_api import direct_opener, gateway_name
 from kitden.local_gateway.keychain import (
@@ -1426,6 +1426,10 @@ def add_server_steps(
     return steps
 
 
+# "On" is a rule taken out: in a project, or for all projects where the user's file has one.
+ON_NEEDS_PROJECT = "Pick a project to use the shared rule there."
+
+
 def skill_rules_in(path: Path) -> bool:
     """The Claude Code settings file has `skillOverrides` with at least one key."""
     try:
@@ -1457,6 +1461,11 @@ def _claude_rule_steps(
         raise ValueError(PLUGIN_SKILL)
     if project is None and item.project is not None:
         raise ValueError(PROJECT_SKILL_ALL)  # a rule in the user's file would hide every copy
+    # On for all projects takes the user's own key out; with no key there, it is on already or a
+    # project decides.
+    user_file = home / ".claude/settings.json"
+    if project is None and state == "on" and not holds(user_file, ("skillOverrides", item.name)):
+        raise ValueError(ON_NEEDS_PROJECT)
     real = os.path.realpath
     if item.scope is Scope.PROJECT and project and real(str(item.project)) != real(project):
         raise ValueError("This skill is in another project.")
@@ -1485,7 +1494,8 @@ def skill_rule_steps(
     """Turn skills off for all projects or in one project, one step per target {client, item}
     (spec 5.5). `params`: scope "all" or "project", `project` (its id), and `state` ("off",
     "name-only" or "on"); without `state`, `off` stands for "off" or "on". "on" takes a project's
-    own rule out, so the shared rule applies there again.
+    own rule out, so the shared rule applies there again; for all projects it takes the user's
+    own key out (Claude Code only, and only when that file has one).
 
     Claude Code writes `skillOverrides` (a plugin: `enabledPlugins` in one project's local
     settings), Codex a `[[skills.config]]` entry, for all projects only. Cursor has no switch.
@@ -1502,8 +1512,6 @@ def skill_rule_steps(
             raise ValueError("Unknown project.")
     elif scope != "all":
         raise ValueError("Choose all projects or one project.")
-    elif state == "on":
-        raise ValueError("Pick a project to use the shared rule there.")
     by_id = {i.id: i for i in inventory.items}
     steps = []
     for target in targets:
@@ -1524,6 +1532,8 @@ def skill_rule_steps(
             raise ValueError(CODEX_NO_NAME_ONLY)
         if project is not None:
             raise ValueError(CODEX_NO_PROJECT)
+        if state == "on":
+            raise ValueError(ON_NEEDS_PROJECT)  # Codex writes only `enabled = false`
         steps.append(adapter.skill_rule_step(item))
     if not steps:
         raise ValueError("Choose a skill.")

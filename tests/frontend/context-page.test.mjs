@@ -543,3 +543,30 @@ test('with the check failed there is no estimate card and no After Apply', async
   assert.equal(text(verdict()), TIGHT.windows[0].result.say);
   assert.equal(pillOf('beta').classList.contains('lost'), false);
 });
+
+test('on an estimate window the pills follow that estimate, not the last chat', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const other = {
+    title: '1M window', models: 'Opus 5.5', tag: 'Estimate', budget: 30000,
+    result: { short: 'All 3 would fit', say: 'Estimate: On a 1M window, every skill would keep its description.', sent: { alpha: 4000, beta: 2000, gamma: 3000 }, over: {}, used: 9100, size: 9100, room: null, misfit: null },
+  };
+  show(answer({ ...TIGHT, windows: [TIGHT.windows[0], other] }, CODEX, CURSOR));
+  await fire(cards()[0], 'click');
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'beta'], ['gamma']]);
+  await fire(cards()[1], 'click');
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'beta', 'gamma'], []]);
+  await fire(cards()[0], 'click');
+});
+
+test('a Codex skill that is off shows Off and offers no On', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'codex' };
+  show(answer(CLAUDE, { ...CODEX, skills: [skill('lint', 300, 0, { state: 'off', switch: ['on', 'off'] }), skill('fmt', 200, 0, { switch: ['on', 'off'] })] }, CURSOR));
+  await fire(pillOf('lint'), 'click');
+  let switches = walk(drawer).filter((n) => n.dataset && n.dataset.state);
+  assert.deepEqual(switches.map((n) => [text(n), n.getAttribute('aria-pressed')]), [['Off', 'true']]);
+  await fire(pillOf('fmt'), 'click');
+  switches = walk(drawer).filter((n) => n.dataset && n.dataset.state);
+  assert.deepEqual(switches.map(text), ['On', 'Off']);
+});

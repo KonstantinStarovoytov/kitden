@@ -599,6 +599,29 @@ def test_state_on_takes_the_project_key_out_and_all_projects_refuses_it(tmp_path
         assert answer.json()["detail"] == "Choose On, Name only or Off."
 
 
+def test_on_for_all_projects_takes_the_users_key_out_and_undo_puts_it_back(tmp_path):
+    user = '{\n  "skillOverrides": {\n    "deploy": "name-only"\n  }\n}\n'
+    home, _, _ = _home(tmp_path, user=user)
+    settings = home / ".claude/settings.json"
+    with _page(home) as page:
+        rule = _rule("claude_code", _item(page, "claude_code", "deploy"), state="on")
+        change, _, undo = _round_trip(page, rule)
+        assert change["rows"][0]["after"] == [
+            {"client": "claude_code", "state": "on", "word": "On"}
+        ]
+        assert json.loads(settings.read_text()) == {"skillOverrides": {}}
+        assert undo()["state"] == "undone"
+    assert settings.read_text() == user
+
+
+def test_on_for_all_projects_with_no_key_in_the_users_file_is_refused(tmp_path):
+    home, _, _ = _home(tmp_path)
+    with _page(home) as page:
+        for client, name in (("claude_code", "deploy"), ("codex", "lint-fix")):
+            answer = _preview(page, _rule(client, _item(page, client, name), state="on"))
+            assert answer.json()["detail"] == "Pick a project to use the shared rule there."
+
+
 def test_name_only_in_a_project_waits_for_shared_skill_overrides(tmp_path):
     home, _, other = _home(tmp_path, user={}, site={"skillOverrides": {"tidy": "off"}})
     with _page(home) as page:
