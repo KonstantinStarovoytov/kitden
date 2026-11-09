@@ -147,6 +147,8 @@ initDock();
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Apply says it is writing only once the write takes this long (tray.js SLOW_WRITE).
+const SLOW = 310;
 async function quietly(fn) {
   const log = console.error;
   console.error = () => {};
@@ -236,16 +238,24 @@ test('barWords waits while a preview is asked', () => {
   assert.equal(barWords(trayOf([row('a'), row('b')], { phase: 'asking' })).applyWaits, true);
 });
 
+test('barWords keeps its words while a fast Apply runs', () => {
+  // A write that ends soon goes straight to Applied: the words stay, only Apply stops taking presses.
+  const change = { steps: [{ client: 'codex' }] };
+  const ready = barWords(trayOf([row('Remove docs', 'Codex: Removed.')], { phase: 'ready', change }));
+  const quick = barWords(trayOf([row('Remove docs', 'Codex: Removed.')], { phase: 'applying', change, slow: false }));
+  assert.deepEqual(quick, { ...ready, applyWaits: true });
+});
+
 test('barWords counts the steps while Apply runs', () => {
   const change = { steps: [{ client: 'codex' }, { client: 'claude_code' }] };
-  const running = trayOf([row('a'), row('b')], { phase: 'applying', change, done: 2, total: 5 });
+  const running = trayOf([row('a'), row('b')], { phase: 'applying', change, done: 2, total: 5, slow: true });
   assert.deepEqual(barWords(running), {
     head: '2 changes in preview', line: 'Writing the settings of Codex and Claude Code. A backup is kept.', cancel: 'Cancel all',
     apply: 'Applying 2 of 5', applyWaits: true, retry: false, changes: false,
   });
   // Before the first step ends there is no count to say.
   assert.equal(barWords({ ...running, done: 0, total: 0 }).apply, 'Applying…');
-  const one = barWords(trayOf([row('a')], { phase: 'applying', change: { steps: [{ client: 'codex' }] } }));
+  const one = barWords(trayOf([row('a')], { phase: 'applying', change: { steps: [{ client: 'codex' }] }, slow: true }));
   assert.equal(one.line, "Writing Codex's settings. A backup is kept.");
   // Once applied the button says so, and takes no more presses.
   const applied = trayOf([row('a'), row('b')], { phase: 'applied', change });
@@ -523,6 +533,12 @@ test('drawTray disables Cancel and × while Apply runs, then shows Applied', asy
   const second = tray.rows[1];
   const section = bar();
   const running = button(section, 'Apply all').click();
+  // Until the write takes a while the bar keeps its words; Apply only stops taking presses.
+  const waiting = button(section, 'Apply all');
+  assert.equal(waiting.attributes['aria-disabled'], 'true');
+  assert.equal(named(section, 'tray-head')[0].children[1].textContent, 'Nothing is written until you Apply.');
+  assert.equal(waiting.children[1].dataset.icon, 'arrow-right');
+  await sleep(SLOW);
   const apply = button(section, 'Applying…');
   assert.ok(apply, 'the button counts while it works');
   assert.equal(apply.attributes['aria-disabled'], 'true');
@@ -566,6 +582,7 @@ test('Apply keeps its width while its change is written, and lets it go after a 
     const apply = button(bar(), 'Apply all');
     const widths = [apply.getBoundingClientRect().width];
     const running = apply.click();
+    await sleep(SLOW);
     widths.push(apply.getBoundingClientRect().width);
     document.fire('kitden:progress', { id: 'c2', done: 2, total: 5, row: tray.rows[1].id });
     widths.push(apply.getBoundingClientRect().width);
@@ -579,6 +596,8 @@ test('Apply keeps its width while its change is written, and lets it go after a 
     assert.deepEqual(widths, [...widths].sort((a, b) => a - b), `never narrower: ${widths}`);
     assert.equal(widths.at(-1), 40 + 7 * 'Applying 2 of 5'.length);
     await running;
+    // The toast comes a moment after the bar leaves; it goes before the next round.
+    await sleep(200);
     hideToast();
   }
   // After a failure Apply says "Try again" at its own width.
@@ -604,6 +623,7 @@ test('the step number of "Applying 2 of 5" rolls from step 2; under reduced moti
     const writing = slow();
     queue('/api/changes/c2/apply', writing.reply);
     const running = button(bar(), 'Apply all').click();
+    await sleep(SLOW);
     const apply = button(bar(), 'Applying…');
     document.fire('kitden:progress', { id: 'c2', done: 1, total: 5, row: tray.rows[0].id });
     const label = apply.children[0];
@@ -623,6 +643,7 @@ test('the step number of "Applying 2 of 5" rolls from step 2; under reduced moti
     assert.equal(label.textContent, 'Applying 2 of 5');
     writing.release(verified('c2'));
     await running;
+    await sleep(200);
     hideToast();
   }
 });
