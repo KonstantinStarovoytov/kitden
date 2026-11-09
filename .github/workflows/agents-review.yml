@@ -1,0 +1,31 @@
+name: Agent reviews
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: agents-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude:
+    # Only with the switch on, only for branches in this repository, never for bots,
+    # drafts, or pull requests labelled no-agent-review.
+    if: >-
+      vars.AGENTS_ENABLED == 'true'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && !endsWith(github.actor, '[bot]')
+      && !github.event.pull_request.draft
+      && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
+    uses: KonstantinStarovoytov/kitden-agents/.github/workflows/review-claude.yml@d124b0c5e940952cfc00d492ec281efe6694b6df
+    permissions:
+      contents: read # the reviewer reads the code
+      pull-requests: write # it posts comments
+      actions: read # it counts today's runs
+    with:
+      model: claude-sonnet-5-5
+    secrets:
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
