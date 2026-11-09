@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-11-08
+Last updated: 2026-11-09
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -16,6 +16,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **The toast names the client that refused a change:** when a client's own command fails,
   "Nothing was changed" now says "Claude Code refused the change" instead of "The change did
   not check out". Thanks to @chiragjangiir (#25).
+- **Servers that apps write back:** when a server runs from a Mac app such as Pen, the review
+  says the app may write it back, the Gateway names the app when its entries differ, and
+  Changes and Overview say when a removed server is back.
 
 ### 0.6.1
 

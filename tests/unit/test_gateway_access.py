@@ -4,6 +4,7 @@ switch on its tools, the counts, and why an outside row stays direct (spec Part 
 import json
 from pathlib import Path
 
+from kitden.clients.entries import app_of
 from kitden.demo import build_demo_home
 from kitden.local_gateway.settings import load_settings, load_tools
 from kitden.local_gateway.views import held_servers, own_rules, tools_view
@@ -179,3 +180,77 @@ def test_a_project_definition_that_replaces_a_shared_one_is_an_override(tmp_path
     assert docs["override"] is True
     assert docs["stays"] == "docs is in the project's own files; it stays there."
     assert not any(r["override"] for g in everywhere.values() for r in g)
+
+
+# The pen.dev app writes `pencil` into each client when it starts, with its own --agent value
+# for each (seen on a Mac, 2026-11-08).
+PEN = "/Applications/Pen.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64"
+PEN_SET_UP = "pencil is set up differently for each client by the Pen app; change it in Pen."
+PEN_NOTE = (
+    "pencil runs from the Pen app, which may write it back. If it comes back, change it in Pen."
+)
+
+
+def test_app_of_names_the_mac_app_a_command_runs_from():
+    assert app_of({"command": PEN}) == "Pen"
+    assert app_of({"command": "/Users/me/Applications/My Tool.app/Contents/MacOS/mcp"}) == "My Tool"
+    # Only a command inside an app bundle counts.
+    assert app_of({"command": "npx", "args": [PEN]}) is None
+    assert app_of({"command": "/opt/Pen.app/mcp"}) is None
+    assert app_of({"url": "https://pen.example.test/mcp"}) is None
+    assert app_of({"command": ["not", "text"]}) is None
+
+
+def add_pencil(home, *clients):
+    """Pen's entry in Claude Code and Codex, as Pen writes it."""
+    if "claude_code" in clients:
+        claude = home / ".claude.json"
+        data = json.loads(claude.read_text())
+        data["mcpServers"]["pencil"] = {"command": PEN, "args": ["--agent", "claudeCodeCLI"]}
+        claude.write_text(json.dumps(data))
+    if "codex" in clients:
+        config = home / ".codex/config.toml"
+        pencil = f'\n[mcp_servers.pencil]\ncommand = "{PEN}"\nargs = ["--agent", "codexCLI"]\n'
+        config.write_text(config.read_text() + pencil)
+
+
+def _pencil(page, client):
+    query = {"client": client, "kind": "mcp_server", "scope": "user"}
+    return next(i for i in page.get("/api/items", params=query).json() if i["name"] == "pencil")
+
+
+def test_entries_an_app_sets_up_differently_name_the_app(tmp_path):
+    with demo_page(tmp_path) as page:
+        add_pencil(page.home, "claude_code", "codex")
+        page.post("/api/rescan", headers=POST)
+        local = page.get("/api/gateway-view").json()["groups"]["local"]
+        row = next(r for r in local if r["name"] == "pencil")
+        targets = [{"item": item} for item in row["items"]]
+        body = {"action": "gateway.move", "targets": targets, "params": {"gateway": "kitden"}}
+        refused = page.post("/api/changes/preview", json=body, headers=POST)
+        assert _pencil(page, "codex")["app"] == "Pen"
+    assert row["stays"] == PEN_SET_UP
+    assert (refused.status_code, refused.json()["detail"]) == (422, PEN_SET_UP)
+
+
+def test_a_review_says_an_app_may_write_its_server_back(tmp_path):
+    with demo_page(tmp_path) as page:
+        add_pencil(page.home, "codex")
+        page.post("/api/rescan", headers=POST)
+        pencil = {"item": _pencil(page, "codex")["id"]}
+        reviews = {}
+        for action, params in (("mcp.remove_direct", {}), ("gateway.move", {"gateway": "kitden"})):
+            body = {"action": action, "targets": [pencil], "params": params}
+            answer = page.post("/api/changes/preview", json=body, headers=POST)
+            assert answer.status_code == 200, answer.text
+            reviews[action] = answer.json()
+            page.post(f"/api/changes/{answer.json()['id']}/cancel", headers=POST)
+        # A server that runs from no app gets no such note.
+        n8n = page.get("/api/items", params={"client": "cursor", "kind": "mcp_server"}).json()
+        target = next(i["id"] for i in n8n if i["name"] == "n8n")
+        body = {"action": "mcp.remove_direct", "targets": [{"item": target}], "params": {}}
+        plain = page.post("/api/changes/preview", json=body, headers=POST).json()
+    # One plain note in the review; the change can still be applied.
+    for review in reviews.values():
+        assert [e["note"] for e in review["after"] if PEN_NOTE in e.get("note", "")] == [PEN_NOTE]
+    assert not any("app" in (e.get("note") or "") for e in plain["after"])

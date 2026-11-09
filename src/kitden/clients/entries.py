@@ -6,6 +6,7 @@ reading any file again. A move asks the same checks before its review.
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from kitden.local_gateway.settings import fill_placeholders
@@ -23,6 +24,8 @@ FROM_ELSEWHERE = (
 )
 # Why an entry in a project's own file (or a project layer) stays where it is.
 IN_PROJECT_FILES = "{} is in the project's own files; it stays there."
+# A command inside a Mac app: "/Applications/Pen.app/Contents/...".
+IN_APP = re.compile(r"(?:^|/)([^/]+)\.app/Contents/")
 
 
 def gateway_entry(entry: dict) -> dict:
@@ -83,3 +86,12 @@ def entry_refusal(name: str, entry: dict) -> str | None:
     if wrong or not ("command" in server or "url" in server):
         return f"{name} could not be read from its file."
     return None
+
+
+def app_of(entry: dict) -> str | None:
+    """The Mac app a server's command runs from ("Pen" for Pen.app), else None. Such an app
+    may write its entry again when it starts: pen.dev "sets up supported MCP integrations when
+    it starts" (docs.pencil.dev, checked 2026-11-08)."""
+    command = entry.get("command")
+    found = IN_APP.search(command) if isinstance(command, str) else None
+    return found.group(1) if found else None

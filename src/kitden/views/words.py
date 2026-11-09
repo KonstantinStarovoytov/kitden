@@ -66,6 +66,19 @@ AFTER_WORDS: dict[str, tuple[str, str]] = {
 # A change to the Kitden gateway when no client has its `kitden` entry on.
 NO_GATEWAY_CLIENT = "No client uses the Kitden gateway yet."
 
+# A server that runs from a Mac app (clients/entries.py app_of): the app may write its entries
+# again when it starts, so a change to them may not last. The Gateway says why a move refuses
+# it, and the review says it before a removal or a move.
+APP_SET_UP = "{name} is set up differently for each client by the {app} app; change it in {app}."
+APP_WRITES_BACK = (
+    "{name} runs from the {app} app, which may write it back. If it comes back, change it in {app}."
+)
+# A server a change took out of a client that is back there now: an Overview card's name and
+# line. The twins of changes.js cameBackWords, which says them as two sentences.
+BACK_IN = "{name} is back in {client}"
+BACK_BY_APP = "The {app} app wrote it again; change it there."
+BACK_BY_OTHER = "Something else on this computer wrote it again."
+
 # The tag a cell carries in a project view: "This project" when the project's own settings
 # decide it (a project item that wins over a shared one), "Only this project" for an item only
 # that project has. A cell that follows the shared setup carries none, and so does every cell

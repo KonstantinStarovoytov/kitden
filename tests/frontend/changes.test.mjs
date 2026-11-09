@@ -111,7 +111,7 @@ const quietly = async (fn) => {
 };
 
 const changesJs = await import('../../src/kitden/web/static/js/changes.js');
-const { backupWords, dayWords, renderChanges, weekCount } = changesJs;
+const { backupWords, cameBackWords, dayWords, renderChanges, weekCount } = changesJs;
 const { changeTitle } = await import('../../src/kitden/web/static/js/parts.js');
 const { closePanel, hideToast, isPanelOpen } = await import('../../src/kitden/web/static/js/panel.js');
 const { STRIKE } = await import('../../src/kitden/web/static/js/motion.js');
@@ -507,6 +507,21 @@ test('in a narrow window the first row is selected and no Details open', async (
   } finally {
     globalThis.innerWidth = 1440;
   }
+});
+
+test('a change whose server is back says who wrote it again', async () => {
+  await fresh();
+  const back = [{ name: 'pencil', client: 'codex', app: 'Pen' }, { name: 'n8n', client: 'cursor', app: null }];
+  show([change('b1', TODAY, { came_back: back, holds_secret: true })]);
+  assert.deepEqual(byClass(drawer, 'why').map(text), [
+    "This change's backup or record holds a secret.",
+    'pencil is back in Codex. The Pen app wrote it again; change it there.',
+    'n8n is back in Cursor. Something else on this computer wrote it again.',
+  ]);
+  // A change with nothing back says nothing of it.
+  show();
+  assert.deepEqual(byClass(drawer, 'why'), []);
+  assert.equal(cameBackWords({ name: 'pencil', client: 'claude_code', app: 'Pen' }), 'pencil is back in Claude Code. The Pen app wrote it again; change it there.');
 });
 
 test('Technical details hold the paths', async () => {
