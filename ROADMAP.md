@@ -9,6 +9,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **The plugin's skill answers more questions:** it now also starts for questions that name MCP
+  servers, skills, plugins, hooks or instruction files, and for requests to turn one on or off or
+  remove it. Without Kitden it shows the install line itself, after checking `kitden --version`.
+  The plugin's description says it needs Kitden installed.
+
+### 0.6.5
+
 - **A server that starts in its own folder can move into the gateway:** the gateway starts it
   in that folder, so it works in every client, also in Cursor, which has no start folder setting. A folder
   the client fills in, or one that is not on this computer, still stays direct, with the reason.
@@ -28,7 +35,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   use instead, and project_path explains what it takes, as Glama's tool quality score asked.
 - **Servers that apps write back:** when a server runs from a Mac app such as Pen, the review
   says the app may write it back, the Gateway names the app when its entries differ, and
-  Changes and Overview say when a removed server is back.
+  Changes and Overview say when a removed server is back. Its Overview card opens the entries
+  outside the gateway, even when the gateway holds a server of the same name.
 
 ### 0.6.1
 

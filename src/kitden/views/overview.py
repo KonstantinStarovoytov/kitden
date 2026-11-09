@@ -168,7 +168,8 @@ def _came_back(back: list[dict]) -> list[dict]:
         name, client, app = server["name"], server["client"], server["app"]
         title = BACK_IN.format(name=name, client=CLIENT_WORDS.get(client, client))
         line = BACK_BY_APP.format(app=app) if app else BACK_BY_OTHER
-        go = {"view": "gateway", "sel": f"{ItemKind.MCP_SERVER}:{name}"}
+        # Its entries outside the gateway, also when the gateway holds a server of that name.
+        go = {"view": "gateway", "sel": f"direct:{name}"}
         action = {"label": "Show…", "go": go}
         card_id = _hash("came-back", client, name)
         cards.append(
