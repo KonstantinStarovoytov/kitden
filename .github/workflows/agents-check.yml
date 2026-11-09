@@ -1,0 +1,17 @@
+name: Check agent workflows
+
+on:
+  pull_request:
+    paths: [".github/workflows/**"]
+
+permissions: {}
+
+concurrency:
+  group: agents-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    uses: KonstantinStarovoytov/kitden-agents/.github/workflows/check.yml@2dc9d518b15a58de00afa59d0afb226f6fdfba4e
+    permissions:
+      contents: read # check out the code
