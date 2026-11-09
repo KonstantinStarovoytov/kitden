@@ -10,7 +10,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 ### Not released yet
 
 - **Context: do your skills fit?** A new page shows what Claude Code and Codex sent in your
-  last chat, and switches a skill to Name only or Off. Estimates show only while Kitden's rule
+  last chat, and switches a skill to Name only (Claude Code) or Off. Estimates show only while Kitden's rule
   rebuilds that list.
 - **Name only is shown:** a skill set to Name only in Claude Code now says so in Library
   Details and in the MCP tools.

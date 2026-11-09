@@ -23,13 +23,16 @@ the List offers a project scope where supported. Start a new client session to l
 ## Check that your skills fit
 
 Open **Context** to see whether each client's skill list fit in its last chat. Claude Code and
-Codex limit that list to a small part of the context window; what does not fit is shown
-without its description or left out. Kitden reads only the skill list from the last chat log
-of each, keeps none of it and sends nothing. Estimates for another window, or for a change
-you are about to make, show only while Kitden's rule rebuilds that last list exactly. Cursor
-gets no verdict, because Kitden cannot see what Cursor sends. Switch a skill to **On**, **Name
-only** or **Off** in its Details; the change goes through preview, **Apply** and **Undo** like
-any other. The **Overview** shows a card when a last chat's list did not fit.
+Codex let that list use only a small part of the context window. Claude Code then shows some
+skills by name only; Codex shortens descriptions and, past that, leaves skills out. Kitden reads
+the skill list from the last chat log, plus the settings, skill files and use counts it needs
+to size and check that list; it keeps none of it and sends nothing. Estimates for another
+window, or for a change you are about to make, show only while Kitden's rule rebuilds that last
+list. Cursor gets no verdict, because Kitden cannot see what Cursor sends. In a skill's
+**Details**, switch it to **On**, **Name only** (Claude Code) or **Off** where the client
+allows it; built-in skills and Cursor have no switch. The change goes through preview,
+**Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
+did not fit.
 
 ## Add from the catalogs
 
