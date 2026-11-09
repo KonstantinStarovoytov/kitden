@@ -644,3 +644,16 @@ def test_after_words_say_name_only(tmp_path):
         assert row["after"] == [
             {"client": "claude_code", "state": "name-only", "word": "Follows all projects"}
         ]
+
+
+def test_an_odd_shared_value_does_not_break_the_review(tmp_path):
+    home, app, _ = _home(tmp_path, user={"skillOverrides": {"deploy": ["x"]}})
+    local = '{"skillOverrides": {"deploy": "off"}}'
+    _write(app / ".claude/settings.local.json", local)
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        for value in (["x"], {}):
+            _write(home / ".claude/settings.json", {"skillOverrides": {"deploy": value}})
+            rule = _rule("claude_code", item, "project", _project(page, app), state="on")
+            (row,) = _preview(page, rule).json()["rows"]
+            assert row["after"][0]["state"] == "on"

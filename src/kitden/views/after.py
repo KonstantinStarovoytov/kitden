@@ -812,8 +812,9 @@ def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
             project = Path(step.cwd) if step.cwd else Path(edit.path).parent.parent
             shared = [home / ".claude/settings.json", project / ".claude/settings.json"]
             values = [_rules(f, key)[name] for f in shared if name in _rules(f, key)]
-            shared_state = {"off": "off", False: "off", "name-only": "name-only"}
-            state = shared_state.get(values[-1], "on") if values else "on"
+            last = values[-1] if values else None  # a hand-edited value may be a list or object
+            off = last in ("off", False)
+            state = "off" if off else "name-only" if last == "name-only" else "on"
             entry = {"client": client, "state": state, "word": FOLLOWS_SHARED}
         elif client == "claude_code" and step.scope is Scope.USER:
             note = _skill_keepers(inventory, home, name)

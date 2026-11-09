@@ -99,8 +99,8 @@ export function changeWords(change, previewBody) {
   const clients = joinWords(reached.map(clientName));
   const plugin = ((previewBody && previewBody.params && previewBody.params.plugin) || "the plugin").split("@")[0];
   const server = (previewBody && previewBody.params && previewBody.params.server) || (change.steps[0] && change.steps[0].name);
-  // A skill rule turns a skill off; `off: false` takes a project's own rule out.
-  const off = !(previewBody && previewBody.params && previewBody.params.off === false);
+  // A skill rule turns a skill off; state "on" (or `off: false`) takes a project's own rule out.
+  const off = ruleState(previewBody && previewBody.params) !== "on";
   // An add names the server, not its row in the Add panel ("<plugin>@<marketplace>/<name>").
   const added = change.steps[0] ? change.steps[0].name : String(server).split("/").pop();
   let title = {
