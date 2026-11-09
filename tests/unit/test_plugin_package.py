@@ -57,6 +57,32 @@ def test_the_skill_description_names_what_users_ask_about():
     assert "turn one on or off" in head and "remove" in head
 
 
+def test_the_audit_skill_suggests_and_changes_nothing():
+    text = (PLUGIN / "skills/audit/SKILL.md").read_text()
+    head, body = text.split("---\n")[1:3]
+    assert "name: audit" in head
+    assert "description: Use when" in head
+    for word in ("turn off", "audit", "context"):
+        assert word in head
+    for rule in ("show_setup", "list_findings", "kitden open", "Never edit", "not sure"):
+        assert rule in body
+    # Kitden's tools do not count use, and the skill must say what it judges by.
+    assert "how often" in body
+    # The whole setup is too large for one answer; some items only their client can change.
+    for field in ("`client`", "explain_item", "`actions`", "`change_hint`"):
+        assert field in body
+    assert len(body.split()) < 300
+
+
+def test_the_readmes_say_what_the_server_and_the_plugin_each_give():
+    plugin = (PLUGIN / "README.md").read_text()
+    for words in ("## What the MCP server gives", "## What the plugin adds", "`setup`", "`audit`"):
+        assert words in plugin
+    readme = (ROOT / "README.md").read_text()
+    assert "| **MCP server** |" in readme and "| **Plugin** |" in readme
+    assert "/kitden:audit" in readme
+
+
 def test_the_install_line_is_the_one_in_the_readme():
     assert INSTALL in (ROOT / "README.md").read_text()
     assert INSTALL in (PLUGIN / "README.md").read_text()

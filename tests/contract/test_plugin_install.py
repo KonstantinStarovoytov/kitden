@@ -65,6 +65,7 @@ def test_claude_code_installs_the_plugin_from_the_repository(home):
     assert listed["kitden@kitden"]["enabled"] is True
     assert listed["kitden@kitden"]["mcpServers"] == {"kitden": ENTRY}
     assert Path(listed["kitden@kitden"]["installPath"], "skills/setup/SKILL.md").is_file()
+    assert Path(listed["kitden@kitden"]["installPath"], "skills/audit/SKILL.md").is_file()
     assert _state(home, "claude_code") == "plugin"
 
     _run(claude, ["plugin", "uninstall", "kitden@kitden"], home)
@@ -96,6 +97,7 @@ def test_codex_installs_the_plugin_from_the_repository(home):
     assert copied.is_relative_to(home / ".codex/plugins/cache")
     assert (copied / "mcp.json").read_bytes() == (ROOT / "plugins/kitden/mcp.json").read_bytes()
     assert (copied / "skills/setup/SKILL.md").is_file()
+    assert (copied / "skills/audit/SKILL.md").is_file()
     assert tomllib.loads(config.read_text())["plugins"]["kitden@kitden"] == {"enabled": True}
     items = build_inventory(home).items
     plugins = {i.name for i in items if i.client == "codex" and str(i.kind) == "plugin"}

@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **The plugin can audit a project:** the new skill `audit` (`/kitden:audit` in Claude Code) has
+  the agent compare what loads with the project you are in and list what to turn off. You make
+  the changes on the page. The READMEs say what the MCP server gives and what the plugin adds.
 - **The plugin's skill answers more questions:** it now also starts for questions that name MCP
   servers, skills, plugins, hooks or instruction files, and for requests to turn one on or off or
   remove it. Without Kitden it shows the install line itself, after checking `kitden --version`.
