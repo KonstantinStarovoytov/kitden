@@ -13,8 +13,11 @@ CLIENT = "codex"
 # shape is known. Only the numbers before the first dash are compared.
 KNOWN_CODEX_VERSION = "0.163.0-alpha.11"
 
-# `- name: description (file: path)`; a name-only line is `- name: (file: path)`.
-ENTRY = re.compile(r"^- (?P<name>[^:]+): (?P<desc>.*?) ?\(file: (?P<path>[^)]*)\)$")
+# `- name: description (file: path)`; a name-only line is `- name: (file: path)`. The name is
+# everything up to the first ": " and has no spaces, so a plugin skill keeps its prefix
+# (`plugin:skill`). The roots lines of the same block (`- `alias` = `/path``) have no `(file:`.
+# checked 2026-11-09 (real Codex list, cli 0.163.0-alpha.11)
+ENTRY = re.compile(r"^- (?P<name>\S+?): (?P<desc>.*?) ?\(file: (?P<path>[^)]*)\)$")
 
 
 @dataclass(frozen=True)
@@ -113,7 +116,11 @@ def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
 
 def last_codex_list(codex_home: Path, folder: str | None) -> CodexSent | Unreadable | None:
     """The list from the newest log that has one. With a folder, only that folder's logs.
-    Compressed `.zst` logs are not opened."""
+    Compressed `.zst` logs are not opened.
+
+    # checked 2026-11-09 (real Codex list, cli 0.163.0-alpha.11): logs are at
+    # sessions/<year>/<month>/<day>/rollout-*.jsonl under the codex home.
+    """
     files = []
     for path in (codex_home / "sessions").rglob("rollout-*.jsonl"):
         try:

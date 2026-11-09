@@ -68,6 +68,55 @@ def test_a_description_with_a_colon_keeps_it(tmp_path):
     assert last_codex_list(tmp_path, None).list.skills == (("a", "Use: when X."),)
 
 
+def test_a_plugin_skill_keeps_its_prefix(tmp_path):
+    text = (
+        "<skills_instructions>\n"
+        "- plugin:skill: Does B. (file: /p/b/SKILL.md)\n"
+        "- plugin:other: (file: /p/o/SKILL.md)\n"
+        "</skills_instructions>"
+    )
+    write_log(tmp_path, "a", [meta(), skills(text)], 100)
+    got = last_codex_list(tmp_path, None)
+    assert got.list.skills == (("plugin:skill", "Does B."), ("plugin:other", ""))
+    assert got.paths == {"plugin:skill": "/p/b/SKILL.md", "plugin:other": "/p/o/SKILL.md"}
+
+
+def test_roots_lines_are_ignored(tmp_path):
+    text = (
+        "<skills_instructions>\n"
+        "### Skill roots\n"
+        "- `alias` = `/Users/x/.codex/skills`\n"
+        "- `plug` = `/Users/x/.codex/plugins/cache`\n"
+        "### Available skills\n"
+        "- a: Does A. (file: /s/a/SKILL.md)\n"
+        "</skills_instructions>"
+    )
+    write_log(tmp_path, "a", [meta(), skills(text)], 100)
+    assert last_codex_list(tmp_path, None).list.skills == (("a", "Does A."),)
+
+
+def test_a_mixed_block_parses_every_skill_line(tmp_path):
+    skill_lines = [
+        "- a: Does A. (file: /s/a/SKILL.md)",
+        "- b: (file: /s/b/SKILL.md)",
+        "- superpowers:brainstorming: Use when: creating things. (file: /p/br/SKILL.md)",
+        "- superpowers:debug: (file: /p/d/SKILL.md)",
+    ]
+    roots = ["- `alias` = `/Users/x/.codex/skills`", "- `p` = `/Users/x/plugins`"]
+    lines = [roots[0], skill_lines[0], skill_lines[1], roots[1], *skill_lines[2:], "Use them well."]
+    text = "<skills_instructions>\n" + "\n".join(lines) + "\n</skills_instructions>"
+    write_log(tmp_path, "a", [meta(), skills(text)], 100)
+    got = last_codex_list(tmp_path, None)
+    assert len(got.list.skills) == len(skill_lines)
+    assert [name for name, _ in got.list.skills] == [
+        "a",
+        "b",
+        "superpowers:brainstorming",
+        "superpowers:debug",
+    ]
+    assert got.list.skills[2] == ("superpowers:brainstorming", "Use when: creating things.")
+
+
 def test_skips_threads_not_started_by_a_person_and_zst_files(tmp_path):
     write_log(tmp_path, "person", [meta(), skills(LIST.replace("Does A.", "Mine."))], 100)
     write_log(tmp_path, "sub", [meta(source="subagent"), skills()], 200)
