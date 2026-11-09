@@ -41,10 +41,12 @@ CLAUDE_ALWAYS_FULL = frozenset(
 CLAUDE_SHARE = 0.01
 CLAUDE_DESCRIPTION_CAP = 1536
 
-# checked 2026-10-30 (the real skill list of Codex): the list may use 2% of the window.
+# checked 2026-11-06 (codex-rs/ext/skills/src/render.rs): the list may use 2% of the window,
+# and one description is cut at 1024 characters.
 CODEX_SHARE = 0.02
 # Fitted to the real list of 2026-10-30, not read from Codex: tokens the list spends on its
 # own text before the first skill.
 CODEX_FIXED_TOKENS = 166
 CODEX_DESCRIPTION_CAP = 1024
+# checked 2026-11-06 (Codex docs, skills.max_context_tokens: "up to 10,000 tokens")
 CODEX_MAX_LIMIT = 10_000

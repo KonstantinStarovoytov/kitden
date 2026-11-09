@@ -107,6 +107,13 @@ def test_codex_leaves_skills_out_when_names_do_not_fit():
     assert fit.cap is None
 
 
+def test_codex_keeps_a_short_name_after_a_long_one_that_does_not_fit():
+    skills = [codex("a", "x"), codex("b" * 200, "x"), codex("c", "x")]
+    line = codex_tokens(codex_line(skills[0], ""))
+    fit = codex_rule(skills, CODEX_FIXED_TOKENS + 2 * line)
+    assert fit.sent == {"a": 0, "b" * 200: None, "c": 0}
+
+
 def test_codex_counts_bytes_so_russian_costs_more():
     assert codex_tokens("я" * 8) > codex_tokens("a" * 8)
 

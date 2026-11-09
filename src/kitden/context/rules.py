@@ -108,7 +108,7 @@ def codex_budget(window: int, limit: int | None) -> int:
 def codex_rule(skills: list[CodexSkill], budget: int) -> CodexFit:
     # Fitted to the real list of 2026-10-30 (not read from the Codex source): when the list
     # does not fit, every long description is cut to the same length; when even the names do
-    # not fit, the last skills are left out.
+    # not fit, the names that do not fit are left out.
     def total(m: int) -> int:
         return sum(codex_tokens(codex_line(s, s.description[:m])) for s in skills)
 
@@ -117,13 +117,12 @@ def codex_rule(skills: list[CodexSkill], budget: int) -> CodexFit:
     if total(0) > room:
         used = CODEX_FIXED_TOKENS
         sent: dict[str, int | None] = {}
-        room_left = True
         for s in skills:
             line = codex_tokens(codex_line(s, ""))
-            room_left = room_left and used + line <= budget
-            if room_left:
+            fits = used + line <= budget  # a later, shorter name may still fit
+            if fits:
                 used += line
-            sent[s.name] = 0 if room_left else None
+            sent[s.name] = 0 if fits else None
         return CodexFit(sent, used, size, None)
     if total(CODEX_DESCRIPTION_CAP) <= room:
         cap = CODEX_DESCRIPTION_CAP
