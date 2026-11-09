@@ -2,6 +2,7 @@ name: Agent reviews
 
 on:
   pull_request:
+    branches: [main] # judged by main's PRINCIPLES.md and AGENTS.md
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions: {}
@@ -20,7 +21,7 @@ jobs:
       && !endsWith(github.actor, '[bot]')
       && !github.event.pull_request.draft
       && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
-    uses: KonstantinStarovoytov/kitden-agents/.github/workflows/review-claude.yml@d124b0c5e940952cfc00d492ec281efe6694b6df
+    uses: KonstantinStarovoytov/kitden-agents/.github/workflows/review-claude.yml@ae7e694d6871ff1ef95ae598d3eed4a6fc9dc579
     permissions:
       contents: read # the reviewer reads the code
       pull-requests: write # it posts comments
