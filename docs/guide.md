@@ -40,6 +40,8 @@ See [online sources](discovery.md) for formats and limits.
 
 Open **Gateway** to share MCP servers and turn individual tools on or off for each project.
 Pick several with a band or Shift-click and drag them in together. Library works on its own.
+A server that must start in its own folder starts there in the gateway, so it also works in
+Cursor, which has no such setting.
 
 ## Review a change. Apply it. Undo it.
 

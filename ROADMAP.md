@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **A server that starts in its own folder can move into the gateway:** the gateway starts it
+  in that folder, so it works in every client, also in Cursor, which has no start folder setting. A folder
+  the client fills in, or one that is not on this computer, still stays direct, with the reason.
 - **A fast Apply no longer flickers:** when the write ends within 300 ms, the bar keeps its
   words and goes straight to Applied, instead of flashing "Applying…" and resizing twice.
 - **Clearer reasons a server stays outside the gateway:** "needs values its client fills in
