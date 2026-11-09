@@ -1023,6 +1023,11 @@ def create_app(
             ruled = {p for p, chain in _chains().items() if own_rules(settings, chain)}
         # A server a change took out that something wrote back since.
         back = came_back(engine.store.entries(), engine, state.inventory) if engine else []
+        # A chat log Kitden cannot read must not break the Overview: then no context cards.
+        try:
+            context = _context_clients(path)
+        except Exception:
+            context = []
         answer = overview(
             state.inventory,
             _registered(),
@@ -1032,7 +1037,7 @@ def create_app(
             ruled,
             problem=problem,
             came_back=back,
-            context_cards=_context_clients(path),
+            context_cards=context,
         )
         return JSONResponse(answer)
 

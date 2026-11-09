@@ -35,7 +35,8 @@ def claude_budget(window: int, per_token: int) -> int:
 
 
 def claude_weight(count: int, last_used_ms: int, at_ms: int) -> float:
-    days = (at_ms - last_used_ms) / 86_400_000
+    # A use after the chat (or a time in other units) counts as fresh: no huge power.
+    days = max(0.0, (at_ms - last_used_ms) / 86_400_000)
     return count * max(0.5 ** (days / 7), 0.1)
 
 

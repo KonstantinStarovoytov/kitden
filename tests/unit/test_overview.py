@@ -781,3 +781,20 @@ def test_the_page_passes_the_context_cards_to_the_overview(tmp_path):
         cards = page.get("/api/overview").json()["cards"]
     [card] = [c for c in cards if c["icon"] == "gauge"]
     assert card["line"] == "2 skills showed only a name in your last Claude Code chat"
+
+
+def test_a_context_read_that_fails_leaves_the_rest_of_the_overview(tmp_path, monkeypatch):
+    import kitden.web.app as web_app
+    from tests.unit.test_local_gateway_views import page_for
+
+    def broken(*args, **kwargs):
+        raise OverflowError("a chat log Kitden does not understand")
+
+    monkeypatch.setattr(web_app, "context_view", broken)
+    home = _context_home(tmp_path)
+    _claude_chat_with_names_only(home)
+    with page_for(home) as page:
+        answer = page.get("/api/overview")
+    assert answer.status_code == 200
+    assert not [c for c in answer.json()["cards"] if c["icon"] == "gauge"]
+    assert "counts" in answer.json()

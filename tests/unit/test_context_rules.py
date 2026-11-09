@@ -70,6 +70,12 @@ def test_claude_weight_halves_every_week_and_stops_at_a_tenth():
     assert claude_weight(8, t, t + 70 * DAY_MS) == 0.8
 
 
+def test_claude_weight_of_a_use_after_the_chat_is_the_full_count():
+    # A lastUsedAt in microseconds, not ms, lies far in the future: no overflow.
+    t = 1_700_000_000_000
+    assert claude_weight(8, t * 1000, t) == 8.0
+
+
 def test_claude_needs_a_description_unless_name_only():
     assert claude_rule([skill("a", None, only=True)], 100).name_only == {"a"}
     with pytest.raises(ValueError):

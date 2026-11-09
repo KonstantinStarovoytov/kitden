@@ -86,6 +86,7 @@ def _full(attachment: dict) -> bool:
     return (
         attachment.get("isInitial") is True
         and isinstance(names, list)
+        and all(isinstance(name, str) for name in names)
         and isinstance(attachment.get("content"), str)
         and attachment.get("skillCount") == len(names)
     )

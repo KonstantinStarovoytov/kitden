@@ -151,6 +151,13 @@ def test_a_list_cut_short_is_not_a_full_list(tmp_path):
     assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
 
 
+def test_a_list_whose_names_are_not_all_text_is_not_a_full_list(tmp_path):
+    write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
+    odd = list_entry(["a", 7], "- a: New.\n- 7: Seven.")
+    write_chat(tmp_path, "p", "new", [odd], 200)
+    assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
+
+
 def test_a_half_written_last_line_is_skipped(tmp_path):
     entry = list_entry(["a"], "- a: Whole.")
     write_chat(
