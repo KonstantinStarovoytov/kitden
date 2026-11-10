@@ -33,11 +33,11 @@ def test_a_held_remote_entry_in_each_client():
 
 
 def test_a_wrong_shape_or_client_is_refused():
-    with pytest.raises(ValueError, match="^The entry could not be read.$"):
+    with pytest.raises(ValueError, match=r"^The entry could not be read\.$"):
         translate_entry({"command": "npx", "env": {"KEY": {"keychain": "files/KEY"}}}, "codex")
-    with pytest.raises(ValueError, match="^The entry could not be read.$"):
+    with pytest.raises(ValueError, match=r"^The entry could not be read\.$"):
         translate_entry({"command": "npx", "args": ["a", 1]}, "cursor")
-    with pytest.raises(ValueError, match="^The entry could not be read.$"):
+    with pytest.raises(ValueError, match=r"^The entry could not be read\.$"):
         translate_entry({"args": ["a"]}, "cursor")
     with pytest.raises(ValueError, match="cannot take an MCP entry"):
         translate_entry(FILES, "claude_desktop_code_tab")

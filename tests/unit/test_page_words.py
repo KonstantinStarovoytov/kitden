@@ -534,7 +534,7 @@ def test_one_phrase_says_cursor_loads_claude_codes_plugins():
 
     notes = (after.CURSOR_IMPORT["note"], after.CURSOR_REMOVE["note"], after.CURSOR_KEEPS)
     for text in (*notes, commands.CURSOR_LOADS_CLAUDE):
-        assert text.startswith(f"{LOADS_PLUGINS},") or text.startswith(f"{LOADS_PLUGINS} "), text
+        assert text.startswith((f"{LOADS_PLUGINS},", f"{LOADS_PLUGINS} ")), text
     # Built on the one phrase, not a copy of it.
     assert "Claude Code's plugins" not in Path(commands.__file__).read_text()
 

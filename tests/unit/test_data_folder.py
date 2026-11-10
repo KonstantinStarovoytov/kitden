@@ -119,7 +119,7 @@ def test_a_failed_copy_is_retried_after_the_page_made_the_folder(tmp_path, monke
 
 
 def test_two_commands_copying_at_once_both_end_complete(tmp_path, monkeypatch):
-    old, _, change_id = _old_folder_with_a_change(tmp_path)
+    _old, _, change_id = _old_folder_with_a_change(tmp_path)
     real = shutil.copytree
     notes, second_started = [], []
 

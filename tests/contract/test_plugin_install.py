@@ -33,7 +33,7 @@ def home(tmp_path, monkeypatch):
 
 
 def _run(binary: str, args: list[str], home: Path, env: dict | None = None) -> str:
-    done = subprocess.run(  # noqa: S603 - fixed client command, no shell
+    done = subprocess.run(
         [binary, *args],
         env={**os.environ, "HOME": str(home), **(env or {})},
         cwd=ROOT,

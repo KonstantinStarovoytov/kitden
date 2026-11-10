@@ -255,7 +255,7 @@ class Upstreams:
         except TimeoutError:
             state = "answer" if server in self._clients else "start"
             sentence = f"{server} did not {state} in {wait:g} seconds."
-        except Exception:
+        except Exception:  # noqa: BLE001 - whatever went wrong, the client gets one plain sentence
             sentence = f"{server} did not list its tools."
         _say(sentence)
         raise UpstreamError(sentence)
@@ -283,7 +283,7 @@ class Upstreams:
                 await self._note_refused(server, False)
                 return _answer(refused.message)  # the server's own answer
             return _error(await self._failed(server, turned))
-        except Exception:
+        except Exception:  # noqa: BLE001
             # The text of an error may hold the server's address; say it plainly instead.
             return _error(await self._failed(server, turned))
         await self._note_refused(server, False)
@@ -331,7 +331,7 @@ class Upstreams:
                     client = await self._open().start(self._serve, server)
                 except UpstreamError:
                     raise
-                except Exception:
+                except Exception:  # noqa: BLE001 - the error's text may hold the server's address
                     verb = "reach" if self._remote(server) else "start"
                     raise UpstreamError(f"Kitden could not {verb} {server}.") from None
             return client
@@ -454,7 +454,7 @@ async def _roots(ctx: ServerRequestContext) -> list[str]:
         answer = await ctx.session.send_request(
             ListRootsRequest(), ListRootsResult, request_read_timeout_seconds=ROOTS_TIMEOUT
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - a client that cannot say its roots has none
         return []
     return [str(root.uri) for root in answer.roots]
 
@@ -511,7 +511,7 @@ class _Gateway:
             return await self.own.call_tool(params.name, arguments)
         except MCPError:
             raise
-        except Exception as exc:  # as MCPServer answers for its own tools
+        except Exception as exc:  # noqa: BLE001 - as MCPServer answers for its own tools
             return _answer(str(exc))
 
     async def _count(self, server: str, tool: str) -> None:
@@ -572,7 +572,7 @@ class _Gateway:
                 # mcp 2.3.0 ServerSession.send_tool_list_changed sends
                 # notifications/tools/list_changed (checked 2026-10-21).
                 await ctx.session.send_tool_list_changed()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return  # the client keeps its list until a new session
 
     def _rules_time(self) -> int | None:
@@ -589,7 +589,7 @@ class _Gateway:
     def _known(self) -> list[str]:
         try:
             return self.known()
-        except Exception:
+        except Exception:  # noqa: BLE001 - the session still starts, with the global tools
             _say(
                 "Kitden could not read the known projects; "
                 "this session gets the global set of tools."

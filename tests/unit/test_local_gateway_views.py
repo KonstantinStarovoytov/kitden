@@ -608,9 +608,8 @@ def test_the_library_follows_the_server_rules(home):
 
     with page_for(home) as page:
         pid = project_id(page, website)
-        assert cells(page) == {
-            c: ("off", "through the Kitden gateway") for c in ("claude_code", "codex", "cursor")
-        }
+        off = ("off", "through the Kitden gateway")
+        assert cells(page) == dict.fromkeys(("claude_code", "codex", "cursor"), off)
         # Codex's own `kitden` entry is off, so it stays off there.
         assert cells(page, f"&project={pid}") == {
             "claude_code": ("gw", "through the Kitden gateway"),

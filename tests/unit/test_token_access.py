@@ -15,7 +15,7 @@ from tests.unit.test_local_gateway_move import (
     keychain_items,
     stop,
 )
-from tests.unit.test_local_gateway_move import home as home  # noqa: F401 - the fixture
+from tests.unit.test_local_gateway_move import home as home
 
 
 def write_held(home, servers):

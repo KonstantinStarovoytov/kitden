@@ -98,7 +98,7 @@ def test_about_answers_before_the_first_scan(tmp_path):
 
 
 def test_a_demo_needs_the_sample_home():
-    with pytest.raises(ValueError, match="Demo mode needs the sample's home folder."):
+    with pytest.raises(ValueError, match=r"Demo mode needs the sample's home folder\."):
         create_app(lambda: Inventory(), token="tok", port=47800, demo=True)
 
 

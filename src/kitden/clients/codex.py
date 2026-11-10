@@ -6,7 +6,7 @@ comments). Spike S4: the running app keeps outside edits.
 
 import json
 import os
-import subprocess  # noqa: S404 - runs the codex command without a shell
+import subprocess  # runs the codex command without a shell
 import threading
 from collections.abc import Callable
 from dataclasses import replace

@@ -26,7 +26,7 @@ from tests.unit.test_local_gateway_move import (
     gateway_file,
     keychain_items,
 )
-from tests.unit.test_local_gateway_move import home as home  # noqa: F401 - the fixture
+from tests.unit.test_local_gateway_move import home as home
 
 # macOS words and `security` command lines; Linux has its own tests.
 pytestmark = pytest.mark.usefixtures("as_mac")

@@ -50,7 +50,7 @@ def _bytes(home):
 
 def _codex_servers(home) -> dict:
     env = {**os.environ, "HOME": str(home), "CODEX_HOME": str(home / ".codex")}
-    out = subprocess.run(  # noqa: S603 - fixed test command
+    out = subprocess.run(
         [_codex(), "mcp", "list", "--json"], env=env, capture_output=True, text=True, check=True
     ).stdout
     data = json.loads(out)
@@ -59,7 +59,7 @@ def _codex_servers(home) -> dict:
 
 def _claude_get(home, name, cwd=None) -> str:
     env = {**os.environ, "HOME": str(home)}
-    done = subprocess.run(  # noqa: S603 - fixed test command
+    done = subprocess.run(
         [find_command("claude", home), "mcp", "get", name],
         env=env,
         cwd=cwd or home,

@@ -220,7 +220,7 @@ def test_add_skills_refuses_when_nothing_is_left(home):
     _claude_has(home, "brainstorming")
     _claude_has(home, "tidy")
     adapters, rows = _skill_rows(home)
-    with pytest.raises(ValueError, match="^Claude Code has every skill in toolbox it can use$"):
+    with pytest.raises(ValueError, match=r"^Claude Code has every skill in toolbox it can use$"):
         plugin_skill_steps(adapters, PLUGIN, rows, "claude_code", ALL_FOUND)
 
 
