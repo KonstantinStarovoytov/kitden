@@ -24,6 +24,7 @@ from tests.unit.test_context_view import (
     CODEX_B,
     CODEX_C,
     a_budget,
+    before_the_chat,
     claude_chat,
     codex_chat,
     codex_home,
@@ -695,7 +696,8 @@ def _codex_chat(home, kind):
         budget = a_budget(paths, lambda fit: fit.sent == {"alpha": 0, "beta": 0, "gamma": None})
         lines = [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"]
     codex_home(home, window=window_for(budget))
-    codex_chat(home, lines)
+    before_the_chat(Path(paths["gamma"]))  # a skill written after the chat was not left out
+    codex_chat(home, lines, at="2026-11-07T12:00:00Z")
 
 
 def test_a_claude_list_that_showed_only_names_gets_a_card(tmp_path):

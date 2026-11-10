@@ -221,6 +221,9 @@ CODEX_SENT_UNKNOWN = (
     "In your last chat{when}, Codex sent {n} {skills}. Kitden cannot find all {their} files, so "
     "it cannot tell if any were cut."
 )
+# After CODEX_CUT, when Kitden cannot find the files of some other skills in the list.
+CODEX_ONE_UNKNOWN = "Kitden cannot find the file of 1 more, so it cannot tell if it was cut."
+CODEX_MORE_UNKNOWN = "Kitden cannot find the files of {n} more, so it cannot tell if they were cut."
 ROOM_LEFT = "Estimate: about {left} {unit} left before the limit."
 # The short result on a card's face.
 CLAUDE_SHORT_ALL = "All {n} sent"
@@ -284,6 +287,7 @@ NOTE_NO_ROOM = (
 NOTE_NAME_ONLY = "The agent sees the name, not when to use it."
 NOTE_ONLY_ASKED = "The agent uses it only when you type its name."
 NOTE_CODEX_OFF = "Off frees room, so long descriptions get cut less."
+NOTE_CODEX_LONG = "Codex sends only the first 1,024 characters of a description."
 NOTE_NOT_LISTED = "It was not in the list of your last chat."
 NOTE_NO_FILE = "Kitden cannot find its file, so it cannot tell if it was cut."
 # "How this is counted".

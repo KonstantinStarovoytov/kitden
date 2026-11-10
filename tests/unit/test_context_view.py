@@ -605,6 +605,7 @@ def test_codex_left_out(home):
     paths = codex_home(home, window=1)
     budget = a_budget(paths, lambda fit: fit.sent == {"alpha": 0, "beta": 0, "gamma": None})
     codex_home(home, window=window_for(budget))
+    before_the_chat(Path(paths["gamma"]))
     codex_chat(
         home,
         [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"],
@@ -691,6 +692,68 @@ def test_codex_with_no_files_found_gives_no_full_or_cut_verdict(home):
     rows = {s["name"]: s for s in cx["skills"] if s["name"] in ("alpha", "beta")}
     assert {n: r["side"] for n, r in rows.items()} == {"alpha": None, "beta": None}
     assert rows["alpha"]["note"] == "Kitden cannot find its file, so it cannot tell if it was cut."
+
+
+def test_codex_sends_at_most_1024_characters_and_that_is_not_a_cut(home):
+    paths = codex_home(home, window=272_000)
+    long = "Plans" * 300  # 1,500 characters
+    paths["delta"] = str(skill(home / ".agents/skills", "delta", long).resolve())
+    lines = [f"- {s.name}: {s.description} (file: {s.path})" for s in rule_skills(paths)]
+    codex_chat(home, [*lines, f"- delta: {long[:1024]} (file: {paths['delta']})"])
+    cx = view(home)["codex"]
+    assert (cx["lamp"], cx["checked"]) == ("ok", True)
+    fact = cx["windows"][0]["result"]
+    assert fact["say"] == (
+        "In your last chat on Oct 30, all 4 skills were sent with full descriptions."
+    )
+    assert fact["misfit"] is None
+    delta = {s["name"]: s for s in cx["skills"]}["delta"]
+    assert delta["side"] == 0
+    assert delta["note"] == (
+        "Codex sends only the first 1,024 characters of a description. "
+        "Off frees room, so long descriptions get cut less."
+    )
+
+
+def test_codex_a_known_cut_is_told_when_another_file_is_gone(home):
+    paths = codex_home(home, window=272_000)
+    codex_chat(
+        home,
+        [
+            f"- alpha: {CODEX_A[:29]} (file: {paths['alpha']})",
+            f"- beta: {CODEX_B} (file: /gone/beta/SKILL.md)",
+        ],
+        at="2026-10-29T12:00:00Z",
+    )
+    cx = view(home)["codex"]
+    assert cx["lamp"] == "warn"
+    fact = cx["windows"][0]["result"]
+    assert fact["say"] == (
+        "In your last chat on Oct 29, 1 of 2 descriptions was cut to 29 characters. "
+        "The agent saw only its start. "
+        "Kitden cannot find the file of 1 more, so it cannot tell if it was cut."
+    )
+    assert fact["misfit"] == {"kind": "cut", "n": 1}
+    assert {s["name"]: s["side"] for s in cx["skills"]}["alpha"] == 1
+
+
+def test_codex_a_skill_written_after_a_names_only_chat_was_not_left_out(home):
+    paths = codex_home(home, window=272_000)
+    after = datetime(2026, 11, 8, tzinfo=UTC).timestamp()
+    os.utime(paths["gamma"], (after, after))
+    codex_chat(
+        home,
+        [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"],
+        at="2026-11-07T12:00:00Z",
+    )
+    cx = view(home)["codex"]
+    fact = cx["windows"][0]["result"]
+    assert fact["say"] == (
+        "In your last chat on Nov 7, Codex removed every description. The agent saw only the names."
+    )
+    assert fact["misfit"] == {"kind": "cut", "n": 2}
+    gamma = {s["name"]: s for s in cx["skills"]}["gamma"]
+    assert (gamma["side"], gamma["note"]) == (None, "It was not in the list of your last chat.")
 
 
 def a_small_window(home, paths, wanted):

@@ -607,9 +607,17 @@ def _codex_limit(codex_home: Path) -> int | None:
 
 
 def _codex_kind(sent: int | None, full: int) -> str:
+    """Codex sends at most the first 1,024 characters of a description: that much is full."""
     if sent is None:
         return "out"
-    return "full" if sent >= full else "cut"
+    return "full" if sent >= min(full, CODEX_DESCRIPTION_CAP) else "cut"
+
+
+def _codex_cuts(rows: list[_Row]) -> list[int]:
+    """The lengths sent of the descriptions that were cut, among those whose full text is
+    known."""
+    sent = [(len(r.sent), len(r.full)) for r in rows if r.sent is not None and r.full is not None]
+    return [kept for kept, full in sent if _codex_kind(kept, full) == "cut"]
 
 
 def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
@@ -622,7 +630,7 @@ def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
             return False
     if names_only != (fit.cap is None):
         return False
-    cuts = [len(r.sent) for r in rows if r.sent is not None and len(r.sent) < len(r.full)]
+    cuts = _codex_cuts(rows)
     return names_only or not cuts or min(cuts) <= fit.cap <= max(cuts)
 
 
@@ -641,21 +649,15 @@ def _codex_fact(rows: list[_Row], names_only: bool, when: str) -> dict:
     used = CODEX_FIXED_TOKENS + sum(sent.values())
     n = len(rows)
     out = sum(r.sent is None for r in rows)
-    cuts = [
-        len(r.sent) for r in rows if r.sent is not None and r.full and len(r.sent) < len(r.full)
-    ]
+    cuts = _codex_cuts(rows)
     # Full or cut only for skills whose full size is known; else only what the log shows.
-    unknown = any(r.sent is not None and r.full is None for r in rows)
+    unknown = sum(r.sent is not None and r.full is None for r in rows)
     misfit = {"kind": "out", "n": out} if out else {"kind": "cut", "n": len(cuts)} if cuts else None
     skills = _many(n, "skill", "skills")
     if out:
         short = words.CODEX_SHORT_OUT.format(out=out)
         them = _many(out, "it", "them")
         say = words.CODEX_LEFT_OUT.format(when=when, out=out, n=n, skills=skills, them=them)
-    elif unknown:
-        short = words.CODEX_SHORT_SENT.format(n=n)
-        their = _many(n, "its", "their")
-        say = words.CODEX_SENT_UNKNOWN.format(when=when, n=n, skills=skills, their=their)
     elif cuts and names_only:
         short = words.CODEX_SHORT_CUT.format(bad=len(cuts), n=n)
         say = words.CODEX_NAMES.format(when=when)
@@ -673,6 +675,13 @@ def _codex_fact(rows: list[_Row], names_only: bool, when: str) -> dict:
             were=_many(bad, "was", "were"),
             their=_many(bad, "its", "their"),
         )
+        if unknown:
+            more = _many(unknown, words.CODEX_ONE_UNKNOWN, words.CODEX_MORE_UNKNOWN)
+            say = f"{say} {more.format(n=unknown)}"
+    elif unknown:
+        short = words.CODEX_SHORT_SENT.format(n=n)
+        their = _many(n, "its", "their")
+        say = words.CODEX_SENT_UNKNOWN.format(when=when, n=n, skills=skills, their=their)
     else:
         short = words.CODEX_SHORT_ALL.format(n=n)
         say = _many(n, words.CODEX_ONE_SENT, words.CODEX_ALL_SENT).format(when=when, n=n)
@@ -682,7 +691,7 @@ def _codex_fact(rows: list[_Row], names_only: bool, when: str) -> dict:
         "room": None,
         "misfit": misfit,
         "bad": out + len(cuts),
-        "unknown": unknown and not out,
+        "unknown": bool(unknown),
     }
 
 
@@ -722,7 +731,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     sent_list = found.list
     if not sent_list.skills:
         return _disk_card(client, [], words.NOTHING_TO_FIT, [])
-    date, _ = _when(sent_list.at)
+    date, at_ms = _when(sent_list.at)
     when = _on_date(date)
     items = _skills(inventory, client, sent_list.folder)
     by_path = {os.path.realpath(i.source.path): i for i in items if i.source.path}
@@ -736,9 +745,12 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     extras = [i for i in items if i.id not in matched]
     # Codex leaves skills out only once it has removed every description: then the user's
     # skills on disk that are missing from the list were left out. Otherwise they were not there.
+    # A file written after the chat says nothing about that chat.
     names_only = all(r.sent == "" for r in rows)
     if names_only:
         for item in [i for i in extras if i.scope is Scope.USER]:
+            if not _unchanged([Path(item.source.path or "")], at_ms):
+                continue
             full = _description(item.source.path)
             rows.append(_Row(item.name, None, item, full, item.source.path or ""))
             extras.remove(item)
@@ -811,6 +823,8 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
         note = words.NOTE_NO_FILE if r.full is None else None
         if r.item is not None and r.full is not None:
             note = words.NOTE_CODEX_OFF
+            if len(r.full) > CODEX_DESCRIPTION_CAP:
+                note = f"{words.NOTE_CODEX_LONG} {note}"
         if r.item is not None and from_plugin(r.item):
             note = words.NOTE_PLUGIN
         size = len(r.full) if r.full is not None else len(r.sent or "")
@@ -834,7 +848,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     ]
     return _card(
         client,
-        lamp="none" if unknown else "warn" if bad else "ok",
+        lamp="warn" if bad else "none" if unknown else "ok",
         message=None if checked else words.NO_CHECK,
         fact={
             "date": date,
