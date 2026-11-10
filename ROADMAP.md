@@ -1,13 +1,13 @@
 # Kitden roadmap
 
-Last updated: 2026-11-09
+Last updated: 2026-11-10
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not released yet
+### 0.7.0
 
 - **Context: do your skills fit?** A new page shows what Claude Code and Codex sent in your
   last chat, and switches a skill to Name only (Claude Code) or Off. Estimates show only while
