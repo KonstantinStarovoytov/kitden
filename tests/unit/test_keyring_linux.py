@@ -46,9 +46,7 @@ def test_a_missing_item_is_none(fake_keychain):
     assert read({"keychain": "srv/NONE"}) is None
 
 
-def test_a_keyring_that_is_down_cannot_be_reached_and_is_not_missing(
-    fake_keychain, monkeypatch
-):
+def test_a_keyring_that_is_down_cannot_be_reached_and_is_not_missing(fake_keychain, monkeypatch):
     monkeypatch.setenv("FAKE_SECRET_TOOL_DOWN", "1")
     for call in (
         lambda: read({"keychain": "srv/KEY"}),

@@ -2626,7 +2626,7 @@ def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
     # The map names how to use it, as the mockup does (gateway-notes 8); the List has none.
     assert (
         '"Point at a link and press × to remove it · click anything for its Details · several '
-        'changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click '
+        "changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click "
         'tools in Details to pick several"'
     ) in gateway
     assert 'setHint(mode === "map" ? mapHint() : "", mode === "map" ? hintActs() : []);' in gateway
