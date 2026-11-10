@@ -254,7 +254,18 @@ def test_without_a_check_name_only_is_told_as_set_now(home):
         "In your last chat on Nov 6, all 2 skills were sent; 1 showed only a name and is set to "
         "Name only now."
     )
-    assert (cc["lamp"], result["misfit"]) == ("ok", None)
+    # Kitden cannot judge that chat: grey, not green, and no Overview card.
+    assert (cc["lamp"], result["misfit"]) == ("none", None)
+    clients = context_view(build_inventory(home), home, home / ".codex", None, {})["clients"]
+    cards = overview(build_inventory(home), [], None, context_cards=clients)["cards"]
+    assert not [c for c in cards if c["icon"] == "gauge"]
+
+
+def test_without_a_check_every_skill_sent_with_its_description_stays_green(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"alpha": "Does alpha."}, model="claude-new-9")
+    cc = view(home)["claude_code"]
+    assert (cc["checked"], cc["lamp"], cc["windows"][0]["result"]["misfit"]) == (False, "ok", None)
 
 
 def test_the_check_that_never_ran_is_not_called_a_mismatch(home):

@@ -539,7 +539,8 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     ]
     return _card(
         client,
-        lamp="warn" if misfit else "ok",
+        # Grey: Kitden cannot judge that chat (the limit may have dropped a skill set now).
+        lamp="warn" if misfit else "none" if now else "ok",
         message=None if checked else words.NO_CHECK,
         fact={
             "date": date,
