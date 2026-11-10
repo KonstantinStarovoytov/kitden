@@ -21,14 +21,14 @@ jobs:
       && !endsWith(github.actor, '[bot]')
       && !github.event.pull_request.draft
       && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
-    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/review.yml@3a46499fc2de9ed22d85028631637185ef34c1e3
+    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/review.yml@43827a9f6ee63e7c8d885132a6140b4c9f48a192
     permissions:
       contents: read # the reviewers read the code
       pull-requests: write # one comment is posted
       actions: read # today's runs are counted
     with:
       model: claude-sonnet-5-5
-      app_id: ${{ vars.AGENTS_APP_ID }} # the Lantern app posts the comment
+      app_client_id: ${{ vars.AGENTS_APP_CLIENT_ID }} # the Lantern app posts the comment
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       openai_api_key: ${{ secrets.OPENAI_API_KEY }}
