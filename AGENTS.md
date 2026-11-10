@@ -8,7 +8,7 @@
 - Changes are judged against [PRINCIPLES.md](PRINCIPLES.md).
 - Follow [docs/design.md](docs/design.md) for how the page looks and moves.
 - Tests use sandbox homes and never touch the real home folder. Run `uv run pytest -q`,
-  `uv run ruff check .`, `uv run ruff format --check .` and
+  `uv run ruff check .`, `uv run ruff format --check .`, `uv run pyright` and
   `node --test tests/frontend/*.test.mjs` before each commit.
 - Keep work proportional to a self-hosted tool for one person or a small team: the simplest
   mechanism that works, no speculative options.

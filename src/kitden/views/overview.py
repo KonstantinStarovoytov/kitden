@@ -72,7 +72,7 @@ def _unreadable(inventory) -> list[dict]:
         where = problem.path or CLIENT_WORDS.get(problem.owner_client, problem.owner_client)
         why = READ_PROBLEMS.get(problem.unknown_reason, "It could not be read")
         client = CLIENT_WORDS.get(problem.owner_client, problem.owner_client)
-        title = f"Could not read {Path(where).name}"
+        title = f"Could not read {Path(str(where)).name}"
         text = f"{why}, so items from {client} may be missing or wrong."
         clients = [problem.owner_client] if problem.owner_client in CLIENTS else []
         card_id = _hash("unreadable", where)

@@ -131,6 +131,7 @@ def change_target(
     plugin = any(_plugin_command(s) for s in change.steps)
     if len(places) == 1 and None not in places:
         [project] = places
+        assert project is not None  # None is not among the places
         alone = _alone(project, projects) and not plugin
         return {"scope": "project", "project": project, "others_unchanged": alone}
     scoped = any(

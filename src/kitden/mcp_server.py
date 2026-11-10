@@ -28,7 +28,7 @@ from kitden.views.findings import find_bypasses, find_findings, finding_dict, ma
 from kitden.views.inventory import Inventory, build_inventory
 
 READ_ONLY = ToolAnnotations(
-    readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
+    read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
 )
 NO_EDITS = (
     "Do not edit client settings files to work around this; tell the developer to make the "

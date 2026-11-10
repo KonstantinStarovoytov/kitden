@@ -413,7 +413,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             technical["path"] = own[0].source.path
         entry["technical"] = technical
         if group["kind"] == "marketplace" and group["key"] not in groups:
-            group = {**group, "entries": entries.get(row.source, {})}
+            group = {**group, "entries": entries.get(row.source, {}) if row.source else {}}
         groups.setdefault(group["key"], {**group, "items": []})
         groups[group["key"]]["items"].append(entry)
 

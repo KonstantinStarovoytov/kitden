@@ -104,7 +104,7 @@ def _states(settings: dict, server: str, tool: str | None, chain: list[str]) -> 
         "differs": own is not None and own != without,
         "follows": Path(by).name if by else None,
         "origin": origin,
-        "origin_from": Path(by).name if origin == "parent" else None,
+        "origin_from": Path(by).name if by and origin == "parent" else None,
     }
 
 
@@ -417,7 +417,9 @@ def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]
         raise ValueError("Unknown project.")
     if project is None and state is None:
         raise ValueError(CHOOSE_STATE)
-    return [rule_step(home, projects.get(project), server, tool, state)]
+    return [
+        rule_step(home, projects.get(project) if project is not None else None, server, tool, state)
+    ]
 
 
 def rules_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]:

@@ -54,6 +54,7 @@ Run these from the checkout before committing:
 uv run pytest -q
 uv run ruff check .
 uv run ruff format --check .
+uv run pyright
 node --test tests/frontend/*.test.mjs
 ```
 

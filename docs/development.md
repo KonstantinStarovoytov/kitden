@@ -201,11 +201,11 @@ Not run yet for step 24: so far it was tested with sandbox files only.
    io.github.KonstantinStarovoytov/kitden` (checked 2026-11-08). Glama, PulseMCP and the GitHub
    MCP Registry read from it. `glama.json` names the maintainer for Glama.
 
-On every push and pull request the workflow runs ruff, the Python tests with a 94% coverage
-floor, the page's tests (`node --test tests/frontend/*.test.mjs`), the start-time budget
-(`scripts/measure-start.py`), a dependency audit (`pip-audit`) and the package build. On a tag
-it also stops if the notes file is missing. Then it publishes to PyPI
-with trusted publishing and creates the GitHub release with the notes file as its text.
+On every push and pull request the workflow runs ruff, the type check (`pyright`), the Python tests with a 94%
+coverage floor, the page's tests (`node --test tests/frontend/*.test.mjs`), the start-time
+budget (`scripts/measure-start.py`), a dependency audit (`pip-audit`) and the package build. On
+a tag it also stops if the notes file is missing. Then it publishes to PyPI with trusted
+publishing and creates the GitHub release with the notes file as its text.
 `README.md` is also the PyPI page. [README media](readme-media.md) says how its pictures are
 made, how their addresses work on GitHub and PyPI, and what to check before promoting a release.
 

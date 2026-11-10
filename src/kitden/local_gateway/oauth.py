@@ -30,6 +30,7 @@ from mcp.client.auth import (
 )
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
 from mcp.shared.auth_utils import calculate_token_expiry
+from pydantic import AnyUrl
 
 from kitden import sign_in
 from kitden.local_gateway import keychain
@@ -91,7 +92,7 @@ def secret_of(tokens: OAuthToken, client: OAuthClientInformationFull | None) -> 
 def client_metadata(redirect_uri: str) -> OAuthClientMetadata:
     return OAuthClientMetadata(
         client_name="Kitden",
-        redirect_uris=[redirect_uri],
+        redirect_uris=[AnyUrl(redirect_uri)],
         grant_types=["authorization_code", "refresh_token"],
         response_types=["code"],
         token_endpoint_auth_method="none",  # noqa: S106 - a public client: no secret

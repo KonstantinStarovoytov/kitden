@@ -96,7 +96,8 @@ def effective_view(inventory, client: str, project: str | None) -> EffectiveView
             continue
         key = (item.kind, item.name)
         current = winners.get(key)
-        if current is None or rank > _ranked(current, base):
+        current_rank = None if current is None else _ranked(current, base)
+        if current_rank is None or rank > current_rank:
             winners[key] = item
     for item in candidates:
         winner = winners.get((item.kind, item.name))

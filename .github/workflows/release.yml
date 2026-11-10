@@ -40,6 +40,7 @@ jobs:
           sudo apt-get install -yq libsecret-tools gnome-keyring dbus
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - run: uv run pyright
       # The Python tests, with a floor on how much of the package they run.
       - run: uv run pytest -q --cov=kitden --cov-fail-under=94 --cov-report=term:skip-covered
       # One real round trip through secret-tool, with the bus where a desktop session has it
