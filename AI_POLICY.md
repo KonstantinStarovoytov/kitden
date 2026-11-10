@@ -10,9 +10,9 @@ send and answer questions about it yourself.
 Two bots review pull requests: `claude` and `luna`. They look for bugs and check the change
 against [PRINCIPLES.md](PRINCIPLES.md).
 
-- Each one only comments. It never approves, requests changes, pushes or merges.
-- Each comment starts with: "Automated review by Kitden's {reviewer} reviewer ({model}).
-  👍 useful · 👎 wrong"
+- They only comment. They never approve, request changes, push or merge.
+- They share one comment per pull request. It starts with the title "Agent review" and ends
+  with "👍 useful · 👎 wrong".
 - Pull requests from forks get no automatic review for now.
 
 Only the maintainer's 👍 or 👎 on a comment is counted. To reach the maintainer, mention
