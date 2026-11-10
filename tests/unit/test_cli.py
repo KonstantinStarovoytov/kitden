@@ -290,7 +290,7 @@ def test_serve_removes_a_record_left_by_a_page_that_ended(tmp_path, monkeypatch)
 
 @pytest.mark.parametrize("signal_name", ["SIGTERM", "SIGINT"])
 def test_a_stopped_page_exits_cleanly_and_removes_its_record(tmp_path, signal_name):
-    process = subprocess.Popen(  # noqa: S603
+    process = subprocess.Popen(
         [sys.executable, "-m", "kitden", "serve", "--no-browser", "--home", str(tmp_path)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -507,7 +507,7 @@ def _listening(port, seconds=20):
 
 @pytest.mark.parametrize("signal_name", ["SIGTERM", "SIGINT"])
 def test_a_stopped_demo_exits_cleanly_and_deletes_its_folder(tmp_path, signal_name):
-    process = subprocess.Popen(  # noqa: S603
+    process = subprocess.Popen(
         [sys.executable, "-m", "kitden", "demo", "--no-browser", "--size", "small"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

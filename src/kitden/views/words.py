@@ -1,9 +1,8 @@
 """The words the pages say, in one place. `STATE_WORDS` is the twin of parts.js STATE_WORDS."""
 
 
-
 def join_words(words: list[str]) -> str:
-    """"a", "a and b", "a, b and c"; "" for none."""
+    """ "a", "a and b", "a, b and c"; "" for none."""
     return " and ".join([", ".join(words[:-1]), words[-1]] if len(words) > 1 else words)
 
 

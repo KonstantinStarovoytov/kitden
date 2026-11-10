@@ -6,7 +6,7 @@ import re
 import stat
 import tomllib
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -205,7 +205,7 @@ def is_home(folder: Path, home: Path) -> bool:
 
 def instruction_items(
     client: str,
-    files: list[tuple[Path, str] | tuple[Path, str, str]],
+    files: Sequence[tuple[Path, str] | tuple[Path, str, str]],
     scope: Scope,
     owner: str,
     project: str | None = None,
@@ -447,6 +447,32 @@ class ClientAdapter(ABC):
     def remove_step(self, item: Item) -> Step:
         """The edit that removes one direct MCP entry."""
         raise ValueError(f"{item.name} cannot be removed here")
+
+    # Switches only some clients have. The others keep these defaults.
+
+    def trusts(self, project: str) -> bool:
+        """Whether the client trusts this project folder (Codex asks first)."""
+        return True
+
+    def reads_other_clients(self) -> bool:
+        """Whether skills in other clients' folders reach this client too (Cursor)."""
+        return False
+
+    def imports_claude_plugins(self) -> bool:
+        """Whether this client loads the plugins Claude Code has (Cursor)."""
+        return False
+
+    def plugin_rule_steps(self, plugin_id: str, project: str, off: bool) -> list[Step]:
+        """The edits that turn one plugin off or on in a project."""
+        raise ValueError(f"{self.id} has no plugin switch for a project")
+
+    def skill_rule_steps(self, name: str, project: str | None, off: bool) -> list[Step]:
+        """The edits that turn one skill off or on, in all projects or in one."""
+        raise ValueError(f"{self.id} has no skill switch of this kind")
+
+    def skill_rule_step(self, item: Item) -> Step:
+        """The edit that turns one skill off or on, in all projects."""
+        raise ValueError(f"{self.id} has no skill switch of this kind")
 
     def add_server_step(self, name: str, entry: dict) -> Step:
         """The edit that adds one MCP entry, already in this client's format (user scope)."""

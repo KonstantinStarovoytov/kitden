@@ -153,7 +153,7 @@ def _cell(
     stale = min((i.stale_at for i in items + deciding if i.stale_at), default=None)
     return Cell(
         state,
-        where=ORIGIN_WORDS.get(origin) if in_project else None,
+        where=ORIGIN_WORDS.get(origin) if in_project and origin else None,
         origin=origin,
         route=_route(items[0], column),
         reason=STALE.format(_clock(stale)) if stale else None,
@@ -318,7 +318,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             row, item = item_rows.get(item_id), items_by_id.get(item_id)
             copies = [items_by_id[i] for i in finding.items if i in items_by_id]
             flag = _flag(finding, item, gateway_registered, copies) if row and item else None
-            if flag and flag not in row.flags:
+            if flag and row and flag not in row.flags:
                 row.flags.append(flag)
     order = {ItemKind.MCP_SERVER: 0, ItemKind.PLUGIN: 1, ItemKind.SKILL: 2, ItemKind.HOOK: 3}
     return sorted(

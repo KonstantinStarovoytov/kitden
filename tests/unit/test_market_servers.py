@@ -173,7 +173,7 @@ def test_market_entry_reads_the_raw_entry_and_refuses_a_gone_one(home):
     plugin, entry = market_entry(adapters, "db-tools@demo-market/db-query")
     assert plugin == "db-tools@demo-market"
     assert entry == {"command": "uvx", "args": ["mcp-db-query"]}
-    with pytest.raises(ValueError, match="This server is no longer offered."):
+    with pytest.raises(ValueError, match=r"This server is no longer offered\."):
         market_entry(adapters, "db-tools@demo-market/gone")
 
 
@@ -278,7 +278,7 @@ def test_add_steps_give_a_path_and_codex_timeouts_only_when_missing(home, monkey
 def test_add_steps_refuse_what_the_list_refuses(home):
     with pytest.raises(ValueError, match=IN_FOLDER.format("pr-index")):
         _steps(home, f"pr-review@{MARKET}/pr-index", _never)
-    with pytest.raises(ValueError, match="This server is no longer offered."):
+    with pytest.raises(ValueError, match=r"This server is no longer offered\."):
         _steps(home, f"db-tools@{MARKET}/gone", _never)
 
 

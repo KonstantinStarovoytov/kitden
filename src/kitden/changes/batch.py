@@ -134,8 +134,9 @@ def kitden_server(step: Step) -> str | None:
 
 def _removed(step: Step) -> str | None:
     """The Kitden gateway server whose entry the step removes."""
-    key = tuple(step.edit.key) if step.edit is not None else ()
-    if len(key) == 2 and key[0] == "servers" and step.edit.after is ABSENT:
+    edit = step.edit
+    key = tuple(edit.key) if edit is not None else ()
+    if edit is not None and len(key) == 2 and key[0] == "servers" and edit.after is ABSENT:
         return kitden_server(step)
     return None
 

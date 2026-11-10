@@ -28,7 +28,7 @@ def test_the_lock_is_released_when_the_page_process_dies(tmp_path):
         f"assert page.PageLock({str(tmp_path)!r}).acquire(); print('locked', flush=True); "
         "time.sleep(60)"
     )
-    process = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)  # noqa: S603
+    process = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
     try:
         assert process.stdout.readline().strip() == "locked"
         assert page.page_running(tmp_path)
@@ -345,7 +345,7 @@ def test_the_page_does_not_load_the_mcp_sdk():
     import sys
 
     code = "import sys, kitden.web.app, kitden.cli; print('mcp' in sys.modules)"
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)  # noqa: S603
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "False"
 
 

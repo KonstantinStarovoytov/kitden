@@ -53,7 +53,7 @@ def _written(text: str) -> list[str]:
         mark = _FENCE.match(line)
         if fence is not None:
             closes = mark and mark.group(1)[0] == fence[0] and len(mark.group(1)) >= len(fence)
-            if closes and not line[mark.end() :].strip():
+            if mark and closes and not line[mark.end() :].strip():
                 fence = None
             continue
         if mark:

@@ -201,7 +201,7 @@ def test_the_same_size_writes_the_same_files(tmp_path):
 
 
 def test_an_unknown_size_is_refused(tmp_path):
-    with pytest.raises(ValueError, match="Choose small, medium or large."):
+    with pytest.raises(ValueError, match=r"Choose small, medium or large\."):
         build_demo_home(tmp_path, "huge")
 
 

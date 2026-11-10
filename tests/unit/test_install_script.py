@@ -111,8 +111,7 @@ def test_no_path_hint_when_the_tool_folder_is_on_path(box):
 
 
 LIBSECRET = (
-    "To store server secrets, install libsecret-tools (Debian, Ubuntu) or libsecret "
-    "(Fedora, Arch)."
+    "To store server secrets, install libsecret-tools (Debian, Ubuntu) or libsecret (Fedora, Arch)."
 )
 
 

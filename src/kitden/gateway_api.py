@@ -135,7 +135,7 @@ class MetaMcpClient:
         password = self.env.get(var)
         if not password:
             raise GatewayError(f"Set {var} in the environment before starting Kitden")
-        status, body, cookie = self._request(
+        status, _body, cookie = self._request(
             "POST",
             "/api/auth/sign-in/email",
             {"email": self.gateway.login_email, "password": password},
@@ -365,7 +365,7 @@ class ObotClient:
         ids = [i.get("id") for i in _list(items) if isinstance(i, dict) and i.get("id")]
         if not ids:
             raise GatewayError("Obot has no catalog to add the server to")
-        return "default" if "default" in ids else ids[0]
+        return "default" if "default" in ids else str(ids[0])
 
     def add(self, name: str, server: dict) -> str:
         """Make the remote server a catalog entry and put it on the connection. Returns the

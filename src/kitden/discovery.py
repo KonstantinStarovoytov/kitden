@@ -52,16 +52,16 @@ def checked_url(url: str) -> str:
 
 
 class CatalogRedirect(HTTPRedirectHandler):
-    def redirect_request(self, request, fp, code, msg, headers, newurl):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
         checked_url(newurl)
-        return super().redirect_request(request, fp, code, msg, headers, newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def download(url: str) -> bytes:
     request = Request(  # noqa: S310 - checked HTTPS hosts, redirects checked too
         checked_url(url), headers={"User-Agent": "Kitden", "Accept": "application/json"}
     )
-    with build_opener(CatalogRedirect()).open(request, timeout=15) as response:  # noqa: S310
+    with build_opener(CatalogRedirect()).open(request, timeout=15) as response:
         content = response.read(MAX_BYTES + 1)
     if len(content) > MAX_BYTES:
         raise ValueError("This source is too large. Choose a smaller repository.")
@@ -664,6 +664,7 @@ class Discovery:
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(value)
             else:
+                assert content is not None  # downloaded above when there is no subfolder
                 _unzip(content, staging)
             staging.rename(folder)
         finally:
@@ -673,9 +674,10 @@ class Discovery:
 
     def skill(self, row: dict, found: set[str]) -> dict:
         if row.get("path") is None:
-            row = self._one_folder(row)[0]
-            if row is None:
+            one = self._one_folder(row)[0]
+            if one is None:
                 raise ValueError("Open this skill and choose a folder before previewing.")
+            row = one
         commit, path = row["commit"], row["path"]
         folder = self.checkout(row["repo"], commit, path) / safe_path(path)
         if not (folder / "SKILL.md").is_file():
@@ -692,7 +694,7 @@ class Discovery:
             **info,
             "path": str(prepared),
             "installed": {},
-            "routes": {c: "ready" for c in found},
+            "routes": dict.fromkeys(found, "ready"),
             "id": row["id"],
             "commit": commit,
         }

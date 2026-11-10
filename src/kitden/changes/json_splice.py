@@ -73,7 +73,8 @@ class _Parser:
         start = self.pos
         char = self.text[self.pos]
         if char == "{":
-            node = _Node(start, start, members=[])
+            members: list[_Member] = []
+            node = _Node(start, start, members=members)
             self.pos += 1
             self._skip()
             while self.text[self.pos] != "}":
@@ -82,7 +83,7 @@ class _Parser:
                 key_end = self.pos
                 self._skip()
                 self.pos += 1  # ':'
-                node.members.append(_Member(key, key_start, key_end, self.value()))
+                members.append(_Member(key, key_start, key_end, self.value()))
                 self._skip()
                 if self.text[self.pos] == ",":
                     self.pos += 1
@@ -127,7 +128,9 @@ def _member(node: _Node, key: str) -> _Member | None:
 
 def _line_indent(text: str, pos: int) -> str:
     line_start = text.rfind("\n", 0, pos) + 1
-    return re.match(r"[ \t]*", text[line_start:]).group(0)
+    indent = re.match(r"[ \t]*", text[line_start:])
+    assert indent is not None  # it can match nothing, but it always matches
+    return indent.group(0)
 
 
 def _indent_unit(text: str) -> str:
@@ -226,8 +229,11 @@ def delete_value(text: str, path: tuple[str, ...]) -> str:
         return text
     _, node = _load(text)
     for key in path[:-1]:
-        node = _member(node, key).value
+        member = _member(node, key)
+        assert member is not None  # get_value found the path
+        node = member.value
     members = node.members
+    assert members is not None
     index = max(i for i, m in enumerate(members) if m.key == path[-1])
     if len(members) == 1:
         return text[: node.start + 1] + text[node.end - 1 :]

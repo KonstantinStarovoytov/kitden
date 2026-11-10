@@ -253,6 +253,7 @@ def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
         return None
     for step in reversed(steps):
         edit = step.edit
+        assert edit is not None
         if edit.check != "entry":
             return None
         try:
@@ -268,7 +269,7 @@ def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
 def _back_already(steps: list[Step], data: bytes | None) -> bool:
     """Every entry these steps changed in one file reads as it did before the change."""
     try:
-        return all(_value(s.edit, data) == s.edit.before for s in steps)
+        return all(_value(s.file_edit, data) == s.file_edit.before for s in steps)
     except (UnrecognizedFormatError, UnicodeDecodeError):
         return False
 
@@ -663,6 +664,7 @@ class Engine:
 
     def _stale(self, step: Step, data: bytes | None) -> str | None:
         edit = step.edit
+        assert edit is not None
         if edit.check == "file":
             ok = _sha(data) == edit.before_hash
         else:
@@ -682,6 +684,7 @@ class Engine:
     def _apply_step(self, step: Step, data: bytes | None) -> bytes | None:
         """Make the edit. Returns the exact bytes expected afterwards, when we know them."""
         edit = step.edit
+        assert edit is not None
         if step.mechanism == CLIENT_CLI:
             result = self.run(step.command or [], step.cwd)
             if result.returncode != 0:
@@ -700,6 +703,7 @@ class Engine:
         Undo leaves the file as it was. Only the entry is written.
         """
         edit = step.edit
+        assert edit is not None
         data = _read(edit.path)
         now = _value(edit, data)
         if edit.before is ABSENT or now is ABSENT or now == edit.before:
@@ -708,11 +712,13 @@ class Engine:
         self._write(edit.path, text.encode())
 
     def _verify(self, step: Step, expected: Any, exact: bytes | None = None) -> None:
-        data = _read(step.edit.path)
-        if not _matches(step, _value(step.edit, data), expected):
-            raise _ApplyError(f"{step.edit.path}: the entry did not read back as expected")
+        data = _read(step.file_edit.path)
+        if not _matches(step, _value(step.file_edit, data), expected):
+            raise _ApplyError(f"{step.file_edit.path}: the entry did not read back as expected")
         if exact is not None and data != exact:
-            raise _ApplyError(f"{step.edit.path}: other parts of the file changed during the write")
+            raise _ApplyError(
+                f"{step.file_edit.path}: other parts of the file changed during the write"
+            )
 
     def apply(self, change_id: str) -> Change:
         change = self.changes[change_id]
@@ -751,7 +757,7 @@ class Engine:
         gateway_steps = [s for s in change.steps if s.gateway is not None]
         copy_steps = [s for s in change.steps if s.copy is not None]
         removal_steps = [s for s in change.steps if s.removal is not None]
-        current = {step.edit.path: _read(step.edit.path) for step in file_steps}
+        current = {step.file_edit.path: _read(step.file_edit.path) for step in file_steps}
         reason = self._first_stale(change, current)
         if reason:
             change.move_to(ChangeState.STALE)
@@ -793,7 +799,7 @@ class Engine:
             expected: dict[str, bytes | None] = {}
             written: set[str] = set()
             for step in file_steps:
-                path = step.edit.path
+                path = step.file_edit.path
                 fresh = _read(path)
                 if fresh != working[path]:
                     # The client wrote the file during Apply (Claude Code rewrites its file
@@ -812,7 +818,7 @@ class Engine:
                 expected[path] = result
                 tick(step)
             for step in file_steps:
-                self._verify(step, step.edit.after, expected[step.edit.path])
+                self._verify(step, step.file_edit.after, expected[step.file_edit.path])
         except Exception as error:  # noqa: BLE001 - any error must be taken back
             lost = self._roll_back(current, ran, copied, removed, stored, gateway_steps)
             try:
@@ -822,13 +828,14 @@ class Engine:
             change.move_to(ChangeState.RESTORED)
             said = str(error) or type(error).__name__
             change.error = f"{said} {' '.join(lost) if lost else PUT_BACK}"
-            if getattr(error, "client", None):
-                change.refused_by = error.client
+            client = getattr(error, "client", None)
+            if client:
+                change.refused_by = client
             self._finish(change)
             return change
 
         for step in file_steps:
-            step.edit.after_hash = _sha(_read(step.edit.path))
+            step.file_edit.after_hash = _sha(_read(step.file_edit.path))
         self._mark_secret(change, file_steps)
         change.move_to(ChangeState.VERIFIED)
         self._finish(change)
@@ -840,8 +847,8 @@ class Engine:
         """Save each file's bytes as the change's backup, which Undo restores."""
         saved = self.store.backup(change_id, current)
         for step in file_steps:
-            copy = saved[step.edit.path]
-            step.edit.backup_path = str(copy) if copy else None
+            copy = saved[step.file_edit.path]
+            step.file_edit.backup_path = str(copy) if copy else None
 
     def _roll_back(
         self,
@@ -863,7 +870,7 @@ class Engine:
                 try:
                     lost += self._run_back(step, by_command)
                 except Exception:  # noqa: BLE001
-                    lost.append(f"{step.name} could not be set as it was in {step.edit.path}.")
+                    lost.append(f"{step.name} could not be set as it was in {step.file_edit.path}.")
         for path, data in current.items():
             if path in by_command:
                 continue
@@ -874,20 +881,22 @@ class Engine:
         # A removed folder comes back from its backup. What a removal that stopped halfway
         # left is part of that backup, so it goes first.
         for step in reversed(removed):
-            if not self._put_folder_back(step.removal):
+            if not self._put_folder_back(step.folder_removal):
                 lost.append(
                     f"{step.name} could not be put back; its backup is in "
-                    f"{step.removal.backup_path}."
+                    f"{step.folder_removal.backup_path}."
                 )
         for step in reversed(copied):
             try:
-                remove_folder(step.copy.target)
+                remove_folder(step.folder_copy.target)
             except Exception:  # noqa: BLE001
-                lost.append(f"{step.copy.target} could not be removed.")
+                lost.append(f"{step.folder_copy.target} could not be removed.")
         try:
             self._remove_from_gateway(gateway_steps, best_effort=True)
         except Exception:  # noqa: BLE001
-            names = ", ".join(s.gateway.name for s in gateway_steps if s.gateway.server_uuid)
+            names = ", ".join(
+                s.gateway_edit.name for s in gateway_steps if s.gateway_edit.server_uuid
+            )
             lost.append(f"{names} may still be in the gateway.")
         store = secret_store_name()
         for item in reversed(stored):
@@ -908,11 +917,12 @@ class Engine:
         """Run a step's inverse command after a failed Apply; what could not be put back.
         An entry that is still as before needs no command: the step may have failed first."""
         edit = step.edit
+        assert edit is not None
         with contextlib.suppress(Exception):
             if _value(edit, _read(edit.path)) == edit.before:
                 return []
-        if self.run(step.undo_command, step.cwd).returncode != 0:
-            return [f"`{_shown(step.undo_command)}` failed; {step.name} was not put back."]
+        if self.run(step.undo, step.cwd).returncode != 0:
+            return [f"`{_shown(step.undo)}` failed; {step.name} was not put back."]
         if edit.path in by_command:
             self._put_entry_back(step)
         return []
@@ -925,7 +935,11 @@ class Engine:
             now = _read(path)
             if path not in by_command:
                 return now == data
-            return all(_value(s.edit, now) == s.edit.before for s in ran if s.edit.path == path)
+            return all(
+                _value(s.file_edit, now) == s.file_edit.before
+                for s in ran
+                if s.file_edit.path == path
+            )
         except Exception:  # noqa: BLE001
             return False
 
@@ -933,7 +947,7 @@ class Engine:
         """Once every backup exists: whether a backup, or an entry the record keeps (an old
         or a new value), holds a secret."""
         change.holds_secret = self.store.backup_holds_secret(change.id) or any(
-            holds_secret(s.edit.before) or holds_secret(s.edit.after) for s in file_steps
+            holds_secret(s.file_edit.before) or holds_secret(s.file_edit.after) for s in file_steps
         )
 
     def _store_secrets(self, change: Change, stored: list[KeychainItem]) -> None:
@@ -956,6 +970,7 @@ class Engine:
 
     def _stale_copy(self, step: Step) -> str | None:
         copy = step.copy
+        assert copy is not None
         if os.path.lexists(copy.target):
             return f"{copy.target} appeared since preview; review the change again"
         same = _same_folder(copy.source, copy.content_hash)
@@ -968,6 +983,7 @@ class Engine:
         one Kitden made: a folder that appeared before the copy is refused and left alone.
         """
         copy = step.copy
+        assert copy is not None
         copy_folder(copy.source, copy.target)
         copied.append(step)
         if digest(copy.target) != copy.content_hash:
@@ -975,6 +991,7 @@ class Engine:
 
     def _stale_removal(self, step: Step) -> str | None:
         removal = step.removal
+        assert removal is not None
         if not os.path.lexists(removal.path):
             return f"{removal.path} is gone since preview; review the change again"
         same = _same_folder(removal.path, removal.content_hash)
@@ -986,6 +1003,7 @@ class Engine:
         The step joins `removed`, what a failed change puts back, once the backup is made.
         """
         removal = step.removal
+        assert removal is not None
         removal.backup_path = str(self.store.backup_folder(change_id, removal.path))
         if digest(removal.backup_path) != removal.content_hash:
             raise _ApplyError(f"{removal.path}: the backup did not read back like the folder")
@@ -1004,6 +1022,7 @@ class Engine:
                 if digest(removal.path) == removal.content_hash:
                     return True
                 remove_folder(removal.path)
+            assert removal.backup_path is not None
             copy_folder(removal.backup_path, removal.path)
             return digest(removal.path) == removal.content_hash
         except (CopyRefusedError, OSError):
@@ -1027,13 +1046,13 @@ class Engine:
         """Add each server, then read the list back: every name must be there."""
         if not steps:
             return
-        with self._client(steps[0].gateway) as client:
+        with self._client(steps[0].gateway_edit) as client:
             for step in steps:
-                g = step.gateway
+                g = step.gateway_edit
                 g.server_uuid = client.add(g.name, g.server)
                 tick(step)
             held = {s["name"] for s in client.held()}
-        missing = [s.gateway.name for s in steps if s.gateway.name not in held]
+        missing = [s.gateway_edit.name for s in steps if s.gateway_edit.name not in held]
         if missing:
             raise _ApplyError(f"the gateway did not list {', '.join(missing)} after adding it")
 
@@ -1049,10 +1068,10 @@ class Engine:
             return []
         gone = []
         try:
-            with self._client(added[0].gateway) as client:
+            with self._client(added[0].gateway_edit) as client:
                 for step in added:
-                    if not client.remove(step.gateway.server_uuid):
-                        gone.append(step.gateway.name)
+                    if not client.remove(step.gateway_edit.server_uuid):
+                        gone.append(step.gateway_edit.name)
                     tick(step)
         except GatewayError:
             if not best_effort:
@@ -1078,7 +1097,7 @@ class Engine:
             data = _read(path)
             if _back_already(steps, data):
                 continue  # a blocked Undo put it back before
-            first = steps[0].edit
+            first = steps[0].file_edit
             if _sha(data) == first.after_hash:
                 plans[path] = Path(first.backup_path).read_bytes() if first.backup_path else None
                 continue
@@ -1094,6 +1113,7 @@ class Engine:
         copies = [s for s in change.steps if s.copy is not None]
         for step in copies:
             copy = step.copy
+            assert copy is not None
             if not os.path.lexists(copy.target):
                 continue  # already gone; nothing to remove
             if not _same_folder(copy.target, copy.content_hash):
@@ -1104,9 +1124,14 @@ class Engine:
                 )
 
         removals = [s for s in change.steps if s.removal is not None]
-        removals = [s for s in removals if not _same_folder(s.removal.path, s.removal.content_hash)]
+        removals = [
+            s
+            for s in removals
+            if not _same_folder(s.folder_removal.path, s.folder_removal.content_hash)
+        ]
         for step in removals:
             removal = step.removal
+            assert removal is not None
             if os.path.lexists(removal.path):
                 reason = f"{removal.path} is back; undo would overwrite it, so nothing was changed"
             elif not removal.backup_path or not os.path.isdir(removal.backup_path):
@@ -1136,17 +1161,19 @@ class Engine:
         # The gateway must answer before anything changes; its servers go last, below.
         added = [s for s in change.steps if s.gateway is not None]
         try:
-            if added and any(s.gateway.server_uuid for s in added):
-                with self._client(added[0].gateway) as client:
+            if added and any(s.gateway_edit.server_uuid for s in added):
+                with self._client(added[0].gateway_edit) as client:
                     client.held()
         except GatewayError as error:
             return self._blocked(change, f"{error}; the client files were not changed")
         tick = self._counter(change)
         for step in reversed(copies):
-            remove_folder(step.copy.target)
+            remove_folder(step.folder_copy.target)
             tick(step)
         for step in reversed(removals):
-            copy_folder(step.removal.backup_path, step.removal.path)
+            removal = step.folder_removal
+            assert removal.backup_path is not None
+            copy_folder(removal.backup_path, removal.path)
             tick(step)
         # Inverse commands, last step first. An entry already gone needs no command. A file
         # that also has direct edits gets its planned bytes afterwards.
@@ -1155,11 +1182,9 @@ class Engine:
                 continue
             if _value(step.edit, _read(step.edit.path)) == step.edit.before:
                 continue  # gone already, or put back by a blocked Undo
-            result = self.run(step.undo_command, step.cwd)
+            result = self.run(step.undo, step.cwd)
             if result.returncode != 0:
-                return self._blocked(
-                    change, f"`{_shown(step.undo_command)}` failed: {result.output}"
-                )
+                return self._blocked(change, f"`{_shown(step.undo)}` failed: {result.output}")
             if step.edit.path in by_command:
                 try:
                     self._put_entry_back(step)

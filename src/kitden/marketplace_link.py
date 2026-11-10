@@ -65,7 +65,7 @@ def _fetch(url: str) -> dict | None:
 def read_marketplace(link: str) -> dict:
     """{"name", "source", "plugins", "formats"} for a marketplace link, or LinkError."""
     link = link.strip()
-    if link.startswith("/") or link.startswith("~"):
+    if link.startswith(("/", "~")):
         folder = Path(link).expanduser().resolve()
         if not folder.is_dir():
             raise LinkError(f"There is no folder {folder}")

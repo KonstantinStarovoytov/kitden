@@ -542,7 +542,7 @@ def test_one_phrase_says_cursor_loads_claude_codes_plugins():
 
     notes = (after.CURSOR_IMPORT["note"], after.CURSOR_REMOVE["note"], after.CURSOR_KEEPS)
     for text in (*notes, commands.CURSOR_LOADS_CLAUDE):
-        assert text.startswith(f"{LOADS_PLUGINS},") or text.startswith(f"{LOADS_PLUGINS} "), text
+        assert text.startswith((f"{LOADS_PLUGINS},", f"{LOADS_PLUGINS} ")), text
     # Built on the one phrase, not a copy of it.
     assert "Claude Code's plugins" not in Path(commands.__file__).read_text()
 
@@ -2634,7 +2634,7 @@ def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
     # The map names how to use it, as the mockup does (gateway-notes 8); the List has none.
     assert (
         '"Point at a link and press × to remove it · click anything for its Details · several '
-        'changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click '
+        "changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click "
         'tools in Details to pick several"'
     ) in gateway
     assert 'setHint(mode === "map" ? mapHint() : "", mode === "map" ? hintActs() : []);' in gateway

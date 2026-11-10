@@ -129,7 +129,7 @@ def _skill_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
             and item.name in names
             and (
                 item.scope in (Scope.USER, Scope.PLUGIN)
-                or (here and os.path.realpath(item.project) in projects)
+                or (here and item.project and os.path.realpath(item.project) in projects)
             )
         )
         if loads_now:
@@ -196,7 +196,7 @@ def _kitden_rules(change: Change) -> dict[str, dict]:
         if key[:1] != ("rules",) or is_mode_key(key):
             continue
         project, server, tool = rule_parts(key)
-        rules.setdefault(server, {})[(project, tool)] = (step.edit.after, step.carried_from)
+        rules.setdefault(server, {})[(project, tool)] = (step.file_edit.after, step.carried_from)
     return rules
 
 
@@ -237,6 +237,7 @@ def _had_on(change: Change, name: str, project: str | None) -> set[str]:
         removes = edit is not None and edit.after is ABSENT
         if step.client not in CLIENTS or step.name != name or not removes:
             continue
+        assert edit is not None  # `removes` is false without an edit
         on = not (isinstance(edit.before, dict) and edit.before.get("enabled") is False)
         where = step.cwd if step.scope is Scope.LOCAL else None
         if on and where in (None, here):
@@ -498,9 +499,9 @@ def _rules_words(change: Change, inventory, home: Path) -> list[dict]:
     """The batch switch: several tools of one server on or off in one project or all, named,
     with each project whose own rule keeps one of them as it is, what the hints are worth and
     what a real guarantee takes."""
-    edits = [s.edit for s in change.steps if s.edit is not None]
+    edits = [s.file_edit for s in change.steps if s.edit is not None]
     project, server, _ = rule_parts(edits[0].key)
-    names = [rule_parts(e.key)[2] for e in edits]
+    names = [str(rule_parts(e.key)[2]) for e in edits]
     state = edits[0].after
     where = "all projects" if project is None else Path(project).name
     count = f"{len(names)} {'tool' if len(names) == 1 else 'tools'}"

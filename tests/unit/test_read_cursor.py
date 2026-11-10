@@ -115,7 +115,7 @@ def test_scan_includes_items_cursor_reads_from_other_clients(tmp_path, no_versio
 
 
 def test_cross_loaded_items_name_the_client_that_owns_them(tmp_path, no_version):
-    home, scan = _scan(tmp_path, no_version)
+    _home, scan = _scan(tmp_path, no_version)
     owners = {
         i.name: (i.source.kind, i.source.owner_client)
         for i in scan.items

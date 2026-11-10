@@ -60,7 +60,7 @@ async def test_register_handshake_and_undo(home):
     engine.apply(change.id)
     assert change.state is ChangeState.VERIFIED, change.error
 
-    listed = subprocess.run(  # noqa: S603 - fixed test command
+    listed = subprocess.run(
         [_codex(), "mcp", "list", "--json"],
         env=_env(home),
         capture_output=True,
@@ -94,7 +94,7 @@ async def test_old_entries_update_to_kitden_with_real_clients(home):
 
     old = {"type": "stdio", "command": "/opt/old/bin/agentsetup", "args": ["mcp"]}
     claude = find_command("claude", home)
-    subprocess.run(  # noqa: S603 - fixed test command
+    subprocess.run(
         [claude, "mcp", "add-json", "-s", "user", "agentsetup", json.dumps(old)],
         env=_env(home),
         capture_output=True,
@@ -116,11 +116,11 @@ async def test_old_entries_update_to_kitden_with_real_clients(home):
     engine.apply(change.id)
     assert change.state is ChangeState.VERIFIED, change.error
 
-    got = subprocess.run(  # noqa: S603 - fixed test command
+    got = subprocess.run(
         [claude, "mcp", "get", "kitden"], env=_env(home), capture_output=True, text=True
     )
     assert got.returncode == 0 and command in got.stdout
-    listed = subprocess.run(  # noqa: S603 - fixed test command
+    listed = subprocess.run(
         [_codex(), "mcp", "list", "--json"],
         env=_env(home),
         capture_output=True,

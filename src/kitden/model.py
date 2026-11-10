@@ -350,6 +350,36 @@ class Step:
     # use it.
     check_note: str | None = None
 
+    @property
+    def file_edit(self) -> FileEdit:
+        """The file edit, for a step that has one."""
+        assert self.edit is not None
+        return self.edit
+
+    @property
+    def gateway_edit(self) -> GatewayEdit:
+        """The gateway edit, for a gateway step."""
+        assert self.gateway is not None
+        return self.gateway
+
+    @property
+    def folder_copy(self) -> FolderCopy:
+        """The folder copy, for a step that copies a folder."""
+        assert self.copy is not None
+        return self.copy
+
+    @property
+    def folder_removal(self) -> FolderRemoval:
+        """The folder removal, for a step that removes a folder."""
+        assert self.removal is not None
+        return self.removal
+
+    @property
+    def undo(self) -> list[str]:
+        """The inverse command, for a step that has one."""
+        assert self.undo_command is not None
+        return self.undo_command
+
 
 @dataclass
 class Change:

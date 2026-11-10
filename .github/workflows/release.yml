@@ -30,6 +30,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "25"
+          # No cache: the built package must not come from files a pull request could plant.
           package-manager-cache: false
       - run: uv sync --locked
       # Linux keeps server secrets in the desktop keyring through secret-tool.
@@ -39,6 +40,8 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -yq libsecret-tools gnome-keyring dbus
       - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
       # The Python tests, with a floor on how much of the package they run.
       - run: uv run pytest -q --cov=kitden --cov-fail-under=94 --cov-report=term:skip-covered
       # One real round trip through secret-tool, with the bus where a desktop session has it
@@ -63,6 +66,8 @@ jobs:
       - run: node --test tests/frontend/*.test.mjs
       # The page opens within its time budgets (docs/development.md, Speed).
       - run: uv run python scripts/measure-start.py
+      # The workflow files themselves have no known weak spots.
+      - run: uvx zizmor==1.32.0 .github
       # No dependency with a known vulnerability.
       - run: uv run --with pip-audit==2.10.1 pip-audit --progress-spinner off --skip-editable
       - name: The tag names the package version

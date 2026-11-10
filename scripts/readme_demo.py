@@ -117,7 +117,7 @@ def build_sample(root: Path) -> Path:
     codex.write_text(
         f'[mcp_servers.kitden]\ncommand = {json.dumps(demo_command(home))}\nargs = ["mcp"]\n'
         '[marketplaces.superpowers-dev]\nsource_type = "local"\n'
-        f'source = {json.dumps(str(market))}\n'
+        f"source = {json.dumps(str(market))}\n"
     )
     write_json(home / ".cursor/mcp.json", {"mcpServers": {"kitden": connection}})
     folder = data_dir(home)

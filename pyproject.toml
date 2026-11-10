@@ -43,6 +43,7 @@ dev = [
     "ruff>=0.16",
     "httpx>=0.28",
     "pytest-cov>=7",
+    "pyright>=1.1.414",
 ]
 
 [build-system]
@@ -55,14 +56,21 @@ packages = ["src/kitden"]
 [tool.hatch.build.targets.sdist]
 only-include = ["src/kitden", "README.md", "LICENSE"]
 
+[tool.pyright]
+include = ["src/kitden"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+
 [tool.ruff]
 line-length = 100
 target-version = "py313"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "S", "SIM"]
-ignore = ["S101"]
+select = ["E", "W", "F", "I", "B", "UP", "S", "SIM", "C4", "PIE", "PERF", "BLE", "RUF"]
+# S101: asserts are fine. PERF401: a plain loop often reads better than extend().
+# RUF001-RUF003: the page's words use ×, – and − on purpose.
+ignore = ["S101", "PERF401", "RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S"]
