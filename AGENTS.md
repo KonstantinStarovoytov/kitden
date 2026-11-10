@@ -5,6 +5,7 @@
   Apply with a backup → verify → Undo. Never write a client's settings any other way.
 - Main pages show only a name, the client and an action; paths, addresses and commands go
   behind Details.
+- Changes are judged against [PRINCIPLES.md](PRINCIPLES.md).
 - Follow [docs/design.md](docs/design.md) for how the page looks and moves.
 - Tests use sandbox homes and never touch the real home folder. Run `uv run pytest -q`,
   `uv run ruff check .` and `node --test tests/frontend/*.test.mjs` before each commit.

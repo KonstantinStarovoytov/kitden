@@ -1,8 +1,10 @@
 # Contributing to Kitden
 
-Bug reports, documentation fixes and small improvements are welcome. For a larger feature,
-[open an issue](https://github.com/KonstantinStarovoytov/kitden/issues) before starting so we
-can agree on the scope. The [roadmap](ROADMAP.md) shows current plans.
+Bug reports, documentation fixes and other small fixes are welcome directly. Anything new a
+user can see or set (a route, a command, a setting, a page element, a dependency; see
+[PRINCIPLES.md](PRINCIPLES.md)) needs an
+[issue](https://github.com/KonstantinStarovoytov/kitden/issues) first, so the maintainer can
+agree to it. The [roadmap](ROADMAP.md) shows current plans.
 
 ## Set up
 
@@ -24,6 +26,9 @@ See [Development](docs/development.md) for the code layout, commands and release
 Keep each pull request focused on one problem. Use short, plain English for code, UI text
 and documentation. Follow the [design guide](docs/design.md) for interface changes and
 [AGENTS.md](AGENTS.md) when working with a coding agent.
+
+Changes are judged against [PRINCIPLES.md](PRINCIPLES.md). Read the [AI policy](AI_POLICY.md)
+if you used AI or want to know what the review bots do.
 
 Every change to client settings must go through preview → Apply with a backup → verify →
 Undo. Tests must use sandbox homes, never your real settings.
