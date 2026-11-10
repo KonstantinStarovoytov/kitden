@@ -1108,9 +1108,12 @@ def test_codex_estimate_says_one_description_for_one_skill():
 
 def test_codex_estimate_with_a_cut_of_a_few_characters_does_not_round_it_to_zero(home):
     paths = codex_home(home)
-    _, size, other = a_small_window(home, paths, lambda f: f.cap == 1)
+    # Which few characters fit depends on how long the test folder's path is.
+    fit, size, other = a_small_window(home, paths, lambda f: f.cap is not None and 0 < f.cap < 10)
+    characters = "character" if fit.cap == 1 else "characters"
     assert other["say"] == (
-        f"Estimate: On a {size} window, 3 of 3 descriptions would be cut to about 1 character."
+        f"Estimate: On a {size} window, 3 of 3 descriptions would be cut to about {fit.cap} "
+        f"{characters}."
     )
 
 
