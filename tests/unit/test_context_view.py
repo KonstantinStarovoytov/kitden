@@ -330,6 +330,8 @@ def test_a_second_window_that_drops_skills(home):
         "The agent may not use them."
     )
     assert other["short"] == "1 of 8 would show only a name"
+    assert other["misfit"] == {"kind": "name", "n": 1}
+    assert cc["windows"][0]["result"]["misfit"] is None
 
 
 def test_a_rule_that_does_not_rebuild_the_list_shows_no_estimate(home):
@@ -720,6 +722,7 @@ def test_codex_estimate_cut(home):
         "characters."
     )
     assert other["short"] == "2 of 3 would be cut short"
+    assert other["misfit"] == {"kind": "cut", "n": 2}
 
 
 def test_codex_estimate_left_out(home):
@@ -729,6 +732,7 @@ def test_codex_estimate_left_out(home):
     assert other["say"] == (
         f"Estimate: On a {size} window, 1 of 3 skills would be left out and no description sent."
     )
+    assert other["misfit"] == {"kind": "out", "n": 1}
 
 
 def test_codex_names_only_with_nothing_left_out(home):

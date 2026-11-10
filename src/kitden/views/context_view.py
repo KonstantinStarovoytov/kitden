@@ -434,7 +434,8 @@ def _claude_estimate(skills: list[ClaudeSkill], fit: ClaudeFit, on: str, frame: 
         body = words.CLAUDE_WOULD_KEEP.format(on=on)
     short = words.CLAUDE_WOULD_SHORT.format(bad=bad, n=n) if bad else words.WOULD_FIT.format(n=n)
     result = {"short": short, "say": frame.format(body), "sent": sent, "over": over}
-    return result | {"used": fit.used, "size": fit.size, "room": None}
+    misfit = {"kind": "name", "n": bad} if bad else None
+    return result | {"used": fit.used, "size": fit.size, "room": None, "misfit": misfit}
 
 
 def _claude_note(row: _Row, state: str, side: int | None, size: int) -> str | None:
@@ -709,7 +710,8 @@ def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str
         body = words.CODEX_WOULD_KEEP.format(on=on)
     short = words.CODEX_WOULD_SHORT.format(bad=bad, n=n) if bad else words.WOULD_FIT.format(n=n)
     result = {"short": short, "say": frame.format(body), "sent": sent, "over": over}
-    return result | {"used": fit.used, "size": fit.size, "room": None}
+    misfit = {"kind": "out", "n": out} if out else {"kind": "cut", "n": bad} if bad else None
+    return result | {"used": fit.used, "size": fit.size, "room": None, "misfit": misfit}
 
 
 def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict:
