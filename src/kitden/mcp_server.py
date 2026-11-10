@@ -17,24 +17,15 @@ from pydantic import Field
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import CursorAdapter
-from kitden.gateways import load_gateways
 from kitden.local_gateway import proxy
 from kitden.local_gateway.settings import load_settings
-from kitden.local_gateway.views import gateway_items
-from kitden.model import Project
-from kitden.views.effective import found_clients, project_views
-from kitden.views.explain import brief, explain
-from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
+from kitden.views import answers
+from kitden.views.answers import NO_CHANGES, NO_EDITS, read_setup, resolve_project
 from kitden.views.inventory import Inventory, build_inventory
 
 READ_ONLY = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
 )
-NO_EDITS = (
-    "Do not edit client settings files to work around this; tell the developer to make the "
-    "change on the local page (run `kitden open`), which previews, backs up and can undo it."
-)
-NO_CHANGES = "Read-only: this tool cannot change settings. " + NO_EDITS
 # The same words for project_path on every tool that takes one (Glama's TDQS asked, 2026-11-09).
 ProjectPath = Annotated[
     str | None,
@@ -63,36 +54,12 @@ GATEWAY_INSTRUCTIONS = (
 )
 
 
-def _project_dict(project: Project | None) -> dict[str, Any] | None:
-    if project is None:
-        return None
-    return {"path": project.path, "exists": project.exists, "known_by": list(project.known_by)}
-
-
-def resolve_project(inventory: Inventory, path: str) -> Project | None:
-    """The known project that is `path` or contains it; the deepest one wins."""
-    real = os.path.realpath(path)
-    found = [
-        p
-        for p in inventory.projects
-        if real == os.path.realpath(p.path)
-        or real.startswith(os.path.realpath(p.path).rstrip("/") + "/")
-    ]
-    return max(found, key=lambda p: len(p.path)) if found else None
-
-
 def create_server(
     build: Callable[[], Inventory],
     cwd: Callable[[], str] = os.getcwd,
     instructions: str = INSTRUCTIONS,
 ) -> MCPServer:
     server = MCPServer(name="kitden", instructions=instructions)
-
-    def where(project_path: str | None) -> tuple[Inventory, Project | None, str | None]:
-        """A fresh read, the project asked for (the current folder by default) and its path."""
-        inventory = build()
-        project = resolve_project(inventory, project_path or cwd())
-        return inventory, project, project.path if project else None
 
     @server.tool(
         annotations=READ_ONLY,
@@ -105,22 +72,7 @@ def create_server(
         ),
     )
     def show_setup(project_path: ProjectPath = None, client: str | None = None) -> dict[str, Any]:
-        inventory, project, path = where(project_path)
-        if client is not None and client not in found_clients(inventory):
-            raise ValueError(f"Unknown or missing client: {client}")
-        views = [
-            {
-                "client": view.client,
-                "items": [brief(i) for i in view.items],
-                "overridden": [
-                    {"name": w.name, "winner": w.id, "loser": lo.id, "mode": mode}
-                    for w, lo, mode in view.shadowed
-                ],
-            }
-            for view in project_views(inventory, path)
-            if client is None or view.client == client
-        ]
-        return {"project": _project_dict(project), "views": views, "note": NO_CHANGES}
+        return answers.setup_answer(build(), project_path or cwd(), client)
 
     @server.tool(
         annotations=READ_ONLY,
@@ -133,9 +85,7 @@ def create_server(
         ),
     )
     def list_findings(project_path: ProjectPath = None) -> dict[str, Any]:
-        inventory, project, path = where(project_path)
-        found = find_findings(inventory, path) + find_bypasses(inventory, path)
-        return {"project": _project_dict(project), "findings": [finding_dict(f) for f in found]}
+        return answers.findings_answer(build(), project_path or cwd())
 
     @server.tool(
         annotations=READ_ONLY,
@@ -149,10 +99,7 @@ def create_server(
     def explain_item(
         name: str, kind: str | None = None, project_path: ProjectPath = None
     ) -> dict[str, Any]:
-        inventory, project, path = where(project_path)
-        # An agent's answer leaves this computer: a file's first lines stay on the local page.
-        definitions = [{**d, "preview": None} for d in explain(inventory, name, kind, path)]
-        return {"project": _project_dict(project), "name": name, "definitions": definitions}
+        return answers.item_answer(build(), project_path or cwd(), name, kind)
 
     @server.tool(
         annotations=READ_ONLY,
@@ -163,7 +110,7 @@ def create_server(
         ),
     )
     def list_projects() -> dict[str, Any]:
-        return {"projects": [_project_dict(p) for p in build().projects]}
+        return answers.projects_answer(build())
 
     return server
 
@@ -175,16 +122,10 @@ def run(home: Path | None = None, read_only: bool = False) -> None:
     `read_only` it offers only its own tools: the kitden plugin starts it so.
     """
     root = home or Path.home()
-
-    def build() -> Inventory:
-        # As the page builds it, so the answers agree with the tools this server offers.
-        inventory = build_inventory(root)
-        mark_gateways(inventory, load_gateways(root))
-        inventory.items += gateway_items(inventory, load_settings(root), root)
-        return inventory
-
     held = {} if read_only else load_settings(root)["servers"]
-    server = create_server(build, instructions=GATEWAY_INSTRUCTIONS if held else INSTRUCTIONS)
+    server = create_server(
+        lambda: read_setup(root), instructions=GATEWAY_INSTRUCTIONS if held else INSTRUCTIONS
+    )
     if not held:
         server.run()
         return
@@ -205,4 +146,4 @@ def known_projects(home: Path) -> list[str]:
     return [p.path for p in build_inventory(home, adapters, apps=[]).projects]
 
 
-__all__ = ["create_server", "resolve_project", "run"]
+__all__ = ["NO_CHANGES", "NO_EDITS", "create_server", "resolve_project", "run"]

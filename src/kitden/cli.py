@@ -1,4 +1,4 @@
-"""Command line entry point: kitden, open, serve, demo, scan, mcp."""
+"""Command line entry point: kitden, open, serve, demo, scan, show, mcp."""
 
 import argparse
 import contextlib
@@ -25,6 +25,7 @@ DEFAULT_PORT = 47800
 # The demo's own ports, so its browser storage (theme, hidden columns) never mixes with the page's.
 DEMO_PORT = 47900
 EXIT_NO_PORT = 2
+EXIT_USAGE = 2  # argparse's own code for a wrong command line
 EXIT_UNREADABLE = 3
 EXIT_NOT_STARTED = 4
 EXIT_UNSUPPORTED = 5
@@ -246,6 +247,39 @@ def _scan(args: argparse.Namespace) -> int:
     return EXIT_UNREADABLE if inventory.problems else 0
 
 
+SHOW = ("setup", "findings", "item", "projects", "context")
+
+
+def _show_answer(args: argparse.Namespace) -> int:
+    """Print one read-only answer as JSON: what the MCP server's tools give, for a skill or a
+    script that has no MCP server. Nothing waits for a client's own commands."""
+    from kitden.views import answers
+
+    home = _home(args) or Path.home()
+    folder = args.project or str(Path.cwd())
+    if args.what == "item" and not args.name:
+        print("Give the name: kitden show item NAME", file=sys.stderr)
+        return EXIT_USAGE
+    inventory = answers.read_setup(home)
+    try:
+        if args.what == "setup":
+            answer = answers.setup_answer(inventory, folder, args.client)
+        elif args.what == "findings":
+            answer = answers.findings_answer(inventory, folder)
+        elif args.what == "item":
+            answer = answers.item_answer(inventory, folder, args.name, args.kind)
+        elif args.what == "projects":
+            answer = answers.projects_answer(inventory)
+        else:
+            answer = answers.context_answer(inventory, home, folder)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return EXIT_USAGE
+    json.dump(answer, sys.stdout, indent=2)
+    print()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     from kitden.demo import SIZES
 
@@ -263,6 +297,12 @@ def main(argv: list[str] | None = None) -> int:
     demo.add_argument("--size", choices=SIZES, default="medium", help="how big the sample is")
     scan = commands.add_parser("scan", help="print what each client loads, then exit")
     scan.add_argument("--json", action="store_true", help="print JSON instead of a summary")
+    show = commands.add_parser("show", help="print one read-only answer as JSON, then exit")
+    show.add_argument("what", choices=SHOW, help="which answer")
+    show.add_argument("name", nargs="?", help="for item: the name to explain")
+    show.add_argument("--project", help="a folder; the current folder by default")
+    show.add_argument("--client", help="for setup: only this client")
+    show.add_argument("--kind", help="for item: mcp_server, skill, plugin, hook, ...")
     mcp = commands.add_parser("mcp", help="run the Kitden MCP server and gateway over stdio")
     mcp.add_argument(
         "--read-only", action="store_true", help="offer only Kitden's own tools, which only read"
@@ -271,7 +311,7 @@ def main(argv: list[str] | None = None) -> int:
         sub.add_argument(
             "--no-browser", action="store_true", default=keep, help="only print the link"
         )
-    for sub in (opener, serve, scan, mcp):
+    for sub in (opener, serve, scan, show, mcp):
         sub.add_argument(
             "--home", default=keep, help="read clients under this home folder (for testing)"
         )
@@ -294,6 +334,8 @@ def main(argv: list[str] | None = None) -> int:
         print(note, file=sys.stderr)
     if args.command == "scan":
         return _scan(args)
+    if args.command == "show":
+        return _show_answer(args)
     if args.command == "mcp":
         from kitden import mcp_server
 

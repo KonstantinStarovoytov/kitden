@@ -81,7 +81,11 @@ PLUGIN_DIR = Path(__file__).resolve().parents[2] / "plugins/kitden"
 
 
 def _install_kitden_plugin(home: Path, enabled: str = "true") -> None:
-    shutil.copytree(PLUGIN_DIR, home / ".codex/plugins/cache/kitden/kitden/0.1.0")
+    # The plugin as it was up to 0.7.1, when it still brought the server.
+    cache = home / ".codex/plugins/cache/kitden/kitden/0.1.0"
+    shutil.copytree(PLUGIN_DIR, cache)
+    entry = '{"mcpServers": {"kitden": {"command": "kitden", "args": ["mcp", "--read-only"]}}}'
+    (cache / "mcp.json").write_text(entry)
     config = home / ".codex/config.toml"
     config.write_text(config.read_text() + f'\n[plugins."kitden@kitden"]\nenabled = {enabled}\n')
 

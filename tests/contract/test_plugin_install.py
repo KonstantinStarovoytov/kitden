@@ -22,7 +22,7 @@ from tests.contract.test_mcp_handshake import CODEX_APP
 
 pytestmark = pytest.mark.contract
 ROOT = Path(__file__).resolve().parents[2]
-ENTRY = json.loads((ROOT / "plugins/kitden/.mcp.json").read_text())["mcpServers"]["kitden"]
+SKILLS = sorted(p.name for p in (ROOT / "plugins/kitden/skills").iterdir())
 
 
 @pytest.fixture
@@ -63,10 +63,11 @@ def test_claude_code_installs_the_plugin_from_the_repository(home):
     _run(claude, ["plugin", "install", "kitden@kitden", "--scope", "user"], home)
     listed = {p["id"]: p for p in json.loads(_run(claude, ["plugin", "list", "--json"], home))}
     assert listed["kitden@kitden"]["enabled"] is True
-    assert listed["kitden@kitden"]["mcpServers"] == {"kitden": ENTRY}
-    assert Path(listed["kitden@kitden"]["installPath"], "skills/show-setup/SKILL.md").is_file()
-    assert Path(listed["kitden@kitden"]["installPath"], "skills/audit/SKILL.md").is_file()
-    assert _state(home, "claude_code") == "plugin"
+    # The plugin brings skills and no server (0.7.2).
+    assert not listed["kitden@kitden"].get("mcpServers")
+    for name in SKILLS:
+        assert Path(listed["kitden@kitden"]["installPath"], f"skills/{name}/SKILL.md").is_file()
+    assert _state(home, "claude_code") == "missing"
 
     _run(claude, ["plugin", "uninstall", "kitden@kitden"], home)
     _run(claude, ["plugin", "marketplace", "remove", "kitden"], home)
@@ -95,14 +96,14 @@ def test_codex_installs_the_plugin_from_the_repository(home):
     assert installed["pluginId"] == "kitden@kitden" and installed["version"] == version
     copied = Path(installed["installedPath"])
     assert copied.is_relative_to(home / ".codex/plugins/cache")
-    assert (copied / "mcp.json").read_bytes() == (ROOT / "plugins/kitden/mcp.json").read_bytes()
-    assert (copied / "skills/show-setup/SKILL.md").is_file()
-    assert (copied / "skills/audit/SKILL.md").is_file()
+    assert not (copied / "mcp.json").exists()
+    for name in SKILLS:
+        assert (copied / f"skills/{name}/SKILL.md").is_file()
     assert tomllib.loads(config.read_text())["plugins"]["kitden@kitden"] == {"enabled": True}
     items = build_inventory(home).items
     plugins = {i.name for i in items if i.client == "codex" and str(i.kind) == "plugin"}
     assert "kitden@kitden" in plugins
-    assert _state(home, "codex") == "plugin"
+    assert _state(home, "codex") == "missing"
 
     _run(codex, ["plugin", "remove", "kitden@kitden"], home, env)
     _run(codex, ["plugin", "marketplace", "remove", "kitden"], home, env)
