@@ -36,7 +36,7 @@ def _version(text: object) -> tuple[int, ...] | None:
 
 def _newer_than_known(version: object) -> bool:
     parsed = _version(version)
-    return parsed is None or parsed > _version(KNOWN_CODEX_VERSION)
+    return parsed is None or parsed > (_version(KNOWN_CODEX_VERSION) or ())
 
 
 def _entries(entry: dict) -> list[tuple[str, str, str]]:

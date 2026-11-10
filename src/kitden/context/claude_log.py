@@ -46,7 +46,7 @@ def _version(text: str) -> tuple[int, ...] | None:
 
 def _newer_than_known(version: object) -> bool:
     parsed = _version(version) if isinstance(version, str) else None
-    return parsed is None or parsed > _version(KNOWN_VERSIONS)
+    return parsed is None or parsed > (_version(KNOWN_VERSIONS) or ())
 
 
 def _find_entry(content: str, name: str, at: int) -> int:
@@ -173,9 +173,8 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                     continue
                 if isinstance(entry, dict) and isinstance(entry.get("version"), str):
                     first = entry
-    newer = first is not None and _newer_than_known(first["version"])
-    if result is None and newer and not _skipped(first, folder):
-        return Unreadable(CLIENT, first["version"])
+    if result is None and first is not None and _newer_than_known(first["version"]):
+        return None if _skipped(first, folder) else Unreadable(CLIENT, first["version"])
     return result
 
 

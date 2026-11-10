@@ -1036,7 +1036,7 @@ def create_app(
         # A chat log Kitden cannot read must not break the Overview: then no context cards.
         try:
             context = _context_clients(path)
-        except Exception:
+        except Exception:  # noqa: BLE001 - an unreadable chat log must not break the Overview
             context = []
         answer = overview(
             state.inventory,
@@ -1086,8 +1086,7 @@ def create_app(
         """The Context page's client cards; none without a home folder."""
         if home is None:
             return []
-        codex = adapters.get("codex")
-        codex_home = codex.codex_home if codex else home / ".codex"
+        codex_home = getattr(adapters.get("codex"), "codex_home", None) or home / ".codex"
         return context_view(state.inventory, home, codex_home, path, draft or {})["clients"]
 
     def _gateway_view(request, project, path):

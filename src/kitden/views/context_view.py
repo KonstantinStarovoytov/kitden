@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import TypeGuard
 
 from kitden.clients.base import Reader, found_columns, from_plugin
 from kitden.clients.claude_code import local_files
@@ -246,7 +247,7 @@ def _swap(client: str, gets: list[str], loses: list[str]) -> str:
     return " ".join(said)
 
 
-def _whole(value) -> bool:
+def _whole(value) -> TypeGuard[float]:
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 
@@ -335,7 +336,8 @@ def _claude_gives(rows, states, weights, budget, sent_full: frozenset[str]) -> b
     cap, so it gives it for any size between: a skill that fits at the cap fits when smaller,
     and one that does not fit when all are empty never fits."""
     for unknown in ("", "x" * CLAUDE_DESCRIPTION_CAP):
-        if _claude_run(rows, states, weights, budget, unknown)[1].full != sent_full:
+        run = _claude_run(rows, states, weights, budget, unknown)
+        if run is None or run[1].full != sent_full:
             return False
     return True
 
@@ -419,9 +421,9 @@ def _claude_estimate(skills: list[ClaudeSkill], fit: ClaudeFit, on: str, frame: 
     over = {}
     for s in skills:
         if s.name in fit.full:
-            sent[s.name] = len(s.name) + 4 + min(len(s.description), CLAUDE_DESCRIPTION_CAP)
+            sent[s.name] = len(s.name) + 4 + min(len(s.description or ""), CLAUDE_DESCRIPTION_CAP)
         elif not s.name_only:
-            over[s.name] = min(len(s.description), CLAUDE_DESCRIPTION_CAP) + 2
+            over[s.name] = min(len(s.description or ""), CLAUDE_DESCRIPTION_CAP) + 2
     n = len(skills)
     chosen = sum(s.name_only for s in skills)
     bad = n - len(fit.full) - chosen
@@ -503,7 +505,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     checked = base is not None and base[1].full == sent_full
     # The log does not say the window: take the only one whose limit rebuilds the list.
     worked_out = two_limits = False
-    rate = None
+    rate = 0
     if setting is None and not checked:
         fits = [
             candidate
@@ -535,7 +537,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         source = words.WORKED_OUT if worked_out else None
         models = " · ".join(p for p in (_model_name(found.model), found.surface, source) if p)
     windows = [_window_card(title, models, _tag(date), budget, fact)]
-    if checked and setting is None and window in CLAUDE_OTHER_WINDOW:
+    if base is not None and checked and setting is None and window in CLAUDE_OTHER_WINDOW:
         other, per_token, shown = CLAUDE_OTHER_WINDOW[window]
         if worked_out:
             # The table's models did not run this chat: keep its own rate and name no model.
@@ -550,7 +552,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     changes = _changes(draft, states, SWITCHES[client])
     if checked and changes:
         run = _claude_run(rows, states | changes, weights, budget)
-        if run is not None:
+        if run is not None and base is not None:
             skills, fit = run
             full = base[1].full
             gets = [r.name for r in rows if r.name not in changes and r.name in fit.full - full]
@@ -591,7 +593,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         check = words.HOW_NOT_MATCHED if base is not None else words.HOW_NOT_RUN
     how = [
         words.HOW_CLAUDE_LIST.format(version=version, when=when, surface=surface),
-        *([words.HOW_CLAUDE_WINDOW.format(size=_size(window))] if worked_out else []),
+        *([words.HOW_CLAUDE_WINDOW.format(size=_size(window))] if worked_out and window else []),
         words.HOW_CLAUDE_RULE,
         f"{words.HOW_CLAUDE_CHECK} {check}",
         words.HOW_CLAUDE_SETTING if setting is not None else words.HOW_CLAUDE_SHELL,
@@ -655,12 +657,13 @@ def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
     must fall among them."""
     for r in rows:
         logged = None if r.sent is None else len(r.sent)
-        if _codex_kind(logged, len(r.full)) != _codex_kind(fit.sent.get(r.name), len(r.full)):
+        full = len(r.full or "")
+        if _codex_kind(logged, full) != _codex_kind(fit.sent.get(r.name), full):
             return False
-    if names_only != (fit.cap is None):
-        return False
+    if names_only or fit.cap is None:
+        return names_only and fit.cap is None
     cuts = _codex_cuts(rows)
-    return names_only or not cuts or min(cuts) <= fit.cap <= max(cuts)
+    return not cuts or min(cuts) <= fit.cap <= max(cuts)
 
 
 def _codex_fact(rows: list[_Row], names_only: bool, when: str) -> dict:
@@ -739,15 +742,16 @@ def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str
     bad = sum(_codex_kind(fit.sent.get(s.name), len(s.description)) != "full" for s in skills)
     # The rule removes every description only when the names alone do not fit, so then at least
     # one skill is left out: `fit.cap` is a number in the branches below.
+    cap = fit.cap or 0
     if out:
         body = words.CODEX_WOULD_LEAVE_OUT.format(
             on=on, out=out, n=n, skills=_many(n, "skill", "skills")
         )
-    elif bad and fit.cap == 0:
+    elif bad and cap == 0:
         body = words.CODEX_WOULD_NAMES.format(on=on)
     elif bad:
         # A cap of a few characters would round to 0.
-        cap = fit.cap if fit.cap < 10 else round(fit.cap / 10) * 10
+        cap = cap if cap < 10 else round(cap / 10) * 10
         body = words.CODEX_WOULD_CUT.format(
             on=on,
             bad=bad,
@@ -792,21 +796,21 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
         for item in [i for i in extras if i.scope is Scope.USER]:
             if not _unchanged([Path(item.source.path or "")], at_ms):
                 continue
-            full = _description(item.source.path)
-            rows.append(_Row(item.name, None, item, full, item.source.path or ""))
+            text = _description(item.source.path)
+            rows.append(_Row(item.name, None, item, text, item.source.path or ""))
             extras.remove(item)
     states = {r.name: _state(r.item) for r in rows}
 
     limit = _codex_limit(codex_home)
     window = codex_window(codex_home, sent_list.model)
-    budget = codex_budget(window, limit) if window or limit else None
+    budget = codex_budget(window or 0, limit) if window or limit else None
     known = all(r.full is not None for r in rows)
 
-    def run(states: dict[str, str]) -> tuple[list[CodexSkill], CodexFit]:
-        skills = [CodexSkill(r.name, r.full, r.path) for r in rows if states[r.name] != "off"]
+    def run(states: dict[str, str], budget: int) -> tuple[list[CodexSkill], CodexFit]:
+        skills = [CodexSkill(r.name, r.full or "", r.path) for r in rows if states[r.name] != "off"]
         return skills, codex_rule(skills, budget)
 
-    base = run(states) if budget and known else None
+    base = run(states, budget) if budget and known else None
     checked = base is not None and _codex_same(rows, base[1], names_only)
 
     fact = _codex_fact(rows, names_only, when)
@@ -815,7 +819,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     if checked and not bad:
         fact["room"] = words.ROOM_LEFT.format(left=f"{budget - fact['used']:,}", unit="tokens")
     lede = words.CONTEXT_LIMITS[client]
-    if limit is not None:
+    if limit is not None and budget is not None:
         title, models = (
             words.LIMIT_TITLE.format(n=f"{budget:,}", unit="tokens"),
             words.CODEX_SETTING,
@@ -828,7 +832,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
         title = words.WINDOW_TITLE.format(size=_size(window)) if window else words.UNKNOWN_WINDOW
         models = sent_list.model or ""
     windows = [_window_card(title, models, _tag(date), budget, fact)]
-    if checked:
+    if base is not None and checked:
         other = None
         if limit is not None and window:
             other = (window, words.DEFAULT_LIMIT)
@@ -847,9 +851,9 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
 
     after = None
     changes = _changes(draft, states, SWITCHES[client])
-    if checked and changes:
-        skills, fit = run(states | changes)
-        lengths = {r.name: len(r.full) for r in rows}
+    if base is not None and budget and checked and changes:
+        skills, fit = run(states | changes, budget)
+        lengths = {r.name: len(r.full or "") for r in rows}
 
         def full(fit: CodexFit) -> set[str]:
             return {n for n, kept in fit.sent.items() if _codex_kind(kept, lengths[n]) == "full"}

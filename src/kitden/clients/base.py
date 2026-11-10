@@ -137,7 +137,7 @@ def skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
 
 
 def waits_to_be_asked(client: str, skill_md: Path) -> str | None:
-    """"only-asked" when Claude Code or Cursor reads `disable-model-invocation: true` in SKILL.md.
+    """ "only-asked" when Claude Code or Cursor reads `disable-model-invocation: true` in SKILL.md.
     The field is checked in the docs of both clients."""
     from kitden.views.skills import front_matter  # views.skills imports this module
 
@@ -466,7 +466,7 @@ class ClientAdapter(ABC):
         """The edits that turn one plugin off or on in a project."""
         raise ValueError(f"{self.id} has no plugin switch for a project")
 
-    def skill_rule_steps(self, name: str, project: str | None, off: bool) -> list[Step]:
+    def skill_rule_steps(self, name: str, project: str | None, state: str) -> list[Step]:
         """The edits that turn one skill off or on, in all projects or in one."""
         raise ValueError(f"{self.id} has no skill switch of this kind")
 

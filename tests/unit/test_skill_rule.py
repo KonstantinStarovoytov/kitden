@@ -659,9 +659,7 @@ def test_after_words_say_name_only(tmp_path):
         change = _preview(page, _rule("claude_code", item, state="name-only")).json()
         assert change["rows"][0]["after"][0]["word"] == "Name only"
         # Taking a project's rule out: the shared file says Name only there, so it follows that.
-        (home / ".claude/settings.json").write_text(
-            '{"skillOverrides": {"deploy": "name-only"}}'
-        )
+        (home / ".claude/settings.json").write_text('{"skillOverrides": {"deploy": "name-only"}}')
         rule = _rule("claude_code", item, "project", _project(page, app), state="on")
         (row,) = _preview(page, rule).json()["rows"]
         assert row["after"] == [
