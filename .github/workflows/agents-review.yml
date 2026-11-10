@@ -21,7 +21,7 @@ jobs:
       && !endsWith(github.actor, '[bot]')
       && !github.event.pull_request.draft
       && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
-    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/review.yml@681b5197f2d1c316291f56855de6eb9125ae04dc
+    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/review.yml@main
     permissions:
       contents: read # the reviewers read the code
       pull-requests: write # one comment is posted

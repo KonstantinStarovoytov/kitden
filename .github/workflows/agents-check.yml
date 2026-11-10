@@ -12,6 +12,6 @@ concurrency:
 
 jobs:
   check:
-    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/check.yml@681b5197f2d1c316291f56855de6eb9125ae04dc
+    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/check.yml@main
     permissions:
       contents: read # check out the code
