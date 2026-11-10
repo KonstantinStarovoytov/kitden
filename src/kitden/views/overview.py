@@ -251,7 +251,7 @@ def _connects(inventory) -> list[dict]:
     """A card per client the Kitden gateway does not reach yet, with the Gateway's own change
     that connects it (gateway-details.js `connectBody`): its `kitden` entry is added, or turned
     back on where its docs name the switch. A client with an old entry gets the update instead
-    (`_old_entries`); one whose entry a plugin gives, or that is not on this Mac, gets none."""
+    (`_old_entries`); one that is not on this Mac gets none."""
     cards = []
     for entry in setup_server_state(inventory):
         client = entry["client"]

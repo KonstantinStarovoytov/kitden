@@ -454,7 +454,7 @@ export function kitdenClients(entries) {
   const setup = [];
   for (const entry of entries || []) {
     if (!WRITABLE.includes(entry.client)) continue;
-    if (entry.state === "added" || entry.state === "plugin") (entry.enabled === false ? off : linked).push(entry.client);
+    if (entry.state === "added") (entry.enabled === false ? off : linked).push(entry.client);
     const label = `Set up in ${CLIENT_NAMES[entry.client]}…`;
     if (entry.state === "missing") {
       setup.push({ client: entry.client, label, body: { action: "setup_server.register", targets: [{ client: entry.client }], params: {} } });

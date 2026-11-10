@@ -1,14 +1,33 @@
 # Kitden plugin
 
-For Claude Code and Codex. It adds the Kitden MCP server and two skills.
+For Claude Code and Codex. It adds the Kitden MCP server and two skills, so an agent can tell you
+what your coding tools load and why.
+
+The plugin does not hold the program. It needs [Kitden](https://pypi.org/project/kitden/) 0.7.1
+or later on this computer:
+
+```bash
+uv tool install --python 3.13 kitden
+```
+
+The [Kitden README](https://github.com/KonstantinStarovoytov/kitden#get-started) has the Homebrew
+line too. Kitden is open source under Apache-2.0, and its code is in the same repository as this
+plugin.
 
 ## What the MCP server gives
 
-The server `kitden`, started as `kitden mcp`, lets an agent read your setup: what each client
-loads in a project, where each item comes from, and problems such as duplicates. So "show my
-setup" or "why does this load twice" gets a true answer in any agent. Its own tools only read.
-It also offers the tools of servers moved into the Kitden gateway. You can add this server to any
-client without the plugin.
+The plugin starts one local program, `kitden mcp --read-only`, and talks to it over stdio. The
+server `kitden` has four tools. Each one only reads.
+
+| Tool | What it answers |
+| --- | --- |
+| `show_setup` | What each client loads in a project, and where each item comes from. |
+| `list_findings` | Problems in the setup, such as an item that loads twice. |
+| `explain_item` | One name across the clients: every place it is set, and which one loads. |
+| `list_projects` | The projects the clients know on this computer. |
+
+The plugin's server offers no other tools. The Kitden gateway is a separate connection that you
+make yourself on the Kitden page.
 
 ## What the plugin adds
 
@@ -19,17 +38,33 @@ client without the plugin.
   project you are in and lists what to turn off. It judges by what the project is; Kitden's
   tools do not tell how often an item is used. You make the changes on the page.
 
-The plugin adds nothing that runs by itself.
+The plugin adds nothing that runs by itself: no hooks and no commands.
 
-It needs Kitden installed on this computer first:
+## Try it
 
-```bash
-uv tool install --python 3.13 kitden
-```
+- "What MCP servers and skills do you load in this project?"
+- "Why does this skill load twice?"
+- "Where does the github MCP server come from?"
+- `/kitden:audit`
 
-The [Kitden README](https://github.com/KonstantinStarovoytov/kitden#get-started) has the Homebrew
-line too. Without Kitden, the client shows the server as failed and the skill tells the agent to
-show this install line.
+## What it reads
+
+The tools read the settings files of Claude Code, Codex and Cursor on this computer. To learn
+versions and plugins they may run the clients' own commands, such as `claude --version` and
+`codex plugin list`. They change nothing and do not go online. Secret values, such as tokens in
+a server's settings, are replaced with `[secret]` before an answer leaves the server. There is no
+account and no telemetry.
+
+## If something goes wrong
+
+- **The client shows the server as failed.** Kitden is missing or older than 0.7.1. Run
+  `kitden --version`. If it fails, use the install line above. If it is older, run
+  `uv tool upgrade kitden` or `brew upgrade kitden`. Then restart the client.
+- **The server runs but the agent has no kitden tools.** Turn the `kitden` server on in the
+  client.
+- **Anything else.** Open an issue at https://github.com/KonstantinStarovoytov/kitden/issues.
+
+## Install and remove
 
 | Client | Install | Remove |
 | --- | --- | --- |

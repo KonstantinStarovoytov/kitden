@@ -264,6 +264,9 @@ def main(argv: list[str] | None = None) -> int:
     scan = commands.add_parser("scan", help="print what each client loads, then exit")
     scan.add_argument("--json", action="store_true", help="print JSON instead of a summary")
     mcp = commands.add_parser("mcp", help="run the Kitden MCP server and gateway over stdio")
+    mcp.add_argument(
+        "--read-only", action="store_true", help="offer only Kitden's own tools, which only read"
+    )
     for sub in (opener, serve, demo):
         sub.add_argument(
             "--no-browser", action="store_true", default=keep, help="only print the link"
@@ -294,7 +297,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "mcp":
         from kitden import mcp_server
 
-        mcp_server.run(_home(args))
+        mcp_server.run(_home(args), args.read_only)
         return 0
     if args.command == "serve":
         return _serve(args)

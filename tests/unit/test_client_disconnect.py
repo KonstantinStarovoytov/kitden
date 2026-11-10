@@ -14,7 +14,6 @@ CLIENTS = ["claude_code", "codex", "cursor"]
 FILE = {"claude_code": ".claude.json", "codex": ".codex/config.toml", "cursor": ".cursor/mcp.json"}
 CODEX_ENTRY = '\n[mcp_servers.kitden]\ncommand = "/opt/kitden/bin/kitden"\nargs = ["mcp"]\n'
 PLUGIN_DIR = Path(__file__).resolve().parents[2] / "plugins/kitden"
-PLUGIN_WORDS = "Claude Code gets Kitden from a plugin. Turn the plugin off to disconnect it."
 NAMES = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 
 
@@ -104,7 +103,7 @@ def test_disconnect_refuses_a_client_without_the_entry(home):
     assert _files(home) == before
 
 
-def test_disconnect_refuses_the_plugin_entry(home):
+def test_the_plugins_server_is_not_a_connection_to_disconnect(home):
     cache = home / ".claude/plugins/cache/kitden/kitden/0.1.0"
     shutil.copytree(PLUGIN_DIR, cache)
     (home / ".claude/plugins/installed_plugins.json").write_text(
@@ -112,10 +111,10 @@ def test_disconnect_refuses_the_plugin_entry(home):
     )
     before = _files(home)
     with page_for(home, run=FakeClaude(home)) as page:
-        assert setup_state(page, "claude_code") == "plugin"
+        assert setup_state(page, "claude_code") == "missing"
         answer = disconnect(page, "claude_code")
         assert answer.status_code == 422
-        assert answer.json()["detail"] == PLUGIN_WORDS
+        assert answer.json()["detail"] == "Claude Code is not connected to Kitden."
     assert _files(home) == before
 
 

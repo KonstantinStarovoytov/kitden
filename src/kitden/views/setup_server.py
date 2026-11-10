@@ -3,8 +3,9 @@ feature 003, FR-014).
 
 An old entry is one the working version (named `agentsetup`) added: a user-level MCP entry named
 `agentsetup` that runs the old command with the `mcp` argument. Entries with that name that run
-another program are someone else's and are left alone. A plugin entry is the same server as
-provided by the kitden plugin (feature 003): the page shows it and never adds a second one.
+another program are someone else's and are left alone. The kitden plugin starts its own server
+with `--read-only`, which offers no moved server: it is not the client's link to the gateway, so
+it does not count here.
 """
 
 import json
@@ -74,14 +75,12 @@ def enable_steps(adapters: dict[str, ClientAdapter], client: str) -> list[Step]:
 
 
 def kitden_on(entry: dict) -> bool:
-    """The client has a `kitden` entry (its own or a plugin's) and it is not turned off."""
-    return entry["state"] in ("added", "plugin") and entry["enabled"] is not False
+    """The client has its own `kitden` entry and it is not turned off."""
+    return entry["state"] == "added" and entry["enabled"] is not False
 
 
 def setup_server_state(inventory) -> list[dict]:
-    """Per client: `added`, `old`, `plugin`, `missing` or `not_installed`, and the old entry to
-    update. A user-level entry wins over a plugin one, and a plugin one over an old entry, which is
-    then only removed (the plugin already provides the server)."""
+    """Per client: `added`, `old`, `missing` or `not_installed`, and the old entry to update."""
     found = found_clients(inventory)
     states = []
     for client in CLIENTS:
@@ -97,18 +96,16 @@ def setup_server_state(inventory) -> list[dict]:
             )
             continue
         mine = next((i for i in inventory.items if _user_entry(i, client, SETUP_NAME)), None)
-        plugin = next((i for i in inventory.items if _plugin_entry(i, client)), None)
         old = next((i for i in inventory.items if i.client == client and is_old_entry(i)), None)
-        state = "added" if mine else "plugin" if plugin else "old" if old else "missing"
+        state = "added" if mine else "old" if old else "missing"
         exists = Path(dict(old.summary)["command"]).exists() if old else None
-        present = mine or plugin
         states.append(
             {
                 "client": client,
                 "state": state,
                 "item": old.id if old else None,
                 "command_exists": exists,
-                "enabled": None if present is None else present.enabled is not Enabled.OFF,
+                "enabled": None if mine is None else mine.enabled is not Enabled.OFF,
             }
         )
     return states

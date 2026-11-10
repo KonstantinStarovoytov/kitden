@@ -94,9 +94,11 @@ def test_mcp_command_serves_the_read_only_server(monkeypatch, tmp_path):
     import kitden.mcp_server as mcp_server
 
     started = []
-    monkeypatch.setattr(mcp_server, "run", lambda home=None: started.append(home))
+    monkeypatch.setattr(mcp_server, "run", lambda home, read_only: started.append(read_only))
     assert cli.main(["mcp", "--home", str(tmp_path)]) == 0
-    assert started == [tmp_path]
+    # The kitden plugin starts it with only Kitden's own tools.
+    assert cli.main(["mcp", "--read-only", "--home", str(tmp_path)]) == 0
+    assert started == [False, True]
 
 
 def test_installed_command_is_an_absolute_path():

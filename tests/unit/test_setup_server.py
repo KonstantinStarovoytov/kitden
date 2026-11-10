@@ -2,6 +2,7 @@
 
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,12 @@ import pytest
 from kitden.changes.actions import setup_server_steps
 from kitden.model import Client, ClientStatus, Enabled, Item, ItemKind, Scope, Source, SourceKind
 from kitden.views.inventory import Inventory, build_inventory, default_adapters
-from kitden.views.setup_server import enable_steps, is_own_entry, setup_server_state
+from kitden.views.setup_server import (
+    enable_steps,
+    is_own_entry,
+    kitden_on,
+    setup_server_state,
+)
 from tests.conftest import make_home
 
 COMMAND = "/Users/me/.local/bin/kitden"
@@ -48,7 +54,8 @@ def test_a_relative_command_is_refused(tmp_path):
         setup_server_steps(adapters, ["codex"], "kitden")
 
 
-# Feature 003, FR-014: a server a plugin provides.
+# The kitden plugin's server only reads (`kitden mcp --read-only`), so it is not the client's
+# link to the gateway.
 PLUGIN_DIR = Path(__file__).resolve().parents[2] / "plugins/kitden"
 
 
@@ -73,19 +80,23 @@ def _state(inventory, client: str) -> dict:
     return next(s for s in setup_server_state(inventory) if s["client"] == client)
 
 
-def test_a_server_from_a_plugin_gives_the_plugin_state():
+def test_a_server_from_a_plugin_leaves_the_client_not_connected():
     items = [_server("claude_code", Scope.PLUGIN)]
     inventory = Inventory(clients=[_found("claude_code")], items=items)
     state = _state(inventory, "claude_code")
-    assert state["state"] == "plugin"
-    assert state["enabled"] is True
+    assert state["state"] == "missing"
+    assert state["enabled"] is None
     assert state["item"] is None
+    assert not kitden_on(state)
 
 
-def test_a_user_entry_wins_over_a_plugin_server():
-    items = [_server("claude_code", Scope.PLUGIN), _server("claude_code", Scope.USER)]
-    inventory = Inventory(clients=[_found("claude_code")], items=items)
-    assert _state(inventory, "claude_code")["state"] == "added"
+def test_a_user_entry_beside_a_plugin_server_is_the_one_that_counts():
+    plugin = replace(_server("claude_code", Scope.PLUGIN), enabled=Enabled.OFF)
+    inventory = Inventory(
+        clients=[_found("claude_code")], items=[plugin, _server("claude_code", Scope.USER)]
+    )
+    state = _state(inventory, "claude_code")
+    assert (state["state"], state["enabled"]) == ("added", True)
 
 
 def test_a_plugin_server_with_another_name_is_not_kitden():
@@ -116,11 +127,12 @@ def test_the_installed_plugin_is_read_from_claude_code_files(tmp_path):
             }
         )
     )
-    assert _state(build_inventory(home), "claude_code")["state"] == "plugin"
+    inventory = build_inventory(home)
+    assert any(is_own_entry(i) and i.scope is Scope.PLUGIN for i in inventory.items)
+    assert _state(inventory, "claude_code")["state"] == "missing"
 
 
-def test_an_old_entry_beside_the_plugin_server_keeps_the_plugin_state(tmp_path):
-    """Review 2026-10-18: the plugin provides the server, so the old entry is only removed."""
+def test_an_old_entry_beside_the_plugin_server_is_still_old(tmp_path):
     home = make_home(tmp_path, "claude_code/2.1.283")
     old_command = home / ".local/bin/agentsetup"
     old_command.parent.mkdir(parents=True)
@@ -137,7 +149,7 @@ def test_an_old_entry_beside_the_plugin_server_keeps_the_plugin_state(tmp_path):
         json.dumps({"version": 2, "plugins": installs})
     )
     state = _state(build_inventory(home), "claude_code")
-    assert state["state"] == "plugin"
+    assert state["state"] == "old"
     assert state["item"] is not None and state["command_exists"] is True
 
 

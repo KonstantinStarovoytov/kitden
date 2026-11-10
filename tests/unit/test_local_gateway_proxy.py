@@ -81,11 +81,11 @@ def roots_of(folder):
     return answer
 
 
-def gateway(home, cwd=None, env=None, roots=None, errlog=None, mode="legacy"):
+def gateway(home, cwd=None, env=None, roots=None, errlog=None, mode="legacy", flags=()):
     """A client for `kitden mcp` started on `home`, as a client app starts it."""
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "kitden", "mcp", "--home", str(home)],
+        args=["-m", "kitden", "mcp", *flags, "--home", str(home)],
         env=env,
         cwd=cwd or home,
     )
@@ -153,6 +153,32 @@ async def test_without_servers_kitden_mcp_is_unchanged(home):
     async with gateway(home, roots=roots) as client:
         assert await names_offered(client) == READ_ONLY
     assert asked == []
+
+
+async def test_read_only_offers_only_kitdens_own_tools(home):
+    # The kitden plugin starts the server this way: servers in the gateway add nothing.
+    write_settings(home, {"echo": echo("echo")})
+    async with gateway(home, flags=["--read-only"]) as client:
+        assert await names_offered(client) == READ_ONLY
+
+
+def test_read_only_keeps_the_plain_instructions_and_starts_no_gateway(home, monkeypatch):
+    write_settings(home, {"echo": echo("echo")})
+    made = {}
+
+    class Server:
+        def run(self):
+            made["ran"] = True
+
+    def create(build, **options):
+        made.update(options)
+        return Server()
+
+    monkeypatch.setattr(mcp_server, "create_server", create)
+    monkeypatch.setattr(proxy, "run", lambda *args: made.update(gateway=True))
+    mcp_server.run(home, read_only=True)
+    assert made.pop("instructions", mcp_server.INSTRUCTIONS) == mcp_server.INSTRUCTIONS
+    assert made == {"ran": True}
 
 
 async def test_project_rules_decide_the_tools_of_a_session(home):

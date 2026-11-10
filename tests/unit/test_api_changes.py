@@ -494,19 +494,23 @@ def test_adding_the_setup_server_and_undo(client):
     assert _files(client.home) == original
 
 
-def test_registering_is_refused_where_the_plugin_provides_the_server(plugin_client):
+def test_registering_adds_the_entry_beside_the_plugins_server(plugin_client):
+    """The plugin's server only reads; the client's own entry is its link to the gateway."""
     body = {"action": "setup_server.register", "targets": [{"client": "claude_code"}], "params": {}}
-    assert plugin_client.post("/api/changes/preview", json=body, headers=POST).status_code == 422
+    change = plugin_client.post("/api/changes/preview", json=body, headers=POST)
+    assert change.status_code == 200, change.text
+    steps = change.json()["steps"]
+    assert [(s["client"], s["name"]) for s in steps] == [("claude_code", "kitden")]
 
 
-def test_updating_an_old_entry_beside_the_plugin_only_removes_it(plugin_client):
+def test_updating_an_old_entry_beside_the_plugin_adds_the_new_one(plugin_client):
     states = {s["client"]: s for s in plugin_client.get("/api/setup-server").json()}
-    assert states["claude_code"]["state"] == "plugin"
+    assert states["claude_code"]["state"] == "old"
     body = {"action": "setup_server.update", "targets": [{"item": states["claude_code"]["item"]}]}
     change = plugin_client.post("/api/changes/preview", json={**body, "params": {}}, headers=POST)
     assert change.status_code == 200, change.text
     steps = change.json()["steps"]
-    assert len(steps) == 1 and "agentsetup" in steps[0]["diff"]
+    assert [s["name"] for s in steps] == ["agentsetup", "kitden"]
 
 
 # Moving servers into the gateway (feature 006) ---------------------------------------------

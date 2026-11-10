@@ -9,7 +9,11 @@ from kitden import mcp_server
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "plugins/kitden"
-ENTRY = {"type": "stdio", "command": "kitden", "args": ["mcp"]}
+# The plugin starts the server with only Kitden's own tools, which only read.
+ENTRY = {"type": "stdio", "command": "kitden", "args": ["mcp", "--read-only"]}
+# The flag came with this version: an older Kitden does not start with it.
+NEEDS = "0.7.1"
+UPGRADE = "uv tool upgrade kitden"
 INSTALL = "uv tool install --python 3.13 kitden"
 # The skills and the MCP server say this in the same words.
 NO_EDITS = "Do not edit client settings files"
@@ -48,7 +52,15 @@ def test_the_skill_states_the_four_rules():
     head, body = text.split("---\n")[1:3]
     assert "name: show-setup" in head
     assert "description: Use when" in head
-    for rule in ("show_setup", "kitden open", NO_EDITS, "kitden --version", INSTALL):
+    for rule in (
+        "show_setup",
+        "kitden open",
+        NO_EDITS,
+        "kitden --version",
+        INSTALL,
+        NEEDS,
+        UPGRADE,
+    ):
         assert rule in body
     assert len(body.split()) < 200
 
@@ -88,6 +100,21 @@ def test_the_readmes_say_what_the_server_and_the_plugin_each_give():
     assert "/kitden:audit" in readme
 
 
+def test_the_plugin_readme_says_what_the_plugin_runs_and_needs():
+    text = (PLUGIN / "README.md").read_text()
+    # The one thing it starts, with only reading tools; nothing of a moved server.
+    assert "`kitden mcp --read-only`" in text
+    for tool in ("show_setup", "list_findings", "explain_item", "list_projects"):
+        assert f"`{tool}`" in text
+    assert "moved into" not in text
+    # What a reviewer and a new user look for.
+    for heading in ("## Try it", "## What it reads", "## If something goes wrong"):
+        assert heading in text
+    assert NEEDS in text and UPGRADE in text
+    assert "https://github.com/KonstantinStarovoytov/kitden/issues" in text
+    assert "https://pypi.org/project/kitden/" in text
+
+
 def test_the_install_line_is_the_one_in_the_readme():
     assert INSTALL in (ROOT / "README.md").read_text()
     assert INSTALL in (PLUGIN / "README.md").read_text()
@@ -111,7 +138,7 @@ def test_the_plugin_adds_nothing_that_runs_by_itself():
 
 
 def test_the_guide_cursor_link_adds_the_same_server():
-    """FR-012: the "Add to Cursor" link carries the entry of .mcp.json, without the type field."""
+    """FR-012: the "Add to Cursor" link adds the whole server, gateway tools too."""
     import base64
     import re
 
@@ -124,7 +151,7 @@ def test_the_guide_cursor_link_adds_the_same_server():
     assert configs and plain, "the guide has the button link and the plain link"
     for config in {*configs, *plain}:
         decoded = json.loads(base64.b64decode(config))
-        assert decoded == {"command": ENTRY["command"], "args": ENTRY["args"]}
+        assert decoded == {"command": "kitden", "args": ["mcp"]}
 
 
 def test_the_skills_and_the_server_forbid_edits_in_the_same_words():

@@ -12,5 +12,6 @@ from, and what loads twice.
 3. Do not edit client settings files to change the setup. The page previews, backs up and can undo
    every change; send the user there.
 4. If the kitden tools are missing, run `kitden --version`. If it fails, Kitden is not installed:
-   show `uv tool install --python 3.13 kitden` and stop. If it works, ask the user to turn the
-   kitden server on in the client.
+   show `uv tool install --python 3.13 kitden` and stop. If it is older than 0.7.1, show
+   `uv tool upgrade kitden` and stop. Otherwise ask the user to turn the kitden server on in the
+   client.

@@ -60,7 +60,7 @@ test('the Kitden card connects every client with an on kitden entry and sets up 
   const { linked, setup, off, known } = kitdenClients([
     entry('claude_code', 'added'),
     entry('codex', 'missing'),
-    entry('cursor', 'plugin'),
+    entry('cursor', 'added'),
   ]);
   assert.deepEqual(linked, ['claude_code', 'cursor']);
   assert.deepEqual(off, []);
@@ -1072,9 +1072,6 @@ test("the client link's × adds a disconnect row", async () => {
   // A second × takes it out.
   await removeLink(tree, link, '');
   assert.deepEqual(tray.rows, []);
-  // A plugin gives Cursor its entry: Kitden cannot take it out, so its link has no ×.
-  const plugin = gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: [...SETUP.slice(0, 2), entry('cursor', 'plugin')] });
-  assert.equal(linkRemoval(plugin, linkOf(plugin, 'client:cursor>gateway:kitden'), ''), null);
   await freshTray();
 });
 
@@ -2418,34 +2415,6 @@ test('a connected client cannot be dragged', async (t) => {
     map.move(map.home.x + 40, map.home.y + 10);
     map.up(map.home.x + 40, map.home.y + 10);
     assert.deepEqual([map.captured, map.asked], [[], []]);
-    // One whose kitden entry comes from a plugin (on or off) says why once the pointer moves as far
-    // as a drag would start (5 px), in the tip's plain look by the pointer, until the pointer lets
-    // go; a click shows nothing. Nothing lights and no wire shows. An entry that is off says what
-    // the panel says: its entry is off.
-    for (const [fields, words] of [[{}, 'Codex gets Kitden from a plugin.'], [{ enabled: false }, "Codex's entry is off."]]) {
-      const setup = [entry('claude_code', 'added'), entry('codex', 'plugin', fields), entry('cursor', 'missing')];
-      const click = dragMap({ id: 'client:codex', opts: { ...OPTS, setup } });
-      click.press();
-      click.move(click.home.x + 12, click.home.y + 12);
-      click.up(click.home.x + 12, click.home.y + 12);
-      assert.deepEqual([click.captured, click.asked], [[], []]);
-      const plugin = dragMap({ id: 'client:codex', opts: { ...OPTS, setup } });
-      const { x, y } = plugin.home;
-      plugin.press();
-      plugin.move(x + 13, y + 12);
-      assert.deepEqual([plugin.captured, plugin.asked], [[], []]);
-      plugin.move(x + 15, y + 10);
-      assert.deepEqual([plugin.captured, plugin.asked], [[], [['tip', words, { at: { x: x + 15, y: y + 10 } }]]]);
-      plugin.move(x + 40, y + 10);
-      assert.deepEqual(plugin.asked.at(-1), ['tip', words, { at: { x: x + 40, y: y + 10 } }]);
-      plugin.up(x + 40, y + 10);
-      assert.deepEqual(plugin.asked.at(-1), ['untip']);
-      assert.ok(!plugin.asked.some(([what]) => ['light', 'wire', 'hold', 'glance'].includes(what)));
-      // The pointer that moves on shows nothing.
-      plugin.move(x + 60, y + 10);
-      assert.deepEqual(plugin.asked.at(-1), ['untip']);
-      assert.deepEqual([tray.rows, posted()], [[], []]);
-    }
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null, clients: null });

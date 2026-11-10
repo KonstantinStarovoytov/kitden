@@ -168,10 +168,11 @@ def create_server(
     return server
 
 
-def run(home: Path | None = None) -> None:
+def run(home: Path | None = None, read_only: bool = False) -> None:
     """Serve over stdio until the client closes the connection.
 
-    With servers moved into the Kitden gateway, the same server also offers their tools.
+    With servers moved into the Kitden gateway, the same server also offers their tools. With
+    `read_only` it offers only its own tools: the kitden plugin starts it so.
     """
     root = home or Path.home()
 
@@ -182,7 +183,7 @@ def run(home: Path | None = None) -> None:
         inventory.items += gateway_items(inventory, load_settings(root), root)
         return inventory
 
-    held = load_settings(root)["servers"]
+    held = {} if read_only else load_settings(root)["servers"]
     server = create_server(build, instructions=GATEWAY_INSTRUCTIONS if held else INSTRUCTIONS)
     if not held:
         server.run()

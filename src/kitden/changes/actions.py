@@ -396,20 +396,16 @@ def disconnect_steps(
     adapters: dict[str, ClientAdapter], inventory: "Inventory", clients: list[str]
 ) -> list[Step]:
     """Remove the user-scope `kitden` entry from each chosen client, with that client's own
-    remove step. An entry a plugin provides stays: the plugin is how to turn it off."""
+    remove step."""
     if not clients:
         raise ValueError("Choose at least one client")
     steps = []
     for client in dict.fromkeys(clients):
         words = CLIENT_WORDS.get(client, client)
-        entries = [i for i in inventory.items if i.client == client and is_own_entry(i)]
+        entries = (i for i in inventory.items if i.client == client and is_own_entry(i))
         mine = next((i for i in entries if i.scope is Scope.USER), None)
         adapter = adapters.get(client)
         if mine is None or adapter is None:
-            if entries:
-                raise ValueError(
-                    f"{words} gets Kitden from a plugin. Turn the plugin off to disconnect it."
-                )
             raise ValueError(f"{words} is not connected to Kitden.")
         steps.append(adapter.remove_step(mine))
     return steps
@@ -868,16 +864,13 @@ def _permission_rules(path: Path, kind: str = "deny") -> list[str]:
 
 def claude_allows_kitden(home: Path, known_projects: list[str]) -> bool:
     """True when Claude Code's user settings or a known project's settings allow every tool of
-    the `kitden` entry without asking (`mcp__kitden` or `mcp__kitden__*`, or the same for the
-    kitden plugin's server). Tools moved into the Kitden gateway are then allowed too."""
+    the `kitden` entry without asking (`mcp__kitden` or `mcp__kitden__*`). Tools moved into the
+    Kitden gateway are then allowed too."""
     files = [home / ".claude/settings.json"]
     for project in known_projects:
         folder = Path(project) / ".claude"
         files += [folder / "settings.json", folder / "settings.local.json"]
-    # A plugin's server tools are mcp__plugin_<plugin>_<server>__<tool> (checked 2026-10-21,
-    # code.claude.com MCP docs); the kitden plugin and its server are both "kitden".
-    servers = (f"mcp__{SETUP_NAME}", f"mcp__plugin_{SETUP_NAME}_{SETUP_NAME}")
-    whole = {rule for server in servers for rule in (server, f"{server}__*")}
+    whole = (f"mcp__{SETUP_NAME}", f"mcp__{SETUP_NAME}__*")
     return any(rule in whole for path in files for rule in _permission_rules(path, "allow"))
 
 
@@ -1034,8 +1027,8 @@ def local_move_steps(
     The steps: each server in the gateway settings (plus the PATH its local servers use, when
     the settings have none), the rules the clients had for it, the removal of each client
     entry, and the `kitden` entry for each of those clients that lacks it (`added_clients` have
-    it, also from the kitden plugin). An existing Codex `kitden` entry gets the timeouts it
-    lacks. An entry that must stay direct is refused, with the reason, before any step.
+    it). An existing Codex `kitden` entry gets the timeouts it lacks. An entry that must stay
+    direct is refused, with the reason, before any step.
 
     A server the gateway holds already keeps its rules: a different entry replaces the held one
     (a new token, say), and the same entry only leaves the clients. A client's removal step is
