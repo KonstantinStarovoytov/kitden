@@ -552,6 +552,19 @@ test('an apply that did not run keeps its rows, and Try again drops the preview'
   assert.equal(tray.phase, 'ready');
 });
 
+test('a failure keeps who refused the change, so the bar can name them', async () => {
+  await fresh();
+  await twoRows();
+  const error = '`codex plugin install` failed: not allowed. The original settings were restored.';
+  const failure = { state: 'restored', error, refused_by: 'codex' };
+  queue('/api/changes/c2/apply', { status: 500, json: { id: 'c2', ...failure } });
+  await applyTray();
+  assert.equal(tray.phase, 'failed');
+  // The shape the bar reads: who refused rides along with the end and the error.
+  assert.deepEqual(tray.failure, failure);
+  assert.deepEqual(tray.rows.map((row) => row.status), ['', '']);
+});
+
 test('a refused Try again keeps the rows and says why', async () => {
   await fresh();
   await twoRows();
