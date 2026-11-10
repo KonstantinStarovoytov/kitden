@@ -365,7 +365,7 @@ class ObotClient:
         ids = [i.get("id") for i in _list(items) if isinstance(i, dict) and i.get("id")]
         if not ids:
             raise GatewayError("Obot has no catalog to add the server to")
-        return "default" if "default" in ids else ids[0]
+        return "default" if "default" in ids else str(ids[0])
 
     def add(self, name: str, server: dict) -> str:
         """Make the remote server a catalog entry and put it on the connection. Returns the

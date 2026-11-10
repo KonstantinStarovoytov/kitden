@@ -491,7 +491,7 @@ def is_local_address(url: str, unknown: bool = True) -> bool:
         return True
     try:
         found = socket.getaddrinfo(host, None)
-        addresses = [ipaddress.ip_address(info[4][0].partition("%")[0]) for info in found]
+        addresses = [ipaddress.ip_address(str(info[4][0]).partition("%")[0]) for info in found]
     except (OSError, UnicodeError, ValueError):
         return unknown
     if not addresses:

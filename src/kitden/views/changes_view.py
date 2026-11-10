@@ -43,8 +43,10 @@ def _made(change_id: str) -> str | None:
     return made.isoformat()
 
 
-def _day(time: str) -> str | None:
+def _day(time: str | None) -> str | None:
     """The local calendar day of a log time, such as "2026-10-27"; the page says it in words."""
+    if time is None:
+        return None
     try:
         return datetime.fromisoformat(time).astimezone().date().isoformat()
     except (TypeError, ValueError):

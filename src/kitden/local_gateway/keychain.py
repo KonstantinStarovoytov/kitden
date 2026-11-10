@@ -35,6 +35,7 @@ import os
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import TypeGuard
 
 from kitden import system
 
@@ -119,7 +120,7 @@ def _attributes(account: str) -> list[str]:
     return ["service", SERVICE, "account", account]
 
 
-def is_reference(value: object) -> bool:
+def is_reference(value: object) -> TypeGuard[dict]:
     """True for `{"keychain": "<server>/<key>"}` and nothing else."""
     return (
         isinstance(value, dict)

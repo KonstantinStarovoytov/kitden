@@ -654,8 +654,8 @@ def create_app(
         skill_catalog(inventory, adapters)
 
     def read_versions() -> dict[str, str | None]:
-        stale = version_cache.stale_clients(home, CLIENTS)
-        return version_cache.refresh_versions(home, stale) if stale else {}
+        stale = version_cache.stale_clients(home_dir(), CLIENTS)
+        return version_cache.refresh_versions(home_dir(), stale) if stale else {}
 
     if version_refresh is None and home is not None and not demo:
         version_refresh = read_versions
@@ -690,6 +690,16 @@ def create_app(
             roots=lambda: (home, writable_roots(home, state.inventory)),
             keychain_run=keychain_run,
         )
+
+    # The routes that change things exist for a page with a folder; these two say so to the types.
+    def home_dir() -> Path:
+        assert home is not None
+        return home
+
+    def change_engine() -> Engine:
+        assert engine is not None
+        return engine
+
     write_lock = asyncio.Lock()
     # Browser sign-ins (Part 3b): the tokens wait here, in memory, until Apply.
     signins = SignIns()
@@ -773,7 +783,7 @@ def create_app(
             # Picked as the pass runs, so tests can patch refresh_tools.
             ask = stand_ins.canned_refresh if stand_ins else refresh_tools
             async with refresh_lock:
-                found = await ask(home, waiting.pop("names"))
+                found = await ask(home_dir(), waiting.pop("names"))
             for name, problem in found.items():
                 if problem:
                     tool_problems[name] = problem
@@ -1067,15 +1077,15 @@ def create_app(
         except _UnknownProject:
             return _error("Unknown project.", 404)
         server = request.query_params.get("server", "")
-        settings = load_settings(home)
+        settings = load_settings(home_dir())
         if server not in settings["servers"]:
             return _error("Unknown server.", 404)
         path = project["path"] if project else None
         # Every known project's chain, by its id: what "in some projects" would change there.
         ids = {p["path"]: p["id"] for p in state.data["projects"]}
         chains = {ids[k]: chain for k, chain in _chains().items() if k in ids}
-        calls = load_calls(home)
-        answer = tools_view(settings, load_tools(home), server, _chain(path), calls, chains)
+        calls = load_calls(home_dir())
+        answer = tools_view(settings, load_tools(home_dir()), server, _chain(path), calls, chains)
         # Its secrets by name, only their start and end; it reads the Keychain, in a thread.
         held = settings["servers"][server]
         access = await asyncio.to_thread(access_rows, server, held, keychain_run)
@@ -1201,6 +1211,7 @@ def create_app(
         """The online catalog row a request names, of this kind; never in the demo."""
         if stand_ins:
             raise ValueError(stand_ins.NOT_IN_DEMO)
+        assert discovery is not None
         row = discovery.get(str(params["discovery"]))
         if row["kind"] != kind:
             raise ValueError(words)
@@ -1241,6 +1252,7 @@ def create_app(
             clients = _clients(targets)
             if params.get("discovery"):
                 row = _online_row(params, "plugin", "Choose a plugin.")
+                assert discovery is not None
                 source = await asyncio.to_thread(discovery.plugin, row)
                 for client in clients:
                     adapter = adapters.get(client)
@@ -1272,6 +1284,7 @@ def create_app(
             found = _found_clients()
             if params.get("discovery"):
                 row = _online_row(params, "skill", "Choose a skill.")
+                assert discovery is not None
                 skill = await asyncio.to_thread(discovery.skill, row, found)
                 skill["installed"] = {
                     i.client: "Installed"
@@ -1285,7 +1298,7 @@ def create_app(
                     raise ValueError(ONLY_IN_PROJECT)
                 listed = (
                     project_skills(state.inventory, adapters, project)
-                    if wanted.startswith("project/")
+                    if project is not None and wanted.startswith("project/")
                     else skill_catalog(state.inventory, adapters)
                 )
                 skill = next((s for s in listed if s["id"] == wanted), None)
@@ -1321,6 +1334,7 @@ def create_app(
             steps = switch_steps(adapters, mcp, gateway, str(params.get("name", "")))
         elif action == SETUP_SERVER:
             command = _kitden_command()
+            assert command is not None  # needed, so it was refused above when missing
             clients = _clients(targets)
             provided = _states_in(state.inventory, "plugin")
             if any(c in provided for c in clients):
@@ -1350,20 +1364,20 @@ def create_app(
             added = _states_in(state.inventory, "added", "plugin")
             command = _kitden_command(needed=bool({i.client for i in items} - added))
             # A Codex entry that keeps only some tools on: Kitden needs the whole list.
-            wanted = await asyncio.to_thread(tools_to_read, adapters, items, home, known)
+            wanted = await asyncio.to_thread(tools_to_read, adapters, items, home_dir(), known)
             for name, server in wanted.items():
                 tools = await _read_tools(name, server)
                 if tools is None:
                     raise ValueError(
                         f"Kitden could not read the tools of {name}; it stays direct for now."
                     )
-                save_tools(home, name, tools)
+                save_tools(home_dir(), name, tools)
             # It may ask a remote server whether it signs in, so not on the event loop.
             steps = await asyncio.to_thread(
                 local_move_steps,
                 adapters,
                 items,
-                home,
+                home_dir(),
                 known,
                 command,
                 added_clients=added,
@@ -1386,7 +1400,7 @@ def create_app(
                 gateway_add_steps,
                 adapters,
                 state.inventory,
-                home,
+                home_dir(),
                 str(params.get("server", "")),
                 discovered=discovered,
                 sign_in=sign_in,
@@ -1398,17 +1412,17 @@ def create_app(
                 signed_in=_given_sign_in(params),
             )
         elif action == GATEWAY_RULE:
-            steps = rule_steps(home, params, _project_paths())
+            steps = rule_steps(home_dir(), params, _project_paths())
         elif action == GATEWAY_RULES:
-            steps = rules_steps(home, params, _project_paths())
+            steps = rules_steps(home_dir(), params, _project_paths())
         elif action == GATEWAY_STRICT:
-            steps = strict_steps(home, params, load_tools(home))
+            steps = strict_steps(home_dir(), params, load_tools(home_dir()))
         elif action == GATEWAY_REMOVE:
-            steps = remove_server_steps(home, str(params.get("server", "")))
+            steps = remove_server_steps(home_dir(), str(params.get("server", "")))
         elif action == GATEWAY_PUT_BACK:
             clients = _clients(targets)
             server = str(params.get("server", ""))
-            steps = put_back_steps(adapters, home, server, clients, keychain_run)
+            steps = put_back_steps(adapters, home_dir(), server, clients, keychain_run)
         elif action == GATEWAY_MOVE_OUT:
             clients = _clients(targets)
             if len(clients) != 1:
@@ -1416,11 +1430,11 @@ def create_app(
             server = str(params.get("server", ""))
             # The client's entry first: when its file is wrong, no other step is built.
             steps = [
-                *put_back_steps(adapters, home, server, clients, keychain_run),
-                *remove_server_steps(home, server),
+                *put_back_steps(adapters, home_dir(), server, clients, keychain_run),
+                *remove_server_steps(home_dir(), server),
             ]
         elif action == GATEWAY_KEYCHAIN:
-            steps = keychain_steps(home, str(params.get("server", "")))
+            steps = keychain_steps(home_dir(), str(params.get("server", "")))
         elif action == GATEWAY_ACCESS:
             value = params.get("value")
             if value is not None and not isinstance(value, str):
@@ -1428,7 +1442,7 @@ def create_app(
             # It may ask the server whether a new token works, so not on the event loop.
             steps = await asyncio.to_thread(
                 access_steps,
-                home,
+                home_dir(),
                 str(params.get("server", "")),
                 str(params.get("field", "")),
                 str(params.get("name", "")),
@@ -1440,14 +1454,14 @@ def create_app(
             # It asks the server whether the new token works, so not on the event loop.
             steps = await asyncio.to_thread(
                 sign_in_steps,
-                home,
+                home_dir(),
                 str(params.get("server", "")),
                 _given_sign_in(params),
                 sign_in=sign_in,
                 keychain_run=keychain_run,
             )
         elif action == SKILL_RULE:
-            steps = skill_rule_steps(adapters, state.inventory, home, targets, params)
+            steps = skill_rule_steps(adapters, state.inventory, home_dir(), targets, params)
         elif action == MCP_ADD:
             item = _item(str(params.get("item", "")))
             if item is None:
@@ -1539,9 +1553,13 @@ def create_app(
 
     async def preview(request: Request) -> JSONResponse:
         body = await _body(request)
-        action = body.get("action")
-        targets = body.get("targets") if isinstance(body.get("targets"), list) else []
-        params = body.get("params") if isinstance(body.get("params"), dict) else {}
+        action = body.get("action") or ""
+        targets = body.get("targets")
+        if not isinstance(targets, list):
+            targets = []
+        params = body.get("params")
+        if not isinstance(params, dict):
+            params = {}
         try:
             built = await _steps_for(action, targets, params)
             if action == PROJECT_ALIGN and not built.steps:
@@ -1549,7 +1567,7 @@ def create_app(
                 # change to apply.
                 listing = {"action": action, "steps": [], "after": [], "align": built.align}
                 return JSONResponse(listing)
-            change = await asyncio.to_thread(engine.preview, str(action), built.steps)
+            change = await asyncio.to_thread(change_engine().preview, str(action), built.steps)
         except ValueError as error:  # includes ChangeRefusedError
             return _error(refusal_words(error), 422)
         # Kept for Redo…, as a tray row would send it (`picked`: the project it was asked in).
@@ -1636,6 +1654,7 @@ def create_app(
         """Whether the last request can join the ones before it in the preview tray: the same
         checks as `batch_preview`, with nothing kept. A refusal is an answer, not an error:
         {"ok": False, "reason", "row"}, `row` being the request that cannot join."""
+        requests: list[dict] = []
         try:
             requests = requests_in(await _body(request))
             await _batch(requests, keep=False)
@@ -1664,12 +1683,13 @@ def create_app(
         assert change is not None
         picked = _picked(body)
         rows, answers = [], []
-        for request, made, row_steps in zip(requests, built, maps, strict=True):
-            row = {k: request[k] for k in ("id", "kind", "title", "detail")}
+        for asked, made, row_steps in zip(requests, built, maps, strict=True):
+            row = {k: asked[k] for k in ("id", "kind", "title", "detail")}
             row.update(project=None, steps=row_steps)
             part = part_of(change, row)
             # A row keeps the project it was asked in; the body's is for rows with none.
-            words = _review(part, made, _picked(request) if request["picked"] else picked)
+            words = _review(part, made, _picked(asked) if asked["picked"] else picked)
+            assert part.target is not None  # _review set it
             if part.target["scope"] == "project":
                 row["project"] = part.target["project"]
             rows.append(row)
@@ -1687,26 +1707,35 @@ def create_app(
     async def change_action(request: Request) -> JSONResponse:
         change_id = request.path_params["change_id"]
         verb = request.path_params["verb"]
-        if change_id not in engine.changes:
+        if change_id not in change_engine().changes:
             return _error("Unknown change.", 404)
-        method = {"apply": engine.apply, "cancel": engine.cancel, "undo": engine.undo}.get(verb)
+        method = {
+            "apply": change_engine().apply,
+            "cancel": change_engine().cancel,
+            "undo": change_engine().undo,
+        }.get(verb)
         if method is None:
             return _error("Unknown action.", 404)
         if verb == "apply":
             # The tray sends the titles it shows now; the rows keep them (changes/batch.py).
-            retitle(engine.changes[change_id], (await _body(request)).get("titles"))
+            retitle(change_engine().changes[change_id], (await _body(request)).get("titles"))
         loop = asyncio.get_running_loop()
         # A tray change names the row of each step (`row`); a row is done only once the whole
         # change is verified.
-        rows = step_rows(engine.changes[change_id].rows or [])
+        rows = step_rows(change_engine().changes[change_id].rows or [])
 
         def progress(change_id: str, done: int, total: int, step: int | None) -> None:
             # The engine works in a thread; the open pages hear it on the event loop.
-            data = {"id": change_id, "done": done, "total": total, "row": rows.get(step)}
+            data = {
+                "id": change_id,
+                "done": done,
+                "total": total,
+                "row": rows.get(step) if step is not None else None,
+            }
             loop.call_soon_threadsafe(events.publish, "change_progress", data)
 
         async with write_lock:
-            engine.on_progress = progress
+            change_engine().on_progress = progress
             try:
                 change = await asyncio.to_thread(method, change_id)
             except ChangeRefusedError as error:
@@ -1714,7 +1743,7 @@ def create_app(
             except ValueError as error:
                 return _error(str(error), 409)
             finally:
-                engine.on_progress = lambda change_id, done, total, step: None
+                change_engine().on_progress = lambda change_id, done, total, step: None
             if verb != "cancel":
                 await state.rescan()
         if verb == "apply" and change.state is ChangeState.VERIFIED:
@@ -1736,12 +1765,12 @@ def create_app(
             if change.rows:
                 changed = [part_of(change, r) for r in change.rows if r["kind"] in fresh]
             names = {step.name for part in changed for step in part.steps}
-            held_now = load_settings(home)["servers"]
-            names |= {name for name in load_refused(home) if name not in held_now}
+            held_now = load_settings(home_dir())["servers"]
+            names |= {name for name in load_refused(home_dir()) if name not in held_now}
             for name in names:
                 # A note that cannot be cleared stays until the server answers a call again.
                 with contextlib.suppress(OSError):
-                    await asyncio.to_thread(mark_refused, home, name, False)
+                    await asyncio.to_thread(mark_refused, home_dir(), name, False)
         events.publish("change_state")
         return JSONResponse(change_dict(change), status_code=STATUS.get(change.state, 200))
 
@@ -1750,13 +1779,15 @@ def create_app(
         `stale`: a previewed change whose files changed since, which Apply would stop; an open
         review asks after each rescan. A file Kitden cannot read now counts as changed."""
         change_id = request.path_params["change_id"]
-        if change_id in engine.changes:
+        if change_id in change_engine().changes:
             try:
-                stale = await asyncio.to_thread(engine.stale_reason, change_id) is not None
+                stale = await asyncio.to_thread(change_engine().stale_reason, change_id) is not None
             except OSError:
                 stale = True
-            return JSONResponse({**change_dict(engine.changes[change_id]), "stale": stale})
-        logged = next((e for e in engine.store.entries() if e.get("id") == change_id), None)
+            return JSONResponse({**change_dict(change_engine().changes[change_id]), "stale": stale})
+        logged = next(
+            (e for e in change_engine().store.entries() if e.get("id") == change_id), None
+        )
         if logged is None:
             return _error("Unknown change.", 404)
         return JSONResponse(logged)
@@ -1831,7 +1862,7 @@ def create_app(
             rows = await asyncio.to_thread(
                 discovery.search, str(body.get("source", "")), str(body.get("query", "")), kind
             )
-            held = set(load_settings(home)["servers"])
+            held = set(load_settings(home_dir())["servers"])
             for row in rows:
                 item_kind = "mcp_server" if row["kind"] == "mcp" else row["kind"]
                 row["held"] = row["kind"] == "mcp" and short_name(row["name"]) in held

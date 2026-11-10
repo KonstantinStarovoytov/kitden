@@ -37,7 +37,7 @@ A project folder (settings.PLACEHOLDERS) is not a shell value; each client names
 """
 
 import re
-from typing import Any
+from typing import Any, TypeGuard
 
 from kitden.local_gateway.settings import PLACEHOLDERS, START_TIME
 from kitden.model import CLIENT_WORDS
@@ -87,7 +87,7 @@ def _text_list(value: Any) -> bool:
     return isinstance(value, list) and all(isinstance(a, str) for a in value)
 
 
-def is_number(value: Any) -> bool:
+def is_number(value: Any) -> TypeGuard[int | float]:
     """A number, not True or False."""
     return isinstance(value, int | float) and not isinstance(value, bool)
 

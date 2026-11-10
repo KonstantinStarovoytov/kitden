@@ -9,7 +9,7 @@ the name but another source says "Needs review" there and offers no add.
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TypeGuard
 
 from kitden.changes.actions import (
     KITDEN_GATEWAY,
@@ -159,7 +159,7 @@ def _row(
     }
 
 
-def _has(row: Row | None, client: str) -> bool:
+def _has(row: Row | None, client: str) -> TypeGuard[Row]:
     """The load map says the client has the item (loads it, has it off, or may load it)."""
     return row is not None and row.cells[client].state not in ("none", "missing")
 
@@ -265,7 +265,7 @@ def _server_add(found: list[str], items: list[Item], refused=lambda item_id: {})
             return None
         return _add(MCP_ADD, "+ Add", item=item)
 
-    add.source = source  # the why of a cell names the reason a client cannot take it
+    add.source = source  # pyright: ignore[reportFunctionMemberAccess]  # the why of a cell names the reason a client cannot take it
     return add
 
 
@@ -424,9 +424,12 @@ def _plugin_rows(
     out = []
     for key in [*rows, *(k for k in offered if k not in rows)]:
         row, offer = rows.get(key), offered.get(key)
-        plugin_id = offer["id"] if offer else row.lookup
-        name = row.name if row else offer["name"]
-        source = row.source if row else offer["marketplace"]
+        if row is None:
+            assert offer is not None  # a key comes from the rows or from the offers
+            plugin_id, name, source = offer["id"], offer["name"], offer["marketplace"]
+        else:
+            plugin_id = offer["id"] if offer else row.lookup
+            name, source = row.name, row.source
         routes = {c: r for c, r in (offer["routes"] if offer else {}).items() if c in found}
         plugin_skills = by_plugin.get(plugin_id, [])
         cells = {}
@@ -835,7 +838,7 @@ def _tables(
     def cannot(row: Row, client: str) -> str | None:
         if row.cells[client].state == "on":
             return None
-        item = server_add.source(row)
+        item = server_add.source(row)  # pyright: ignore[reportFunctionMemberAccess]
         return refused(item).get(client) if item else None
 
     built = {

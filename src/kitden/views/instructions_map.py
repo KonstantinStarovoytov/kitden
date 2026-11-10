@@ -164,6 +164,7 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
             entry["kind"] = block["kind"]
         if path in through:
             entry["through"] = THROUGH_AGENTS
+        text = ""
         # The first lines are file text and may name paths: they stay under `technical`.
         if block["rules"] is not None:
             entry["count"] = len(block["rules"])

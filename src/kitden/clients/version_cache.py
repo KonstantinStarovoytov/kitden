@@ -65,7 +65,7 @@ def cached_version(home: Path, client: str) -> str | None:
     """The cached version while the binary is unchanged; no command runs."""
     binary = _binary(client)
     entry = load_versions(home).get(client)
-    if binary is None or not _fresh(entry, binary):
+    if binary is None or entry is None or not _fresh(entry, binary):
         return None
     version = entry.get("version")
     return version if isinstance(version, str) else None

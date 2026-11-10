@@ -298,7 +298,7 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
 
     # A skill in a client's own folder that no plugin here holds: it can go to another client.
     plugin_names = {r["name"] for r in rows.values()}
-    own: dict[str, Path] = {}
+    standalone_dirs: dict[str, Path] = {}
     for item in inventory.items:
         standalone = (
             item.kind is ItemKind.SKILL
@@ -308,8 +308,9 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             and item.source.path is not None
         )
         if standalone:
-            own.setdefault(item.name, Path(item.source.path).parent)
-    for name, skill_dir in own.items():
+            assert item.source.path is not None
+            standalone_dirs.setdefault(item.name, Path(item.source.path).parent)
+    for name, skill_dir in standalone_dirs.items():
         info = read_skill(skill_dir)
         installed = dict(loads.get(name, {}))
         owners = [CLIENT_WORDS[c] for c in CLIENTS if installed.get(c) == "Installed"]
@@ -369,6 +370,7 @@ def project_skills(inventory, adapters: dict[str, ClientAdapter], project: str) 
             and item.source.path is not None
         )
         if here:
+            assert item.source.path is not None
             folders.setdefault(item.name, Path(item.source.path).parent)
             owner = item.source.owner_client
             own = owner in (item.client, "shared")

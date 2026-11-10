@@ -146,13 +146,13 @@ def _serve(args: argparse.Namespace) -> int:
             if not args.no_browser:
                 webbrowser.open(url)
 
-        stop_when = None
+        stop_when: Callable[[], bool] | None = None
         if args.background:
             clock = page.IdleClock(page.IDLE_SECONDS, time.monotonic())
             activity = app.state.activity
-
-            def stop_when() -> bool:
-                return clock.tick(activity.tabs(), activity.busy(), time.monotonic())
+            stop_when = lambda: clock.tick(  # noqa: E731 - one line, used once
+                activity.tabs(), activity.busy(), time.monotonic()
+            )
 
         run_server(app, HOST, port, on_started=started, stop_when=stop_when)
         return 0

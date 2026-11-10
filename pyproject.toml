@@ -43,6 +43,7 @@ dev = [
     "ruff>=0.16",
     "httpx>=0.28",
     "pytest-cov>=7",
+    "pyright>=1.1.414",
 ]
 
 [build-system]
@@ -54,6 +55,11 @@ packages = ["src/kitden"]
 
 [tool.hatch.build.targets.sdist]
 only-include = ["src/kitden", "README.md", "LICENSE"]
+
+[tool.pyright]
+include = ["src/kitden"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
 
 [tool.ruff]
 line-length = 100

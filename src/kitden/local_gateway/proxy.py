@@ -315,8 +315,9 @@ class Upstreams:
         time its Codex entry gave it (`startup_timeout_sec`, carried by the move)."""
         entry = self.settings["servers"].get(server)
         wait = entry.get(START_TIME) if isinstance(entry, dict) else None
-        usable = isinstance(wait, int | float) and not isinstance(wait, bool)
-        return max(START_TIMEOUT, wait) if usable else START_TIMEOUT
+        if isinstance(wait, int | float) and not isinstance(wait, bool):
+            return max(START_TIMEOUT, wait)
+        return START_TIMEOUT
 
     def _remote(self, server: str) -> bool:
         entry = self.settings["servers"].get(server)
