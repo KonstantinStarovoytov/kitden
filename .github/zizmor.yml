@@ -1,0 +1,7 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # Our own agent workflows are called at main on purpose.
+        KonstantinStarovoytov/*: ref-pin
+        "*": hash-pin
