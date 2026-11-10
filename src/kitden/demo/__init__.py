@@ -16,6 +16,7 @@ from kitden.demo.runner import NOT_IN_DEMO, DemoRunner
 from kitden.demo.sample import (
     DEMO_SECRET,
     SIZES,
+    VERSIONS,
     build_demo_home,
     cached_tool,
     demo_command,
@@ -40,9 +41,6 @@ __all__ = [
     "keychain_file",
     "no_sign_in",
 ]
-
-# The client versions whose file shapes the sample copies.
-VERSIONS = {"claude_code": "2.1.283", "codex": "0.159.2", "cursor": "3.21.16"}
 
 
 def _version(home: Path, adapter: type[ClientAdapter]) -> Callable[[], str | None]:

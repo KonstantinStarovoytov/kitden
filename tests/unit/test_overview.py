@@ -345,8 +345,9 @@ def test_a_picked_project_gets_the_cards_of_its_own_servers(tmp_path):
     ]
     [more] = [c for c in here if c["action"] and c["action"]["label"] == "Show…"]
     assert more["name"] == f"{len(rows) - 3} more servers skip the gateway"
-    # website has a server of its own that All projects does not count.
-    [shared_more] = [c for c in shared if c["action"] and c["action"]["label"] == "Show…"]
+    # website has a server of its own that All projects does not count. All projects has the
+    # sample's skill list card too, with the same button.
+    [shared_more] = [c for c in shared if c["name"].endswith("skip the gateway")]
     assert shared_more["name"] == f"{len(rows) - 4} more servers skip the gateway"
 
 

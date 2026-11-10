@@ -1,23 +1,39 @@
 """The sample home: a synthetic setup for `kitden demo` and for tests. No real client wrote it.
 
 Each file has the shape the client of the matching fixture writes (`tests/fixtures`: Claude Code
-2.1.283, Codex 0.159.2, Cursor 3.21.16). Every fake secret starts with `DEMO_SECRET_`. Paths
-inside the files use the sample home's absolute path, and the same size always writes the same
-files.
+2.1.283, Codex 0.159.2, Cursor 3.21.16). The two chat logs are the exception: their shape was
+checked on real logs of Claude Code 2.1.271 to 2.1.311 and of Codex 0.163.0-alpha.11 only. Every
+fake secret starts with `DEMO_SECRET_`. Paths inside the files use the sample home's absolute
+path, and the same size always writes the same files.
 """
 
 import json
 import sqlite3
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from kitden.clients.cursor import INSTALLED_PREFIX, SNAPSHOT_PREFIX, STATE_DB, WORKSPACE_STATE
+from kitden.context.rules import (
+    ClaudeSkill,
+    CodexSkill,
+    claude_budget,
+    claude_rule,
+    claude_weight,
+    codex_budget,
+    codex_line,
+    codex_rule,
+)
+from kitden.context.tables import CLAUDE_WINDOWS
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import CALLS_FILE, SETTINGS_FILE, TOOLS_FILE
 from kitden.system import cursor_state_dir
+from kitden.views.skills import read_skill
 
 SIZES = ("small", "medium", "large")
+# The client versions whose file shapes the sample copies.
+VERSIONS = {"claude_code": "2.1.283", "codex": "0.159.2", "cursor": "3.21.16"}
 DEMO_SECRET = "DEMO_SECRET_"  # noqa: S105 - the prefix of every fake secret
 # The PATH the sample's gateway keeps, so a move into it never writes this computer's PATH.
 SAMPLE_PATH = "/usr/local/bin:/usr/bin:/bin"
@@ -27,6 +43,80 @@ CURSOR_TEAM = "123"
 # install, 2026-10-20; see `plugin_folders` in src/kitden/clients/cursor.py).
 UI_KIT_HASH = "9c1d2e3"
 WRITTEN_AT = "2026-10-01T00:00:00Z"
+# The sample's last chats, and the last use of a skill before them.
+CHAT_AT = "2026-10-01T12:00:00Z"
+USED_AT = "2026-09-30T12:00:00Z"
+# Claude Code's own skills, and how long each one's description is. The sample's chat holds
+# stand-in text of these lengths, not the descriptions.
+# checked 2026-11-10 (real list, Claude Code 2.1.311, in the Claude app)
+CLAUDE_BUILT_IN = (
+    ("dataviz", 1436),
+    ("artifact-design", 178),
+    ("artifact-diagramming", 181),
+    ("artifact-capabilities", 709),
+    ("update-config", 690),
+    ("keybindings-help", 228),
+    ("code-review", 979),
+    ("simplify", 176),
+    ("fewer-permission-prompts", 163),
+    ("loop", 336),
+    ("schedule", 369),
+    ("claude-api", 1068),
+    ("workflow-authoring", 230),
+    ("run", 361),
+    ("plugin-authoring", 246),
+)
+# Codex's models in the sample, with their windows.
+# checked 2026-11-10 (real ~/.codex/models_cache.json)
+CODEX_MODELS = (("gpt-6-astra", "GPT-6-Astra", 272_000), ("gpt-6.1-sol", "GPT-6.1-Sol", 500_000))
+# What each of the sample's skills says about itself; any other skill says "A sample skill."
+DESCRIPTIONS = {
+    "brandkit": (
+        "Use when a page, a slide or a picture has to follow the brand: its colours, type and"
+        " logo, and the tone of its words. Checks finished work against the brand rules too."
+    ),
+    "release-notes": (
+        "Use when a release is ready and needs its notes: reads the merged changes since the"
+        " last tag and writes what is new, what changed and what broke, in plain words."
+    ),
+    "shared-style": (
+        "Use when writing or reviewing text for the team's docs: short sentences, plain"
+        " words, one idea in a paragraph, and the same name for the same thing everywhere."
+    ),
+    "brainstorming": (
+        "Use before building anything new: asks what the work is for, who will use it and"
+        " what would make it a failure, then plays the idea back so it can be corrected"
+        " before any code is written."
+    ),
+    "planning": (
+        "Use when a design is agreed and the work has several steps: splits it into small"
+        " tasks, each with its own test, and names the files every task touches."
+    ),
+    "code-review": (
+        "Use when a change is ready for review: reads the diff for bugs, missing tests and"
+        " risky edits, and lists what it found, the worst first."
+    ),
+    "docker-expert": (
+        "Use when writing or fixing a Dockerfile or a compose file: small images, cached"
+        " layers, health checks, and no secret left in a layer."
+    ),
+    "langfuse": (
+        "Use when a question is about traces, prompts or scores in Langfuse: finds the right"
+        " trace, compares prompt versions and reads the cost of a run."
+    ),
+    "api-style": (
+        "Use when adding or changing an endpoint in this project: the names, the error"
+        " shape and the paging every endpoint here follows."
+    ),
+    "ui-polish": (
+        "Use when a screen works but looks rough: spacing, alignment, the empty and loading"
+        " states, and what the keyboard does."
+    ),
+    "ui-components": (
+        "Use when building a screen from the kit's parts: which part fits which job, and the"
+        " props each one takes."
+    ),
+}
 # Added to some names in the large sample, so the page always has a name to cut short.
 LONG = "-with-a-name-long-enough-that-the-page-cuts-it-short"
 BULK_TOOLS = (
@@ -64,6 +154,11 @@ def build_demo_home(root: Path, size: str) -> Path:
     _gateway(home, medium)
     if size == "large":
         _bulk(home)
+    # Last: a chat lists the skills that are there. The large sample is too much for a 200K
+    # window even with names alone, so its chat ran a model with a 1M window.
+    write_claude_chat(home, "claude-opus-5-5" if size == "large" else "claude-sonnet-4-6")
+    if medium:
+        write_codex_chat(home)
     return home
 
 
@@ -82,8 +177,124 @@ def _toml(value: str | list[str]) -> str:
     return json.dumps(value)
 
 
+def _lines(path: Path, entries: list[dict]) -> None:
+    _text(path, "".join(json.dumps(entry) + "\n" for entry in entries))
+
+
+def _ms(at: str) -> int:
+    return int(datetime.fromisoformat(at.replace("Z", "+00:00")).timestamp() * 1000)
+
+
 def _skill(folder: Path, name: str) -> None:
-    _text(folder / name / "SKILL.md", f"---\nname: {name}\ndescription: A sample skill.\n---\n")
+    about = DESCRIPTIONS.get(name, "A sample skill.")
+    _text(folder / name / "SKILL.md", f"---\nname: {name}\ndescription: {about}\n---\n")
+
+
+def _described(folder: Path) -> list[tuple[str, str]]:
+    """Each skill in a skills folder, by name, with its description."""
+    files = sorted(folder.glob("*/SKILL.md"))
+    return [(file.parent.name, read_skill(file.parent)["description"]) for file in files]
+
+
+def _stand_in(size: int) -> str:
+    """Text of this length, in place of a description the sample does not copy."""
+    return ("Stand-in text. " * (size // 15 + 1))[: size - 1] + "."
+
+
+def write_claude_chat(home: Path, model: str) -> None:
+    """The sample's last Claude Code chat, in work/atlas: the skill list it sent, and the model
+    that answered. The list holds Claude Code's own skills, then the sample's own, then those
+    of each plugin that is not turned off. Kitden's copy of Claude Code's rule decides which of
+    them keep a description in this model's window, so the page's check of the rule passes on
+    the sample.
+
+    Claude Code names a chat's folder after the folder it ran in; the sample's has one fixed
+    name, so the same size writes the same files (Kitden reads the folder from the log)."""
+    state = json.loads((home / ".claude.json").read_text())
+    used = state.get("skillUsage", {})
+    weights = {
+        name: claude_weight(use["usageCount"], use["lastUsedAt"], _ms(CHAT_AT))
+        for name, use in used.items()
+    }
+    own = _described(home / ".claude/skills")
+    on = json.loads((home / ".claude/settings.json").read_text())["enabledPlugins"]
+    plugins = json.loads((home / ".claude/plugins/installed_plugins.json").read_text())["plugins"]
+    for key, records in plugins.items():
+        # As in Kitden's reading of Claude Code: an installed plugin is on unless turned off.
+        if on.get(key, True):
+            folder = Path(records[0]["installPath"]) / "skills"
+            own += [(f"{key.split('@')[0]}:{name}", text) for name, text in _described(folder)]
+    skills = [
+        ClaudeSkill(name, _stand_in(size), True, False, 0.0) for name, size in CLAUDE_BUILT_IN
+    ]
+    skills += [ClaudeSkill(name, text, False, False, weights.get(name, 0.0)) for name, text in own]
+    full = claude_rule(skills, claude_budget(*CLAUDE_WINDOWS[model])).full
+    listing = {
+        "type": "skill_listing",
+        "isInitial": True,
+        "skillCount": len(skills),
+        "names": [s.name for s in skills],
+        "content": "\n".join(
+            f"- {s.name}: {s.description}" if s.name in full else f"- {s.name}" for s in skills
+        ),
+    }
+    _lines(
+        home / ".claude/projects/-sample-work-atlas/3f6c2a1e-5b7d-4c8e-9a0b-1d2e3f4a5b6c.jsonl",
+        [
+            {
+                "type": "attachment",
+                "timestamp": CHAT_AT,
+                "version": VERSIONS["claude_code"],
+                "entrypoint": "claude-desktop",
+                "cwd": str(home / "work/atlas"),
+                "isSidechain": False,
+                "attachment": listing,
+            },
+            {"type": "assistant", "timestamp": CHAT_AT, "message": {"model": model}},
+        ],
+    )
+
+
+def write_codex_chat(home: Path) -> None:
+    """The sample's last Codex chat, in work/atlas, and Codex's list of models. Kitden's copy
+    of Codex's rule decides how much of each description the list holds."""
+    atlas = home / "work/atlas"
+    slug, _, window = CODEX_MODELS[0]
+    models = [
+        {"slug": slug, "display_name": shown, "context_window": size}
+        for slug, shown, size in CODEX_MODELS
+    ]
+    _json(home / ".codex/models_cache.json", {"models": models})
+    folders = (home / ".agents/skills", home / ".codex/skills", atlas / ".agents/skills")
+    skills = [
+        CodexSkill(name, text, str(folder / name / "SKILL.md"))
+        for folder in folders
+        for name, text in _described(folder)
+    ]
+    sent = codex_rule(skills, codex_budget(window, None)).sent
+    listed = [
+        codex_line(s, s.description[: sent[s.name]]) for s in skills if sent[s.name] is not None
+    ]
+    text = "<skills_instructions>\n" + "\n".join(listed) + "\n</skills_instructions>"
+    meta = {
+        "timestamp": CHAT_AT,
+        "cwd": str(atlas),
+        "thread_source": "user",
+        "cli_version": VERSIONS["codex"],
+    }
+    message = {
+        "type": "message",
+        "role": "developer",
+        "content": [{"type": "input_text", "text": text}],
+    }
+    _lines(
+        home / ".codex/sessions/2026/10/01/rollout-2026-10-01T12-00-00-sample.jsonl",
+        [
+            {"timestamp": CHAT_AT, "type": "session_meta", "payload": meta},
+            {"timestamp": CHAT_AT, "type": "turn_context", "payload": {"model": slug}},
+            {"timestamp": CHAT_AT, "type": "response_item", "payload": message},
+        ],
+    )
 
 
 def _claude_code(home: Path, medium: bool) -> None:
@@ -118,6 +329,11 @@ def _claude_code(home: Path, medium: bool) -> None:
         {
             "numStartups": 12,
             "oauthAccount": {"emailAddress": "DEMO_SECRET_EMAIL"},
+            # How often each skill ran: Claude Code keeps the descriptions of the most used.
+            "skillUsage": {
+                "superpowers:brainstorming": {"usageCount": 6, "lastUsedAt": _ms(USED_AT)},
+                "brandkit": {"usageCount": 1, "lastUsedAt": _ms(USED_AT)},
+            },
             "mcpServers": servers,
             "projects": projects,
         },
@@ -155,10 +371,8 @@ def _claude_code(home: Path, medium: bool) -> None:
     if not medium:
         return
 
-    _text(
-        home / "shared/style/SKILL.md",
-        "---\nname: shared-style\ndescription: A sample skill.\n---\n",
-    )
+    about = DESCRIPTIONS["shared-style"]
+    _text(home / "shared/style/SKILL.md", f"---\nname: shared-style\ndescription: {about}\n---\n")
     (home / ".claude/skills/shared-style").symlink_to("../../shared/style")
     _text(
         home / ".claude/commands/review.md",
