@@ -11,8 +11,8 @@ Two bots review pull requests: `claude` and `luna`. They look for bugs and check
 against [PRINCIPLES.md](PRINCIPLES.md).
 
 - They only comment. They never approve, request changes, push or merge.
-- They share one comment per pull request. It starts with the title "Agent review" and ends
-  with "👍 useful · 👎 wrong".
+- They share one comment per pull request, posted by the `kitden-lantern` bot. It starts
+  with the title "Agent review" and ends with "👍 useful · 👎 wrong".
 - Pull requests from forks get no automatic review for now.
 
 Only the maintainer's 👍 or 👎 on a comment is counted. To reach the maintainer, mention
