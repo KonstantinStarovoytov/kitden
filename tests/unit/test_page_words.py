@@ -528,6 +528,14 @@ def test_python_and_page_state_words_agree():
         assert f'{state}: "{word}"' in parts, state
 
 
+def test_python_and_page_skill_state_words_agree():
+    from kitden.views.words import SKILL_STATE_WORDS
+
+    parts = script("parts.js")
+    for state, word in SKILL_STATE_WORDS.items():
+        assert f'"{state}": "{word}"' in parts, state
+
+
 def test_one_phrase_says_cursor_loads_claude_codes_plugins():
     from kitden.views import after, commands
     from kitden.views.words import LOADS_PLUGINS

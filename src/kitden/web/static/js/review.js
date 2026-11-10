@@ -9,7 +9,7 @@ import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, pan
 import { allPutBack, baseNames, byClientOrder, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, data, gatewayShows, reload, render, setBusy, state } from "./store.js";
 import { projectLabel } from "./tools.js";
-import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone, writing } from "./tray.js";
+import { addToTray, changeOutcome, checkTrayStale, onTray, ruleState, takeOut, tray, undone, writing } from "./tray.js";
 
 
 const DONE_WORDS = {
@@ -99,8 +99,8 @@ export function changeWords(change, previewBody) {
   const clients = joinWords(reached.map(clientName));
   const plugin = ((previewBody && previewBody.params && previewBody.params.plugin) || "the plugin").split("@")[0];
   const server = (previewBody && previewBody.params && previewBody.params.server) || (change.steps[0] && change.steps[0].name);
-  // A skill rule turns a skill off; `off: false` takes a project's own rule out.
-  const off = !(previewBody && previewBody.params && previewBody.params.off === false);
+  // A skill rule turns a skill off; state "on" (or `off: false`) takes a project's own rule out.
+  const off = ruleState(previewBody && previewBody.params) !== "on";
   // An add names the server, not its row in the Add panel ("<plugin>@<marketplace>/<name>").
   const added = change.steps[0] ? change.steps[0].name : String(server).split("/").pop();
   let title = {
@@ -129,6 +129,12 @@ export function changeWords(change, previewBody) {
     "gateway.add": `Add ${added} to the Kitden gateway`,
     "skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`,
   }[change.action] || change.action;
+  // A skill set to Name only is neither off nor back to the shared rule.
+  const nameOnly = change.action === "skill.rule" && ruleState(previewBody && previewBody.params) === "name-only";
+  if (nameOnly) title = `Set ${short} to Name only`;
+  // On for all projects takes the user's own rule out: the skill is on again.
+  const onForAll = change.action === "skill.rule" && !off && previewBody && (previewBody.params || {}).scope === "all";
+  if (onForAll) title = `Turn on ${short}`;
   const verb = DONE_WORDS[change.action] || change.action;
   let what = `${verb} ${short} ${REMOVES.includes(change.action) ? "from" : "in"} ${clients}`;
   // Never "removed" alone for a client that still loads another copy of the skill.
@@ -163,7 +169,7 @@ export function changeWords(change, previewBody) {
   } else if (change.action === "gateway.add") {
     what = `${verb} ${added} to the Kitden gateway`;
   } else if (change.action === "skill.rule") {
-    what = off ? `${verb} ${short}` : `${short} uses the shared rule`;
+    what = nameOnly ? `${short} is Name only` : off ? `${verb} ${short}` : onForAll ? `Turned on ${short}` : `${short} uses the shared rule`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   } else if (change.action === "project.align") {
@@ -520,10 +526,11 @@ export function showEffect() {
 }
 
 // The Library morphs its cells, the Gateway map lands its rows (gateway.js landRows), the
-// Overview's card leaves or comes back and a Changes row draws its Undo (changes.js): each is the
-// one motion of the change, so none cross-fades the page too. Other places cross-fade.
+// Overview's card leaves or comes back, a Changes row draws its Undo (changes.js) and Context
+// draws again in place: each is the one motion of the change, so none cross-fades the page too.
+// Other places cross-fade.
 function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
-  return view === "library" || view === "overview" || view === "changes" || (view === "gateway" && mode === "map");
+  return view === "library" || view === "overview" || view === "context" || view === "changes" || (view === "gateway" && mode === "map");
 }
 
 // After Apply all or an Undo, the Details open now are drawn again from what the files say, by

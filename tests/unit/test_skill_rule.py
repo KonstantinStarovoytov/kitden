@@ -14,11 +14,13 @@ from starlette.testclient import TestClient
 from kitden.views.inventory import build_inventory
 from kitden.views.words import (
     CHANGE_UNREAD,
+    CODEX_NO_NAME_ONLY,
     CODEX_NO_PROJECT,
     CURSOR_NO_SKILL_SWITCH,
     NEW_LOCAL_FILE,
     NO_CLAUDE_FOLDER,
     NO_SKILL_MERGE,
+    PLUGIN_NO_NAME_ONLY,
     PROJECT_SKILL_ALL,
     REPO_RULE,
     REPO_RULE_OUT,
@@ -92,8 +94,10 @@ def _project(page, folder):
     return next(p["id"] for p in page.get("/api/projects").json() if p["path"] == str(folder))
 
 
-def _rule(client, item, scope="all", project=None, off=True):
+def _rule(client, item, scope="all", project=None, off=True, state=None):
     params = {"scope": scope, "off": off, **({"project": project} if project else {})}
+    if state:
+        params = {**params, "state": state}
     targets = [{"client": client, "item": item}]
     return {
         "id": "r1",
@@ -548,3 +552,129 @@ def test_the_engine_refuses_a_rule_file_outside_its_writable_roots(tmp_path):
             _project(page, api): "repo"
         }
     assert not (repo / ".claude/settings.local.json").exists()
+
+
+def test_name_only_writes_skill_overrides_and_undo_restores(tmp_path):
+    home, _, _ = _home(tmp_path)
+    settings = home / ".claude/settings.json"
+    with _page(home) as page:
+        rule = _rule("claude_code", _item(page, "claude_code", "deploy"), state="name-only")
+        change, _, undo = _round_trip(page, rule)
+        (row,) = change["rows"]
+        assert row["after"] == [
+            {"client": "claude_code", "state": "name-only", "word": "Name only"}
+        ]
+        data = json.loads(settings.read_text())
+        assert data["skillOverrides"] == {"deploy": "name-only"}
+        assert data["theme"] == "dark"
+        assert undo()["state"] == "undone"
+    assert settings.read_text() == USER
+
+
+def test_name_only_in_one_project_and_the_state_beats_off(tmp_path):
+    home, app, _ = _home(tmp_path)
+    path = app / ".claude/settings.local.json"
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        # `state` wins over the old `off` flag.
+        project = _project(page, app)
+        rule = _rule("claude_code", item, "project", project, off=True, state="name-only")
+        _, _, undo = _round_trip(page, rule)
+        assert json.loads(path.read_text()) == {"skillOverrides": {"deploy": "name-only"}}
+        assert undo()["state"] == "undone"
+    assert not path.exists()
+
+
+def test_state_on_takes_the_project_key_out_and_all_projects_refuses_it(tmp_path):
+    local = '{\n  "skillOverrides": {\n    "deploy": "name-only"\n  }\n}\n'
+    home, app, _ = _home(tmp_path, local=local)
+    path = app / ".claude/settings.local.json"
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        _round_trip(page, _rule("claude_code", item, "project", _project(page, app), state="on"))
+        assert json.loads(path.read_text()) == {"skillOverrides": {}}
+        answer = _preview(page, _rule("claude_code", item, state="on"))
+        assert answer.json()["detail"] == "Pick a project to use the shared rule there."
+        answer = _preview(page, _rule("claude_code", item, state="loud"))
+        assert answer.json()["detail"] == "Choose On, Name only or Off."
+
+
+def test_on_for_all_projects_takes_the_users_key_out_and_undo_puts_it_back(tmp_path):
+    user = '{\n  "skillOverrides": {\n    "deploy": "name-only"\n  }\n}\n'
+    home, _, _ = _home(tmp_path, user=user)
+    settings = home / ".claude/settings.json"
+    with _page(home) as page:
+        rule = _rule("claude_code", _item(page, "claude_code", "deploy"), state="on")
+        change, _, undo = _round_trip(page, rule)
+        assert change["rows"][0]["after"] == [
+            {"client": "claude_code", "state": "on", "word": "On"}
+        ]
+        assert json.loads(settings.read_text()) == {"skillOverrides": {}}
+        assert undo()["state"] == "undone"
+    assert settings.read_text() == user
+
+
+def test_on_for_all_projects_with_no_key_in_the_users_file_is_refused(tmp_path):
+    home, _, _ = _home(tmp_path)
+    with _page(home) as page:
+        for client, name in (("claude_code", "deploy"), ("codex", "lint-fix")):
+            answer = _preview(page, _rule(client, _item(page, client, name), state="on"))
+            assert answer.json()["detail"] == "Pick a project to use the shared rule there."
+
+
+def test_name_only_in_a_project_waits_for_shared_skill_overrides(tmp_path):
+    home, _, other = _home(tmp_path, user={}, site={"skillOverrides": {"tidy": "off"}})
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        rule = _rule("claude_code", item, "project", _project(page, other), state="name-only")
+        assert _preview(page, rule).json() == {"detail": NO_SKILL_MERGE, "row": "r1"}
+
+
+def test_codex_refuses_name_only(tmp_path):
+    home, _, _ = _home(tmp_path)
+    config = home / ".codex/config.toml"
+    with _page(home) as page:
+        rule = _rule("codex", _item(page, "codex", "lint-fix"), state="name-only")
+        answer = _preview(page, rule)
+        assert answer.json() == {"detail": CODEX_NO_NAME_ONLY, "row": "r1"}
+        assert CODEX_NO_NAME_ONLY == "Codex has no Name only setting."
+        # Cursor and a plugin keep their own refusals.
+        polish = _rule("cursor", _item(page, "cursor", "polish"), state="name-only")
+        assert _preview(page, polish).json()["detail"] == CURSOR_NO_SKILL_SWITCH
+    assert config.read_text() == CODEX
+
+
+def test_a_plugin_has_no_name_only(tmp_path):
+    home, app, _ = _home(tmp_path)
+    with _page(home) as page:
+        plugin = _item(page, "claude_code", PLUGIN, kind="plugin")
+        rule = _rule("claude_code", plugin, "project", _project(page, app), state="name-only")
+        assert _preview(page, rule).json()["detail"] == PLUGIN_NO_NAME_ONLY
+
+
+def test_after_words_say_name_only(tmp_path):
+    home, app, _ = _home(tmp_path, local='{"skillOverrides": {"deploy": "name-only"}}')
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        change = _preview(page, _rule("claude_code", item, state="name-only")).json()
+        assert change["rows"][0]["after"][0]["word"] == "Name only"
+        # Taking a project's rule out: the shared file says Name only there, so it follows that.
+        (home / ".claude/settings.json").write_text('{"skillOverrides": {"deploy": "name-only"}}')
+        rule = _rule("claude_code", item, "project", _project(page, app), state="on")
+        (row,) = _preview(page, rule).json()["rows"]
+        assert row["after"] == [
+            {"client": "claude_code", "state": "name-only", "word": "Follows all projects"}
+        ]
+
+
+def test_an_odd_shared_value_does_not_break_the_review(tmp_path):
+    home, app, _ = _home(tmp_path, user={"skillOverrides": {"deploy": ["x"]}})
+    local = '{"skillOverrides": {"deploy": "off"}}'
+    _write(app / ".claude/settings.local.json", local)
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        for value in (["x"], {}):
+            _write(home / ".claude/settings.json", {"skillOverrides": {"deploy": value}})
+            rule = _rule("claude_code", item, "project", _project(page, app), state="on")
+            (row,) = _preview(page, rule).json()["rows"]
+            assert row["after"][0]["state"] == "on"

@@ -27,7 +27,7 @@ from kitden.clients.base import (
     SKILL_REMOVE,
     ClientAdapter,
 )
-from kitden.clients.claude_code import rule_file
+from kitden.clients.claude_code import holds, rule_file
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
 from kitden.gateway_api import direct_opener, gateway_name
 from kitden.local_gateway.keychain import (
@@ -64,10 +64,12 @@ from kitden.views.setup_server import is_own_entry
 from kitden.views.words import (
     APP_SET_UP,
     CHANGE_UNREAD,
+    CODEX_NO_NAME_ONLY,
     CODEX_NO_PROJECT,
     CURSOR_NO_SKILL_SWITCH,
     NO_SKILL_MERGE,
     PLUGIN_ALL_PROJECTS,
+    PLUGIN_NO_NAME_ONLY,
     PLUGIN_SKILL,
     PROJECT_SKILL_ALL,
 )
@@ -1424,6 +1426,10 @@ def add_server_steps(
     return steps
 
 
+# "On" is a rule taken out: in a project, or for all projects where the user's file has one.
+ON_NEEDS_PROJECT = "Pick a project to use the shared rule there."
+
+
 def skill_rules_in(path: Path) -> bool:
     """The Claude Code settings file has `skillOverrides` with at least one key."""
     try:
@@ -1437,7 +1443,7 @@ def skill_rules_in(path: Path) -> bool:
 
 
 def _claude_rule_steps(
-    adapter: ClientAdapter, home: Path, item: Item, project: str | None, off: bool
+    adapter: ClientAdapter, home: Path, item: Item, project: str | None, state: str
 ) -> list[Step]:
     """Claude Code: a skill's `skillOverrides` key, or a plugin's key in one project (taken out
     of each local file that holds it)."""
@@ -1446,17 +1452,24 @@ def _claude_rule_steps(
             raise ValueError(item.change_hint or f"{item.name} has no switch here.")
         if project is None:
             raise ValueError(PLUGIN_ALL_PROJECTS)
-        return adapter.plugin_rule_steps(item.name, project, off)
+        if state == "name-only":
+            raise ValueError(PLUGIN_NO_NAME_ONLY)
+        return adapter.plugin_rule_steps(item.name, project, state == "off")
     if item.kind is not ItemKind.SKILL:
         raise ValueError("Choose a skill or a plugin.")
     if item.scope is Scope.PLUGIN:
         raise ValueError(PLUGIN_SKILL)
     if project is None and item.project is not None:
         raise ValueError(PROJECT_SKILL_ALL)  # a rule in the user's file would hide every copy
+    # On for all projects takes the user's own key out; with no key there, it is on already or a
+    # project decides.
+    user_file = home / ".claude/settings.json"
+    if project is None and state == "on" and not holds(user_file, ("skillOverrides", item.name)):
+        raise ValueError(ON_NEEDS_PROJECT)
     real = os.path.realpath
     if item.scope is Scope.PROJECT and project and real(str(item.project)) != real(project):
         raise ValueError("This skill is in another project.")
-    if project is not None and off:
+    if project is not None and state != "on":
         # The docs do not confirm that `skillOverrides` merges key by key (claude_code.py). If a
         # higher file replaces the whole object, a new key in the local file would drop the
         # rules of the user's file, and of the project's shared file, in that project.
@@ -1468,7 +1481,7 @@ def _claude_rule_steps(
             files.append(folder / "settings.local.json")
         if any(skill_rules_in(f) for f in files):
             raise ValueError(NO_SKILL_MERGE)
-    return adapter.skill_rule_steps(item.name, project, off)
+    return adapter.skill_rule_steps(item.name, project, state)
 
 
 def skill_rule_steps(
@@ -1479,13 +1492,18 @@ def skill_rule_steps(
     params: dict,
 ) -> list[Step]:
     """Turn skills off for all projects or in one project, one step per target {client, item}
-    (spec 5.5). `params`: scope "all" or "project", `project` (its id), and `off`. `off` False
-    takes a project's own rule out, so the shared rule applies there again.
+    (spec 5.5). `params`: scope "all" or "project", `project` (its id), and `state` ("off",
+    "name-only" or "on"); without `state`, `off` stands for "off" or "on". "on" takes a project's
+    own rule out, so the shared rule applies there again; for all projects it takes the user's
+    own key out (Claude Code only, and only when that file has one).
 
     Claude Code writes `skillOverrides` (a plugin: `enabledPlugins` in one project's local
     settings), Codex a `[[skills.config]]` entry, for all projects only. Cursor has no switch.
     """
-    scope, off = params.get("scope"), params.get("off", True) is not False
+    scope = params.get("scope")
+    state = params.get("state") or ("on" if params.get("off", True) is False else "off")
+    if state not in ("off", "name-only", "on"):
+        raise ValueError("Choose On, Name only or Off.")
     project = None
     if scope == "project":
         paths = {p.id: p.path for p in inventory.projects}
@@ -1494,8 +1512,6 @@ def skill_rule_steps(
             raise ValueError("Unknown project.")
     elif scope != "all":
         raise ValueError("Choose all projects or one project.")
-    elif not off:
-        raise ValueError("Pick a project to use the shared rule there.")
     by_id = {i.id: i for i in inventory.items}
     steps = []
     for target in targets:
@@ -1508,12 +1524,16 @@ def skill_rule_steps(
         if adapter is None or item.client not in ("claude_code", "codex"):
             raise ValueError(f"{item.name} has no switch here.")
         if item.client == "claude_code":
-            steps += _claude_rule_steps(adapter, home, item, project, off)
+            steps += _claude_rule_steps(adapter, home, item, project, state)
             continue
         if item.kind is not ItemKind.SKILL or item.scope is Scope.PLUGIN:
             raise ValueError(f"{item.name} has no switch here.")
+        if state == "name-only":
+            raise ValueError(CODEX_NO_NAME_ONLY)
         if project is not None:
             raise ValueError(CODEX_NO_PROJECT)
+        if state == "on":
+            raise ValueError(ON_NEEDS_PROJECT)  # Codex writes only `enabled = false`
         steps.append(adapter.skill_rule_step(item))
     if not steps:
         raise ValueError("Choose a skill.")

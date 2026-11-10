@@ -7,13 +7,13 @@
     "url": "https://github.com/KonstantinStarovoytov/kitden",
     "source": "github"
   },
-  "version": "0.6.5",
+  "version": "0.7.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "kitden",
-      "version": "0.6.5",
+      "version": "0.7.0",
       "runtimeHint": "uvx",
       "transport": { "type": "stdio" },
       "packageArguments": [{ "type": "positional", "value": "mcp" }]

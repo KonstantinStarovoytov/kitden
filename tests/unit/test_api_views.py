@@ -18,6 +18,7 @@ ENDPOINTS = [
     "/api/gateway-view",
     "/api/library-map",
     "/api/explain?name=x",
+    "/api/context",
 ]
 
 
@@ -87,6 +88,23 @@ def test_unknown_project_is_404(client, path):
     sep = "&" if "?" in path else "?"
     response = client.get(f"{path}{sep}project=nope")
     assert (response.status_code, response.json()) == (404, {"detail": "Unknown project."})
+
+
+def test_context_reads_each_client(client):
+    answer = client.get("/api/context").json()
+    assert [c["client"] for c in answer["clients"]] == ["claude_code", "codex", "cursor"]
+    # No chat logs in the fixture home: no result, no estimate.
+    claude = answer["clients"][0]
+    assert claude["message"].startswith("No Claude Code chat yet.")
+    assert claude["windows"] == []
+    draft = json.dumps({"claude_code": {"x": "off"}})
+    assert client.get("/api/context", params={"draft": draft}).status_code == 200
+
+
+@pytest.mark.parametrize("draft", ["not json", "[1]", '{"codex": 3}', '{"codex": {"a": 1}}'])
+def test_context_refuses_a_draft_it_cannot_read(client, draft):
+    response = client.get("/api/context", params={"draft": draft})
+    assert response.status_code == 422
 
 
 def test_explain_needs_a_name(client):

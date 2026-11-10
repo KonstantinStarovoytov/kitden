@@ -7,7 +7,7 @@ import pytest
 
 from kitden.clients.base import file_source
 from kitden.model import Item, ItemKind, Scope
-from kitden.views.explain import explain, reads
+from kitden.views.explain import brief, explain, reads
 from kitden.views.inventory import build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
 
@@ -160,3 +160,10 @@ def test_a_definition_kept_from_the_last_good_read_says_when(home):
     found = explain(inventory, "github", "mcp_server", None)
     assert found and {d["stale_at"] for d in found} == {at}
     assert {d["stale_at"] for d in explain(inventory, "Neon", "mcp_server", None)} == {None}
+
+
+def test_brief_names_the_skill_state():
+    source = file_source(Path("/home/u/.claude/skills/deploy/SKILL.md"), "claude_code")
+    item = Item("claude_code", ItemKind.SKILL, "deploy", source, Scope.USER)
+    assert "skill_state" not in brief(item)
+    assert brief(replace(item, skill_state="name-only"))["skill_state"] == "name-only"

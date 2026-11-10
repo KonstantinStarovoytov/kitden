@@ -1,14 +1,19 @@
 # Kitden roadmap
 
-Last updated: 2026-11-09
+Last updated: 2026-11-10
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not released yet
+### 0.7.0
 
+- **Context: do your skills fit?** A new page shows what Claude Code and Codex sent in your
+  last chat, and switches a skill to Name only (Claude Code) or Off. Estimates show only while
+  Kitden's rule rebuilds that list.
+- **Name only is shown:** a skill set to Name only in Claude Code now says so in Library
+  Details and in the MCP tools.
 - **The plugin can audit a project:** the new skill `audit` (`/kitden:audit` in Claude Code) has
   the agent compare what loads with the project you are in and list what to turn off. You make
   the changes on the page. The READMEs say what the MCP server gives and what the plugin adds.

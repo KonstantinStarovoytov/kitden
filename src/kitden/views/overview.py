@@ -32,7 +32,14 @@ from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.library_map import library_map
 from kitden.views.setup_server import ENABLE_KEYS, kitden_on, setup_server_state
-from kitden.views.words import BACK_BY_APP, BACK_BY_OTHER, BACK_IN, join_words
+from kitden.views.words import (
+    BACK_BY_APP,
+    BACK_BY_OTHER,
+    BACK_IN,
+    CONTEXT_CARD_LINES,
+    SKILL_LIST_IN,
+    join_words,
+)
 
 READ_PROBLEMS = {
     UnknownReason.UNRECOGNIZED_FORMAT: "The file format is not recognized",
@@ -178,6 +185,26 @@ def _came_back(back: list[dict]) -> list[dict]:
     return cards
 
 
+def _context(clients: list[dict]) -> list[dict]:
+    """A card per client whose last chat did not fit its skill list (the Context page's lamp is
+    "warn"; Cursor never is). "Show…" opens Context on that client."""
+    cards = []
+    for card in clients:
+        misfit = card["lamp"] == "warn" and card["windows"][0]["result"]["misfit"]
+        if not misfit:
+            continue
+        client, n = card["client"], misfit["n"]
+        word = CLIENT_WORDS.get(client, client)
+        skills = "1 skill" if n == 1 else f"{n} skills"
+        were = "was" if n == 1 else "were"
+        line = CONTEXT_CARD_LINES[misfit["kind"]].format(skills=skills, were=were, client=word)
+        action = {"label": "Show…", "go": {"view": "context", "sel": f"client:{client}"}}
+        card_id = _hash("context", client)
+        title = SKILL_LIST_IN.format(client=word)
+        cards.append(_card(card_id, "attention", "gauge", title, line, [client], action, "library"))
+    return cards
+
+
 def _move_ins(groups: dict) -> list[dict]:
     """A card per server outside the Kitden gateway that a move can take, as the Gateway's
     "Move into the gateway…" offers it (gateway-details.js `movesTo`): its row has entries
@@ -256,7 +283,7 @@ def _ruled_projects(inventory, adapters) -> set[str]:
     an item of its own, or a rule for a user skill, can: the Library map is read for those."""
     kinds = (ItemKind.PLUGIN, ItemKind.SKILL)
     maybe = {i.project for i in inventory.items if i.kind in kinds and i.project}
-    maybe |= {p for i in inventory.items if i.kind in kinds for p, _, _ in i.project_rules}
+    maybe |= {p for i in inventory.items if i.kind in kinds for p, *_ in i.project_rules}
     known = [p.path for p in inventory.projects if p.path in maybe]
     return {p for p in known if _library_rules(library_map(inventory, adapters, p))}
 
@@ -320,13 +347,15 @@ def overview(
     gateway_rules: set[str] | frozenset[str] = frozenset(),
     problem: str | None = None,
     came_back: list[dict] | None = None,
+    context_cards: list[dict] | None = None,
 ) -> dict:
     """The Overview page's `cards`, `notes` (how many rows the folded notes draw), `map` (the
     "Your setup" map) and `counts` (for the lede). `held` are the servers the Kitden gateway
     holds (None: no Kitden gateway here), `adapters` the clients' adapters, for the Library's
     counts, `gateway_rules` the known projects with gateway rules of their own, `problem`
     why the Kitden gateway settings could not be read (None: they could), and `came_back` the
-    servers a change took out of a client that are back there now (changes_view.py)."""
+    servers a change took out of a client that are back there now (changes_view.py), and
+    `context_cards` the Context page's client cards (context_view.py)."""
     findings = find_findings(inventory, project)
     cards = (
         _unreadable(inventory)
@@ -335,6 +364,7 @@ def overview(
         + _old_entries(inventory)
         + _duplicates(inventory, findings)
         + _came_back(came_back or [])
+        + _context(list(context_cards or []))
     )
     # Servers outside the gateway and clients not connected are options, not problems. The rows
     # are the Gateway page's, so a server in two clients is one card. Nothing moves into a gateway

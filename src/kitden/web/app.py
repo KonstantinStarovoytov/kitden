@@ -154,6 +154,7 @@ from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
 from kitden.views.changes_view import came_back, change_entries
 from kitden.views.commands import commands_for
+from kitden.views.context_view import context_view
 from kitden.views.effective import project_views
 from kitden.views.explain import explain, with_page_fields
 from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
@@ -1032,6 +1033,11 @@ def create_app(
             ruled = {p for p, chain in _chains().items() if own_rules(settings, chain)}
         # A server a change took out that something wrote back since.
         back = came_back(engine.store.entries(), engine, state.inventory) if engine else []
+        # A chat log Kitden cannot read must not break the Overview: then no context cards.
+        try:
+            context = _context_clients(path)
+        except Exception:  # noqa: BLE001 - an unreadable chat log must not break the Overview
+            context = []
         answer = overview(
             state.inventory,
             _registered(),
@@ -1041,6 +1047,7 @@ def create_app(
             ruled,
             problem=problem,
             came_back=back,
+            context_cards=context,
         )
         return JSONResponse(answer)
 
@@ -1059,6 +1066,28 @@ def create_app(
                 server["needs"] = "token"
         problem = UNREADABLE if settings_unreadable(home) else None
         return held, problem
+
+    def _context(request, project, path):
+        """Context: what each client's last chat sent, and whether its skill list fit. `draft`
+        is the tray's skill states not applied yet, as JSON: client -> skill name -> state."""
+        try:
+            draft = json.loads(request.query_params.get("draft") or "{}")
+        except ValueError:
+            draft = None
+        good = isinstance(draft, dict) and all(
+            isinstance(states, dict) and all(isinstance(v, str) for v in states.values())
+            for states in draft.values()
+        )
+        if not good:
+            return _error("Kitden cannot read the draft.", 422)
+        return JSONResponse({"project": project, "clients": _context_clients(path, draft)})
+
+    def _context_clients(path, draft=None):
+        """The Context page's client cards; none without a home folder."""
+        if home is None:
+            return []
+        codex_home = getattr(adapters.get("codex"), "codex_home", None) or home / ".codex"
+        return context_view(state.inventory, home, codex_home, path, draft or {})["clients"]
 
     def _gateway_view(request, project, path):
         held, problem = _kitden(path)
@@ -1962,6 +1991,7 @@ def create_app(
             Route("/api/explain", _read_model(_explain)),
             Route("/api/overview", _read_model(_overview)),
             Route("/api/gateway-view", _read_model(_gateway_view)),
+            Route("/api/context", _read_model(_context)),
             Route("/api/events", stream),
             Route("/api/progress", progress),
             Route("/api/about", about),

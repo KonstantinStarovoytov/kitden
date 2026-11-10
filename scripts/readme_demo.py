@@ -15,6 +15,7 @@ import uvicorn
 
 from kitden.cli import pick_port
 from kitden.demo import build_demo_home, demo_build, demo_command
+from kitden.demo.sample import write_claude_chat, write_codex_chat
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import CALLS_FILE, SETTINGS_FILE, TOOLS_FILE
 from kitden.web.app import create_app
@@ -140,6 +141,9 @@ def build_sample(root: Path) -> Path:
         },
     )
     write_json(folder / CALLS_FILE, {})
+    # The last chats again, now that the skills are these: in a 1M window they all fit.
+    write_claude_chat(home, "claude-opus-5-5")
+    write_codex_chat(home)
     return home
 
 

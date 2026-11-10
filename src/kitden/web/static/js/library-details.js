@@ -12,10 +12,10 @@ import { initLibraryAdd } from "./library-add.js";
 import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
 import { copyBodies, offBodies, onBodies, removeBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, review, stepTo, swapContent, technical } from "./panel.js";
-import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
+import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, SKILL_STATE_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
 import { say } from "./toast.js";
-import { inTray, keyFor, trayRow } from "./tray.js";
+import { inTray, keyFor, ruleState, trayRow } from "./tray.js";
 
 const OFF_ALL = "Turn off for all projects…";
 const OFF_SOME = "Turn off in some projects…";
@@ -207,11 +207,10 @@ function rowsButton(label, bodies, look = "btn") {
   return node;
 }
 
-// The tray holds this very row: its key, and the same `off` (a skill rule's on and off share a key).
-function queued(body) {
-  const off = (body.params || {}).off;
+// The tray holds this very row: its key, and the same state (a skill rule's states share a key).
+export function queued(body) {
   const row = trayRow(keyFor(body));
-  return Boolean(row) && (row.body.params || {}).off === off;
+  return Boolean(row) && ruleState(row.body.params) === ruleState(body.params);
 }
 
 // Words in a quiet line that show while `when()` holds, after every change of the tray.
@@ -308,6 +307,8 @@ export function skillCard(item, c, { someStep = () => {} } = {}) {
   const source = el("span", "fact-mark");
   source.append(icon(item.source === ORIGIN_WORDS.project ? "folder" : "user-round", 13), el("span", null, item.source));
   const facts = [{ label: "Plugin", value: NO_PLUGIN, quiet: true }, stateFact(item), comesFrom(item, c), { label: "Source", value: source, text: item.source }, clientsFact(item, { count: true })];
+  const own = SKILL_STATE_WORDS[item.skill_state];
+  if (own) facts.splice(2, 0, { label: "Loads", value: own, text: own });
   const actions = [];
   if (offBodies(item).length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, () => skillOffBodies(item, c.answer)) });
   const here = skillHereBody(item, c);

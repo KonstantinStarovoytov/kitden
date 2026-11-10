@@ -72,6 +72,8 @@
   --on-success: #ffffff;
   --lamp-warn: #97590a;
   --lamp-warn-soft: rgba(151, 89, 10, 0.10);
+  /* Past the limit on the Context picture: amber hatching. */
+  --hatch: repeating-linear-gradient(135deg, rgb(151 89 10 / .5) 0 2px, transparent 2px 6px);
   --lamp-off: #80868f;
   /* The door's light in the logo's gesture (logo.js): the warm sand of the mockup, never a text colour. */
   --hearth: #e6b46d;
@@ -113,6 +115,7 @@
     --route: #f09a7c; --route-soft: #382a27;
     --success: #47c27a; --on-success: #0b1a12;
     --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886; --hearth: #f3cc8f;
+    --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px);
     --danger: #f07070; --focus: #f09a7c;
     --diff-add: #47c27a; --diff-del: #f07070;
     --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
@@ -129,6 +132,7 @@
   --route: #f09a7c; --route-soft: #382a27;
   --success: #47c27a; --on-success: #0b1a12;
   --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886; --hearth: #f3cc8f;
+  --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px);
   --danger: #f07070; --focus: #f09a7c;
   --diff-add: #47c27a; --diff-del: #f07070;
   --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
@@ -376,6 +380,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .s-on { color: var(--lamp-on); } .s-on .dot::after { transform: scale(1); }
 .s-gw { color: var(--route); } .s-gw .dot { border-radius: 3px; } .s-gw .dot::after { transform: scale(1); }
 .s-off { color: var(--lamp-off); }
+/* Name only: still in the list, with half of its dot. */
+.s-name-only { color: var(--lamp-on); } .s-name-only .dot::after { border-radius: 50%; transform: scale(.5); }
 .s-unk { color: var(--lamp-warn); } .s-unk .dot { border-style: dashed; }
 /* Needs review: an amber ring with a small dot, apart from Unknown's dashed ring. */
 .s-review { color: var(--lamp-warn); } .s-review .dot::after { transform: scale(0.5); border-radius: 50%; }
@@ -1198,6 +1204,74 @@ html.map-entrance::view-transition-old(root), html.map-entrance::view-transition
 ::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }
 html.map-entrance::view-transition-new(page) { animation: none; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
+/* Context (context.js, design/kitden-context.html): a chip per client, a card per context window and
+   the verdict. A chip or card that is pressed takes the selection tint and an accent edge. */
+.ctx-clients { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+.ctx-client { display: flex; align-items: center; gap: 7px; padding: 4px 10px 4px 5px; border: 1px solid var(--wire); border-radius: 7px; background: transparent; color: var(--ink-3); font: inherit; font-size: 11px; font-weight: 500; cursor: pointer; transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease; }
+.ctx-client:hover { color: var(--ink); }
+.ctx-client.on { background: var(--route-soft); border-color: var(--route); color: var(--ink); }
+.ctx-wins { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 900px; margin: 0 0 18px; }
+.ctx-win { display: grid; grid-template-columns: auto 1fr auto; column-gap: 9px; align-items: center; text-align: left; padding: 12px 14px; background: var(--panel); border: 1px solid var(--wire); border-radius: 10px; color: var(--ink); font: inherit; cursor: pointer; transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease; }
+.ctx-win:hover { border-color: var(--lamp-off); }
+.ctx-win.on { background: var(--route-soft); border-color: var(--route); }
+.ctx-win b { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.ctx-win em { font-style: normal; font-size: 11px; color: var(--ink-3); text-align: right; }
+.ctx-win small { grid-column: 2 / 4; font-size: 11px; color: var(--ink-3); }
+.ctx-short { grid-column: 2 / 4; margin-top: 6px; font-size: 12px; color: var(--ink-2); }
+.ctx-verdict { max-width: 900px; margin: 0 0 22px; font-size: 15px; line-height: 1.35; font-weight: 500; letter-spacing: -0.01em; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.ctx-est { color: var(--route); }
+.ctx-room, .ctx-note { max-width: 900px; margin: -14px 0 22px; font-size: 12px; color: var(--ink-3); }
+.ctx-room { font-size: 13px; color: var(--ink-2); }
+/* The zoom picture: the window strip, its slice opening into the skill list's bar, the limit line
+   and the hatched part past it. Pieces move 240 ms --calm when the bar is drawn again (context.js). */
+.ctx-zoom { max-width: 900px; }
+.ctx-zl { display: flex; justify-content: space-between; margin: 0 0 6px; font-size: 12px; color: var(--ink-3); }
+.ctx-window { position: relative; height: 22px; border: 1px solid var(--wire); border-radius: 6px; overflow: hidden; background: var(--inset); }
+.ctx-window p { position: absolute; inset: 0; margin: 0; padding-left: calc(2% + 12px); display: flex; align-items: center; font-size: 11px; color: var(--ink-4); }
+.ctx-slice { position: absolute; left: 0; top: 0; bottom: 0; background: var(--route); }
+.ctx-link { display: block; width: 100%; height: 44px; }
+.ctx-link polygon { fill: var(--preview-fill); stroke: var(--preview-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ctx-hold { position: relative; margin: 0 0 26px; }
+.ctx-bar { position: relative; height: 56px; border: 1px solid var(--wire); border-radius: 7px; overflow: hidden; background: var(--inset); }
+.ctx-seg { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--inset); cursor: pointer; transition: background-color var(--t-fast) ease; }
+.ctx-seg.sent { background-color: var(--link); }
+.ctx-seg.over { background-image: var(--hatch); border-right-color: var(--lamp-warn-soft); }
+.ctx-seg.names { background-color: var(--panel-raised); cursor: default; }
+.ctx-seg.hot { background-color: var(--ink-3); }
+.ctx-seg.sel { background-color: var(--route); background-image: none; }
+.ctx-limit { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); pointer-events: none; }
+.ctx-chip { position: absolute; top: 29px; transform: translate(-50%, -50%); padding: 2px 8px; border: 1px solid var(--wire); border-radius: 6px; background: var(--panel); font-size: 11px; font-weight: 500; white-space: nowrap; pointer-events: none; }
+.ctx-flag { position: absolute; bottom: calc(100% + 6px); font-size: 11px; font-weight: 500; color: var(--ink); white-space: nowrap; pointer-events: none; }
+/* The two sides: pills with the same marks as the bar. A dashed line while the tray changes one;
+   after Apply, filled when it gets its description, amber when it loses it. */
+.ctx-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 900px; }
+.ctx-side { min-height: 120px; padding: 12px; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel); }
+.ctx-side.lo { background: var(--dim); }
+.ctx-side h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.ctx-side h3 i { width: 12px; height: 12px; border-radius: 3px; background: var(--link); }
+.ctx-side.lo h3 i { background: var(--hatch); box-shadow: inset 0 0 0 1px var(--wire); }
+.ctx-side.calm h3 i { background: none; box-shadow: inset 0 0 0 1px var(--link); }
+.ctx-cloud { display: flex; flex-wrap: wrap; gap: 5px; }
+.ctx-apart { max-width: 900px; margin-top: 10px; }
+.ctx-pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border: 1px solid var(--wire); border-radius: 7px; background: var(--panel-raised); color: var(--ink); font: inherit; font-size: 11.5px; white-space: nowrap; cursor: pointer; transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease; }
+.ctx-pill u { text-decoration: none; font-size: 10px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+.lo .ctx-pill, .ctx-apart .ctx-pill { background: transparent; color: var(--ink-3); }
+.ctx-pill:hover, .ctx-pill.hot { border-color: var(--ink-3); }
+.ctx-pill.chg { border-style: dashed; border-color: var(--preview-line); }
+.ctx-pill.back { border-color: var(--preview-line); background: var(--preview-fill); color: var(--ink); }
+.ctx-pill.lost { border-color: var(--lamp-warn); color: var(--ink); }
+.ctx-pill.sel { border-color: var(--route); background: var(--route-soft); color: var(--ink); }
+/* A skill's switch in Details: the pressed state rests raised; dashed while its row waits in the tray. */
+.ctx-switch { justify-self: start; }
+.ctx-switch button[aria-pressed="true"] { background: var(--panel-raised); box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
+.ctx-switch button.pending { background: var(--preview-fill); box-shadow: inset 0 0 0 1px var(--preview-line); }
+.ctx-how { max-width: 900px; margin: 16px 0 0; font-size: 12px; color: var(--ink-3); }
+.ctx-how summary { width: max-content; cursor: pointer; }
+.ctx-how summary:hover { color: var(--ink); }
+.ctx-how ul { max-width: 640px; margin: 8px 0 0; padding-left: 16px; }
+.ctx-how li { margin-bottom: 3px; }
+@media (max-width: 700px) { .ctx-wins, .ctx-sides { grid-template-columns: 1fr; } }
+
 /* A tab or filter whose rows are slow to come: the old list dims while it waits. */
 .table-scroll.waiting { opacity: 0.5; pointer-events: none; }
 

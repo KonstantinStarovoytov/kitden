@@ -123,6 +123,15 @@ export function keyFor(body) {
   return JSON.stringify(sorted({ action, targets: inClientOrder(action, targets), params }));
 }
 
+// The note of each row the Context page adds: Apply's toast then says the next chat shows the
+// real list (dock.js appliedToast).
+export const CONTEXT_NOTE = "Your next chat will show the real list.";
+
+// The state a skill rule asks for: `state` when it has one, else "off" or, with `off: false`, "on".
+export function ruleState(params = {}) {
+  return params.state || (params.off === false ? "on" : "off");
+}
+
 // An add of a plugin or a skill is the same change whatever order its clients were picked in: the
 // List's forms, the add panel and a drag give it one key.
 const ADD_ORDER = ["plugin.install", "skill.install"];

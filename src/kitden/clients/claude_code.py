@@ -121,7 +121,8 @@ def _skill_rules(layers: list[tuple[Scope, dict]]) -> dict[str, tuple[str, Scope
 def _apply_rules(
     items: list[Item], rules: dict[str, tuple[str, Scope]], known: bool = True
 ) -> list[Item]:
-    """Mark the skills a rule turns off. A rule that keeps a skill on only records its file.
+    """Mark the skills a rule turns off. A rule that keeps a skill on only records its file; one
+    that narrows it ("name-only") is kept as the skill's state, and wins over its file.
     When a settings file could not be read (`known` is False) the skills' state is unknown."""
     ruled = []
     for item in items:
@@ -133,7 +134,10 @@ def _apply_rules(
         elif rule:
             state, scope = rule
             item = replace(
-                item, enabled=Enabled.OFF if state == "off" else Enabled.ON, state_scope=scope
+                item,
+                enabled=Enabled.OFF if state == "off" else Enabled.ON,
+                state_scope=scope,
+                skill_state=None if state == "on" else state,
             )
         ruled.append(item)
     return ruled
@@ -149,7 +153,8 @@ def _project_rules(
         for path, rules in by_project.items():
             rule = rules.get(item.name)
             if item.kind is ItemKind.SKILL and rule and rule[1] is not Scope.USER:
-                found.append((path, Enabled.OFF if rule[0] == "off" else Enabled.ON, rule[1]))
+                state = rule[0]
+                found.append((path, Enabled.OFF if state == "off" else Enabled.ON, rule[1], state))
         ruled.append(replace(item, project_rules=tuple(found)) if found else item)
     return ruled
 
@@ -314,12 +319,14 @@ class ClaudeCodeAdapter(ClientAdapter):
     # settings file may hold it, and "off" hides the skill from Claude and from `/`. The
     # `/skills` menu saves it to `.claude/settings.local.json`. The docs still do not say whether
     # the object merges key by key across files (also /en/settings and /en/skills, same day).
-    def skill_rule_steps(self, name: str, project: str | None, off: bool) -> list[Step]:
-        """`skillOverrides.<name>` set to "off", in the user settings or in one project's local
-        settings. With `off` False the project's key goes, so the shared rule applies there."""
-        return self._rule_steps(
-            ("skillOverrides", name), project, "off" if off else ABSENT, NEW_SESSION
-        )
+    # checked 2026-11-09 (code.claude.com/docs/en/skills, `skillOverrides`): "on", "name-only"
+    # (name listed, no description), "user-invocable-only" and "off"; a missing key is "on".
+    def skill_rule_steps(self, name: str, project: str | None, state: str) -> list[Step]:
+        """`skillOverrides.<name>` set to "off" or "name-only", in the user settings or in one
+        project's local settings. With `state` "on" the project's key goes, so the shared rule
+        applies there."""
+        value = state if state in ("off", "name-only") else ABSENT
+        return self._rule_steps(("skillOverrides", name), project, value, NEW_SESSION)
 
     # checked 2026-10-26 (code.claude.com/docs/en/settings-reference, `enabledPlugins`): "To opt
     # out of a project-enabled plugin on your machine, set it to false in

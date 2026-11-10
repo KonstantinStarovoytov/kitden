@@ -10,7 +10,7 @@ import { afterParts, changeWords, detailsAgain, nothingChanged, reloadAll, showE
 import { busy, go, onBusy, state } from "./store.js";
 import { hideToast, makeRoom, onToastGone, say, toast } from "./toast.js";
 import { openAccess } from "./access-form.js";
-import { applyTray, cancelTray, endApplied, onTray, setTrayWords, TAKE_OUT, takeOut, tray, trayRow, tryAgain, writing } from "./tray.js";
+import { applyTray, cancelTray, CONTEXT_NOTE, endApplied, onTray, setTrayWords, TAKE_OUT, takeOut, tray, trayRow, tryAgain, writing } from "./tray.js";
 
 // Every client the steps write, as the bar says it while Apply runs. Not the one being written:
 // the engine's count names no step, and it does not write them in the preview's order.
@@ -109,11 +109,13 @@ function waitWords(t, words) {
 
 // The toast after a verified Apply: `done` is { change, rows }, kept before the tray emptied. One
 // change says its own words and offers Undo; many say how many and offer Undo all, which undoes
-// the one combined change.
+// the one combined change. Rows all added on the Context page say the next chat shows the real list.
 export function appliedToast({ change, rows }) {
   if (!rows.length) return;
   const many = rows.length > 1;
-  const text = many ? `Applied ${rows.length} changes` : changeWords(rows[0].part, rows[0].body).done;
+  const count = `Applied ${rows.length} ${many ? "changes" : "change"}`;
+  const context = rows.every((row) => row.note === CONTEXT_NOTE);
+  const text = context ? `${count}. The backup is in Changes. ${CONTEXT_NOTE}` : many ? count : changeWords(rows[0].part, rows[0].body).done;
   toast(text, () => undoChange(change), { ok: true, label: many ? "Undo all" : "Undo" });
 }
 

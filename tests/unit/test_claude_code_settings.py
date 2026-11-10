@@ -3,6 +3,7 @@
 import json
 
 import kitden.clients.claude_code as claude_code
+from kitden.clients.base import skill_items
 from kitden.clients.claude_code import ClaudeCodeAdapter, git_root
 from kitden.model import Enabled, ItemKind, Scope
 from kitden.views.effective import effective_view
@@ -178,7 +179,7 @@ def test_a_local_rule_turns_a_user_skill_off_in_that_project_only(tmp_path, no_v
     outside = effective_view(inventory, "claude_code", None)
     assert "deploy" in {i.name for i in outside.items}
     # The rule source in that project is the local file.
-    assert user_skill.project_rules == ((str(root), Enabled.OFF, Scope.LOCAL),)
+    assert user_skill.project_rules == ((str(root), Enabled.OFF, Scope.LOCAL, "off"),)
 
 
 def test_a_project_off_plugin_with_a_local_off_shows_on_under_all_projects(tmp_path, no_version):
@@ -259,7 +260,10 @@ def test_a_project_in_a_subfolder_of_a_repository_reads_the_roots_local_file(tmp
     )
     inventory = build_inventory(home)
     state, item = _state_in(home, str(web), "deploy")
-    assert (state, item.project_rules) == (Enabled.OFF, ((str(web), Enabled.OFF, Scope.LOCAL),))
+    assert (state, item.project_rules) == (
+        Enabled.OFF,
+        ((str(web), Enabled.OFF, Scope.LOCAL, "off"),),
+    )
     # The key only the starting folder's file has still counts.
     assert _skill_state(inventory.items, "review", Scope.PROJECT) == (Enabled.OFF, Scope.LOCAL)
     # The plugin: one local entry, the root's, off.
@@ -327,3 +331,83 @@ def test_the_home_folder_as_a_project_does_not_read_the_user_settings_twice(tmp_
     _write(home / ".claude/settings.local.json", {"enabledPlugins": {PLUGIN: True}})
     rows = _plugin_rows(_scan(home, no_version))
     assert rows == {("user", "off", "user"), ("local", "on", "local")}
+
+
+def _state(items, name, scope):
+    (item,) = [i for i in items if i.kind is ItemKind.SKILL and i.name == name and i.scope is scope]
+    return item.skill_state
+
+
+def test_name_only_is_kept_as_the_skills_state(tmp_path, no_version):
+    home, _ = _home(
+        tmp_path,
+        user={"skillOverrides": {"deploy": "name-only", "review": "user-invocable-only"}},
+        local={"skillOverrides": {"review": "off"}},
+    )
+    items = _scan(home, no_version)
+    assert _skill_state(items, "deploy", Scope.USER) == (Enabled.ON, Scope.USER)
+    assert _state(items, "deploy", Scope.USER) == "name-only"
+    # The most specific file wins for a project skill, and an off skill keeps "off".
+    assert _state(items, "review", Scope.PROJECT) == "off"
+    # A skill with no rule, or a rule that says "on", has no state of its own.
+    assert _state(_scan(_home(tmp_path / "two")[0], no_version), "deploy", Scope.USER) is None
+    home, _ = _home(tmp_path / "three", user={"skillOverrides": {"deploy": "on"}})
+    assert _state(_scan(home, no_version), "deploy", Scope.USER) is None
+
+
+def test_a_skill_that_waits_to_be_asked_says_so(tmp_path, no_version):
+    home, _ = _home(tmp_path)
+    (home / ".claude/skills/deploy/SKILL.md").write_text(
+        "---\nname: deploy\ndisable-model-invocation: true\n---\n"
+    )
+    assert _state(_scan(home, no_version), "deploy", Scope.USER) == "only-asked"
+    # A value in skillOverrides wins over the skill file.
+    _write(home / ".claude/settings.json", {"skillOverrides": {"deploy": "name-only"}})
+    assert _state(_scan(home, no_version), "deploy", Scope.USER) == "name-only"
+    _write(home / ".claude/settings.json", {"skillOverrides": {"deploy": "on"}})
+    assert _state(_scan(home, no_version), "deploy", Scope.USER) is None
+
+
+def test_only_claude_code_and_cursor_read_the_skill_file_for_it(tmp_path):
+    _skill(tmp_path, "deploy")
+    (tmp_path / "deploy/SKILL.md").write_text("---\ndisable-model-invocation: true\n---\n")
+    _skill(tmp_path, "plain")
+    states = {}
+    for client in ("claude_code", "cursor", "codex"):
+        for item in skill_items(client, tmp_path, Scope.USER, client):
+            states[client, item.name] = item.skill_state
+    assert states == {
+        ("claude_code", "deploy"): "only-asked",
+        ("claude_code", "plain"): None,
+        ("cursor", "deploy"): "only-asked",
+        ("cursor", "plain"): None,
+        ("codex", "deploy"): None,
+        ("codex", "plain"): None,
+    }
+
+
+def _skill_in(home, project):
+    view = effective_view(build_inventory(home), "claude_code", project)
+    (item,) = [i for i in view.items if i.kind is ItemKind.SKILL and i.name == "deploy"]
+    return item
+
+
+def test_a_local_name_only_rule_sets_the_skill_state_in_that_project(tmp_path, no_version):
+    home, root = _home(tmp_path, local={"skillOverrides": {"deploy": "name-only"}})
+    assert _skill_in(home, str(root)).skill_state == "name-only"
+    assert _skill_in(home, None).skill_state is None
+
+
+def test_a_local_on_rule_clears_a_user_name_only_in_that_project(tmp_path, no_version):
+    home, root = _home(
+        tmp_path,
+        user={"skillOverrides": {"deploy": "name-only"}},
+        local={"skillOverrides": {"deploy": "on"}},
+    )
+    inside = _skill_in(home, str(root))
+    assert (inside.skill_state, inside.enabled, inside.state_scope) == (
+        None,
+        Enabled.ON,
+        Scope.LOCAL,
+    )
+    assert _skill_in(home, None).skill_state == "name-only"

@@ -2,7 +2,7 @@
 // in Details and the × of a link on the map add the same rows. Nothing here writes; a body only
 // goes to the tray (tray.js), and nothing is written before Apply.
 import { CLIENT_NAMES } from "./parts.js";
-import { tray } from "./tray.js";
+import { ruleState, tray } from "./tray.js";
 
 // Turn it off for all projects: one row per client that loads its own copy and has a switch (`can.off`,
 // library_map.py): a plugin's own switch, or a skill rule. Its first item is then the user's own
@@ -51,7 +51,7 @@ export function skillRuleWaits(scope, answer) {
   return tray.rows.some(({ body }) => {
     const target = (body.targets || [])[0] || {};
     const params = body.params || {};
-    return body.action === "skill.rule" && params.scope === scope && params.off !== false && target.client === "claude_code" && !plugins.has(target.item);
+    return body.action === "skill.rule" && params.scope === scope && ruleState(params) !== "on" && target.client === "claude_code" && !plugins.has(target.item);
   });
 }
 

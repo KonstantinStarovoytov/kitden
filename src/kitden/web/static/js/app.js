@@ -4,6 +4,7 @@ import { $, $$, busyWhile, el, focusKey, icon, reportError, setSecretsWord } fro
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
+import { renderContext } from "./context.js";
 import { drawTray, initDock } from "./dock.js";
 import { renderGateway } from "./gateway.js";
 import { startGlow } from "./glow.js";
@@ -24,6 +25,7 @@ import { checkTrayStale, tray } from "./tray.js";
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
   library: { title: "Library", render: renderLibrary, snapshot: snapshotRows, settle: settleRows },
+  context: { title: "Context", render: renderContext },
   gateway: { title: "Gateway", render: renderGateway },
   changes: { title: "Changes", render: renderChanges },
   agents: { title: "Agents", render: renderAgents },
@@ -34,7 +36,7 @@ let shownView = null;
 const FOCUSABLE = "[data-focus], tr[data-key]";
 // Places that show one project's setup. For a picked project no longer on the list they say so
 // instead; Changes and Agents draw as usual.
-const PROJECT_PLACES = ["overview", "library", "gateway"];
+const PROJECT_PLACES = ["overview", "library", "context", "gateway"];
 // Places where the top search finds on the page itself. On the others it sends the search to the
 // Library. A map page's render returns what the search found there.
 const MAP_PAGES = ["gateway", "library"];
@@ -151,6 +153,7 @@ function refreshForProject() {
 function drawIcons() {
   $('.nav [data-view="overview"]').prepend(icon("house"));
   $('.nav [data-view="library"]').prepend(icon("library"));
+  $('.nav [data-view="context"]').prepend(icon("gauge"));
   $('.nav [data-view="gateway"]').prepend(icon("network"));
   $('.nav [data-view="changes"]').prepend(icon("history"));
   $("#theme").prepend(icon("sun-moon", 14));

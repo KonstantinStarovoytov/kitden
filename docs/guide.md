@@ -20,6 +20,21 @@ what differs between Claude Code, Codex and Cursor. Click an item for its **Deta
 The preview names the clients and projects affected. Adds on the map go to all projects;
 the List offers a project scope where supported. Start a new client session to load a change.
 
+## Check that your skills fit
+
+Open **Context** to see whether each client's skill list fit in its last chat. Claude Code and
+Codex let that list use only a small part of the context window. Claude Code then shows some
+skills by name only; Codex shortens descriptions and, past that, leaves skills out. Kitden reads
+the skill list from the last chat log, plus the settings, skill files and use counts it needs
+to size and check that list; it keeps none of it and sends nothing. Estimates for another
+window, or for a change you are about to make, show only while Kitden's rule rebuilds that last
+list. Claude Code's log does not say the window, so Kitden names it only when one window alone
+gives that list. Cursor gets no verdict, because Kitden cannot see what Cursor sends. In a skill's
+**Details**, switch it to **On**, **Name only** (Claude Code) or **Off** where the client
+allows it; built-in skills, Claude Code plugin skills and Cursor have no switch. The change goes through preview,
+**Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
+did not fit.
+
 ## Add from the catalogs
 
 **+ Add plugins** in Library and **+ Add servers** in Gateway open one catalog: **skills.sh**,
@@ -66,6 +81,7 @@ itself stays offline.
 1. In **Library → List**, find **superpowers** and press **+ Add** under **Codex**.
 2. Review and **Apply**. Codex now has a copy in the sample setup.
 3. Open **Changes → Undo** to remove that copy again.
+4. Open **Context**: in the sample's last Claude Code chat, four skills showed only a name.
 
 Press **Ctrl+C** in Terminal to stop and delete the sample.
 

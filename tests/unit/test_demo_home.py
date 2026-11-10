@@ -18,6 +18,7 @@ from kitden.local_gateway.settings import deciding_project, load_calls, load_set
 from kitden.local_gateway.views import held_servers, tools_view
 from kitden.model import ClientStatus, Enabled, ItemKind, Scope
 from kitden.views.catalog import market_servers
+from kitden.views.context_view import context_view
 from kitden.views.effective import effective_view
 from kitden.views.inventory import build_inventory
 from kitden.views.setup_server import setup_server_state
@@ -225,3 +226,48 @@ def test_the_linux_sample_stays_inside_its_folder(tmp_path, system, monkeypatch)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(outside))
     build_demo_home(tmp_path / "demo", "medium")  # medium has Cursor
     assert not outside.exists()
+
+
+def _context(home):
+    cards = context_view(demo_build(home)(), home, home / ".codex", None, {})["clients"]
+    return {card["client"]: card for card in cards}
+
+
+def test_the_medium_sample_has_a_last_chat_in_claude_code_and_codex(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    cards = _context(home)
+    claude, codex = cards["claude_code"], cards["codex"]
+    assert claude["checked"] and codex["checked"]
+    # Claude Code's own skills fill a 200K window's list: most of the user's show only a name.
+    assert claude["fact"]["folder"] == str(home / "work/atlas")
+    assert [w["title"] for w in claude["windows"]] == ["200K window", "1M window"]
+    assert claude["windows"][0]["result"]["misfit"] == {"kind": "name", "n": 4}
+    assert claude["windows"][1]["result"]["misfit"] is None
+    assert len(claude["skills"]) == 20
+    assert sorted(s["name"] for s in claude["skills"] if s["side"] == 1) == [
+        "brandkit",
+        "release-notes",
+        "shared-style",
+        "superpowers:planning",
+    ]
+    # Codex has room for all four.
+    assert codex["windows"][0]["result"]["misfit"] is None
+    assert sorted(s["name"] for s in codex["skills"]) == [
+        "api-style",
+        "code-review",
+        "docker-expert",
+        "langfuse",
+    ]
+    assert all(s["side"] == 0 and s["size"] > 40 for s in codex["skills"])
+
+
+@pytest.mark.parametrize("size", ["small", "large"])
+def test_each_sample_has_a_chat_that_lists_every_skill_it_holds(tmp_path, size):
+    home = build_demo_home(tmp_path, size)
+    for card in _context(home).values():
+        if card["client"] == "cursor":
+            continue
+        assert card["checked"]
+        # Each skill on disk is in the list, and each listed skill that is not built in is on disk.
+        assert all(s["side"] is not None for s in card["skills"])
+        assert all(s["item"] or s["source"] for s in card["skills"])
