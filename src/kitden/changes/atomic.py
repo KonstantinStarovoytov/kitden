@@ -21,7 +21,7 @@ class RefusedWriteError(Exception):
 def _full_fsync(fd: int) -> None:
     # On macOS plain fsync does not flush the drive cache; F_FULLFSYNC does.
     try:
-        fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+        fcntl.fcntl(fd, fcntl.F_FULLFSYNC)  # pyright: ignore[reportAttributeAccessIssue]
     except (AttributeError, OSError):
         os.fsync(fd)
 
