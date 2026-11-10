@@ -21,7 +21,7 @@ jobs:
       && !endsWith(github.actor, '[bot]')
       && !github.event.pull_request.draft
       && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
-    uses: KonstantinStarovoytov/kitden-agents/.github/workflows/review-claude.yml@ba2b1ac4b99c11d73d58ca624e08af54b4959a9b
+    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/review-claude.yml@f63877b0cfcb4662c0e5ff8b77563262aeb4873f
     permissions:
       contents: read # the reviewer reads the code
       pull-requests: write # it posts comments
@@ -39,7 +39,7 @@ jobs:
       && !endsWith(github.actor, '[bot]')
       && !github.event.pull_request.draft
       && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
-    uses: KonstantinStarovoytov/kitden-agents/.github/workflows/review-luna.yml@ba2b1ac4b99c11d73d58ca624e08af54b4959a9b
+    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/review-luna.yml@f63877b0cfcb4662c0e5ff8b77563262aeb4873f
     permissions:
       contents: read # the reviewer reads the code
       pull-requests: write # it posts comments
