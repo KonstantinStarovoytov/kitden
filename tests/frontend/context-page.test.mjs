@@ -464,6 +464,16 @@ test('the two sides list the pills by side, and hovering one lights its piece an
   assert.deepEqual(pills().filter((p) => p.classList.contains('hot')).map((p) => p.dataset.skill), ['alpha']);
 });
 
+test('Details shows no size for a skill whose description Kitden could not read', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const skills = [...TIGHT.skills.slice(0, 2), skill('gamma', 0, 1)];
+  show(answer({ ...TIGHT, skills }, CODEX, CURSOR));
+  await fire(pillOf('gamma'), 'click');
+  assert.match(text(drawer), /SourceYour skills/);
+  assert.doesNotMatch(text(drawer), /Size/);
+});
+
 test('a pill opens Details with the size, the source and the switch; Name only joins the tray', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };

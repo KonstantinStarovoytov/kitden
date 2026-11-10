@@ -341,7 +341,9 @@ function openSkill(client, name) {
   const card = model && model.clients.find((c) => c.client === client);
   const skill = card && card.skills.find((s) => s.name === name);
   if (!skill) return;
-  const facts = [{ label: "Size", value: `${fmt(skill.size)} characters` }];
+  // No size when Kitden could not read the description: 0 would be a claim.
+  const facts = [];
+  if (skill.size) facts.push({ label: "Size", value: `${fmt(skill.size)} characters` });
   if (skill.source) facts.push({ label: "Source", value: skill.source });
   const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list: skill.switch.length ? switchFor(card, skill) : null, why: skill.note });
   openPanel(content);

@@ -426,7 +426,8 @@ def _claude_estimate(skills: list[ClaudeSkill], fit: ClaudeFit, on: str, frame: 
     chosen = sum(s.name_only for s in skills)
     bad = n - len(fit.full) - chosen
     if bad:
-        body = words.CLAUDE_WOULD_DROP.format(on=on, bad=bad, n=n)
+        skills_word, them = _many(n, "skill", "skills"), _many(bad, "it", "them")
+        body = words.CLAUDE_WOULD_DROP.format(on=on, bad=bad, n=n, skills=skills_word, them=them)
     elif chosen:
         them = "1 skill shows" if chosen == 1 else f"{chosen} skills show"
         body = words.CLAUDE_WOULD_KEEP_CHOSEN.format(on=on, chosen=them)
@@ -438,7 +439,16 @@ def _claude_estimate(skills: list[ClaudeSkill], fit: ClaudeFit, on: str, frame: 
     return result | {"used": fit.used, "size": fit.size, "room": None, "misfit": misfit}
 
 
-def _claude_note(row: _Row, state: str, side: int | None, size: int) -> str | None:
+def _claude_note(
+    row: _Row,
+    state: str,
+    side: int | None,
+    size: int,
+    explained: bool = True,
+    can_free: bool = True,
+) -> str | None:
+    """`explained`: the limit rebuilds the list, so it is why a description is missing.
+    `can_free`: some skill with a description has a switch."""
     if row.item is None:
         return words.NOTE_BUILT_IN if row.name in CLAUDE_ALWAYS_FULL else None
     if state in ASKED:
@@ -451,7 +461,9 @@ def _claude_note(row: _Row, state: str, side: int | None, size: int) -> str | No
         return words.NOTE_NAME_ONLY
     if side == 0:
         return words.NOTE_FREES.format(n=f"{min(size, CLAUDE_DESCRIPTION_CAP) + 2:,}")
-    return words.NOTE_NO_ROOM
+    if not explained:
+        return words.NOTE_NOT_SENT
+    return f"{words.NOTE_NO_ROOM} {words.NOTE_FREE_ROOM}" if can_free else words.NOTE_NO_ROOM
 
 
 def _model_name(model: str | None) -> str | None:
@@ -491,6 +503,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     checked = base is not None and base[1].full == sent_full
     # The log does not say the window: take the only one whose limit rebuilds the list.
     worked_out = two_limits = False
+    rate = None
     if setting is None and not checked:
         fits = [
             candidate
@@ -499,7 +512,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         ]
         if len({size for size, _ in fits}) == 1:
             worked_out = True
-            window = fits[0][0]
+            window, rate = fits[0]
             two_limits = len(fits) > 1
             budget = None if two_limits else claude_budget(*fits[0])
             # None when a size is not known: the window is sure, an estimate is not.
@@ -524,6 +537,9 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     windows = [_window_card(title, models, _tag(date), budget, fact)]
     if checked and setting is None and window in CLAUDE_OTHER_WINDOW:
         other, per_token, shown = CLAUDE_OTHER_WINDOW[window]
+        if worked_out:
+            # The table's models did not run this chat: keep its own rate and name no model.
+            per_token, shown = rate, ""
         limit = claude_budget(other, per_token)
         skills = base[0]
         result = _claude_estimate(skills, claude_rule(skills, limit), _on(other), words.ESTIMATE)
@@ -544,11 +560,19 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
             say = f"{result['say']} {_swap(client, gets, loses)}".strip()
             after = {"say": say, "gets": gets, "loses": loses, "result": result}
 
+    explained = checked or two_limits
+    can_free = any(
+        r.item is not None
+        and r.sent is not None
+        and states[r.name] == "on"
+        and not from_plugin(r.item)
+        for r in rows
+    )
     skills = []
     for r in rows:
         side = 0 if r.sent is not None else 1
         size = len(r.full) if r.full is not None else len(r.sent or "")
-        note = _claude_note(r, states[r.name], side, size)
+        note = _claude_note(r, states[r.name], side, size, explained, can_free)
         skills.append(_skill(client, r.name, r.item, size, side, note))
     listed = {r.name for r in rows}
     for item in items:
@@ -574,8 +598,13 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         words.HOW_CLAUDE_SURFACE,
         words.HOW_CLAUDE_REST,
     ]
+    parts = {}
+    if setting is not None:
+        limit_set = words.CONTEXT_LIMIT_SET[client].format(n=f"{setting:,}")
+        parts["lede"] = words.CONTEXT_LEDE + limit_set
     return _card(
         client,
+        **parts,
         # Grey: Kitden cannot judge that chat (the limit may have dropped a skill set now).
         lamp="warn" if misfit else "none" if now else "ok",
         message=None if checked else words.TWO_LIMITS if two_limits else words.NO_CHECK,
@@ -711,10 +740,22 @@ def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str
     # The rule removes every description only when the names alone do not fit, so then at least
     # one skill is left out: `fit.cap` is a number in the branches below.
     if out:
-        body = words.CODEX_WOULD_LEAVE_OUT.format(on=on, out=out, n=n)
+        body = words.CODEX_WOULD_LEAVE_OUT.format(
+            on=on, out=out, n=n, skills=_many(n, "skill", "skills")
+        )
+    elif bad and fit.cap == 0:
+        body = words.CODEX_WOULD_NAMES.format(on=on)
     elif bad:
-        cap = f"{round(fit.cap / 10) * 10:,}"
-        body = words.CODEX_WOULD_CUT.format(on=on, bad=bad, n=n, cap=cap)
+        # A cap of a few characters would round to 0.
+        cap = fit.cap if fit.cap < 10 else round(fit.cap / 10) * 10
+        body = words.CODEX_WOULD_CUT.format(
+            on=on,
+            bad=bad,
+            n=n,
+            descriptions=_many(n, "description", "descriptions"),
+            cap=f"{cap:,}",
+            characters=_many(cap, "character", "characters"),
+        )
     else:
         body = words.CODEX_WOULD_KEEP.format(on=on)
     short = words.CODEX_WOULD_SHORT.format(bad=bad, n=n) if bad else words.WOULD_FIT.format(n=n)
@@ -773,11 +814,16 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     unknown = fact.pop("unknown")
     if checked and not bad:
         fact["room"] = words.ROOM_LEFT.format(left=f"{budget - fact['used']:,}", unit="tokens")
+    lede = words.CONTEXT_LIMITS[client]
     if limit is not None:
         title, models = (
             words.LIMIT_TITLE.format(n=f"{budget:,}", unit="tokens"),
             words.CODEX_SETTING,
         )
+        lede = words.CONTEXT_LIMIT_SET[client].format(n=f"{budget:,}")
+        if limit > budget:
+            models = words.CODEX_ABOVE_MOST.format(said=f"{limit:,}", most=f"{budget:,}")
+            lede = words.CODEX_MOST.format(n=f"{budget:,}")
     else:
         title = words.WINDOW_TITLE.format(size=_size(window)) if window else words.UNKNOWN_WINDOW
         models = sent_list.model or ""
@@ -848,6 +894,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     ]
     return _card(
         client,
+        lede=words.CONTEXT_LEDE + lede,
         lamp="warn" if bad else "none" if unknown else "ok",
         message=None if checked else words.NO_CHECK,
         fact={

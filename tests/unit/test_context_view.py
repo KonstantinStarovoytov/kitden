@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from kitden.context.rules import CodexSkill, codex_rule
-from kitden.views.context_view import context_view
+from kitden.views.context_view import _codex_estimate, context_view
 from kitden.views.inventory import build_inventory
 from kitden.views.overview import overview
 from tests.unit.test_context_claude_log import assistant, list_entry, write_chat
@@ -327,7 +327,7 @@ def test_a_second_window_that_drops_skills(home):
     other = cc["windows"][1]["result"]
     assert other["say"] == (
         "Estimate: On a 200K window, 1 of 8 skills would show only a name. "
-        "The agent may not use them."
+        "The agent may not use it."
     )
     assert other["short"] == "1 of 8 would show only a name"
     assert other["misfit"] == {"kind": "name", "n": 1}
@@ -857,6 +857,7 @@ def test_codex_limit_from_config_toml(home):
         "Estimate",
         5_440,
     )
+    assert cx["lede"].endswith("Your config.toml limits this list to 900 tokens.")
 
 
 def test_codex_draft_off_shows_after_apply(home):
@@ -1019,3 +1020,104 @@ def test_a_skill_of_unknown_size_does_not_hide_the_window_when_no_size_changes_t
     cc = view(home)["claude_code"]
     assert cc["windows"][0]["title"] == "200K window"
     assert cc["checked"] is False
+
+
+# Review of 2026-11-10
+
+
+def test_a_window_worked_out_from_the_list_names_no_models_on_the_other_card(home):
+    # The table says Opus 5.5 has a 1M window, yet this chat's list is the one of a 200K window.
+    eight_skills(home, model="claude-opus-5-5")
+    other = view(home)["claude_code"]["windows"][1]
+    assert (other["title"], other["models"], other["budget"]) == ("1M window", "", 40_000)
+
+
+def test_a_missing_description_the_limit_does_not_explain_is_not_blamed_on_room(home):
+    own = home / ".claude/skills"
+    skill(own, "alpha", "Does alpha.")
+    skill(own, "beta", "Does beta.")
+    claude_chat(home, {"alpha": "Does alpha.", "beta": None})
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is False
+    notes = {s["name"]: s["note"] for s in cc["skills"]}
+    assert notes["beta"] == (
+        "Its description was not sent in your last chat. Kitden cannot tell why."
+    )
+
+
+def test_no_room_gives_advice_only_when_a_skill_can_be_switched(home):
+    skill(home / ".claude/skills", "alpha", LONG[:1000])
+    built_in = ("dataviz", "simplify", "loop", "schedule", "run", "code-review")
+    # Only built-in skills have a description here, and they have no switch.
+    sent = dict.fromkeys(built_in, "x" * 1536) | {"alpha": None}
+    claude_chat(home, sent, model="claude-sonnet-4-6")
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is True
+    notes = {s["name"]: s["note"] for s in cc["skills"]}
+    assert notes["alpha"] == "No room for its description."
+
+
+def test_no_room_with_a_skill_to_switch_keeps_the_advice(home):
+    eight_skills(home, model="claude-sonnet-4-6")
+    notes = {s["name"]: s["note"] for s in view(home)["claude_code"]["skills"]}
+    assert notes["s8"] == (
+        "No room for its description. Set a skill with a description to Name only or Off to "
+        "free room."
+    )
+
+
+def test_a_claude_limit_from_settings_is_named_in_the_lede(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    write_json(home / ".claude/settings.json", {"env": {"SLASH_COMMAND_TOOL_CHAR_BUDGET": 9000}})
+    claude_chat(home, {"alpha": "Does alpha."})
+    assert view(home)["claude_code"]["lede"] == (
+        "Every chat starts with a list of your skills. The agent reads it to choose the right "
+        "skill. Your Claude Code settings limit this list to 9,000 characters."
+    )
+
+
+def test_a_codex_limit_above_the_most_codex_allows_says_so(home):
+    paths = codex_home(home, window=272_000, limit=50_000)
+    codex_chat(
+        home,
+        [
+            f"- {n}: {d} (file: {paths[n]})"
+            for n, d in (("alpha", CODEX_A), ("beta", CODEX_B), ("gamma", CODEX_C))
+        ],
+    )
+    fact = view(home)["codex"]["windows"][0]
+    assert (fact["title"], fact["models"], fact["budget"]) == (
+        "10,000 tokens",
+        "config.toml says 50,000; Codex allows 10,000 at most",
+        10_000,
+    )
+    assert view(home)["codex"]["lede"].endswith("Codex lets this list use 10,000 tokens at most.")
+
+
+def test_codex_estimate_says_one_description_for_one_skill():
+    one = [CodexSkill("alpha", CODEX_A, "/work/skills/alpha/SKILL.md")]
+    budget = next(b for b in range(100, 400) if (codex_rule(one, b).cap or 0) >= 30)
+    fit = codex_rule(one, budget)
+    assert fit.cap < len(CODEX_A)
+    say = _codex_estimate(one, fit, "On a 9K window", "Estimate: {}")["say"]
+    about = round(fit.cap / 10) * 10
+    assert say == (
+        f"Estimate: On a 9K window, 1 of 1 description would be cut to about {about} characters."
+    )
+
+
+def test_codex_estimate_with_a_cut_of_a_few_characters_does_not_round_it_to_zero(home):
+    paths = codex_home(home)
+    _, size, other = a_small_window(home, paths, lambda f: f.cap == 1)
+    assert other["say"] == (
+        f"Estimate: On a {size} window, 3 of 3 descriptions would be cut to about 1 character."
+    )
+
+
+def test_codex_estimate_that_removes_every_description_says_so(home):
+    paths = codex_home(home)
+    _, size, other = a_small_window(home, paths, lambda f: f.cap == 0)
+    assert other["say"] == (
+        f"Estimate: On a {size} window, Codex would remove every description. "
+        "The agent would see only the names."
+    )

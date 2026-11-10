@@ -173,6 +173,13 @@ CONTEXT_LIMITS = {
     "codex": "Codex lets this list use 2% of the context window.",
     "cursor": "Cursor does not publish a limit for this list.",
 }
+# In place of CONTEXT_LIMITS when the user's own setting is the limit.
+CONTEXT_LIMIT_SET = {
+    "claude_code": "Your Claude Code settings limit this list to {n} characters.",
+    "codex": "Your config.toml limits this list to {n} tokens.",
+}
+# A config.toml value above the most Codex allows.
+CODEX_MOST = "Codex lets this list use {n} tokens at most."
 NO_CHAT = "No {client} chat yet. Open one chat, and Kitden will show what {client} sent."
 # "{client}" is "Claude Code 2.2.0", or "this version of Claude Code" when the log names none.
 CANNOT_READ_LOG = (
@@ -240,11 +247,16 @@ ESTIMATE = "Estimate: {}"
 AFTER_APPLY = "After Apply, estimate: {}"
 ON_WINDOW = "On a {size} window"
 WITH_LIMIT = "With this limit"
-CLAUDE_WOULD_DROP = "{on}, {bad} of {n} skills would show only a name. The agent may not use them."
+CLAUDE_WOULD_DROP = (
+    "{on}, {bad} of {n} {skills} would show only a name. The agent may not use {them}."
+)
 CLAUDE_WOULD_KEEP = "{on}, every skill would keep its description."
 CLAUDE_WOULD_KEEP_CHOSEN = "{on}, everything would fit. {chosen} only a name, as you chose."
-CODEX_WOULD_LEAVE_OUT = "{on}, {out} of {n} skills would be left out and no description sent."
-CODEX_WOULD_CUT = "{on}, {bad} of {n} descriptions would be cut to about {cap} characters."
+CODEX_WOULD_LEAVE_OUT = "{on}, {out} of {n} {skills} would be left out and no description sent."
+CODEX_WOULD_CUT = "{on}, {bad} of {n} {descriptions} would be cut to about {cap} {characters}."
+CODEX_WOULD_NAMES = (
+    "{on}, Codex would remove every description. The agent would see only the names."
+)
 CODEX_WOULD_KEEP = "{on}, every skill would keep its full description."
 # Both sides of a swap after Apply: (one, many).
 GAINS = {
@@ -264,6 +276,7 @@ UNKNOWN_WINDOW = "Unknown window"
 LIMIT_TITLE = "{n} {unit}"
 CLAUDE_SETTING = "Set in Claude Code settings"
 CODEX_SETTING = "Set in config.toml"
+CODEX_ABOVE_MOST = "config.toml says {said}; Codex allows {most} at most"
 DEFAULT_LIMIT = "Default limit"
 # The two sides of the picture, and the first side's name when there is no list to read.
 CONTEXT_SIDES = {
@@ -281,9 +294,11 @@ SOURCE_OWN = "Your skills"
 NOTE_BUILT_IN = "Claude Code always sends built-in skills in full."
 NOTE_PLUGIN = "A plugin's skill follows its plugin. Turn the plugin off in the Library."
 NOTE_FREES = "Name only frees {n} characters. The agent no longer sees when to use it."
-NOTE_NO_ROOM = (
-    "No room for its description. Set a skill with a description to Name only or Off to free room."
-)
+NOTE_NO_ROOM = "No room for its description."
+# After NOTE_NO_ROOM, when a skill with a description has a switch.
+NOTE_FREE_ROOM = "Set a skill with a description to Name only or Off to free room."
+# The limit does not explain the list, so Kitden does not blame it.
+NOTE_NOT_SENT = "Its description was not sent in your last chat. Kitden cannot tell why."
 NOTE_NAME_ONLY = "The agent sees the name, not when to use it."
 NOTE_ONLY_ASKED = "The agent uses it only when you type its name."
 NOTE_CODEX_OFF = "Off frees room, so long descriptions get cut less."
@@ -297,9 +312,10 @@ HOW_CLAUDE_LIST = (
     "Last chat: the list Claude Code{version} sent{when}{surface}, read from its chat log."
 )
 HOW_CLAUDE_RULE = (
-    "Estimates use Claude Code's own rule, read from version 2.1.311: 1% of the window, at 3 "
+    "Estimates use the rule Kitden found in Claude Code 2.1.311: 1% of the window, at 3 "
     "characters per token for new models and 4 for older ones. Built-in skills always keep their "
-    "description; of the rest, the most used in the last weeks go first."
+    "description; of the rest, the most used in the last weeks go first. A newer Claude Code may "
+    "count differently."
 )
 HOW_CLAUDE_CHECK = (
     "Before it shows an estimate, Kitden checks that the rule gives the same list as your last "
@@ -323,8 +339,9 @@ HOW_CLAUDE_SURFACE = "The list in the terminal can differ from the Claude app."
 HOW_CLAUDE_REST = "The rest of the window (system prompt, tools, MCP, the chat) is not measured."
 HOW_CODEX_LIST = "Last chat: the list Codex{version} sent{when}, read from its chat log."
 HOW_CODEX_RULE = (
-    "Estimates use Codex's rule from its source code: 2% of the window, about 4 bytes per token. "
-    "Each entry also pays for its name and file path."
+    "Estimates start from Codex's source code: 2% of the window, at most 1,024 characters per "
+    "description, about 4 bytes per token. Each entry also pays for its name and file path. How "
+    "Codex cuts a list that does not fit is fitted to one real list, not read from the code."
 )
 HOW_CODEX_CHECK = (
     "Before it shows an estimate, Kitden checks that the rule cuts the same skills as your last "
