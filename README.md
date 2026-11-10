@@ -30,6 +30,21 @@ at a glance. Add what an agent is missing, turn an item off or remove it, on the
   <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/library-light.png" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin, Codex and Cursor load the frontend-design skill.">
 </picture>
 
+### See whether your skills fit
+
+Every chat starts with the list of your skills, and that list has a small budget: 1% of the
+context window in Claude Code, 2% in Codex. Past it, Claude Code sends some skills by name
+only and Codex shortens or drops them, so the agent may never reach for them. Kitden reads the
+last chat's log and shows which skills went in whole, so you can turn off the ones you do not
+use. A guess for another window is marked Estimate. Cursor gets no verdict: Kitden cannot see
+what it sends.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/context-dark.png">
+  <source srcset="docs/images/readme/context-light.png">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/context-light.png" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Two boxes list the sixteen skills whose description was sent and the four sent by name only.">
+</picture>
+
 ### Find and add from one place
 
 Search the official MCP Registry, skills.sh, the Claude plugins marketplace and any public

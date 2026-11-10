@@ -81,6 +81,7 @@ itself stays offline.
 1. In **Library → List**, find **superpowers** and press **+ Add** under **Codex**.
 2. Review and **Apply**. Codex now has a copy in the sample setup.
 3. Open **Changes → Undo** to remove that copy again.
+4. Open **Context**: in the sample's last Claude Code chat, four skills showed only a name.
 
 Press **Ctrl+C** in Terminal to stop and delete the sample.
 

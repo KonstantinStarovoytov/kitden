@@ -4,6 +4,7 @@ Run: uv run --with playwright==1.64.1 python scripts/record_readme.py [--serve]
 
 Each picture starts the real page on a fresh copy of the README sample (scripts/readme_demo.py)
 in a temporary folder: memory in Claude Code, playwright in Codex and Context7 in Cursor.
+The Context picture is taken on the sample `kitden demo` opens, so the demo shows the same.
 Stand-ins keep it local: a fake Keychain, fake client commands, canned tool lists and
 catalog answers, and no access checks. Nothing goes online, and nothing of the real home
 folder is read or written.
@@ -35,7 +36,14 @@ import kitden.clients.base as base  # noqa: E402
 import kitden.discovery as discovery  # noqa: E402
 import kitden.web.app as web  # noqa: E402
 from conftest import install_fake_security  # noqa: E402
-from kitden.demo import DemoRunner, canned_refresh, demo_command, no_sign_in  # noqa: E402
+from kitden.demo import (  # noqa: E402
+    DemoRunner,
+    build_demo_home,
+    canned_refresh,
+    demo_build,
+    demo_command,
+    no_sign_in,
+)
 from kitden.local_gateway.settings import save_tools  # noqa: E402
 from kitden.views.inventory import build_inventory  # noqa: E402
 
@@ -222,10 +230,10 @@ def stand_ins(root: Path) -> None:
     discovery.access_needed = canned_access
 
 
-def start_page(home: Path, port: int = PORT) -> tuple[str, uvicorn.Server]:
+def start_page(home: Path, port: int = PORT, build=None) -> tuple[str, uvicorn.Server]:
     """The real page on the sample, and its server (set `should_exit` to stop it)."""
     app = web.create_app(
-        lambda **options: build_inventory(home, **options),
+        build or (lambda **options: build_inventory(home, **options)),
         token=TOKEN,
         port=port,
         home=home,
@@ -240,9 +248,14 @@ def start_page(home: Path, port: int = PORT) -> tuple[str, uvicorn.Server]:
     return f"http://127.0.0.1:{port}/?token={TOKEN}", server
 
 
-def fresh_page(root: Path, run: int) -> tuple[str, uvicorn.Server]:
-    """A new sample and page for one animation, so each starts from the same setup."""
-    return start_page(sample(root / f"run{run}"), PORT + 1 + run)
+def fresh_page(root: Path, run: int, scene: str) -> tuple[str, uvicorn.Server]:
+    """A new sample and page for one picture, so each starts from the same setup. Context is
+    taken on the demo's own sample, read as the demo reads it."""
+    folder, port = root / f"run{run}", PORT + 1 + run
+    if scene == "context":
+        home = build_demo_home(folder, "medium")
+        return start_page(home, port, demo_build(home))
+    return start_page(sample(folder), port)
 
 
 def main() -> int:
@@ -261,7 +274,7 @@ def main() -> int:
                 time.sleep(3600)
         from record_scenes import record_all  # Playwright loads only to record
 
-        record_all(lambda run: fresh_page(folder, run), OUT, args.only)
+        record_all(lambda run, scene: fresh_page(folder, run, scene), OUT, args.only)
     except KeyboardInterrupt:
         pass
     finally:

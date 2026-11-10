@@ -1,17 +1,21 @@
 # README media
 
-The README shows the logo, the slogan and four parts: the map, find and add, the gateway, and
-why it is safe. Then come the other features and how to start. Steps, privacy and limits live
-in the [guide](guide.md). Each part has a heading and a few plain sentences; the first three
-have a picture of the real page, with no caption.
+The README shows the logo, the slogan and five parts: the map, whether skills fit, find and
+add, the gateway, and why it is safe. Then come the other features and how to start. Steps,
+privacy and limits live in the [guide](guide.md). Each part has a heading and a few plain
+sentences; the first four have a picture of the real page, with no caption.
 
 ## Scenes
 
 Each scene is in `docs/images/readme/`, in light and dark, cropped to the part of the page it
 is about, taken at 1.5 pixels per CSS pixel and shown at its CSS size or smaller (470 to
-860 px wide). They differ in look as in subject: two stills, then one animation.
+860 px wide). They differ in look as in subject: three stills, then one animation.
 
 - `library` (a PNG): the Library map, which agent loads which plugin and skill. No pointer.
+- `context` (a PNG): Context for Claude Code, from the client tabs down to the two boxes. The
+  last chat's skill list is over its limit, so four skills show only a name; the 1M window is
+  an estimate. Taken on the sample `kitden demo` opens (its medium size), so a reader who
+  runs the demo sees the same. No pointer.
 - `find` (a PNG): two add panels side by side, each cut to its own size with clear space
   between. Left, a search for "mcp" in skills.sh: one skill is open with its description, and
   two agents are ticked under Add to. Right, a search for "linear" in the MCP Registry:
@@ -41,8 +45,9 @@ uv run --with playwright==1.64.1 python scripts/record_readme.py
 `--only pick-dark` makes one picture; `--serve` only starts the page to look around. It needs
 `ffmpeg` and `img2webp` (from libwebp) on the PATH.
 Each picture starts the real page on a fresh copy of the sample from
-`scripts/readme_demo.py`, in a temporary folder. Stand-ins keep it local: a fake Keychain,
-fake client commands, canned tool lists and catalog answers, and no access checks. Nothing goes online, and nothing
+`scripts/readme_demo.py`, in a temporary folder; `context` uses the demo's own sample.
+Stand-ins keep it local: a fake Keychain, fake client commands, canned tool lists and catalog
+answers, and no access checks. Nothing goes online, and nothing
 of the real home folder is read or written. `scripts/record_scenes.py` plays each scene and
 takes it.
 

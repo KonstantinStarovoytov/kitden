@@ -1,4 +1,4 @@
-"""The README's pictures, played on the real page with Playwright: two stills and two short
+"""The README's pictures, played on the real page with Playwright: three stills and two short
 animations (one of them, `pick`, is for posts).
 
 Used by scripts/record_readme.py, which starts a fresh page for each one. An animated scene is
@@ -337,14 +337,30 @@ def scene_find(page: Page, film: Film, pointer: Pointer) -> None:
     film.side_by_side("skills", "servers")
 
 
-# A scene that needs a taller window than VIEW, so its panel shows whole.
-VIEWS = {"find": {"width": 1280, "height": 1000}}
-OPEN = {"library": open_library, "find": open_find}
+def open_context(page: Page, link: str) -> None:
+    page.goto(link)
+    page.goto(link.split("/?")[0] + "/#context")
+    page.locator(".ctx-sides").wait_for()
+    time.sleep(1.2)  # the bars have grown
+
+
+def scene_context(page: Page, film: Film, pointer: Pointer) -> None:
+    """One still picture: Context, with the last Claude Code chat of the demo's sample. The
+    pointer stays out of it."""
+    pointer.jump(1200, 880)
+    time.sleep(0.4)
+    film.still()
+
+
+# A scene that needs a taller window than VIEW, so its part of the page shows whole.
+VIEWS = {"find": {"width": 1280, "height": 1000}, "context": {"width": 1280, "height": 900}}
+OPEN = {"library": open_library, "find": open_find, "context": open_context}
 
 # The part of the page each animation shows, in CSS pixels: x, y, width, height.
 SCENES = (
     ("library", scene_library, (180, 255, 470, 370)),  # the clients and their plugins, a still
     ("find", scene_find, (661, 110, 580, 850)),  # two add panels after a search, a still
+    ("context", scene_context, (175, 190, 960, 645)),  # the last chat's skill list, a still
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
     ("tools", scene_tools, (180, 235, 860, 500)),  # memory, its tools and the changes waiting
 )
@@ -369,8 +385,8 @@ def encode(frames: Path, out: Path) -> None:
 
 
 def record_all(fresh_page, out: Path, only: str = "") -> None:
-    """Make every scene's animation in light and dark, each on a fresh page; `only` keeps the
-    ones whose name (as "pick-dark") starts with it."""
+    """Make every scene's animation in light and dark, each on a fresh page for that scene;
+    `only` keeps the ones whose name (as "pick-dark") starts with it."""
     out.mkdir(parents=True, exist_ok=True)
     run = 0
     with sync_playwright() as playwright:
@@ -379,7 +395,7 @@ def record_all(fresh_page, out: Path, only: str = "") -> None:
             for theme in ("light", "dark"):
                 if not f"{name}-{theme}".startswith(only):
                     continue
-                link, server = fresh_page(run)
+                link, server = fresh_page(run, name)
                 run += 1
                 context = browser.new_context(
                     viewport=VIEWS.get(name, VIEW), device_scale_factor=SCALE, color_scheme=theme
