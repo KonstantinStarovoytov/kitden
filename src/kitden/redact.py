@@ -110,7 +110,7 @@ class _Redactor:
         netloc = parts.netloc
         if "@" in netloc:
             self.found = True
-            netloc = f"{SECRET}@{netloc.rsplit('@', 1)[1]}"
+            netloc = f"{SECRET}@{netloc.split('@', 1)[0]}"
         query = []
         for pair in parts.query.split("&") if parts.query else []:
             name, sep, val = pair.partition("=")
