@@ -1893,7 +1893,6 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
         "in the gateway · ${",
         " through Kitden, so Kitden's rules apply to them.`",
         " on its own and skip",
-        "gets Kitden from a plugin: turn the plugin off to disconnect it.`",
         " loses the Kitden gateway's servers and Kitden's own read of your setup. Servers it"
         " sets up on its own stay.`",
         "`Kitden did not find ${",
@@ -1919,7 +1918,6 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
         " it either way.`",
         '"Update the Kitden entry…"',
         '"Update…"',
-        '"from a plugin"',
         '"not on this computer"',
         '"its entry is off"',
         '"settings not readable"',
@@ -2340,13 +2338,11 @@ def test_a_server_drags_onto_a_client():
 
 
 def test_a_client_drags_onto_the_gateway():
-    # gateway-notes 6.3: the tip asks for the gateway, then says a drop connects the client; a
-    # client a plugin connects says why it cannot be dragged.
+    # gateway-notes 6.3: the tip asks for the gateway, then says a drop connects the client.
     drag = script("gateway-drag.js")
     for words in (
         'const ON_GATEWAY = "Drop on the gateway";',
         "`Connect ${CLIENT_NAMES[drag.block.client]}`",
-        "`${name} gets Kitden from a plugin.`",
     ):
         assert words in drag, words
     # The gateway's box is widened 24 px each side and 16 up and down.
@@ -2642,11 +2638,9 @@ def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
     hint = "return pick.ids.size || pick.stuck ? PICK_HINT(pick.ids.size, pick.stuck) : MAP_HINT;"
     assert hint in gateway
     assert "flex: none" in rule(".hint-line svg")
-    # A client whose settings cannot be read says so, as its panel does; so does a plugin entry
-    # that is off.
+    # A client whose settings cannot be read says so, as its panel does.
     drag = script("gateway-drag.js")
     assert "`${who}'s settings are not readable.`" in drag
-    assert "`${name}'s entry is off.`" in drag
     # A plain button beside the 30 px inputs of the Add forms is as tall as they are.
     assert "height: 30px;" in rule(".form .btn:not(.small)")
     # The gateway card counts a server that is moving out as it leaves.

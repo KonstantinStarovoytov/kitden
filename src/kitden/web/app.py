@@ -1364,23 +1364,18 @@ def create_app(
         elif action == SETUP_SERVER:
             command = _kitden_command()
             assert command is not None  # needed, so it was refused above when missing
-            clients = _clients(targets)
-            provided = _states_in(state.inventory, "plugin")
-            if any(c in provided for c in clients):
-                raise ValueError("The kitden plugin already provides this server there.")
-            steps = setup_server_steps(adapters, clients, command)
+            steps = setup_server_steps(adapters, _clients(targets), command)
         elif action == SETUP_SERVER_UPDATE:
             items = _items(targets)
             if not items or any(i is None or not is_old_entry(i) for i in items):
                 raise ValueError("Choose an old Kitden entry.")
-            added = _states_in(state.inventory, "added", "plugin")
+            added = _states_in(state.inventory, "added")
             command = _kitden_command() if any(i.client not in added for i in items) else None
             steps = update_steps(adapters, items, added, command)
         elif action == SETUP_SERVER_ENABLE:
             clients = _clients(targets)
             entries = setup_server_state(state.inventory)
             entry = next((e for e in entries if [e["client"]] == clients), None)
-            # Only the client's own entry, turned off: a plugin's is the plugin's switch.
             if entry is None or entry["state"] != "added" or entry["enabled"] is not False:
                 raise ValueError("The kitden entry there is not turned off.")
             steps = enable_steps(adapters, clients[0])
@@ -1390,7 +1385,7 @@ def create_app(
         elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
             items = _known_servers(targets)
             known = _known_paths()
-            added = _states_in(state.inventory, "added", "plugin")
+            added = _states_in(state.inventory, "added")
             command = _kitden_command(needed=bool({i.client for i in items} - added))
             # A Codex entry that keeps only some tools on: Kitden needs the whole list.
             wanted = await asyncio.to_thread(tools_to_read, adapters, items, home_dir(), known)

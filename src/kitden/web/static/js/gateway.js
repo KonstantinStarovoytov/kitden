@@ -483,8 +483,7 @@ function connectParts(links, kitden, waits) {
 }
 
 // A client's block: Connected or Not connected, and on a first run that it is found, with its
-// version; the change that disconnects it (`disconnect`) where its link's × can (connectAction),
-// and whether a plugin gives it its kitden entry (`viaPlugin`), which Kitden cannot take out.
+// version; and the change that disconnects it (`disconnect`) where its link's × can (connectAction).
 // One that is not connected, past a first run, has the change that connects it (`connect`,
 // connectBody) and can be dragged onto the gateway (`drags`). While a change that connects it waits
 // in the tray (`wait`, connectRows), its lamp is the dashed ring and its meta says so (`wait`, in
@@ -503,10 +502,8 @@ function clientBlock(id, { setup, linked, known, first, clients, wait = null }) 
   if (firstFound) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
   const action = on ? connectAction(id, setup) : null;
   const disconnect = action && !action.connect ? action.body : null;
-  const viaPlugin = (setup || []).some((e) => e.client === id && e.state === "plugin");
-  const pluginOff = (setup || []).some((e) => e.client === id && e.state === "plugin" && e.enabled === false);
   const connect = !on && !first ? connectBody(id, setup) : null;
-  const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", stateInMeta: !firstFound, client: id, ports: { right: true }, disconnect, viaPlugin, pluginOff, connect, drags: Boolean(connect) };
+  const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", stateInMeta: !firstFound, client: id, ports: { right: true }, disconnect, connect, drags: Boolean(connect) };
   if (!wait) return block;
   // The dot stays with the words before it (a no-break space), so a wrap never starts a line with it.
   // Its row lands on the map in its turn (`landsWith`, map.js landOwners).
@@ -906,11 +903,11 @@ function blocksById(model) {
 }
 
 // What the × of a link does, as `{ tip, body }` (`body` is the change to preview), or null where
-// the map does not act on the link: a client disconnects from the Kitden gateway (not one a
-// plugin connects: clientBlock), a client's own entries of a server it sets up on its own go (the
-// row's `client_items` for that client: none for a plugin's server), a server in the Kitden
-// gateway comes out of it, and a tool of such a server turns off, for the picked project
-// (`picked`, "" for all). A registered gateway's links have none.
+// the map does not act on the link: a client disconnects from the Kitden gateway, a client's own
+// entries of a server it sets up on its own go (the row's `client_items` for that client: none
+// for a plugin's server), a server in the Kitden gateway comes out of it, and a tool of such a
+// server turns off, for the picked project (`picked`, "" for all). A registered gateway's links
+// have none.
 export function linkRemoval(model, link, picked) {
   const byId = blocksById(model);
   const from = byId.get(link.from);

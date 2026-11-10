@@ -52,7 +52,7 @@ def gateway_items(inventory, settings: dict, home: Path) -> list[Item]:
     known = [p.path for p in inventory.projects]
     items = []
     for entry in setup_server_state(inventory):
-        if entry["state"] not in ("added", "plugin"):
+        if entry["state"] != "added":
             continue
         for name, server in settings["servers"].items():
             places = [(None, own_state(rules["global"], name, None), f"servers.{name}")]

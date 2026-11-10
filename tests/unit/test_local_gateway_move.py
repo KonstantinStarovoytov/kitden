@@ -2,6 +2,7 @@
 
 import json
 import re
+import shutil
 import socket
 import stat
 import sys
@@ -169,7 +170,7 @@ def move(home, *wanted, command=KITDEN, headers=None):
     assert items, wanted
     adapters = {a.id: a for a in default_adapters(home)}
     states = setup_server_state(inventory)
-    added = {s["client"] for s in states if s["state"] in ("added", "plugin")}
+    added = {s["client"] for s in states if s["state"] == "added"}
     known = [p.path for p in inventory.projects]
     return local_move_steps(
         adapters, items, home, known, command, added_clients=added, headers=headers
@@ -284,6 +285,20 @@ def test_moving_adds_the_server_removes_the_entries_and_adds_kitden_where_missin
     }
     assert "files" not in cursor(home)["mcpServers"]
     assert cursor(home)["mcpServers"]["kitden"] == {"command": KITDEN, "args": ["mcp"]}
+
+
+def test_a_client_with_only_the_kitden_plugin_gets_its_own_entry_on_a_move(home):
+    """The plugin's server only reads (`kitden mcp --read-only`): it offers no moved server."""
+    cache = home / ".claude/plugins/cache/kitden/kitden/0.1.0"
+    shutil.copytree(Path(__file__).parents[2] / "plugins/kitden", cache)
+    write_json(
+        home / ".claude/plugins/installed_plugins.json",
+        {"version": 2, "plugins": {"kitden@kitden": [{"installPath": str(cache)}]}},
+    )
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    with page_for(home) as page:
+        steps = preview(page, home, ("claude_code", "files")).json()["steps"]
+    assert ("claude_code", "kitden") in [(s["client"], s["name"]) for s in steps]
 
 
 def test_apply_then_undo_puts_every_file_back(home):
@@ -974,13 +989,7 @@ def test_the_review_says_when_claude_code_allows_every_kitden_tool(tmp_path, fak
         "Claude Code allows every Kitden tool without asking; after the move that includes the "
         "tools of n8n-mcp."
     )
-    # Installed as a plugin, Claude Code names the tools mcp__plugin_kitden_kitden__<tool>.
-    for where, rule in (
-        (".claude/settings.json", "mcp__kitden"),
-        (None, "mcp__kitden__*"),
-        (".claude/settings.json", "mcp__plugin_kitden_kitden"),
-        (None, "mcp__plugin_kitden_kitden__*"),
-    ):
+    for where, rule in ((".claude/settings.json", "mcp__kitden"), (None, "mcp__kitden__*")):
         home = new_home(tmp_path / rule.replace("*", "all"))
         add_claude(home, "kitden", {"type": "stdio", "command": KITDEN, "args": ["mcp"]})
         path = home / (where or "work/website/.claude/settings.local.json")
@@ -991,15 +1000,15 @@ def test_the_review_says_when_claude_code_allows_every_kitden_tool(tmp_path, fak
             note = preview(page, home, ("cursor", "n8n-mcp")).json()["after"][0]["note"]
         assert words in note, note
 
-    # Allowing only some of its tools is not every tool.
-    home = new_home(tmp_path / "some")
-    add_claude(home, "kitden", {"type": "stdio", "command": KITDEN, "args": ["mcp"]})
-    write_json(
-        home / ".claude/settings.json", {"permissions": {"allow": ["mcp__kitden__show_setup"]}}
-    )
-    with page_for(home) as page:
-        note = preview(page, home, ("cursor", "n8n-mcp")).json()["after"][0]["note"]
-    assert "allows every Kitden tool" not in note
+    # Allowing only some of its tools is not every tool. The kitden plugin's server only reads,
+    # so allowing all of its tools (mcp__plugin_kitden_kitden) is not it either.
+    for rule in ("mcp__kitden__show_setup", "mcp__plugin_kitden_kitden"):
+        home = new_home(tmp_path / rule)
+        add_claude(home, "kitden", {"type": "stdio", "command": KITDEN, "args": ["mcp"]})
+        write_json(home / ".claude/settings.json", {"permissions": {"allow": [rule]}})
+        with page_for(home) as page:
+            note = preview(page, home, ("cursor", "n8n-mcp")).json()["after"][0]["note"]
+        assert "allows every Kitden tool" not in note
 
 
 def test_a_codex_entry_keeps_its_own_start_time(home):

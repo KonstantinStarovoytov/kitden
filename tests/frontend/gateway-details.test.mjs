@@ -180,10 +180,6 @@ test('a connected client offers Disconnect, a free one Connect', () => {
   assert.equal(quiet.id, 'Version not known · on this computer');
   const reading = clientCard('cursor', { setup: SETUP, clients: [{ id: 'cursor', status: 'found', version: null }], progress: { steps: [{ name: 'client versions', done: false }] }, view: VIEW });
   assert.equal(reading.id, 'Checking the version… · on this computer');
-  // A plugin gives Cursor its entry: Kitden cannot take it out, and says how.
-  const plugin = clientCard('cursor', { setup: [entry('cursor', 'plugin')], clients: CLIENTS, view: VIEW });
-  assert.deepEqual([labels(plugin), facts(plugin)[0]], [['See what it loads in Library'], ['Gateway', 'Connected']]);
-  assert.ok(plugin.why.endsWith('Cursor gets Kitden from a plugin: turn the plugin off to disconnect it.'), plugin.why);
   // Not on this computer: nothing to connect, and the panel says why.
   const gone = clientCard('cursor', { setup: [entry('cursor', 'not_installed', { enabled: null })], clients: [{ id: 'cursor', status: 'not_found', version: null }], view: VIEW });
   assert.deepEqual([gone.id, labels(gone)], ['Not installed', ['See what it loads in Library']]);
@@ -197,10 +193,6 @@ test('a connected client offers Disconnect, a free one Connect', () => {
   assert.ok(codexOff.why.startsWith('Codex has the kitden entry turned off, so it does not reach the gateway. docs is'), codexOff.why);
   assert.deepEqual(moreLabels(codexOff), ['Turn it on in Codex…', 'Open ChatGPT']);
   assert.deepEqual([codexOff.more[0].body, codexOff.more[0].note], [{ action: 'setup_server.enable', targets: [{ client: 'codex' }], params: {} }, SETUP_NOTE]);
-  // A plugin's entry that is off is the plugin's switch: only the sentence.
-  const pluginOff = clientCard('codex', { setup: [entry('codex', 'plugin', { enabled: false })], clients: CLIENTS, view: VIEW });
-  assert.deepEqual(moreLabels(pluginOff), ['Open ChatGPT']);
-  assert.ok(pluginOff.why.includes("Turn it on in Codex's own MCP settings."), pluginOff.why);
   // Without the setup read, Kitden does not know whether it connects: no button claims either.
   const unread = clientCard('codex', { setup: null, clients: CLIENTS, view: VIEW });
   assert.deepEqual(facts(unread).slice(0, 2), [['Gateway', 'Not known'], ['Through Kitden', 'Not known']]);
@@ -295,12 +287,12 @@ test('the gateway panel lists every client with its own button', async () => {
   assert.deepEqual(facts(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: PROJECTS, clients: FOUND })).at(-1), ['Tools', 'Not known yet']);
   const empty = gatewayCard({ ...KITDEN, servers: [] }, { view: { ...VIEW, groups: { move: [], local: [], plugin: [] } }, setup: SETUP, projects: [], clients: FOUND });
   assert.deepEqual([facts(empty), moreLabels(empty)], [[['Servers', '0 in the gateway · 0 outside'], ['Tools', 'Nothing yet']], ['Add a server…', 'Add another gateway…']]);
-  // A client a plugin connects, or one not on this computer, has no button.
-  const plugin = gatewayCard(KITDEN, { view: VIEW, setup: [entry('claude_code', 'plugin'), entry('codex', 'not_installed', { enabled: null }), entry('cursor', 'missing')], projects: PROJECTS, clients: FOUND });
-  assert.deepEqual(plugin.list.children[1].children.map((r) => r.children.length), [2, 2, 3]);
+  // A client that is not on this computer has no button.
+  const gone = gatewayCard(KITDEN, { view: VIEW, setup: [entry('claude_code', 'added'), entry('codex', 'not_installed', { enabled: null }), entry('cursor', 'missing')], projects: PROJECTS, clients: FOUND });
+  assert.deepEqual(gone.list.children[1].children.map((r) => r.children.length), [3, 2, 3]);
   // A row with no button says why in its small line.
   const smallOf = (card) => card.list.children[1].children.map((r) => textOf(r.children[1].children[1]));
-  assert.deepEqual(smallOf(plugin), ['Connected · from a plugin', 'Not connected · not on this computer', 'Not connected']);
+  assert.deepEqual(smallOf(gone), ['Connected', 'Not connected · not on this computer', 'Not connected']);
   const off = gatewayCard(KITDEN, { view: VIEW, setup: [entry('claude_code', 'added', { enabled: false }), entry('codex', 'not_installed', { enabled: null }), entry('cursor', 'old', { item: 'cursor:agentsetup' })], clients: FOUND, clientList: [{ id: 'codex', status: 'unreadable' }] });
   assert.deepEqual(smallOf(off), ['Not connected · its entry is off', 'Not connected · settings not readable', 'Not connected']);
   // An old entry is updated, not connected.
@@ -1466,7 +1458,7 @@ test('a link says what it joins, where it is written and what its button does', 
   });
 });
 
-test('a bypass, a registered and a plugin client link open their panel; only the bypass has a remove', () => {
+test('a bypass and a registered client link open their panel; only the bypass has a remove', () => {
   // A server Claude Code sets up on its own: its × removes Claude Code's own entry.
   const direct = linkFor('client:claude_code>outside:move:github');
   assert.deepEqual(direct.removal, { tip: 'Remove github from Claude Code', body: { action: 'mcp.remove_direct', targets: [{ item: 'g' }], params: {} } });
@@ -1480,20 +1472,8 @@ test('a bypass, a registered and a plugin client link open their panel; only the
   assert.equal(textOf(route.why), 'Tools and access are set in MetaMCP itself.');
   const held = linkCard(linkParts(tree, 'gateway:gw-2>held:gw-2:x', ''), { linked: LINKED, view });
   assert.deepEqual([held.id, labels(held), facts(held).map(([label]) => label)], ['Held by the gateway', [], ['From', 'To', 'State']]);
-  // A plugin gives Cursor its entry: no Disconnect, and the panel says why.
-  const plugin = linkCard(linkFor('client:cursor>gateway:kitden', { setup: [...SETUP.slice(0, 2), entry('cursor', 'plugin')] }), { linked: ['claude_code', 'codex', 'cursor'], view: FILES_VIEW });
-  assert.deepEqual(labels(plugin), []);
-  assert.ok(textOf(plugin.why).endsWith('Cursor gets Kitden from a plugin: turn the plugin off to disconnect it.'), textOf(plugin.why));
-  // Where it is written says only what is true: a plugin's files for a plugin's entry or server;
-  // nothing for a line that also, or only, comes from the Desktop Code tab.
-  assert.deepEqual(facts(plugin).at(-1), ['Written in', "A plugin's files"]);
-  // The same client's route to a registered gateway is its own entry: written in its settings.
-  const routes = { ...view, connections: { ...view.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: ['x'] } } };
-  const pluginSetup = [...SETUP.slice(0, 2), entry('cursor', 'plugin')];
-  const ownTree = gatewayTree(routes, { setup: pluginSetup, clients: CLIENTS, held: new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP' }] }]]) });
-  const ownRoute = linkParts(ownTree, 'client:cursor>gateway:gw-2', '');
-  assert.equal(ownRoute.from.viaPlugin, true);
-  assert.deepEqual(facts(linkCard(ownRoute, { linked: ['claude_code', 'codex', 'cursor'], view: routes })).at(-1), ['Written in', "Cursor's settings"]);
+  // Where it is written says only what is true: a plugin's files for a plugin's server; nothing
+  // for a line that also, or only, comes from the Desktop Code tab.
   const linear = row('linear', 'claude_code', [], { stays: 'with the plugin' });
   const desktop = { ...row('notion', 'claude_code', ['n']), clients: ['claude_desktop_code_tab'] };
   const both = { ...row('slack', 'claude_code', ['s1', 's2']), clients: ['claude_code', 'claude_desktop_code_tab'] };

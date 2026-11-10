@@ -7,6 +7,17 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### 0.7.1
+
+- **The plugin's server only reads:** the plugin now starts `kitden mcp --read-only`, which
+  offers Kitden's four reading tools and never the tools of servers in the gateway. The plugin
+  needs Kitden 0.7.1 or later.
+- **The gateway link is always the page's own entry:** the page no longer counts the plugin's
+  server as a client's connection to the gateway. If your servers are in the gateway and a
+  client had only the plugin, click **Connect** for that client on the page.
+- **The plugin README says what runs:** the four tools, what they read, prompts to try and what
+  to do when the server fails.
+
 ### 0.7.0
 
 - **Context: do your skills fit?** A new page shows what Claude Code and Codex sent in your

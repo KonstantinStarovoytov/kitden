@@ -92,7 +92,7 @@ Add only servers and plugins you trust: they run with your permissions.
 | **See what runs** | How often each tool is called, and which tools only read. |
 | **Instructions in view** | Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each client loads, and where they come from. |
 | **MCP server** | `kitden mcp` lets any agent read your setup, so "show my setup" or "why does this load twice" gets a true answer. Its own tools only read. |
-| **Plugin** | For Claude Code and Codex. With Kitden installed, `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` adds the server and two skills. `/kitden:audit` compares what loads with the project you are in and lists what to turn off; you change it on the page. [More](https://github.com/KonstantinStarovoytov/kitden/blob/main/plugins/kitden/README.md). <!-- Checked 2026-11-05: https://code.claude.com/docs/en/discover-plugins --> |
+| **Plugin** | For Claude Code and Codex. With Kitden installed, `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` adds the server, with only Kitden's reading tools, and two skills. `/kitden:audit` compares what loads with the project you are in and lists what to turn off; you change it on the page. [More](https://github.com/KonstantinStarovoytov/kitden/blob/main/plugins/kitden/README.md). <!-- Checked 2026-11-05: https://code.claude.com/docs/en/discover-plugins --> |
 
 ## Get started
 

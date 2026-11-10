@@ -107,8 +107,8 @@ function waitWords(key, words) {
 // What connects a client to the Kitden gateway, or takes it off again, by its kitden entry (its row
 // in the setup): `{ connect, update, body }`, Connect being the entry's set up (`update` for an old
 // entry, which it replaces) and Disconnect its removal (Task 1). Null where Kitden cannot do
-// either: the setup was not read, a plugin gives the entry, the client is not on this computer, or its
-// own entry is turned off.
+// either: the setup was not read, the client is not on this computer, or its own entry is turned
+// off.
 export function connectAction(client, setup) {
   const entry = (setup || []).find((e) => e.client === client);
   if (entry && entry.state === "added" && entry.enabled !== false) {
@@ -129,14 +129,13 @@ export function connectBody(client, setup) {
   return turnsOn ? { action: "setup_server.enable", targets: [{ client }], params: {} } : null;
 }
 
-// Why a client has no Connect or Disconnect, in a few words for a gateway row: a plugin gives its
-// entry, its own entry is off, or Kitden did not find it here (or could not read its settings, by
-// the scan's `found`). Null where it has a button, or Kitden cannot say.
+// Why a client has no Connect or Disconnect, in a few words for a gateway row: its own entry is
+// off, or Kitden did not find it here (or could not read its settings, by the scan's `found`).
+// Null where it has a button, or Kitden cannot say.
 function noButtonWords(entry, found) {
   if (!entry) return null;
   if (entry.state === "not_installed") return found && found.status === "unreadable" ? "settings not readable" : "not on this computer";
-  if (entry.enabled === false) return "its entry is off";
-  return entry.state === "plugin" ? "from a plugin" : null;
+  return entry.enabled === false ? "its entry is off" : null;
 }
 
 // Whether Kitden knows the tools of every server in `servers`.
@@ -221,8 +220,8 @@ function throughSay(name, through, place) {
 }
 
 // What the client panel says (gateway-notes 3.5): whether the client calls servers through Kitden,
-// so its rules apply, or why not (not on this computer, its entry off); the servers it sets up on its
-// own, which skip those rules; and why there is no Disconnect for a plugin's entry.
+// so its rules apply, or why not (not on this computer, its entry off); and the servers it sets up
+// on its own, which skip those rules.
 function clientSay(name, { known, on, entry, found, turnsOn, through, place, own }) {
   if (!known) return "Kitden could not read which clients use it.";
   let said = { say: `${name} does not use the Kitden gateway yet.`, rules: false };
@@ -240,7 +239,6 @@ function clientSay(name, { known, on, entry, found, turnsOn, through, place, own
     const many = own.length > 1;
     words.push(`${joinWords(own.map((s) => s.name))} ${many ? "are" : "is"} set up in ${name} on its own and skip${many ? "" : "s"} ${said.rules ? "those rules" : "Kitden's rules"}.`);
   }
-  if (on && entry.state === "plugin") words.push(`${name} gets Kitden from a plugin: turn the plugin off to disconnect it.`);
   return words.join(" ");
 }
 
@@ -275,8 +273,7 @@ export function clientCard(client, { setup, clients, progress = data.progress, v
     ownFact(own),
     { label: "Projects", value: picked ? folder : ALL_PROJECTS },
   ];
-  // A plugin's entry that is off is the plugin's switch, not the entry's.
-  const turnsOn = off.includes(client) && entry.state === "added" && TURNS_ON.includes(client);
+  const turnsOn = off.includes(client) && TURNS_ON.includes(client);
   const why = clientSay(name, { known, on, entry, found, turnsOn, through, place: placeWords(picked, folder), own });
   const actions = [];
   if (action && action.connect) actions.push({ label: action.update ? "Update the Kitden entry…" : "Connect to the gateway…", body: action.body, note: SETUP_NOTE, primary: true });
@@ -998,14 +995,13 @@ function linkKind(from, to) {
 const DESKTOP_TAB = "claude_desktop_code_tab";
 
 // Where a change to a link is written, in words, never a path: the client's settings, a plugin's
-// files (for an entry or a server a plugin gives), or the Kitden gateway's own file, which holds its
+// files (for a server a plugin gives), or the Kitden gateway's own file, which holds its
 // servers and its rules (gateway.json: there is no rules file of its own). Null where Kitden does
 // not say: a registered gateway keeps its servers itself, and a Claude Code line may also, or only,
 // come from the Desktop app's Code tab.
 function writtenIn(kind, from, to) {
   if (kind === "change") return "Not written yet";
-  // A plugin gives a client only its kitden entry; its route to a registered gateway is its own.
-  if (kind === "client") return from.viaPlugin && to.gateway.kind === "kitden" ? "A plugin's files" : `${from.name}'s settings`;
+  if (kind === "client") return `${from.name}'s settings`;
   if (kind === "direct") {
     if (to.groupKey === "plugin") return "A plugin's files";
     const own = (to.row.clients || []).includes(from.client) && !(from.client === "claude_code" && to.row.clients.includes(DESKTOP_TAB));
@@ -1029,10 +1025,7 @@ function heldSay(name, linked) {
 function linkSay(kind, from, to, { linked, view, picked, folder, unk }) {
   const place = placeWords(picked, folder);
   if (kind === "client" && to.gateway.kind !== "kitden") return `Tools and access are set in ${to.name} itself.`;
-  if (kind === "client") {
-    const plugin = from.viaPlugin ? ` ${from.name} gets Kitden from a plugin: turn the plugin off to disconnect it.` : "";
-    return `${throughSay(from.name, throughKitden(view), place).say}${plugin}`;
-  }
+  if (kind === "client") return throughSay(from.name, throughKitden(view), place).say;
   if (kind === "held") return from.gateway.kind === "kitden" ? heldSay(to.name, linked) : `Tools and access are set in ${from.name} itself.`;
   if (kind === "tool") {
     const none = nobody(linked);
