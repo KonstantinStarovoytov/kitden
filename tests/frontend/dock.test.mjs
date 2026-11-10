@@ -186,6 +186,15 @@ function slow() {
 const refusal = (detail) => ({ status: 422, json: { detail, row: null } });
 const verified = (id) => ({ status: 200, json: { id, state: 'verified', steps: [] } });
 const stale = (id) => ({ status: 409, json: { id, state: 'stale', error: 'Settings changed.' } });
+// An Apply the client itself refused: the engine's short reason says who, the error everything.
+const clientRefused = (id) => ({
+  status: 500,
+  json: {
+    id, state: 'restored',
+    error: '`codex plugin install` failed: not allowed. The original settings were restored.',
+    refused_by: 'codex', steps: [],
+  },
+});
 
 const bar = () => pages['#dock'].children.find((child) => child.classList.contains('bar')) || null;
 const toastNode = () => pages['#dock'].children.find((child) => child.classList.contains('toast')) || null;
@@ -808,6 +817,22 @@ test('a failed Apply stays in the bar, shakes it and puts focus on Try again', a
   assert.equal(section.className, 'bar tray many');
   assert.equal(button(section, 'Apply all').attributes['aria-disabled'], undefined);
   assert.equal(section.attributes['aria-label'], '2 changes in preview');
+});
+
+test('a change a client refused says who refused in the bar', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(add('github'));
+  queue('/api/changes/c1/apply', clientRefused('c1'));
+  await button(bar(), 'Apply').click();
+  const section = bar();
+  assert.equal(section.className, 'bar tray err');
+  assert.equal(section.attributes['aria-label'], 'Nothing was changed');
+  // The engine's short reason names the client; the command and its output stay in Details.
+  assert.deepEqual(section.children[0].children.map((node) => node.textContent).slice(0, 2), [
+    'Nothing was changed', 'Codex refused the change. Kitden put the files back.',
+  ]);
+  assert.ok(globalThis.document.activeElement === button(section, 'Try again'), 'focus is not where it should be');
 });
 
 test('an end that is not known leaves Open Changes and no Try again', async () => {

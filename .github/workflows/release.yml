@@ -30,6 +30,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "25"
+          package-manager-cache: false
       - run: uv sync --locked
       # Linux keeps server secrets in the desktop keyring through secret-tool.
       - name: A keyring on the session bus (Ubuntu)
@@ -46,7 +47,8 @@ jobs:
       - name: The real keyring (Ubuntu)
         if: runner.os == 'Linux'
         run: |
-          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_RUNTIME_DIR
           export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
           dbus-daemon --session --address="$DBUS_SESSION_BUS_ADDRESS" --fork
           printf 'kitden-ci' | gnome-keyring-daemon --unlock --components=secrets
