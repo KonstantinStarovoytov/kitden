@@ -24,6 +24,7 @@ from kitden.model import (
     Scope,
     Step,
 )
+from kitden.web.app import change_dict
 from tests.unit.fake_metamcp import FakeMetaMcp
 
 CONFIG = """# my Codex settings
@@ -781,8 +782,6 @@ def test_a_folder_removal_is_backed_up_and_undone(tmp_path):
 
 
 def test_a_removed_folder_with_a_secret_flags_the_change(tmp_path):
-    from kitden.web.app import change_dict
-
     folder = tidy_folder(tmp_path)
     engine = make_engine(tmp_path)
     plain = engine.preview("skill.remove", [removal_step(folder)])
@@ -1158,7 +1157,10 @@ def test_a_command_that_fails_after_writing_is_taken_back(tmp_path, settings):
     change = engine.preview("plugin.install", plugin_steps(settings)[1:])
     engine.apply(change.id)
     assert change.state is ChangeState.RESTORED
+    # The bar's line names who refused; the command and its output stay in the error.
     assert change.refused_by == "claude_code"
+    assert change_dict(change)["refused_by"] == "claude_code"
+    assert "`claude plugin install` failed: half done" in change.error
     assert undone and undone[0][1:3] == ["plugin", "uninstall"]
     assert json.loads(settings.read_text()).get("enabledPlugins") == {}
     assert change.error.endswith("The original settings were restored.")
@@ -1178,28 +1180,6 @@ def test_a_command_that_fails_after_writing_is_taken_back(tmp_path, settings):
     assert change.state is ChangeState.RESTORED
     assert f"{settings} is not as it was before." in change.error
     assert "restored" not in change.error
-
-
-def test_a_client_that_refuses_is_named_for_the_bar(tmp_path, settings):
-    # The bar's line after a failed Apply names who refused, in short; the command and its
-    # output stay in the error, behind Show changes and on Changes.
-    settings.write_text(json.dumps({"theme": "dark"}))
-    cli = FakePluginCli(settings)
-
-    def run(command, cwd):  # the client's own install says no
-        if command[1:3] == ["plugin", "install"]:
-            return CommandResult(returncode=1, output="installed for the user")
-        return cli(command, cwd)
-
-    engine = make_engine(tmp_path, run=run)
-    change = engine.preview("plugin.install", plugin_steps(settings)[1:])
-    assert engine.apply(change.id).state is ChangeState.RESTORED
-    assert change.refused_by == "claude_code"
-    assert change.error.endswith("The original settings were restored.")
-    assert "`claude plugin install` failed: installed for the user" in change.error
-    from kitden.web.app import change_dict
-
-    assert change_dict(change)["refused_by"] == "claude_code"
 
 
 def test_a_check_that_fails_after_writing_is_not_a_refusal(tmp_path, settings):
