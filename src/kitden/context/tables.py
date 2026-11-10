@@ -7,6 +7,15 @@ CLAUDE_WINDOWS: dict[str, tuple[int, int]] = {
     "claude-sonnet-4-6": (200_000, 4),
 }
 
+# checked 2026-11-10 (real logs): the log does not say the window, and a model can run with
+# another one than the table says. The limits Kitden tries then: (window, characters per token).
+CLAUDE_CANDIDATES: tuple[tuple[int, int], ...] = (
+    (200_000, 3),
+    (200_000, 4),
+    (1_000_000, 3),
+    (1_000_000, 4),
+)
+
 # The estimate for a chat whose model is not known: the other kind of window than the last one.
 # last window -> (window, characters per token, name shown)
 CLAUDE_OTHER_WINDOW: dict[int, tuple[int, int, str]] = {

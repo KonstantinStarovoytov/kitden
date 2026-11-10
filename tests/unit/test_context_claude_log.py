@@ -237,3 +237,59 @@ def test_a_list_with_no_version_has_an_empty_version(tmp_path):
     del entry["version"]
     write_chat(tmp_path, "p", "chat", [entry], 100)
     assert last_claude_list(tmp_path, None).version == ""
+
+
+def added_entry(names, content, **kw):
+    """A list of skills added in the middle of a chat."""
+    return list_entry(names, content, isInitial=False, **kw)
+
+
+def test_skills_added_in_the_middle_of_a_chat_join_the_list(tmp_path):
+    full = list_entry(["a", "b"], "- a: Does A.\n- b", at="2026-11-09T10:00:00Z")
+    added = added_entry(["p:c"], "- p:c: Does C.", at="2026-11-09T11:00:00Z")
+    write_chat(tmp_path, "p", "chat", [full, assistant(), added], 100)
+    got = last_claude_list(tmp_path, None)
+    assert got.skills == (("a", "Does A."), ("b", None), ("p:c", "Does C."))
+    assert got.at == "2026-11-09T11:00:00Z"
+
+
+def test_an_added_skill_already_in_the_list_takes_its_new_text(tmp_path):
+    full = list_entry(["a", "b"], "- a\n- b: Does B.")
+    write_chat(tmp_path, "p", "chat", [full, added_entry(["a"], "- a: Does A.")], 100)
+    assert last_claude_list(tmp_path, None).skills == (("a", "Does A."), ("b", "Does B."))
+
+
+def test_a_full_list_after_added_skills_stands_alone(tmp_path):
+    full = list_entry(["a"], "- a: Does A.")
+    again = list_entry(["a", "c"], "- a: Does A.\n- c")
+    write_chat(tmp_path, "p", "chat", [full, added_entry(["c"], "- c: Does C."), again], 100)
+    assert last_claude_list(tmp_path, None).skills == (("a", "Does A."), ("c", None))
+
+
+def test_added_skills_with_no_full_list_before_them_are_no_list(tmp_path):
+    write_chat(tmp_path, "p", "chat", [added_entry(["c"], "- c: Does C."), assistant()], 100)
+    assert last_claude_list(tmp_path, None) is None
+
+
+def test_added_skills_from_a_newer_client_keep_the_list_readable(tmp_path):
+    full = list_entry(["a"], "- a: Does A.", version="2.2.0")
+    added = added_entry(["c"], "- c: Does C.", version="2.2.0")
+    write_chat(tmp_path, "p", "chat", [full, added], 100)
+    assert last_claude_list(tmp_path, None).skills == (("a", "Does A."), ("c", "Does C."))
+
+
+def test_the_model_is_the_one_that_answered_the_list_not_a_later_one(tmp_path):
+    entries = [
+        assistant("claude-sonnet-4-6"),
+        list_entry(["a"], "- a: Does A."),
+        assistant("claude-fable-5-1"),
+        assistant("claude-opus-5-5"),
+    ]
+    write_chat(tmp_path, "p", "chat", entries, 100)
+    assert last_claude_list(tmp_path, None).model == "claude-fable-5-1"
+
+
+def test_a_list_with_no_answer_yet_takes_the_model_before_it(tmp_path):
+    entries = [assistant("claude-sonnet-4-6"), list_entry(["a"], "- a: Does A.")]
+    write_chat(tmp_path, "p", "chat", entries, 100)
+    assert last_claude_list(tmp_path, None).model == "claude-sonnet-4-6"

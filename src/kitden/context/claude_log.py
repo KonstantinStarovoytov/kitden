@@ -81,10 +81,17 @@ def _split(names: list[str], content: str) -> tuple[tuple[str, str | None], ...]
     return tuple(skills)
 
 
-def _full(attachment: dict) -> bool:
+def _added(skills: tuple, added: tuple) -> tuple[tuple[str, str | None], ...]:
+    """The list with the added skills: a skill already there takes its new text."""
+    new = dict(added)
+    kept = tuple((name, new.pop(name)) if name in new else (name, text) for name, text in skills)
+    return kept + tuple(new.items())
+
+
+def _readable(attachment: dict) -> bool:
     names = attachment.get("names")
     return (
-        attachment.get("isInitial") is True
+        isinstance(attachment.get("isInitial"), bool)
         and isinstance(names, list)
         and all(isinstance(name, str) for name in names)
         and isinstance(attachment.get("content"), str)
@@ -107,9 +114,14 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
     # checked 2026-11-09 (real logs, Claude Code 2.1.309): entry fields timestamp, version,
     # entrypoint, cwd, isSidechain; attachment fields type, isInitial, skillCount, names, content;
     # model is message.model of an assistant entry.
+    # checked 2026-11-10 (real logs, Claude Code 2.1.271-2.1.309): a list with isInitial false
+    # holds only the skills added since the last list, each with its description whatever the
+    # limit. A chat sends its full list again when it is resumed, not when the model changes, so
+    # the list's model is the first one to answer after it.
     """
     result: SentList | Unreadable | None = None
-    model = None
+    model = None  # the last model so far
+    answered = True  # a model has answered the last full list
     first: dict | None = None  # the first entry that names a version: the chat's client
     with path.open(encoding="utf-8", errors="replace") as lines:
         for line in lines:
@@ -126,22 +138,34 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                 entrypoint = entry.get("entrypoint")
                 version = entry.get("version")
                 version = version if isinstance(version, str) else ""
-                if _full(attachment):
+                at = str(entry.get("timestamp", ""))
+                if not _readable(attachment):
+                    if _newer_than_known(version):
+                        result = Unreadable(CLIENT, version)
+                    continue
+                skills = _split(attachment["names"], attachment["content"])
+                if attachment["isInitial"]:
                     result = SentList(
                         CLIENT,
-                        str(entry.get("timestamp", "")),
+                        at,
                         version,
                         INTERACTIVE.get(entrypoint) if isinstance(entrypoint, str) else None,
-                        None,
+                        model,
                         entry.get("cwd"),
-                        _split(attachment["names"], attachment["content"]),
+                        skills,
                     )
-                elif _newer_than_known(version):
-                    result = Unreadable(CLIENT, version)
+                    answered = False
+                elif isinstance(result, SentList):
+                    result = replace(result, at=at, skills=_added(result.skills, skills))
+                elif result is None and _newer_than_known(version):
+                    result = Unreadable(CLIENT, version)  # nothing to add them to
             elif '"model"' in line and ASSISTANT.search(line):
                 found = MODEL.search(line)  # a regex: no need to parse a large assistant line
                 if found and not found[1].startswith("<"):
                     model = found[1]
+                    if not answered and isinstance(result, SentList):
+                        result = replace(result, model=model)
+                        answered = True
             elif first is None and '"version"' in line:
                 try:
                     entry = json.loads(line)
@@ -152,8 +176,6 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
     newer = first is not None and _newer_than_known(first["version"])
     if result is None and newer and not _skipped(first, folder):
         return Unreadable(CLIENT, first["version"])
-    if isinstance(result, SentList):
-        result = replace(result, model=model)
     return result
 
 

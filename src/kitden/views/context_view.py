@@ -31,6 +31,7 @@ from kitden.context.rules import (
 )
 from kitden.context.tables import (
     CLAUDE_ALWAYS_FULL,
+    CLAUDE_CANDIDATES,
     CLAUDE_DESCRIPTION_CAP,
     CLAUDE_OTHER_WINDOW,
     CLAUDE_WINDOWS,
@@ -305,12 +306,15 @@ def _claude_weights(home: Path, at_ms: int) -> dict[str, float]:
     return weights
 
 
-def _claude_run(rows, states, weights, budget) -> tuple[list[ClaudeSkill], ClaudeFit] | None:
-    """The rule on the list's skills in these states; None when a size is not known."""
+def _claude_run(
+    rows, states, weights, budget, unknown: str | None = None
+) -> tuple[list[ClaudeSkill], ClaudeFit] | None:
+    """The rule on the list's skills in these states; None when a size is not known.
+    `unknown` stands in for a description Kitden cannot find."""
     skills = [
         ClaudeSkill(
             r.name,
-            r.sent if r.sent is not None else r.full,
+            r.sent if r.sent is not None else r.full if r.full is not None else unknown,
             r.name in CLAUDE_ALWAYS_FULL,
             states[r.name] == "name-only",
             weights.get(r.name, 0.0),
@@ -322,6 +326,18 @@ def _claude_run(rows, states, weights, budget) -> tuple[list[ClaudeSkill], Claud
         return skills, claude_rule(skills, budget)
     except ValueError:
         return None
+
+
+def _claude_gives(rows, states, weights, budget, sent_full: frozenset[str]) -> bool:
+    """This limit rebuilds the sent list, whatever the size of a description Kitden cannot find.
+
+    The rule gives the same list with every such description empty and with every one at the
+    cap, so it gives it for any size between: a skill that fits at the cap fits when smaller,
+    and one that does not fit when all are empty never fits."""
+    for unknown in ("", "x" * CLAUDE_DESCRIPTION_CAP):
+        if _claude_run(rows, states, weights, budget, unknown)[1].full != sent_full:
+            return False
+    return True
 
 
 def _unchanged(files: list[Path], at_ms: int) -> bool:
@@ -472,6 +488,22 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     base = _claude_run(rows, states, weights, budget) if budget else None
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
     checked = base is not None and base[1].full == sent_full
+    # The log does not say the window: take the only one whose limit rebuilds the list.
+    worked_out = two_limits = False
+    if setting is None and not checked:
+        fits = [
+            candidate
+            for candidate in CLAUDE_CANDIDATES
+            if _claude_gives(rows, states, weights, claude_budget(*candidate), sent_full)
+        ]
+        if len({size for size, _ in fits}) == 1:
+            worked_out = True
+            window = fits[0][0]
+            two_limits = len(fits) > 1
+            budget = None if two_limits else claude_budget(*fits[0])
+            # None when a size is not known: the window is sure, an estimate is not.
+            base = _claude_run(rows, states, weights, budget) if budget else None
+            checked = base is not None
 
     when = _on_date(date)
     settled = bool(date) and _unchanged(files, at_ms)
@@ -486,7 +518,8 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         models = words.CLAUDE_SETTING
     else:
         title = words.WINDOW_TITLE.format(size=_size(window)) if window else words.UNKNOWN_WINDOW
-        models = " · ".join(p for p in (_model_name(found.model), found.surface) if p)
+        source = words.WORKED_OUT if worked_out else None
+        models = " · ".join(p for p in (_model_name(found.model), found.surface, source) if p)
     windows = [_window_card(title, models, _tag(date), budget, fact)]
     if checked and setting is None and window in CLAUDE_OTHER_WINDOW:
         other, per_token, shown = CLAUDE_OTHER_WINDOW[window]
@@ -527,10 +560,13 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     surface = f" {found.surface}" if found.surface else ""
     if checked:
         check = words.HOW_CLAUDE_CHECKED
+    elif two_limits:
+        check = words.HOW_TWO_LIMITS
     else:
         check = words.HOW_NOT_MATCHED if base is not None else words.HOW_NOT_RUN
     how = [
         words.HOW_CLAUDE_LIST.format(version=version, when=when, surface=surface),
+        *([words.HOW_CLAUDE_WINDOW.format(size=_size(window))] if worked_out else []),
         words.HOW_CLAUDE_RULE,
         f"{words.HOW_CLAUDE_CHECK} {check}",
         words.HOW_CLAUDE_SETTING if setting is not None else words.HOW_CLAUDE_SHELL,
@@ -541,7 +577,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         client,
         # Grey: Kitden cannot judge that chat (the limit may have dropped a skill set now).
         lamp="warn" if misfit else "none" if now else "ok",
-        message=None if checked else words.NO_CHECK,
+        message=None if checked else words.TWO_LIMITS if two_limits else words.NO_CHECK,
         fact={
             "date": date,
             "surface": found.surface,

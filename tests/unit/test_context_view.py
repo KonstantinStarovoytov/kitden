@@ -881,3 +881,74 @@ def test_a_codex_skill_that_is_off_has_no_on_to_offer(home):
     rows = {s["name"]: s for s in view(home)["codex"]["skills"]}
     assert (rows["beta"]["item"], rows["beta"]["switch"]) == (None, [])
     assert rows["alpha"]["switch"] == ["on", "off"]
+
+
+# The window worked out from the list
+
+
+def eight_skills(home, *, model, sent=7):
+    """Eight skills of 1,000 characters; the log sent the first `sent` with a description.
+    A limit of 8,000 characters (a 200K window at 4 per token) keeps 7, 6,000 keeps 5, and a
+    1M window keeps all 8."""
+    names = [f"s{i}" for i in range(1, 9)]
+    for name in names:
+        skill(home / ".claude/skills", name, LONG[:1000])
+    claude_chat(
+        home, {n: LONG[:1000] if i < sent else None for i, n in enumerate(names)}, model=model
+    )
+
+
+def test_a_model_not_in_the_table_gets_the_one_window_that_gives_its_list(home):
+    eight_skills(home, model="claude-new-9")
+    cc = view(home)["claude_code"]
+    assert (cc["checked"], cc["message"]) == (True, None)
+    fact, other = cc["windows"]
+    assert (fact["title"], fact["budget"]) == ("200K window", 8000)
+    assert fact["models"] == "New 9 · in the Claude app · worked out from the list"
+    assert other["title"] == "1M window"
+    assert (
+        "The chat log does not say the window. Only a 200K window gives this list, "
+        "so Kitden shows it."
+    ) in cc["how"]
+
+
+def test_a_model_that_ran_with_the_other_window_than_the_table_says(home):
+    eight_skills(home, model="claude-opus-5-5")
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is True
+    assert cc["windows"][0]["title"] == "200K window"
+    assert cc["windows"][0]["models"].endswith("worked out from the list")
+
+
+def test_a_window_with_two_limits_that_give_the_list_shows_no_estimate(home):
+    skill(home / ".claude/skills", "alpha", LONG[:1000])
+    built_in = ("dataviz", "simplify", "loop", "schedule", "run", "code-review")
+    sent = dict.fromkeys(built_in, "x" * 1536) | {"alpha": None}
+    # The built-in skills alone pass 8,000 characters: alpha shows a name at 6,000 and at 8,000.
+    claude_chat(home, sent, model="claude-new-9")
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is False
+    assert cc["message"] == (
+        "Two limits give the list of your last chat, so Kitden shows no estimate."
+    )
+    [fact] = cc["windows"]
+    assert (fact["title"], fact["budget"]) == ("200K window", None)
+    assert cc["after"] is None
+
+
+def test_a_list_every_window_gives_keeps_the_window_unknown(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"alpha": "Does alpha."}, model="claude-new-9")
+    cc = view(home)["claude_code"]
+    assert cc["windows"][0]["title"] == "Unknown window"
+    assert cc["windows"][0]["models"] == "New 9 · in the Claude app"
+
+
+def test_a_skill_of_unknown_size_does_not_hide_the_window_when_no_size_changes_the_list(home):
+    built_in = ("dataviz", "simplify", "loop", "schedule", "run", "code-review")
+    # ghost has no file. The built-in skills alone pass 8,000 characters, so it shows only a
+    # name on a 200K window whatever its size, and gets a description on a 1M window.
+    claude_chat(home, dict.fromkeys(built_in, "x" * 1536) | {"ghost": None}, model="claude-new-9")
+    cc = view(home)["claude_code"]
+    assert cc["windows"][0]["title"] == "200K window"
+    assert cc["checked"] is False
