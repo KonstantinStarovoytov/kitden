@@ -30,10 +30,11 @@ IN_APP = re.compile(r"(?:^|/)([^/]+)\.app/Contents/")
 
 
 def gateway_entry(entry: dict) -> dict:
-    """What the Kitden gateway runs: command, args and env, or url and headers. Keys only the
-    client reads (type, on/off, tool lists, timeouts) stay behind; local_move_steps adds a
-    Codex entry's own start time."""
-    server = {key: entry[key] for key in ("command", "args", "env", "url") if entry.get(key)}
+    """What the Kitden gateway runs: command, args, env and a start folder, or url and headers.
+    Keys only the client reads (type, on/off, tool lists, timeouts) stay behind;
+    local_move_steps adds a Codex entry's own start time."""
+    keys = ("command", "args", "env", "cwd", "url")
+    server = {key: entry[key] for key in keys if entry.get(key)}
     headers = entry.get("headers") or entry.get("http_headers")
     if headers:
         server["headers"] = headers
@@ -69,15 +70,13 @@ def reads_elsewhere(entry: dict, server: dict) -> bool:
 def entry_refusal(name: str, entry: dict) -> str | None:
     """Why the Kitden gateway cannot run this entry, so it stays direct; None when it can."""
     server = gateway_entry(entry)
+    if "cwd" in entry:
+        why = _folder_refusal(name, entry["cwd"])
+        if why is not None:
+            return why
     if reads_elsewhere(entry, server):
         # A variable, an env file or a helper command the client reads as it starts the server.
         return f"{name} needs values its client fills in when it starts; it stays direct for now."
-    if "cwd" in entry:
-        # The gateway starts a local server in the project or home folder instead. A plain folder
-        # is named by its base name; one the client fills in ("${CLAUDE_PLUGIN_ROOT}") is not.
-        folder = str(entry["cwd"])
-        where = "a folder of its own" if "${" in folder else f"its own folder, {Path(folder).name}"
-        return f"{name} must start in {where}; it stays direct for now."
     # The gateway speaks streamable HTTP; Claude Code also has `sse` and `ws` (checked
     # 2026-10-21). Without a type, an address that ends in /sse is SSE, as Cursor reads it.
     kind = entry.get("type")
@@ -91,6 +90,24 @@ def entry_refusal(name: str, entry: dict) -> str | None:
     wrong = any(not isinstance(server.get(k, kind()), kind) for k, kind in shapes.items())
     if wrong or not ("command" in server or "url" in server):
         return f"{name} could not be read from its file."
+    return None
+
+
+def _folder_refusal(name: str, folder: Any) -> str | None:
+    """Why the gateway cannot start a server in its own folder; None when it can: a full path
+    to a folder on this computer. One the client fills in ("${CLAUDE_PLUGIN_ROOT}") is not
+    named; a plain one is named by its base name. The gateway is the only way such a server
+    runs in Cursor: its docs list command, args, env and envFile, no cwd (checked 2026-11-09)."""
+    if not isinstance(folder, str):
+        return f"{name} could not be read from its file."
+    if "${" in folder:
+        return f"{name} must start in a folder of its own; it stays direct for now."
+    where = f"its own folder, {Path(folder).name}"
+    if not Path(folder).is_absolute():
+        return f"{name} must start in {where}; it stays direct for now."
+    if not Path(folder).is_dir():
+        gone = f"{where}, which is not on this computer"
+        return f"{name} must start in {gone}; it stays direct for now."
     return None
 
 

@@ -105,8 +105,8 @@ command line does not (checked 2026-10-21).
    turned off in Kitden." Turn it on again; the call works in the same session.
 7. Undo the switches and the move; check the server is direct again.
 
-Not run yet for steps 5 to 7: they need the real clients, and Part 2 was built and tested with
-fake servers only.
+Not run yet for steps 5 to 7: they need the real clients; so far they were tested with fake
+servers only.
 
 Before a release that adds, removes or puts back items, also check these once by hand, on the
 same test project:
@@ -133,7 +133,7 @@ same test project:
     skills…" a Codex plugin and a Codex server together and Undo: the plugin is gone from Codex's
     `/plugins` too, not only from the file.
 
-Not run yet for steps 8 to 16: Part 3 was built and tested with fake client commands only.
+Not run yet for steps 8 to 16: so far they were tested with fake client commands only.
 
 Before a release that touches secrets, also check the Keychain once by hand, on the same test
 project, with a server that has a token:
@@ -153,7 +153,7 @@ project, with a server that has a token:
     command's arguments). Use Claude Code for a minute, then check the entry is still there and
     a new session has the server. Undo; the entry is gone and the rest of the file is kept.
 
-Not run yet for steps 17 to 22: Part 5 was built and tested with a fake `security` only, and
+Not run yet for steps 17 to 22: so far they were tested with a fake `security` only, and
 step 22 with a fake `claude`.
 
 On Linux, check steps 17 to 19 once by hand too, on an Ubuntu desktop: the item shows in
@@ -169,7 +169,7 @@ same test project, with a Claude Code plugin that is on:
     place. Press "Preview again": the bar shows a fresh preview of the plugin as it is now. Press
     Cancel: the tray is empty and nothing was written.
 
-Not run yet for step 23: Part 3 of visual management was tested with sandbox files only.
+Not run yet for step 23: so far it was tested with sandbox files only.
 
 Before a release that touches the Gateway map, also check this once by hand, on the same test
 project, with a server that a client sets up on its own:
@@ -177,7 +177,7 @@ project, with a server that a client sets up on its own:
 24. Drag a server onto the servers on the Gateway map, Apply, and check a new session reaches it
     through the gateway; Undo from the toast.
 
-Not run yet for step 24: Part 4 was tested with sandbox files only.
+Not run yet for step 24: so far it was tested with sandbox files only.
 
 ## Release
 
@@ -206,9 +206,8 @@ floor, the page's tests (`node --test tests/frontend/*.test.mjs`), the start-tim
 (`scripts/measure-start.py`), a dependency audit (`pip-audit`) and the package build. On a tag
 it also stops if the notes file is missing. Then it publishes to PyPI
 with trusted publishing and creates the GitHub release with the notes file as its text.
-`README.md` is also the PyPI page. Fallback images and links use full `https://` addresses;
-`picture` sources use local paths so GitHub previews follow the branch. See
-[README media](readme-media.md) for capture and release steps.
+`README.md` is also the PyPI page. [README media](readme-media.md) says how its pictures are
+made, how their addresses work on GitHub and PyPI, and what to check before promoting a release.
 
 ## Gateways
 

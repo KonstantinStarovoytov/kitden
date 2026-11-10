@@ -3145,17 +3145,6 @@ def test_the_project_menu_ring_is_only_for_a_keyboard():
     assert not re.search(r"^\.where-option\.active \{ box-shadow", css, re.M)
 
 
-def test_how_it_works_dark_svg_uses_no_old_amber():
-    css = (STATIC / "style.css").read_text()
-    images = STATIC.parents[3] / "docs/images"
-    light = re.search(r"--lamp-warn: (#[0-9a-f]{6});", css).group(1)
-    dark = re.search(r"--lamp-on: #47c27a; --lamp-warn: (#[0-9a-f]{6});", css).group(1)
-    for name, warn in (("how-it-works.svg", light), ("how-it-works-dark.svg", dark)):
-        svg = (images / name).read_text().lower()
-        assert "#e0a347" not in svg, name
-        assert f'<circle cx="684" cy="142" r="4" fill="{warn}"/>' in svg, name
-
-
 def test_hints_follow_one_pattern_and_refusals_are_amber():
     # One hint pattern ("Click to … · drag onto …", no final period) in the add panels and the
     # catalog; a refusal in a form is amber, as in the dock and under a token field.

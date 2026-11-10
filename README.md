@@ -15,6 +15,7 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml"><img src="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml/badge.svg?branch=main" alt="Checks on main"></a>
   <a href="https://github.com/KonstantinStarovoytov/kitden/releases/latest"><img src="https://img.shields.io/github/v/release/KonstantinStarovoytov/kitden?label=latest%20release" alt="Latest release"></a>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
+  <a href="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden"><img src="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden/badges/score.svg" alt="Kitden on Glama"></a>
 </p>
 
 ### Everything your agents load, on one map
@@ -75,8 +76,8 @@ Add only servers and plugins you trust: they run with your permissions.
 | **Per project** | Turn a server or a tool on or off for one project only. |
 | **See what runs** | How often each tool is called, and which tools only read. |
 | **Instructions in view** | Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each client loads, and where they come from. |
-| **Ask your agent** | "Show my setup" works from any agent, through Kitden's own read-only MCP server. |
-| **Claude Code plugin** | With Kitden installed, `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` adds its skill and read-only tools to Claude Code. Codex has [one too](https://github.com/KonstantinStarovoytov/kitden/blob/main/plugins/kitden/README.md). <!-- Checked 2026-11-05: https://code.claude.com/docs/en/discover-plugins --> |
+| **MCP server** | `kitden mcp` lets any agent read your setup, so "show my setup" or "why does this load twice" gets a true answer. Its own tools only read. |
+| **Plugin** | For Claude Code and Codex. With Kitden installed, `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` adds the server and two skills. `/kitden:audit` compares what loads with the project you are in and lists what to turn off; you change it on the page. [More](https://github.com/KonstantinStarovoytov/kitden/blob/main/plugins/kitden/README.md). <!-- Checked 2026-11-05: https://code.claude.com/docs/en/discover-plugins --> |
 
 ## Get started
 
@@ -98,7 +99,6 @@ uv tool install --python 3.13 kitden && kitden
 ```
 
 Or with Homebrew: `brew install konstantinstarovoytov/tap/kitden`, then `kitden`.
-
 Update later with `uv tool upgrade kitden` or `brew upgrade kitden`.
 
 [Guide](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md) ·

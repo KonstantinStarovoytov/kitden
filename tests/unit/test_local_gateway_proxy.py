@@ -215,6 +215,21 @@ async def test_kitdens_own_tools_see_the_servers_in_the_gateway(home, monkeypatc
     assert [f["id"] for f in found.structured_content["findings"]] == [f["id"] for f in shown]
 
 
+async def test_a_server_with_a_start_folder_starts_there(home):
+    website, own = home / "work/website", home / "work/agents"
+    own.mkdir(parents=True)
+    write_settings(home, {"echo": {**echo("echo", "${workspaceFolder}"), "cwd": str(own)}})
+    save_tools(home, "echo", [tool("where")])
+    env = {"CLAUDE_PROJECT_DIR": str(website)}
+
+    async with gateway(home, env=env) as client:
+        where = json.loads(text(await client.call_tool("where", {})))
+
+    # It starts in its own folder; a project folder in its arguments is still the project's.
+    assert Path(where["cwd"]).resolve() == own.resolve()
+    assert where["args"][1:] == [str(website)]
+
+
 async def test_a_call_reaches_the_upstream_server(home):
     website = home / "work/website"
     entry = echo("echo", "${workspaceFolder}", "${CLAUDE_PROJECT_DIR}", "${CLAUDE_PROJECT_DIR:-.}")

@@ -2,7 +2,7 @@
 
 Sources read in full: `docs/mockup/kitden-motion.html` (v11) `Overview` (1231-1270) and `Changes` (1273-1300), the helpers they call
 (`rise` 471, `blurIn` 473, `roll` 474, `countUp` 475, `fold` 480, `panelLoad` 534, `dock.toast` 542), `motion-spec.md` M8 (401-444), and
-decisions D21-D24 in `docs/superpowers/plans/2026-10-24-mockup-alignment.md`. Line numbers are in `kitden-motion.html` unless marked.
+decisions D21-D24 in `2026-10-24-mockup-alignment.md` (the git tag `dev-notes-2026-11-09`). Line numbers are in `kitden-motion.html` unless marked.
 "Calm" = `S.rich` false. `D(ms)` = 0 under reduced motion. Default Web Animation ease = CALM `cubic-bezier(.2,.8,.2,1)`, default 300 ms.
 `rise` in Calm = opacity 0 → 1 and translateY 6px → 0, 260 ms, no blur.
 
