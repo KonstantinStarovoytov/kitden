@@ -1,4 +1,4 @@
-name: Agent reviews
+name: Agent review
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  claude:
+  review:
     # Only with the switch on, only for branches in this repository, never for bots,
     # drafts, or pull requests labelled no-agent-review.
     if: >-
@@ -21,28 +21,13 @@ jobs:
       && !endsWith(github.actor, '[bot]')
       && !github.event.pull_request.draft
       && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
-    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/review-claude.yml@f63877b0cfcb4662c0e5ff8b77563262aeb4873f
+    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/review.yml@f0270ffc23051646688984600023ebe6ed90ef01
     permissions:
-      contents: read # the reviewer reads the code
-      pull-requests: write # it posts comments
-      actions: read # it counts today's runs
+      contents: read # the reviewers read the code
+      pull-requests: write # one comment is posted
+      actions: read # today's runs are counted
     with:
       model: claude-sonnet-5-5
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-  luna:
-    # Same conditions as the claude job above.
-    if: >-
-      vars.AGENTS_ENABLED == 'true'
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && !endsWith(github.actor, '[bot]')
-      && !github.event.pull_request.draft
-      && !contains(github.event.pull_request.labels.*.name, 'no-agent-review')
-    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/review-luna.yml@f63877b0cfcb4662c0e5ff8b77563262aeb4873f
-    permissions:
-      contents: read # the reviewer reads the code
-      pull-requests: write # it posts comments
-      actions: read # it counts today's runs
-    secrets:
       openai_api_key: ${{ secrets.OPENAI_API_KEY }}
