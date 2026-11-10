@@ -570,7 +570,7 @@ def test_turn_on_and_remove_never_act_on_a_projects_own_entry(tmp_path):
 def test_skill_rules_for_a_project_in_a_repository_subfolder(tmp_path):
     # atlas is a git repository; atlas/web is a known project in it.
     home = build_demo_home(tmp_path, "medium")
-    inventory, adapters = _read(home)
+    inventory, _adapters = _read(home)
     web = next(p.id for p in inventory.projects if p.path.endswith("atlas/web"))
     atlas = home / "work/atlas"
     (atlas / ".git").mkdir()

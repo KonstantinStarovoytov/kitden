@@ -510,7 +510,7 @@ def test_a_move_takes_only_an_authorization_header(home):
     try:
         add_claude(home, "neon", {"type": "http", "url": remote.url})
         with pytest.raises(
-            ValueError, match="^Only the server's declared access fields can be set.$"
+            ValueError, match=r"^Only the server's declared access fields can be set\.$"
         ):
             move(home, ("claude_code", "neon"), headers={"X-Key": "SENTINEL_SECRET_X"})
     finally:
@@ -1075,7 +1075,7 @@ def test_a_codex_allowlist_turns_strict_on(home):
         (("rules", "global", "github", "tools", "create_issue"), "off"),
         (("rules", "global", "github", "mode"), "strict"),
     ]
-    _, change = apply(home, steps)
+    _, _change = apply(home, steps)
     assert servers_on(load_settings(home), []) == ["github"]
 
 

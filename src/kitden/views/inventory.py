@@ -114,7 +114,7 @@ def _read(adapter: ClientAdapter, apps: list[Path]) -> tuple[Client, Scan | None
         return client, None
     try:
         return client, adapter.scan()
-    except Exception:  # a changed file format must not hide the other clients
+    except Exception:  # noqa: BLE001 - a changed file format must not hide the other clients
         return replace(client, status=ClientStatus.UNREADABLE), None
 
 

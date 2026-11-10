@@ -32,7 +32,7 @@ def home(tmp_path, monkeypatch):
 
 
 def _claude_plugins(home, cwd=None) -> dict:
-    done = subprocess.run(  # noqa: S603 - fixed test command
+    done = subprocess.run(
         [find_command("claude", home), "plugin", "list", "--json"],
         env={**os.environ, "HOME": str(home)},
         cwd=cwd or home,

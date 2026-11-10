@@ -4,7 +4,7 @@ import contextlib
 import os
 import shutil
 import signal
-import subprocess  # noqa: S404 - runs fixed client commands without a shell
+import subprocess  # runs fixed client commands without a shell
 from dataclasses import dataclass
 from pathlib import Path
 

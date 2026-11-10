@@ -53,6 +53,7 @@ Run these from the checkout before committing:
 ```bash
 uv run pytest -q
 uv run ruff check .
+uv run ruff format --check .
 node --test tests/frontend/*.test.mjs
 ```
 

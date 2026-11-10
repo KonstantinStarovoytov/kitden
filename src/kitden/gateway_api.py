@@ -135,7 +135,7 @@ class MetaMcpClient:
         password = self.env.get(var)
         if not password:
             raise GatewayError(f"Set {var} in the environment before starting Kitden")
-        status, body, cookie = self._request(
+        status, _body, cookie = self._request(
             "POST",
             "/api/auth/sign-in/email",
             {"email": self.gateway.login_email, "password": password},

@@ -61,7 +61,7 @@ def download(url: str) -> bytes:
     request = Request(  # noqa: S310 - checked HTTPS hosts, redirects checked too
         checked_url(url), headers={"User-Agent": "Kitden", "Accept": "application/json"}
     )
-    with build_opener(CatalogRedirect()).open(request, timeout=15) as response:  # noqa: S310
+    with build_opener(CatalogRedirect()).open(request, timeout=15) as response:
         content = response.read(MAX_BYTES + 1)
     if len(content) > MAX_BYTES:
         raise ValueError("This source is too large. Choose a smaller repository.")
@@ -692,7 +692,7 @@ class Discovery:
             **info,
             "path": str(prepared),
             "installed": {},
-            "routes": {c: "ready" for c in found},
+            "routes": dict.fromkeys(found, "ready"),
             "id": row["id"],
             "commit": commit,
         }

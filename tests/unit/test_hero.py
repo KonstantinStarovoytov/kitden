@@ -47,10 +47,10 @@ def keyframes(text: str, name: str) -> list[tuple[float, dict[str, str]]]:
     assert match, name
     frames = []
     for stops, body in re.findall(r"([\d.%,\s]+)\{([^}]*)\}", match.group(1)):
-        props = dict(
-            (key.strip(), value.strip())
+        props = {
+            key.strip(): value.strip()
             for key, value in (part.split(":", 1) for part in body.split(";") if part.strip())
-        )
+        }
         for stop in stops.split(","):
             frames.append((float(stop.strip().rstrip("%")), props))
     return sorted(frames, key=lambda frame: frame[0])

@@ -267,7 +267,7 @@ def change_entries(log: list[dict], engine, inventory) -> list[dict]:
         for change_id, own in lines.items()
     ]
     # Made in the same second: the one logged later comes first.
-    entries = sorted(reversed(entries), key=lambda e: e["time"] or "", reverse=True)
+    entries = sorted(reversed(entries), key=lambda e: e["time"] or "", reverse=True)  # noqa: C414
     _came_back(entries, engine.changes, inventory)
     return entries
 

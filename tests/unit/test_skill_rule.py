@@ -481,7 +481,7 @@ def test_turn_off_this_copy_in_codex_for_a_skill_in_one_project(tmp_path):
     _skill(app / ".agents/skills", "app-style")
     with _page(home) as page:
         item = _item(page, "codex", "app-style")
-        change, _, undo = _round_trip(page, _rule("codex", item))
+        _change, _, undo = _round_trip(page, _rule("codex", item))
         skill = os.path.realpath(app / ".agents/skills/app-style/SKILL.md")
         assert tomllib.loads(config.read_text())["skills"]["config"] == [
             {"path": skill, "enabled": False}

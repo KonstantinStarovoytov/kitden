@@ -10,7 +10,7 @@ from kitden.changes.engine import Engine
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.model import ChangeState
 
-TOKEN = "SENTINEL_SECRET_ARGS"  # noqa: S105 - test value
+TOKEN = "SENTINEL_SECRET_ARGS"
 SECRET_ENTRY = {"command": "npx", "args": ["files-mcp"], "env": {"FILES_TOKEN": TOKEN}}
 PLAIN_ENTRY = {"type": "http", "url": "https://mcp.neon.tech/mcp"}
 REFERENCE_ENTRY = {"type": "http", "url": "https://x.test/mcp", "headers": {"X-Key": "${KEY}"}}

@@ -390,7 +390,7 @@ async def test_a_slow_server_does_not_hold_up_the_list_or_other_servers(
     )
     save_tools(home, "alpha", [tool("echo"), tool("slow")])
     save_tools(home, "stuck", [tool("wait")])
-    server = proxy.gateway_server(home, create_server(lambda: None), known=lambda: [])
+    server = proxy.gateway_server(home, create_server(lambda: None), known=list)
     results = {}
 
     async with Client(server, mode="legacy") as client:
@@ -460,7 +460,7 @@ async def test_tools_keep_their_title_and_hints(home):
     hints = {"readOnlyHint": True, "destructiveHint": False}
     write_settings(home, {"docs": echo("docs")})
     save_tools(home, "docs", [{**tool("search"), "title": "Search docs", "annotations": hints}])
-    server = proxy.gateway_server(home, create_server(lambda: None), known=lambda: [])
+    server = proxy.gateway_server(home, create_server(lambda: None), known=list)
     async with Client(server, mode="legacy") as client:
         listed = {t.name: t for t in (await client.list_tools()).tools}
     assert listed["search"].title == "Search docs"
