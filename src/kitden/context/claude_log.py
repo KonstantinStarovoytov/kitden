@@ -11,11 +11,6 @@ CLIENT = "claude_code"
 # will confirm it. An entrypoint not here is still read, without a surface.
 INTERACTIVE = {"claude-desktop": "in the Claude app", "cli": "in the terminal"}
 
-# checked 2026-11-09 (real logs, Claude Code 2.1.311): the newest version whose list entry shape
-# is known.
-KNOWN_VERSIONS = "2.1.311"
-
-
 ASSISTANT = re.compile(r'"type"\s*:\s*"assistant"')
 MODEL = re.compile(r'"model"\s*:\s*"([^"]*)"')
 
@@ -35,18 +30,6 @@ class SentList:
 class Unreadable:
     client: str
     version: str
-
-
-def _version(text: str) -> tuple[int, ...] | None:
-    try:
-        return tuple(int(part) for part in text.split("."))
-    except ValueError:
-        return None
-
-
-def _newer_than_known(version: object) -> bool:
-    parsed = _version(version) if isinstance(version, str) else None
-    return parsed is None or parsed > (_version(KNOWN_VERSIONS) or ())
 
 
 def _find_entry(content: str, name: str, at: int) -> int:
@@ -88,14 +71,14 @@ def _added(skills: tuple, added: tuple) -> tuple[tuple[str, str | None], ...]:
     return kept + tuple(new.items())
 
 
-def _readable(attachment: dict) -> bool:
+def _known_shape(attachment: dict) -> bool:
+    """The list has the fields Kitden reads, whatever the client's version."""
     names = attachment.get("names")
     return (
         isinstance(attachment.get("isInitial"), bool)
         and isinstance(names, list)
         and all(isinstance(name, str) for name in names)
         and isinstance(attachment.get("content"), str)
-        and attachment.get("skillCount") == len(names)
     )
 
 
@@ -108,8 +91,9 @@ def _skipped(entry: dict, folder: str | None) -> bool:
 
 
 def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
-    """The last list this chat sent, or None. A chat with no full list, from a client newer than
-    KNOWN_VERSIONS, is Unreadable. Only lines with a list, a model or the first version are parsed.
+    """The last list this chat sent, or None when it sent none. A chat whose list has a shape
+    Kitden does not know is Unreadable, on any version of the client. Only lines with a list or a
+    model are parsed.
 
     # checked 2026-11-09 (real logs, Claude Code 2.1.309): entry fields timestamp, version,
     # entrypoint, cwd, isSidechain; attachment fields type, isInitial, skillCount, names, content;
@@ -122,7 +106,6 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
     result: SentList | Unreadable | None = None
     model = None  # the last model so far
     answered = True  # a model has answered the last full list
-    first: dict | None = None  # the first entry that names a version: the chat's client
     with path.open(encoding="utf-8", errors="replace") as lines:
         for line in lines:
             if '"skill_listing"' in line:
@@ -139,9 +122,10 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                 version = entry.get("version")
                 version = version if isinstance(version, str) else ""
                 at = str(entry.get("timestamp", ""))
-                if not _readable(attachment):
-                    if _newer_than_known(version):
-                        result = Unreadable(CLIENT, version)
+                if not _known_shape(attachment):
+                    result = Unreadable(CLIENT, version)
+                    continue
+                if attachment.get("skillCount") != len(attachment["names"]):  # cut short
                     continue
                 skills = _split(attachment["names"], attachment["content"])
                 if attachment["isInitial"]:
@@ -157,8 +141,6 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                     answered = False
                 elif isinstance(result, SentList):
                     result = replace(result, at=at, skills=_added(result.skills, skills))
-                elif result is None and _newer_than_known(version):
-                    result = Unreadable(CLIENT, version)  # nothing to add them to
             elif '"model"' in line and ASSISTANT.search(line):
                 found = MODEL.search(line)  # a regex: no need to parse a large assistant line
                 if found and not found[1].startswith("<"):
@@ -166,15 +148,6 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                     if not answered and isinstance(result, SentList):
                         result = replace(result, model=model)
                         answered = True
-            elif first is None and '"version"' in line:
-                try:
-                    entry = json.loads(line)
-                except ValueError:
-                    continue
-                if isinstance(entry, dict) and isinstance(entry.get("version"), str):
-                    first = entry
-    if result is None and first is not None and _newer_than_known(first["version"]):
-        return None if _skipped(first, folder) else Unreadable(CLIENT, first["version"])
     return result
 
 

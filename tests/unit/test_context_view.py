@@ -308,7 +308,7 @@ def test_one_skill_with_only_a_name(home):
 
 def test_an_unreadable_log_with_no_version_names_no_version(home):
     skill(home / ".claude/skills", "alpha", "Does alpha.")
-    entry = list_entry(["alpha"], "- alpha: A.", version=None, isInitial=False)
+    entry = list_entry("alpha", "- alpha: A.", version=None)  # names in an unknown shape
     write_chat(home, "p", "chat", [entry], 100)
     assert view(home)["claude_code"]["message"] == (
         "Kitden cannot read chat logs of this version of Claude Code yet, so it shows no result "
@@ -368,7 +368,7 @@ def test_no_chat_yet(home):
 
 def test_unreadable_log(home):
     skill(home / ".claude/skills", "alpha", "Does alpha.")
-    entry = list_entry(["alpha"], "- alpha: A.", version="2.2.0", isInitial=False)
+    entry = list_entry("alpha", "- alpha: A.", version="2.2.0")  # names in an unknown shape
     write_chat(home, "p", "chat", [entry], 100)
     cc = view(home)["claude_code"]
     assert cc["message"] == (
@@ -810,7 +810,8 @@ def test_codex_names_only_with_nothing_left_out(home):
 
 def test_codex_unreadable_log(home):
     codex_home(home, window=272_000)
-    write_log(home / ".codex", "a", [meta(version="0.200.0"), turn()], 100)
+    odd = codex_list_entry("<skills_instructions>\n- alpha | Does A.\n</skills_instructions>")
+    write_log(home / ".codex", "a", [meta(version="0.200.0"), turn(), odd], 100)
     cx = view(home)["codex"]
     assert cx["message"] == (
         "Kitden cannot read chat logs of Codex 0.200.0 yet, so it shows no result and no estimate."

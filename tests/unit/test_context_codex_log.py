@@ -205,34 +205,37 @@ def test_a_half_written_last_line_is_skipped(tmp_path):
     assert last_codex_list(tmp_path, None).list.skills[0] == ("a", "Does A.")
 
 
-def test_a_newer_version_with_no_readable_list_is_unreadable(tmp_path):
+def test_a_list_with_unknown_lines_is_unreadable_on_any_version(tmp_path):
+    for version in ("0.150.0", "0.163.0-alpha.11", "9.9.9"):
+        write_log(tmp_path, "old", [meta(), skills()], 100)
+        odd = "<skills_instructions>\n- a | Does A. | /s/a/SKILL.md\n</skills_instructions>"
+        write_log(tmp_path, "new", [meta(version=version), skills(odd)], 200)
+        assert last_codex_list(tmp_path, None) == Unreadable("codex", version)
+
+
+def test_a_list_block_with_no_skill_lines_is_no_list(tmp_path):
     write_log(tmp_path, "old", [meta(), skills()], 100)
-    odd = "<skills_instructions>\n(a new shape)\n</skills_instructions>"
-    write_log(tmp_path, "new", [meta(version="0.164.0"), skills(odd)], 200)
-    assert last_codex_list(tmp_path, None) == Unreadable("codex", "0.164.0")
+    empty = "<skills_instructions>\nUse a skill when it fits.\n</skills_instructions>"
+    write_log(tmp_path, "new", [meta(), skills(empty)], 200)
+    assert last_codex_list(tmp_path, None).list.skills[0] == ("a", "Does A.")
 
 
-def test_a_newer_log_with_no_list_at_all_is_unreadable(tmp_path):
-    write_log(tmp_path, "old", [meta(), skills()], 100)
-    write_log(tmp_path, "new", [meta(version="0.164.0"), turn()], 200)
-    assert last_codex_list(tmp_path, None) == Unreadable("codex", "0.164.0")
+def test_a_good_list_after_an_odd_one_is_read(tmp_path):
+    odd = "<skills_instructions>\n- a | Does A.\n</skills_instructions>"
+    write_log(tmp_path, "a", [meta(), skills(odd), skills()], 100)
+    assert last_codex_list(tmp_path, None).list.skills[0] == ("a", "Does A.")
 
 
-def test_a_newer_version_with_a_readable_list_is_read(tmp_path):
+def test_a_log_with_no_list_falls_back_whatever_its_version(tmp_path):
+    for version in ("0.150.0", "9.9.9"):
+        write_log(tmp_path, "old", [meta(), skills()], 100)
+        write_log(tmp_path, "new", [meta(version=version), turn()], 200)
+        assert last_codex_list(tmp_path, None).list.skills[0] == ("a", "Does A.")
+
+
+def test_another_version_with_a_readable_list_is_read(tmp_path):
     write_log(tmp_path, "new", [meta(version="0.164.0"), skills()], 100)
     assert last_codex_list(tmp_path, None).list.version == "0.164.0"
-
-
-def test_versions_compare_as_numbers(tmp_path):
-    write_log(tmp_path, "a", [meta(version="0.1000.0"), turn()], 100)
-    assert last_codex_list(tmp_path, None) == Unreadable("codex", "0.1000.0")
-
-
-def test_a_known_version_log_with_no_list_is_skipped(tmp_path):
-    write_log(tmp_path, "old", [meta(), skills()], 100)
-    write_log(tmp_path, "new", [meta(version="0.163.0-alpha.11"), turn()], 200)
-    write_log(tmp_path, "older", [meta(version="0.159.2"), turn()], 300)
-    assert last_codex_list(tmp_path, None).list.skills[0] == ("a", "Does A.")
 
 
 def test_a_newer_log_that_is_not_a_person_log_or_folder_is_skipped(tmp_path):

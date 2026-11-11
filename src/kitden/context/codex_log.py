@@ -9,10 +9,6 @@ from kitden.context.claude_log import SentList, Unreadable
 
 CLIENT = "codex"
 
-# checked 2026-11-09 (real logs, Codex app, cli 0.163.0-alpha.11): the newest version whose list
-# shape is known. Only the numbers before the first dash are compared.
-KNOWN_CODEX_VERSION = "0.163.0-alpha.11"
-
 # `- name: description (file: path)`; a name-only line is `- name: (file: path)`. The name is
 # everything up to the first ": " (it may contain spaces), so a plugin skill keeps its prefix
 # (`plugin:skill`). The roots lines of the same block (`- `alias` = `/path``) have no `(file:`.
@@ -29,18 +25,9 @@ class CodexSent:
     paths: dict[str, str]  # name -> the `file:` path of its line, its root alias resolved
 
 
-def _version(text: object) -> tuple[int, ...] | None:
-    found = re.match(r"\d+(\.\d+)*", text) if isinstance(text, str) else None
-    return tuple(int(part) for part in found[0].split(".")) if found else None
-
-
-def _newer_than_known(version: object) -> bool:
-    parsed = _version(version)
-    return parsed is None or parsed > (_version(KNOWN_CODEX_VERSION) or ())
-
-
-def _entries(entry: dict) -> list[tuple[str, str, str]]:
-    """(name, sent text, path) for each line of the list in a developer message; [] if none."""
+def _entries(entry: dict) -> list[tuple[str, str, str]] | None:
+    """(name, sent text, path) for each line of the list in a developer message; [] if it has
+    no list. None when the list has `- ` lines and Kitden knows none of them: a new shape."""
     payload = entry.get("payload")
     if not isinstance(payload, dict) or payload.get("role") != "developer":
         return []
@@ -50,8 +37,10 @@ def _entries(entry: dict) -> list[tuple[str, str, str]]:
         if isinstance(text, str) and "<skills_instructions>" in text:
             lines = text.splitlines()
             roots = {m["alias"]: m["folder"] for m in map(ROOT.match, lines) if m}
-            matches = (ENTRY.match(line) for line in lines)
-            return [(m["name"], m["desc"], _resolve(m["path"], roots)) for m in matches if m]
+            matches = [m for m in map(ENTRY.match, lines) if m]
+            if not matches and any(ln.startswith("- ") and not ROOT.match(ln) for ln in lines):
+                return None
+            return [(m["name"], m["desc"], _resolve(m["path"], roots)) for m in matches]
     return []
 
 
@@ -64,9 +53,9 @@ def _resolve(path: str, roots: dict[str, str]) -> str:
 
 
 def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
-    """The last list this log sent, or None. A log with no readable list, from a client newer
-    than KNOWN_CODEX_VERSION, is Unreadable. Only the first `session_meta`, `turn_context` lines
-    and lines with a list are parsed.
+    """The last list this log sent, or None when it sent none. A log whose list has a shape
+    Kitden does not know is Unreadable, on any version of the client. Only the first
+    `session_meta`, `turn_context` lines and lines with a list are parsed.
 
     # checked 2026-11-09 (real logs, Codex app, cli 0.163.0-alpha.11): session_meta payload
     # fields timestamp, cwd, thread_source (`user` for a person's chat), cli_version;
@@ -76,6 +65,7 @@ def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
     meta: dict | None = None
     model = None
     found: tuple[str, list[tuple[str, str, str]]] | None = None  # list entry's date, its lines
+    odd = False  # the last list had a shape Kitden does not know
     with path.open(encoding="utf-8", errors="replace") as lines:
         for line in lines:
             if meta is None:
@@ -106,14 +96,16 @@ def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
                     model = value if isinstance(value, str) else model
                 elif entry.get("type") == "response_item":
                     listed = _entries(entry)
-                    if listed:
-                        found = (str(entry.get("timestamp", "")), listed)
+                    if listed is None:
+                        found, odd = None, True
+                    elif listed:
+                        found, odd = (str(entry.get("timestamp", "")), listed), False
     if meta is None:
         return None
     version = meta.get("cli_version")
     version = version if isinstance(version, str) else ""
     if found is None:
-        return Unreadable(CLIENT, version) if _newer_than_known(version) else None
+        return Unreadable(CLIENT, version) if odd else None
     at, listed = found
     sent = SentList(
         CLIENT,
