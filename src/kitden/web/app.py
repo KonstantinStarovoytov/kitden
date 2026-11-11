@@ -199,6 +199,8 @@ UNREADABLE = "Kitden could not read the gateway settings."
 
 
 Event = str | tuple[str, dict]
+# Put in every queue when the page stops, so open event streams end and the stop does not wait.
+_END = None
 
 
 class Broadcaster:
@@ -206,14 +208,14 @@ class Broadcaster:
     carry a little data, such as how many steps of a change are done."""
 
     def __init__(self) -> None:
-        self._queues: set[asyncio.Queue[Event]] = set()
+        self._queues: set[asyncio.Queue[Event | None]] = set()
 
-    def subscribe(self) -> asyncio.Queue[Event]:
-        queue: asyncio.Queue[Event] = asyncio.Queue()
+    def subscribe(self) -> asyncio.Queue[Event | None]:
+        queue: asyncio.Queue[Event | None] = asyncio.Queue()
         self._queues.add(queue)
         return queue
 
-    def unsubscribe(self, queue: asyncio.Queue[Event]) -> None:
+    def unsubscribe(self, queue: asyncio.Queue[Event | None]) -> None:
         self._queues.discard(queue)
 
     @property
@@ -225,17 +227,24 @@ class Broadcaster:
         for queue in self._queues:
             queue.put_nowait((event, data) if data is not None else event)
 
+    def close(self) -> None:
+        """End every open event stream: the page is stopping."""
+        for queue in self._queues:
+            queue.put_nowait(_END)
+
 
 async def event_lines(
-    queue: asyncio.Queue[Event],
+    queue: asyncio.Queue[Event | None],
     is_disconnected: Callable[[], Awaitable[bool]],
     heartbeat: float = HEARTBEAT_SECONDS,
 ) -> AsyncIterator[str]:
-    """Server-sent event lines until the browser goes away."""
+    """Server-sent event lines until the browser goes away or the page stops."""
     yield ": connected\n\n"
     while not await is_disconnected():
         try:
             event = await asyncio.wait_for(queue.get(), heartbeat)
+            if event is _END:
+                return
             name, data = event if isinstance(event, tuple) else (event, {})
             yield f"event: {name}\ndata: {json.dumps(data)}\n\n"
         except TimeoutError:

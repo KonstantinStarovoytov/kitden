@@ -47,6 +47,14 @@ def test_an_event_can_carry_a_little_data():
     assert lines[1] == 'event: change_progress\ndata: {"id": "c1", "done": 1, "total": 3}\n\n'
 
 
+def test_closing_ends_every_event_stream():
+    events = Broadcaster()
+    queue = events.subscribe()
+    events.close()
+    lines = _collect(queue, [False, False, False])
+    assert lines == [": connected\n\n"]
+
+
 def test_event_stream_sends_heartbeats_when_idle():
     lines = _collect(asyncio.Queue(), [False, True], heartbeat=0.01)
     assert lines == [": connected\n\n", ": heartbeat\n\n"]

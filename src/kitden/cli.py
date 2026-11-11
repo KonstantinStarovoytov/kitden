@@ -68,6 +68,13 @@ def run_server(
                 return True
             return bool(stop_when and stop_when())
 
+        async def shutdown(self, sockets=None) -> None:
+            # End the open pages' event streams first, so the stop needs no forced cancel.
+            events = getattr(getattr(app, "state", None), "events", None)
+            if events is not None:
+                events.close()
+            await super().shutdown(sockets=sockets)
+
     # Open pages keep an event stream; do not wait for them when stopping.
     config = uvicorn.Config(
         app, host=host, port=port, log_level="warning", timeout_graceful_shutdown=2
