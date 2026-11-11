@@ -122,22 +122,23 @@ def test_no_chats_at_all_is_none(tmp_path):
     assert last_claude_list(tmp_path, None) is None
 
 
-def test_a_newer_version_with_an_unknown_shape_is_unreadable(tmp_path):
-    write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
-    odd = list_entry(["a"], "- a: New.", version="2.2.0")
-    del odd["attachment"]["names"]
-    write_chat(tmp_path, "p", "new", [odd], 200)
-    assert last_claude_list(tmp_path, None) == Unreadable("claude_code", "2.2.0")
+def test_a_list_with_an_unknown_shape_is_unreadable_on_any_version(tmp_path):
+    for version in ("2.0.5", "2.1.311", "9.9.9"):
+        write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
+        odd = list_entry(["a"], "- a: New.", version=version)
+        del odd["attachment"]["names"]
+        write_chat(tmp_path, "p", "new", [odd], 200)
+        assert last_claude_list(tmp_path, None) == Unreadable("claude_code", version)
 
 
-def test_versions_compare_as_numbers(tmp_path):
-    odd = list_entry(["a"], "- a: New.", version="2.1.1000")
-    del odd["attachment"]["names"]
-    write_chat(tmp_path, "p", "chat", [odd], 100)
-    assert last_claude_list(tmp_path, None) == Unreadable("claude_code", "2.1.1000")
+def test_a_good_list_after_an_odd_one_is_read(tmp_path):
+    odd = list_entry(["a"], "- a: Odd.")
+    del odd["attachment"]["content"]
+    write_chat(tmp_path, "p", "chat", [odd, list_entry(["a"], "- a: Good.")], 100)
+    assert last_claude_list(tmp_path, None).skills == (("a", "Good."),)
 
 
-def test_an_odd_entry_from_a_known_version_is_skipped(tmp_path):
+def test_added_skills_alone_fall_back_to_the_next_older(tmp_path):
     write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
     odd = list_entry(["a"], "- a: New.", isInitial=False)
     write_chat(tmp_path, "p", "new", [odd], 200)
@@ -151,11 +152,11 @@ def test_a_list_cut_short_is_not_a_full_list(tmp_path):
     assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
 
 
-def test_a_list_whose_names_are_not_all_text_is_not_a_full_list(tmp_path):
+def test_a_list_whose_names_are_not_all_text_is_unreadable(tmp_path):
     write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
     odd = list_entry(["a", 7], "- a: New.\n- 7: Seven.")
     write_chat(tmp_path, "p", "new", [odd], 200)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
+    assert last_claude_list(tmp_path, None) == Unreadable("claude_code", "2.1.311")
 
 
 def test_a_half_written_last_line_is_skipped(tmp_path):
@@ -192,28 +193,12 @@ def test_only_list_lines_are_parsed(tmp_path):
     assert got.model == "claude-opus-5-5"
 
 
-def newer_chat(version="2.2.0", **fields):
-    return {"type": "user", "version": version, "cwd": "/work/a", "isSidechain": False, **fields}
-
-
-def test_a_newer_chat_with_no_list_is_unreadable_not_the_older_chat(tmp_path):
-    write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
-    write_chat(tmp_path, "p", "new", [newer_chat(), assistant()], 200)
-    assert last_claude_list(tmp_path, None) == Unreadable("claude_code", "2.2.0")
-
-
-def test_a_known_version_chat_with_no_list_is_still_skipped(tmp_path):
-    write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
-    write_chat(tmp_path, "p", "new", [newer_chat("2.1.311")], 200)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
-
-
-def test_a_newer_chat_that_is_not_a_person_chat_or_folder_is_skipped(tmp_path):
-    write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
-    write_chat(tmp_path, "p", "sdk", [newer_chat(entrypoint="sdk-cli")], 200)
-    write_chat(tmp_path, "p", "side", [newer_chat(isSidechain=True)], 300)
-    write_chat(tmp_path, "p", "elsewhere", [newer_chat(cwd="/work/b")], 400)
-    assert last_claude_list(tmp_path, "/work/a").skills == (("a", "Old."),)
+def test_a_chat_with_no_list_falls_back_whatever_its_version(tmp_path):
+    for version in ("2.0.5", "9.9.9"):
+        write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
+        bare = {"type": "user", "version": version, "cwd": "/work/a", "isSidechain": False}
+        write_chat(tmp_path, "p", "new", [bare, assistant()], 200)
+        assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
 
 
 def test_a_file_that_cannot_be_read_is_skipped(tmp_path):
@@ -271,7 +256,7 @@ def test_added_skills_with_no_full_list_before_them_are_no_list(tmp_path):
     assert last_claude_list(tmp_path, None) is None
 
 
-def test_added_skills_from_a_newer_client_keep_the_list_readable(tmp_path):
+def test_added_skills_from_another_version_keep_the_list_readable(tmp_path):
     full = list_entry(["a"], "- a: Does A.", version="2.2.0")
     added = added_entry(["c"], "- c: Does C.", version="2.2.0")
     write_chat(tmp_path, "p", "chat", [full, added], 100)

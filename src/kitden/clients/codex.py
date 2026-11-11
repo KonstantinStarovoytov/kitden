@@ -432,11 +432,14 @@ class CodexAdapter(ClientAdapter):
 
         disabled_skills = (
             {
-                os.path.realpath(as_dict(rule).get("path", ""))
-                for rule in config.get("skills", {}).get("config", [])
-                if isinstance(rule, dict) and rule.get("enabled") is False
+                os.path.realpath(rule["path"])
+                for rule in config["skills"].get("config", [])
+                if isinstance(rule, dict)
+                and rule.get("enabled") is False
+                and isinstance(rule.get("path"), str)
             }
             if isinstance(config.get("skills"), dict)
+            and isinstance(config["skills"].get("config", []), list)
             else set()
         )
         for folder in (self.home / ".agents/skills", self.codex_home / "skills"):

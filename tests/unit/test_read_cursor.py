@@ -169,6 +169,30 @@ def test_broken_state_database_is_reported_and_cache_still_read(tmp_path, no_ver
     )
 
 
+def _state_problems(scan, home):
+    return [(p.path, p.unknown_reason) for p in scan.problems if p.path == str(cursor_db(home))]
+
+
+def test_switches_in_an_unknown_shape_are_reported_and_items_still_read(tmp_path, no_version):
+    for odd in (
+        ["thirdPartyExtensibilityEnabled"],
+        "not json",
+        {"importPluginsFromClaudeOnBoot": 0},
+    ):
+        home, scan = _scan(tmp_path / str(type(odd).__name__), no_version, {REACTIVE_KEY: odd})
+        assert _state_problems(scan, home) == [
+            (str(cursor_db(home)), UnknownReason.UNRECOGNIZED_FORMAT)
+        ]
+        assert rows(scan.items, home) >= OWN
+
+
+def test_a_state_database_without_the_switches_is_read_with_the_defaults(tmp_path, no_version):
+    home, scan = _scan(tmp_path, no_version)
+    assert REACTIVE_KEY not in cursor_state_rows(home)
+    assert _state_problems(scan, home) == []
+    assert rows(scan.items, home) >= OWN | CROSS_LOADED
+
+
 def _instructions(scan):
     return {
         (i.scope, i.name, dict(i.summary)["category"], i.project, i.source.path)

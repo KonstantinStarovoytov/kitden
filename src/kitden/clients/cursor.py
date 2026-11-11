@@ -73,6 +73,7 @@ REACTIVE_KEY = (
     ".persistentStorage.applicationUser"
 )
 INSTALLED_PREFIX = "cursor.plugins.installedIds."
+SWITCHES = ("thirdPartyExtensibilityEnabled", "importPluginsFromClaudeOnBoot")
 
 
 def _switches(flags: dict) -> tuple[bool, bool]:
@@ -184,7 +185,9 @@ class CursorAdapter(ClientAdapter):
         return scan
 
     def _state(self, read: Reader) -> tuple[dict[str, list], dict]:
-        """Installed-plugin rows by key, and the reactive-storage switches (S5)."""
+        """Installed-plugin rows by key, and the reactive-storage switches (S5). Switches kept
+        in a shape Kitden does not know are a problem of the database, and read as the defaults;
+        a database with no switches row is Cursor with its defaults."""
         db = cursor_state_dir(self.home) / STATE_DB
         if not db.is_file():
             return {}, {}
@@ -201,10 +204,13 @@ class CursorAdapter(ClientAdapter):
             try:
                 data = json.loads(value)
             except (TypeError, ValueError):
-                continue
+                data = None
             if key == REACTIVE_KEY:
                 flags = as_dict(data)
-            else:
+                known = all(isinstance(flags.get(name, True), bool) for name in SWITCHES)
+                if not isinstance(data, dict) or not known:
+                    read.problem(db, UnknownReason.UNRECOGNIZED_FORMAT)
+            elif data is not None:
                 installed[key] = data if isinstance(data, list) else []
         return installed, flags
 
@@ -230,7 +236,8 @@ class CursorAdapter(ClientAdapter):
                 plugin_id = as_dict(entry).get("id")
                 if not isinstance(plugin_id, str):
                     continue
-                if "project" in (as_dict(entry).get("sources") or []):
+                sources = as_dict(entry).get("sources")
+                if isinstance(sources, list) and "project" in sources:
                     folders = [p for p in places[key] if p]
                     if len(folders) > 1:
                         if any((plugin_id, p) in found for p in folders):

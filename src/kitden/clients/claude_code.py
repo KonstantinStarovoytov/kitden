@@ -94,6 +94,11 @@ def _instruction_files(folder: Path) -> list:
     ]
 
 
+def _names(value: Any) -> set[str]:
+    """The names in a settings list; a value of another shape holds none."""
+    return {v for v in value if isinstance(v, str)} if isinstance(value, list) else set()
+
+
 def _on(value: bool | None) -> Enabled:
     return Enabled.UNKNOWN if value is None else (Enabled.ON if value else Enabled.OFF)
 
@@ -582,9 +587,9 @@ class ClaudeCodeAdapter(ClientAdapter):
                 )
             )
             for install in installs if isinstance(installs, list) else []:
-                scan.items += self._plugin_parts(
-                    read, Path(as_dict(install).get("installPath", "")), state_on
-                )
+                where = as_dict(install).get("installPath", "")
+                if isinstance(where, str):
+                    scan.items += self._plugin_parts(read, Path(where), state_on)
         account = Source(
             kind=SourceKind.ACCOUNT,
             path=None,
@@ -656,8 +661,8 @@ class ClaudeCodeAdapter(ClientAdapter):
         """The project's items, and its skill rules (None when a settings file was unreadable)."""
         path = str(root)
         items: list[Item] = []
-        approved = set(data.get("enabledMcpjsonServers") or [])
-        rejected = set(data.get("disabledMcpjsonServers") or [])
+        approved = _names(data.get("enabledMcpjsonServers"))
+        rejected = _names(data.get("disabledMcpjsonServers"))
         mcp_path = root / ".mcp.json"
         for name, entry in as_dict(as_dict(read.json(mcp_path)).get("mcpServers")).items():
             state = (
