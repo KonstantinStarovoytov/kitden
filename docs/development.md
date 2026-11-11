@@ -208,6 +208,9 @@ budget (`scripts/measure-start.py`), a dependency audit (`pip-audit`), a check o
 files (`zizmor`) and the package build. On a tag it also stops if the notes file is missing.
 Then it publishes to PyPI with trusted publishing and creates the GitHub release with the
 notes file as its text.
+Once a day the tests also run on the newest versions of the dependencies
+(`.github/workflows/latest-deps.yml`): people who install Kitden get those, not the ones in
+`uv.lock`. When that run fails, GitHub sends an email.
 `README.md` is also the PyPI page. [README media](readme-media.md) says how its pictures are
 made, how their addresses work on GitHub and PyPI, and what to check before promoting a release.
 
