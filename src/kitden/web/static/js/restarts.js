@@ -2,7 +2,7 @@
 // (spec 2026-11-11, "Restart needed after an Apply"). One strip for each client, with the
 // client's own note and "Got it". There is no Restart button: the person restarts the client.
 // GET /api/restarts says which clients still run from before the Apply. The page asks on load,
-// when a change ends and after Rescan, not on a timer. "Got it" hides that client's strip for
+// when a change ends, after Rescan and when the person comes back to the page, not on a timer. "Got it" hides that client's strip for
 // that change in localStorage; without storage it hides it until the page loads again.
 import { getJson } from "./api.js";
 import { $, button, el, icon } from "./dom.js";
@@ -96,9 +96,23 @@ export async function refreshRestarts() {
   draw();
 }
 
+// Runs `ask` when the person comes back to the page, as after restarting an agent: the tab
+// shows again or the window gets focus. The two often come together, so a return while an ask
+// is still out asks nothing more.
+export function onReturn(ask, doc = globalThis.document, win = globalThis) {
+  let out = null;
+  const back = () => {
+    if (out || doc.visibilityState !== "visible") return;
+    out = Promise.resolve(ask()).catch(() => {}).finally(() => { out = null; });
+  };
+  doc.addEventListener("visibilitychange", back);
+  win.addEventListener("focus", back);
+}
+
 export function startRestarts(node) {
   box = node;
   refreshRestarts();
   // A change ends (Apply or Undo): the log has its line by then.
   onBusy(() => { if (!busy.change) refreshRestarts(); });
+  onReturn(refreshRestarts);
 }

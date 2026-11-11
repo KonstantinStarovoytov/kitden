@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 // motion.js reads matchMedia when it loads.
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
-const { SEEN_KEY, gotIt, seenIds, shownStrips, stripKey } = await import('../../src/kitden/web/static/js/restarts.js');
+const { SEEN_KEY, gotIt, onReturn, seenIds, shownStrips, stripKey } = await import('../../src/kitden/web/static/js/restarts.js');
 
 const CURSOR = { client: 'cursor', note: 'Restart Cursor for this to take effect.', change: 'c1' };
 const CODEX = { client: 'codex', note: 'Restart Codex for this to take effect.', change: 'c2' };
@@ -77,4 +77,44 @@ test('one change for two clients keeps two strips, each got on its own', () => {
   const store = storage();
   gotIt(stripKey(cursor), store);
   assert.deepEqual(shownStrips([cursor, codex], seenIds(store)), [codex]);
+});
+
+// The strips ask again when the person comes back from restarting an agent.
+function page(state = 'visible') {
+  const doc = new EventTarget();
+  doc.visibilityState = state;
+  return { doc, win: new EventTarget() };
+}
+
+const tick = () => new Promise((next) => setTimeout(next, 0));
+
+test('coming back to the tab or the window asks again, one ask at a time', async () => {
+  const { doc, win } = page();
+  const asks = [];
+  onReturn(() => new Promise((done) => asks.push(done)), doc, win);
+  doc.dispatchEvent(new Event('visibilitychange'));
+  win.dispatchEvent(new Event('focus')); // both come together: still one ask
+  assert.equal(asks.length, 1);
+  asks[0]();
+  await tick();
+  win.dispatchEvent(new Event('focus'));
+  assert.equal(asks.length, 2);
+});
+
+test('a tab that goes to the background does not ask', () => {
+  const { doc, win } = page('hidden');
+  let asks = 0;
+  onReturn(() => { asks += 1; }, doc, win);
+  doc.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(asks, 0);
+});
+
+test('an ask that fails does not stop the next one', async () => {
+  const { doc, win } = page();
+  let asks = 0;
+  onReturn(() => { asks += 1; return Promise.reject(new Error('offline')); }, doc, win);
+  win.dispatchEvent(new Event('focus'));
+  await tick();
+  win.dispatchEvent(new Event('focus'));
+  assert.equal(asks, 2);
 });
