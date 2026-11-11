@@ -111,9 +111,39 @@ test('the watch follows the old page, then waits for the new one and reloads', (
   assert.equal(w.reload, true);
 });
 
+test('a missed read during the installer keeps the real step', () => {
+  let w = { mine: '0.7.2', since: null };
+  w = watchStep(w, running(1), 0);
+  w = watchStep(w, null, 500);
+  assert.notEqual(w.phase, 'waiting');
+  assert.equal(updateView(running(1), w.phase).tip, 'Installing…');
+  assert.equal(updateView(running(1), w.phase).ring, 0.55);
+  // The old page answers again: the miss changed nothing.
+  w = watchStep(w, running(1), 1000);
+  assert.equal(w.phase, null);
+  assert.equal(w.since, null);
+});
+
+test('a missed read after the restart step waits for the new page', () => {
+  let w = { mine: '0.7.2', since: null };
+  w = watchStep(w, running(2), 0);
+  w = watchStep(w, null, 500);
+  assert.equal(w.phase, 'waiting');
+});
+
+test('30 s of silence says it did not start, also before the restart step', () => {
+  let w = { mine: '0.7.2', since: null };
+  w = watchStep(w, running(1), 0);
+  w = watchStep(w, null, 500);
+  w = watchStep(w, null, 30000);
+  assert.equal(w.phase, null);
+  w = watchStep(w, null, 30500);
+  assert.equal(w.phase, 'gone');
+});
+
 test('no new page within 30 s: it did not start again', () => {
   let w = { mine: '0.7.2', since: null };
-  w = watchStep(w, null, 1000);
+  w = watchStep(w, { ...OUT, state: 'done', step: 2 }, 1000);
   w = watchStep(w, null, 30500);
   assert.equal(w.phase, 'waiting');
   w = watchStep(w, null, 31000);

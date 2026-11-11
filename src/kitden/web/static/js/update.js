@@ -46,15 +46,21 @@ export function updateView(api, phase) {
 }
 
 // One read while the page watches an update. `watch.mine` is the version this page runs;
-// `watch.since` is when the old page first stopped answering or said it handed over. `answer` is
-// GET /api/update, or null when no page answered. A page with another version is the new one:
-// this page reloads. Each tab watches on its own clock.
+// `watch.last` is the old page's last real answer; `watch.since` is when the old page first said
+// it handed over or stopped answering. `answer` is GET /api/update, or null when no page answered.
+// A page with another version is the new one: this page reloads. A missed answer means "the
+// restart is under way" only after the old page said so (handed over, or the restart step);
+// before that the page keeps the last real step, and only 30 s of silence says it did not start.
+// Each tab watches on its own clock.
 export function watchStep(watch, answer, now) {
   if (answer && answer.version !== watch.mine) return { ...watch, phase: "reloading", reload: true };
-  if (answer && answer.state === "running") return { ...watch, since: null, phase: null };
-  if (answer && answer.state !== "done") return { ...watch, phase: null, stop: true };
+  if (answer && answer.state === "running") return { ...watch, last: answer, since: null, phase: null };
+  if (answer && answer.state !== "done") return { ...watch, last: answer, phase: null, stop: true };
+  const last = answer || watch.last;
+  const restarting = Boolean(last) && (last.state === "done" || (last.state === "running" && last.step === 2));
   const since = watch.since ?? now;
-  return { ...watch, since, phase: now - since >= WAIT_MS ? "gone" : "waiting" };
+  const phase = now - since >= WAIT_MS ? "gone" : restarting ? "waiting" : null;
+  return { ...watch, last, since, phase };
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -255,7 +261,7 @@ export function startUpdate(spot) {
     if (now && now.state === "running") {
       api = now;
       phase = null;
-      watch = { mine, since: null };
+      watch = { mine, since: null, last: now };
       closePop(false);
       draw();
       press.focus();
@@ -375,7 +381,7 @@ export function startUpdate(spot) {
       from = sessionStorage.getItem(FROM_KEY);
       sessionStorage.removeItem(FROM_KEY);
     } catch { /* no storage: the new version just shows */ }
-    if (["running", "done"].includes(answer.state)) watch = { mine, since: null };
+    if (["running", "done"].includes(answer.state)) watch = { mine, since: null, last: answer };
     if (from && from !== mine && !watch) return landed(from);
     draw();
     schedule();
