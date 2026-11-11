@@ -142,6 +142,32 @@ def test_the_background_start_does_not_run_from_the_callers_folder(tmp_path, mon
     assert os.path.isabs(command[command.index("--home") + 1])
 
 
+def test_the_new_version_starts_from_its_launcher_with_the_old_values_out_of_sight(
+    tmp_path, monkeypatch
+):
+    import os
+    import subprocess
+
+    seen = {}
+    monkeypatch.setattr(
+        subprocess, "Popen", lambda command, **kw: seen.update(command=command, env=kw.get("env"))
+    )
+    launcher = tmp_path / "bin/kitden"
+    page.start_background(tmp_path / "home", "home", launcher, "47800:tok:session")
+    assert seen["command"] == [
+        str(launcher),
+        "serve",
+        "--background",
+        "--no-browser",
+        "--take-over",
+        "--home",
+        str(tmp_path / "home"),
+    ]
+    assert seen["env"][page.TAKE_OVER] == "47800:tok:session"
+    assert seen["env"]["HOME"] == os.environ["HOME"]
+    assert not any("tok" in word for word in seen["command"])
+
+
 def test_the_event_route_counts_a_tab_until_it_disconnects():
     import asyncio
 

@@ -5,7 +5,9 @@ import contextlib
 import html
 import importlib
 import json
+import secrets
 import sys
+import time
 import webbrowser
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
@@ -150,6 +152,11 @@ from kitden.model import (
 from kitden.redact import masked_command, redact_text
 from kitden.sign_in import SIGNED_OUT, SignIn, SignIns
 from kitden.system import secret_store_name
+from kitden.update.check import EVERY, cached_latest, newer
+from kitden.update.check import fetch as fetch_latest
+from kitden.update.install import MANUAL_COMMAND, Install
+from kitden.update.run import Outcome, write_marker
+from kitden.update.run import upgrade as run_upgrade
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
 from kitden.views.changes_view import came_back, change_entries
@@ -571,7 +578,21 @@ SIGNED_IN_PAGE = "Back in Kitden. You can close this tab."
 NOT_SIGNED_IN_PAGE = "Sign-in did not finish. You can close this tab and try again in Kitden."
 
 # The API calls that answer before the first scan is done.
-NO_WAIT = ("/api/events", "/api/progress", "/api/about")
+# /api/update: after an update the browser asks the new page for its version while it scans.
+NO_WAIT = ("/api/events", "/api/progress", "/api/about", "/api/update")
+NOTES_URL = "https://github.com/KonstantinStarovoytov/kitden/releases/tag/v{}"
+
+
+@dataclass
+class UpdateRun:
+    """Where updating Kitden from the page is, for GET /api/update."""
+
+    state: str = "idle"  # idle, running, done, same or failed
+    step: int | None = None  # the index in kitden.update.run.STEPS
+    tail: list[str] = field(default_factory=list)  # the installer's last lines
+    latest: str | None = None  # None until the check has answered
+    asked: float | None = None  # when the last check started (monotonic)
+    handed_over: bool = False  # the new version's page was started: this one stops
 
 
 class WaitForFirstScan:
@@ -609,6 +630,11 @@ def create_app(
     version_refresh: Callable[[], dict[str, str | None]] | None = None,
     demo: bool = False,
     open_browser: Callable[[str], Any] = webbrowser.open,
+    session: str | None = None,
+    install: Install | None = None,
+    fetch: Callable[[str], bytes] = fetch_latest,
+    upgrade: Callable[[Install, Callable[[int], None], str], Awaitable[Outcome]] = run_upgrade,
+    start_page: Callable[[Path, str], Any] | None = None,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown).
     `version_refresh` reads the clients' versions after the first scan; by default the ones
@@ -617,7 +643,13 @@ def create_app(
     With `demo`, `home` is the sample's, and stand-ins keep everything inside it: no client
     command, Keychain, MCP server, version read or network. What would go online is refused.
     `open_browser` shows a server's sign-in page; tests pass a stand-in.
+
+    Kitden updates itself from the page only with `install` (how it was installed) and
+    `start_page`, which starts the new version's page with its launcher and the
+    "port:token:session" it takes over. `session` is the old page's, after such an update.
+    `fetch` asks for the latest version; `upgrade` runs the installer.
     """
+    session = session or secrets.token_urlsafe(32)
     events = Broadcaster()
     watcher_ref: list[Watcher] = []
     make_adapters = default_adapters
@@ -702,6 +734,90 @@ def create_app(
         return engine
 
     write_lock = asyncio.Lock()
+
+    # Updating Kitden (spec 2026-11-11). Only the page server asks for the latest version, at
+    # most once a day; the demo never does. Without an install the command says uv.
+    update = UpdateRun()
+    update_tasks: set[asyncio.Task] = set()
+    can_update = install is not None and start_page is not None and home is not None and not demo
+
+    def check_later() -> None:
+        """Ask for the latest version in a worker thread, so the page never waits for it."""
+        if home is None or demo:
+            return
+        now = time.monotonic()
+        if update.asked is not None and now - update.asked < EVERY.total_seconds():
+            return
+        update.asked = now
+        method = install.method if install else "uv"
+
+        async def ask() -> None:
+            when = datetime.now(UTC)
+            update.latest = await asyncio.to_thread(cached_latest, home_dir(), method, when, fetch)
+
+        task = asyncio.ensure_future(ask())
+        update_tasks.add(task)
+        task.add_done_callback(update_tasks.discard)
+
+    def update_view() -> dict:
+        notes = NOTES_URL.format(update.latest) if newer(__version__, update.latest) else None
+        return {
+            "version": __version__,
+            "latest": update.latest,
+            "can_update": can_update,
+            "command": MANUAL_COMMAND[install.method if install else None],
+            "notes_url": notes,
+            "state": update.state,
+            "step": update.step,
+            "tail": update.tail,
+        }
+
+    async def run_update() -> None:
+        """Run the installer; when it changed the version, start the new page and stop this one.
+        It holds `write_lock`, so no change runs meanwhile; after a hand-over the lock stays
+        taken, so no change starts on a page that is stopping."""
+        assert install is not None and start_page is not None
+
+        def on_step(step: int) -> None:
+            update.step = step
+
+        try:
+            outcome = await upgrade(install, on_step, __version__)
+            update.tail = outcome.tail
+            if outcome.state != "updated" or outcome.version is None:
+                update.state = outcome.state
+                return
+            try:
+                write_marker(home_dir(), outcome.version, install.launcher)
+                update.step = 2  # "Restarting Kitden…"
+                start_page(install.launcher, f"{port}:{token}:{session}")
+            except OSError as error:
+                update.state, update.tail = "failed", [*outcome.tail, str(error)]
+                return
+            update.state, update.handed_over = "done", True
+        except Exception as error:  # noqa: BLE001 - shown on the page; the old version runs on
+            update.state, update.tail = "failed", [str(error)]
+        finally:
+            if not update.handed_over:
+                write_lock.release()
+
+    async def update_kitden(request: Request) -> JSONResponse:
+        """GET: the version, the latest one, and how an update goes. POST: start the update."""
+        if request.method == "GET":
+            check_later()
+            return JSONResponse(update_view())
+        if not can_update:
+            return _error("Kitden cannot update itself here.", 409)
+        if write_lock.locked():  # a change or an update runs, or this page handed over
+            return _error("Kitden is busy. Try again when it is done.", 409)
+        await write_lock.acquire()
+        # The installer starts now; uv prints nothing until it has downloaded (ruling R12).
+        update.state, update.step, update.tail = "running", 0, []
+        task = asyncio.ensure_future(run_update())
+        update_tasks.add(task)
+        task.add_done_callback(update_tasks.discard)
+        return JSONResponse(update_view(), status_code=202)
+
     # Browser sign-ins (Part 3b): the tokens wait here, in memory, until Apply.
     signins = SignIns()
     redirect_uri = f"http://127.0.0.1:{port}/sign-in/done"
@@ -836,7 +952,7 @@ def create_app(
             yield
         finally:
             watcher.stop()
-            for running in (task, scan, *refreshing):
+            for running in (task, scan, *refreshing, *update_tasks):
                 if running is not None:
                     running.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
@@ -1998,16 +2114,22 @@ def create_app(
             Route("/api/events", stream),
             Route("/api/progress", progress),
             Route("/api/about", about),
+            Route("/api/update", update_kitden, methods=["GET", "POST"]),
             Mount("/static", StaticFiles(directory=STATIC), name="static"),
         ],
         middleware=[
-            Middleware(SecurityMiddleware, token=token, port=port),
+            Middleware(SecurityMiddleware, token=token, port=port, session=session),
             Middleware(WaitForFirstScan, state=state),
         ],
         lifespan=lifespan,
     )
     app.state.inventory = state
     app.state.events = events
-    # What a background page checks before it stops by itself (feature 002, research R6).
-    app.state.activity = SimpleNamespace(tabs=lambda: events.count, busy=write_lock.locked)
+    # What a background page checks before it stops by itself (feature 002, research R6), and
+    # whether any page stops because the new version's page takes over.
+    app.state.activity = SimpleNamespace(
+        tabs=lambda: events.count,
+        busy=write_lock.locked,
+        handed_over=lambda: update.handed_over,
+    )
     return app

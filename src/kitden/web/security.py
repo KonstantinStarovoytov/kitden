@@ -2,7 +2,8 @@
 
 - Only Host 127.0.0.1:<port> or localhost:<port> (blocks DNS rebinding).
 - A start link with a random token sets an HttpOnly, SameSite=Strict session cookie.
-  The link works while the page runs; `kitden open` reuses it.
+  The link works while the page runs; `kitden open` reuses it. After an update the new
+  version's page takes over the same link and session.
 - Every request needs that cookie, but the page the browser comes back to after a server's
   sign-in (`/sign-in/done`), which only a waiting sign-in's `state` opens.
 - State-changing requests also need the exact same Origin, `Sec-Fetch-Site: same-origin` when
@@ -35,11 +36,12 @@ SECURITY_HEADERS = {
 
 
 class SecurityMiddleware:
-    def __init__(self, app: ASGIApp, token: str, port: int) -> None:
+    def __init__(self, app: ASGIApp, token: str, port: int, session: str | None = None) -> None:
         self.app = app
         self.token = token
         self.cookie = f"{COOKIE}_{port}"
-        self.session = secrets.token_urlsafe(32)
+        # A page that takes over after an update gets the old page's session: tabs stay signed in.
+        self.session = session or secrets.token_urlsafe(32)
         self.hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

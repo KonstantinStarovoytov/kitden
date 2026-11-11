@@ -24,6 +24,11 @@ LOG = "page.log"
 # home can take about that long (feature 001 validation: 4.2 s), so a slow start is not a failure.
 WAIT_SECONDS = 20.0
 IDLE_SECONDS = 600.0  # a background page stops after 10 minutes without an open tab
+# After an update the new version's page takes over the old page's port, token and session, so
+# open tabs keep working. They come in this env value as "port:token:session", never in the
+# command line, which other users can see.
+TAKE_OVER = "KITDEN_TAKE_OVER"
+TAKE_OVER_SECONDS = 30.0  # how long the new page waits for the old one to stop
 
 
 class PageLock:
@@ -31,15 +36,21 @@ class PageLock:
         self.home = Path(home)
         self.fd: int | None = None
 
-    def acquire(self) -> bool:
+    def acquire(self, wait: float = 0) -> bool:
+        """Take the lock, trying for up to `wait` seconds."""
+        deadline = time.monotonic() + wait
         fd = os.open(private_data_dir(self.home) / LOCK, os.O_RDWR | os.O_CREAT, 0o600)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            os.close(fd)
-            return False
-        self.fd = fd
-        return True
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                if time.monotonic() < deadline:
+                    time.sleep(0.1)
+                    continue
+                os.close(fd)
+                return False
+            self.fd = fd
+            return True
 
     def release(self) -> None:
         if self.fd is not None:
@@ -117,14 +128,22 @@ def log_path(home: Path) -> Path:
     return data_dir(home) / LOG
 
 
-def start_background(home: Path, home_arg: str | None) -> None:
+def start_background(
+    home: Path, home_arg: str | None, launcher: Path | None = None, take_over: str | None = None
+) -> None:
     """Start `kitden serve --background` detached from this terminal (research R5).
 
     `-P` and the data folder as working folder keep the caller's folder off the import path:
-    a project's own `secrets.py` must never run inside the page.
+    a project's own `secrets.py` must never run inside the page. After an update, `launcher`
+    is the new version's program and `take_over` the old page's "port:token:session".
     """
     folder = private_data_dir(home)
-    command = [sys.executable, "-P", "-m", "kitden", "serve", "--background", "--no-browser"]
+    program = [sys.executable, "-P", "-m", "kitden"] if launcher is None else [str(launcher)]
+    command = [*program, "serve", "--background", "--no-browser"]
+    env = None
+    if take_over is not None:
+        command.append("--take-over")
+        env = {**os.environ, TAKE_OVER: take_over}
     if home_arg:
         command += ["--home", str(Path(home).absolute())]
     fd = os.open(folder / LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
@@ -137,6 +156,7 @@ def start_background(home: Path, home_arg: str | None) -> None:
             stderr=fd,
             start_new_session=True,
             close_fds=True,
+            env=env,
         )
     finally:
         os.close(fd)
