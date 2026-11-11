@@ -43,7 +43,7 @@ export function updateView(api, phase) {
   if (api.state === "same") return { ...view, tip: SAME };
   if (!api.notes_url) return view;
   if (!api.can_update) return { ...view, tip: `${api.latest} is out` };
-  return { ...view, button: "available", tip: `${api.version} → ${api.latest}` };
+  return { ...view, button: "available", tip: `Update available: ${api.latest}` };
 }
 
 // The words of the box behind the red button. "gone": the old page stopped and no new one
@@ -52,7 +52,7 @@ export function updateView(api, phase) {
 export function failedWords(api, phase) {
   if (phase === "gone") return { title: NOT_STARTED, text: "Run this in a terminal to open it:", command: "kitden open" };
   if (api.step === 2) {
-    const text = "Kitden was updated, but the new page could not start. Stop this page, then run this in a terminal:";
+    const text = "Kitden was updated, but the new page could not start. Close this tab: the old page stops within 10 minutes. Then run this in a terminal:";
     return { title: NEW_NOT_STARTED, text, command: "kitden open" };
   }
   return { title: FAILED, text: "The old version keeps running.", command: api.command };

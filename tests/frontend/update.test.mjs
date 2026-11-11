@@ -14,10 +14,10 @@ test('only the version when nothing is newer', () => {
     { version: 'Kitden 0.7.2', button: null, tip: '', ring: 0 });
 });
 
-test('available shows from and to', () => {
+test('available names the new version', () => {
   const v = updateView(OUT, null);
   assert.equal(v.button, 'available');
-  assert.equal(v.tip, '0.7.2 → 0.7.3');
+  assert.equal(v.tip, 'Update available: 0.7.3');
 });
 
 test('a latest version that is not newer shows no button', () => {
@@ -84,7 +84,7 @@ test('files replaced but the new page could not start: this old page still runs'
   assert.equal(v.tip, 'The new version did not start');
   assert.deepEqual(failedWords(api, null), {
     title: 'The new version did not start',
-    text: 'Kitden was updated, but the new page could not start. Stop this page, then run this in a terminal:',
+    text: 'Kitden was updated, but the new page could not start. Close this tab: the old page stops within 10 minutes. Then run this in a terminal:',
     command: 'kitden open',
   });
 });
