@@ -33,9 +33,11 @@ EXIT_UNSUPPORTED = 5
 
 
 def pick_port(start: int, tries: int = 20) -> int | None:
-    """The first free loopback port from `start`, or None."""
+    """The first free loopback port from `start`, or None. A port left in TIME_WAIT by a page
+    that just stopped counts as free, as it does for uvicorn's own bind."""
     for port in range(start, start + tries):
         with socket.socket() as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 sock.bind((HOST, port))
             except OSError:

@@ -44,6 +44,29 @@ def test_pick_port_skips_a_busy_port():
         busy.close()
 
 
+def test_a_port_the_old_page_just_closed_is_free_again():
+    # The old page closes its connections itself, which leaves the port in TIME_WAIT. The new
+    # page takes that port over after an update; uvicorn's own bind allows it, so must the probe.
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    port = listener.getsockname()[1]
+    client = socket.create_connection(("127.0.0.1", port))
+    accepted, _ = listener.accept()
+    accepted.close()  # the server side closes first: its port goes to TIME_WAIT
+    client.close()
+    listener.close()
+    assert pick_port(port, tries=1) == port
+    busy = socket.socket()  # the new page listens there, bound as uvicorn binds
+    busy.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    busy.bind(("127.0.0.1", port))
+    busy.listen()
+    try:
+        assert pick_port(port, tries=1) is None  # a page that still listens keeps it
+    finally:
+        busy.close()
+
+
 def test_serve_runs_on_loopback_and_prints_a_token_link(monkeypatch, capsys):
     calls = {}
     monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47811)
