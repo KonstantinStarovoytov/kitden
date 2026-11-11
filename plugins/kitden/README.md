@@ -1,67 +1,64 @@
 # Kitden plugin
 
-For Claude Code and Codex. It adds the Kitden MCP server and two skills, so an agent can tell you
-what your coding tools load and why.
+For Claude Code and Codex. Six skills, so an agent can tell you what your coding tools load, why,
+and whether your skills fit in the context.
 
-The plugin does not hold the program. It needs [Kitden](https://pypi.org/project/kitden/) 0.7.1
-or later on this computer:
+The plugin has no MCP server and nothing that runs by itself: no hooks and no commands. Its
+skills run the command `kitden show`, which only reads.
+
+The plugin does not hold the program. It needs [Kitden](https://pypi.org/project/kitden/) 0.7.2
+or later on this computer. When Kitden is missing, the agent asks before it installs anything.
+You can also install it yourself:
 
 ```bash
 uv tool install --python 3.13 kitden
 ```
 
-The [Kitden README](https://github.com/KonstantinStarovoytov/kitden#get-started) has the Homebrew
-line too. Kitden is open source under Apache-2.0, and its code is in the same repository as this
-plugin.
+Or with Homebrew: `brew install konstantinstarovoytov/tap/kitden`. Kitden runs on macOS and
+Linux. It is open source under Apache-2.0, and its code is in the same repository as this plugin.
 
-## What the MCP server gives
+## What the skills do
 
-The plugin starts one local program, `kitden mcp --read-only`, and talks to it over stdio. The
-server `kitden` has four tools. Each one only reads.
-
-| Tool | What it answers |
+| Skill | What it does |
 | --- | --- |
-| `show_setup` | What each client loads in a project, and where each item comes from. |
-| `list_findings` | Problems in the setup, such as an item that loads twice. |
-| `explain_item` | One name across the clients: every place it is set, and which one loads. |
-| `list_projects` | The projects the clients know on this computer. |
+| `show-setup` | Answers what each client loads in a project, where an item comes from and why it loads twice. |
+| `audit` | Compares what loads with the project you are in and lists what to turn off. It judges by what the project is; Kitden does not tell how often an item is used. |
+| `context` | Says whether your skills fit in the client's skill list, and which ones lost their description. |
+| `before-install` | Before you add a server, plugin or skill, looks whether a client already has it. |
+| `open` | Opens the Kitden page and gives you the link. |
+| `install` | Installs or updates Kitden when a skill needs it. It shows the line and asks first. |
 
-The plugin's server offers no other tools. The Kitden gateway is a separate connection that you
-make yourself on the Kitden page.
+The skills change nothing in your settings. To change something, the agent sends you to the
+Kitden page, which previews, backs up and can undo every change.
 
-## What the plugin adds
-
-- One install line for the server, and one line to remove it.
-- The skill `show-setup`: sends a change to the Kitden page, so the agent does not edit your
-  settings files, and shows the install line when Kitden is missing.
-- The skill `audit` (`/kitden:audit` in Claude Code): the agent compares what loads with the
-  project you are in and lists what to turn off. It judges by what the project is; Kitden's
-  tools do not tell how often an item is used. You make the changes on the page.
-
-The plugin adds nothing that runs by itself: no hooks and no commands.
+In Claude Code each skill is also a command, such as `/kitden:audit`.
 
 ## Try it
 
 - "What MCP servers and skills do you load in this project?"
 - "Why does this skill load twice?"
-- "Where does the github MCP server come from?"
+- "Do my skills fit in the context?"
+- "Is the github server already set up somewhere?"
 - `/kitden:audit`
+- `/kitden:context`
 
 ## What it reads
 
-The tools read the settings files of Claude Code, Codex and Cursor on this computer. To learn
-versions and plugins they may run the clients' own commands, such as `claude --version` and
-`codex plugin list`. They change nothing and do not go online. Secret values, such as tokens in
-a server's settings, are replaced with `[secret]` before an answer leaves the server. There is no
-account and no telemetry.
+`kitden show` reads the settings files of Claude Code, Codex and Cursor on this computer. For
+the context check it also reads what the client sent in your last chats, from the client's own
+chat files. To learn versions and plugins it may run the clients' own commands, such as
+`claude --version` and `codex plugin list`. It changes nothing and does not go online. Secret
+values, such as tokens in a server's settings, are replaced with `[secret]`. There is no account
+and no telemetry.
+
+The install is the one step that goes online, and only after your yes. The agent uses uv, or
+Homebrew, or Kitden's own `install.sh` from this repository.
 
 ## If something goes wrong
 
-- **The client shows the server as failed.** Kitden is missing or older than 0.7.1. Run
-  `kitden --version`. If it fails, use the install line above. If it is older, run
-  `uv tool upgrade kitden` or `brew upgrade kitden`. Then restart the client.
-- **The server runs but the agent has no kitden tools.** Turn the `kitden` server on in the
-  client.
+- **The agent says `kitden` is not found.** Say yes to the install, or run the install line
+  above, then open a new terminal.
+- **A skill says Kitden is too old.** Run `uv tool upgrade kitden` or `brew upgrade kitden`.
 - **Anything else.** Open an issue at https://github.com/KonstantinStarovoytov/kitden/issues.
 
 ## Install and remove
@@ -73,4 +70,4 @@ account and no telemetry.
 
 The Claude Code line needs Claude Code 2.1.275 or later (checked 2026-11-05).
 
-Removing the plugin leaves every other setting as it is.
+Removing the plugin leaves Kitden and every other setting as they are.

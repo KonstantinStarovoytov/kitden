@@ -1,5 +1,0 @@
-{
-  "mcpServers": {
-    "kitden": { "type": "stdio", "command": "kitden", "args": ["mcp", "--read-only"] }
-  }
-}

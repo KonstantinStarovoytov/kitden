@@ -115,6 +115,9 @@ def test_the_installed_plugin_is_read_from_claude_code_files(tmp_path):
     home = make_home(tmp_path, "claude_code/2.1.283")
     cache = home / ".claude/plugins/cache/kitden/kitden/0.1.0"
     shutil.copytree(PLUGIN_DIR, cache)
+    # The plugin as it was up to 0.7.1, when it still brought the server.
+    entry = '{"mcpServers": {"kitden": {"command": "kitden", "args": ["mcp", "--read-only"]}}}'
+    (cache / ".mcp.json").write_text(entry)
     (home / ".claude/plugins/installed_plugins.json").write_text(
         json.dumps(
             {

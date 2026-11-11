@@ -1,20 +1,21 @@
 """The plugin package Claude Code and Codex install (feature 003: FR-008 to FR-011, FR-015)."""
 
 import json
+import re
 import struct
 from pathlib import Path
 
 import kitden
-from kitden import mcp_server
+from kitden import cli, mcp_server
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "plugins/kitden"
-# The plugin starts the server with only Kitden's own tools, which only read.
-ENTRY = {"type": "stdio", "command": "kitden", "args": ["mcp", "--read-only"]}
-# The flag came with this version: an older Kitden does not start with it.
-NEEDS = "0.7.1"
+SKILLS = ("audit", "before-install", "context", "install", "open", "show-setup")
+# `kitden show` came with this version: the skills run it.
+NEEDS = "0.7.2"
 UPGRADE = "uv tool upgrade kitden"
 INSTALL = "uv tool install --python 3.13 kitden"
+BREW = "brew install konstantinstarovoytov/tap/kitden"
 # The skills and the MCP server say this in the same words.
 NO_EDITS = "Do not edit client settings files"
 
@@ -42,73 +43,120 @@ def test_both_manifests_carry_the_package_version():
     assert claude["license"] == portable["license"] == "Apache-2.0"
 
 
-def test_both_mcp_files_hold_only_the_read_only_server():
-    assert (PLUGIN / ".mcp.json").read_bytes() == (PLUGIN / "mcp.json").read_bytes()
-    assert _json(PLUGIN / ".mcp.json") == {"mcpServers": {"kitden": ENTRY}}
-
-
-def test_the_skill_states_the_four_rules():
-    text = (PLUGIN / "skills/show-setup/SKILL.md").read_text()
-    head, body = text.split("---\n")[1:3]
-    assert "name: show-setup" in head
+def _skill(name: str) -> tuple[str, str]:
+    """A skill's head and body."""
+    head, body = (PLUGIN / f"skills/{name}/SKILL.md").read_text().split("---\n")[1:3]
+    assert f"name: {name}\n" in head
     assert "description: Use when" in head
-    for rule in (
-        "show_setup",
-        "kitden open",
-        NO_EDITS,
-        "kitden --version",
-        INSTALL,
-        NEEDS,
-        UPGRADE,
-    ):
+    return head, body
+
+
+def test_the_plugin_has_no_mcp_server():
+    # Anthropic's directory holds a plugin that starts a local server (Validate, 2026-11-10), so
+    # the skills run the `kitden` command instead.
+    assert not (PLUGIN / ".mcp.json").exists() and not (PLUGIN / "mcp.json").exists()
+    assert "mcpServers" not in _json(PLUGIN / ".claude-plugin/plugin.json")
+
+
+def test_the_plugin_holds_these_skills_and_each_is_short():
+    assert sorted(p.name for p in (PLUGIN / "skills").iterdir()) == list(SKILLS)
+    for name in SKILLS:
+        assert len(_skill(name)[1].split()) < 300, name
+
+
+def test_the_skills_run_only_commands_kitden_has():
+    asked = set()
+    for name in SKILLS:
+        asked |= set(re.findall(r"kitden show (\w+)", _skill(name)[1]))
+    assert asked == set(cli.SHOW)
+
+
+def test_every_skill_that_runs_kitden_sends_a_missing_kitden_to_the_install_skill():
+    for name in SKILLS:
+        if name != "install":
+            assert "kitden `install` skill" in _skill(name)[1], name
+
+
+def test_the_show_setup_skill_reads_and_sends_changes_to_the_page():
+    head, body = _skill("show-setup")
+    for word in ("MCP servers", "skills", "plugins", "hooks", "CLAUDE.md", "Codex", "Cursor"):
+        assert word in head
+    # A change request must reach the skill, so the agent sends the user to the page.
+    assert "turn one on or off" in head and "remove" in head and "comes from" in head
+    rules = ("kitden show setup", "--client", "kitden show findings", "kitden show item")
+    for rule in (*rules, "kitden show projects", "kitden open", NO_EDITS):
         assert rule in body
     assert len(body.split()) < 200
 
 
-def test_the_skill_description_names_what_users_ask_about():
-    head = (PLUGIN / "skills/show-setup/SKILL.md").read_text().split("---\n")[1]
-    for word in ("MCP servers", "skills", "plugins", "hooks", "CLAUDE.md", "Codex", "Cursor"):
-        assert word in head
-    # A change request must reach the skill, so the agent sends the user to the page.
-    assert "turn one on or off" in head and "remove" in head
-
-
 def test_the_audit_skill_suggests_and_changes_nothing():
-    text = (PLUGIN / "skills/audit/SKILL.md").read_text()
-    head, body = text.split("---\n")[1:3]
-    assert "name: audit" in head
-    assert "description: Use when" in head
+    head, body = _skill("audit")
     for word in ("turn off", "audit", "context"):
         assert word in head
-    for rule in ("show_setup", "list_findings", "kitden open", NO_EDITS, "not sure"):
+    rules = ("kitden show setup", "kitden show findings", "kitden open", NO_EDITS, "not sure")
+    for rule in rules:
         assert rule in body
-    # Kitden's tools do not count use, and the skill must say what it judges by.
+    # Kitden does not count use, and the skill must say what it judges by.
     assert "how often" in body
     # The whole setup is too large for one answer; some items only their client can change.
-    for field in ("`client`", "explain_item", "`actions`", "`change_hint`"):
+    for field in ("--client", "kitden show item", "`actions`", "`change_hint`"):
         assert field in body
-    assert len(body.split()) < 300
 
 
-def test_the_readmes_say_what_the_server_and_the_plugin_each_give():
+def test_the_install_skill_asks_first_and_names_each_way():
+    head, body = _skill("install")
+    assert "install" in head and "update" in head and "not found" in head
+    for rule in ("kitden --version", NEEDS, INSTALL, UPGRADE, BREW, "brew upgrade kitden"):
+        assert rule in body
+    assert "install.sh" in body and "uvx --python 3.13 kitden" in body
+    # Nothing is installed without the user's yes.
+    assert "Ask" in body and "Without a yes" in body
+    assert body.index("Ask") < body.index(INSTALL)
+
+
+def test_the_context_skill_says_what_kitden_measured():
+    head, body = _skill("context")
+    for word in ("skills fit", "context", "description"):
+        assert word in head
+    for rule in ("kitden show context", "`say`", "`over`", "`how`", "Estimate", "kitden open"):
+        assert rule in body
+    assert NO_EDITS in body
+
+
+def test_the_before_install_skill_looks_and_installs_nothing():
+    head, body = _skill("before-install")
+    for word in ("add", "install", "already"):
+        assert word in head
+    for rule in ("kitden show item", "kitden show setup", "`loads`", "`why`", "`summary`"):
+        assert rule in body
+    assert "do not add it" in body
+
+
+def test_the_open_skill_opens_the_page():
+    head, body = _skill("open")
+    assert "open" in head and "Kitden" in head
+    assert "`kitden open`" in body and "link" in body
+
+
+def test_the_readmes_say_what_the_plugin_gives():
     plugin = (PLUGIN / "README.md").read_text()
-    headings = ("## What the MCP server gives", "## What the plugin adds")
-    for words in (*headings, "`show-setup`", "`audit`"):
-        assert words in plugin
+    for name in SKILLS:
+        assert f"`{name}`" in plugin, name
     readme = (ROOT / "README.md").read_text()
     assert "| **MCP server** |" in readme and "| **Plugin** |" in readme
-    assert "/kitden:audit" in readme
+    assert "/kitden:audit" in readme and "/kitden:context" in readme
 
 
 def test_the_plugin_readme_says_what_the_plugin_runs_and_needs():
     text = (PLUGIN / "README.md").read_text()
-    # The one thing it starts, with only reading tools; nothing of a moved server.
-    assert "`kitden mcp --read-only`" in text
-    for tool in ("show_setup", "list_findings", "explain_item", "list_projects"):
-        assert f"`{tool}`" in text
-    assert "moved into" not in text
+    # What it runs: the kitden command, which only reads here. No server, and it says so.
+    assert "`kitden show`" in text and "no MCP server" in text
+    assert "kitden mcp" not in text
+    # It offers the install and never runs it unasked.
+    assert "asks before" in text and BREW in text
     # What a reviewer and a new user look for.
-    for heading in ("## Try it", "## What it reads", "## If something goes wrong"):
+    headings = ("## What the skills do", "## Try it", "## What it reads")
+    for heading in (*headings, "## If something goes wrong", "## Install and remove"):
         assert heading in text
     assert NEEDS in text and UPGRADE in text
     assert "https://github.com/KonstantinStarovoytov/kitden/issues" in text
@@ -120,14 +168,15 @@ def test_the_install_line_is_the_one_in_the_readme():
     assert INSTALL in (PLUGIN / "README.md").read_text()
 
 
-def test_every_description_says_kitden_must_be_installed():
+def test_every_description_says_it_uses_kitden_and_offers_the_install():
     texts = {
         _json(PLUGIN / ".claude-plugin/plugin.json")["description"],
         _json(PLUGIN / "plugin.json")["description"],
         _json(ROOT / ".claude-plugin/marketplace.json")["plugins"][0]["description"],
     }
     assert len(texts) == 1
-    assert "Needs Kitden installed" in texts.pop()
+    text = texts.pop()
+    assert "Kitden program" in text and "offers to install" in text
 
 
 def test_the_plugin_adds_nothing_that_runs_by_itself():
@@ -140,7 +189,6 @@ def test_the_plugin_adds_nothing_that_runs_by_itself():
 def test_the_guide_cursor_link_adds_the_same_server():
     """FR-012: the "Add to Cursor" link adds the whole server, gateway tools too."""
     import base64
-    import re
 
     readme = (ROOT / "docs/guide.md").read_text()
     configs = re.findall(r"install-mcp\?name=kitden&config=([A-Za-z0-9+/=]+)", readme)

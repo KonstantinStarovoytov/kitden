@@ -6,7 +6,7 @@
     {
       "name": "kitden",
       "source": "./plugins/kitden",
-      "description": "Ask what your coding agents load; open the Kitden page. Needs Kitden installed."
+      "description": "Ask what your coding agents load and whether your skills fit. Uses the Kitden program and offers to install it."
     }
   ]
 }

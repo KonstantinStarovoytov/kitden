@@ -7,6 +7,16 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### 0.7.2
+
+- **The plugin has no server:** its skills now run the command `kitden show`, which only reads.
+  One build works for Claude Code and Codex, and the plugin needs Kitden 0.7.2 or later.
+- **`kitden show`:** prints one read-only answer as JSON: `setup`, `findings`, `item NAME`,
+  `projects` or `context`. The answers are the same as the MCP server's.
+- **Four new skills:** `context` says whether your skills fit, `before-install` looks whether an
+  item is already set up, `open` opens the page, and `install` installs or updates Kitden after
+  it asks.
+
 ### 0.7.1
 
 - **The plugin's server only reads:** the plugin now starts `kitden mcp --read-only`, which
