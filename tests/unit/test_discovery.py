@@ -712,3 +712,26 @@ def test_github_source_pages_results_with_plugins_first(tmp_path, monkeypatch):
     rest = source.search("acme/skills", "", "all", discovery.PAGE)
     assert [r["name"] for r in rest["results"]] == [f"s{n:03}" for n in range(58, 70)]
     assert source.search("acme/skills", "s06", "all")["results"][0]["name"] == "s060"
+
+
+def test_github_source_pages_through_every_mcp_file(tmp_path, monkeypatch):
+    files = [f"servers/s{n:03}/.mcp.json" for n in range(70)]
+    reads = []
+
+    def read(url):
+        if "/commits/" in url:
+            return {"sha": SHA}
+        if "/git/trees/" in url:
+            return {"tree": [{"path": p, "type": "blob"} for p in files]}
+        reads.append(url)
+        number = url.split("/servers/s")[1][:3]
+        return {"mcpServers": {f"server-{number}": {"command": "run"}}}
+
+    monkeypatch.setattr(discovery, "read_json", read)
+    source = Discovery(tmp_path)
+    source.add_source("acme/servers")
+    first = source.search("acme/servers", "", "mcp")
+    assert first["total"] == 70
+    rest = source.search("acme/servers", "", "mcp", discovery.PAGE)
+    assert [r["name"] for r in rest["results"]][-1] == "server-069"
+    assert len(reads) == 70, "each file is read once"

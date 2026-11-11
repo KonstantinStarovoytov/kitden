@@ -296,6 +296,7 @@ class Discovery:
         self.root = data_dir(home) / "discovery"
         self.results: dict[str, dict] = {}
         self.trees: dict[str, tuple[str, list[str]]] = {}
+        self.files: dict[str, dict] = {}
 
     def sources(self) -> list[dict]:
         try:
@@ -389,7 +390,9 @@ class Discovery:
             for path in paths:
                 if PurePosixPath(path).name not in ("server.json", ".mcp.json"):
                     continue
-                data = read_json(raw_url(repo, commit, path))
+                url = raw_url(repo, commit, path)
+                # A file at a commit never changes: read it once, not again for each page.
+                data = self.files[url] = self.files.get(url) or read_json(url)
                 if "name" in data and ("packages" in data or "remotes" in data):
                     entry, refusal, setup = server_setup(data)
                     rows.append(
@@ -418,8 +421,6 @@ class Discovery:
                                 "description": "MCP server from this GitHub source.",
                             }
                         )
-                if len(rows) >= 60:
-                    break
             rows = [r for r in rows if words_match(query, r["name"])]
         if kind in ("all", "plugin"):
             manifest_path = next(
