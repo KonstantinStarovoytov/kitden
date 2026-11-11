@@ -132,6 +132,20 @@ def test_installed_command_is_an_absolute_path():
     assert command.endswith("/kitden")
 
 
+def test_installed_command_is_the_stable_launcher_of_an_install(monkeypatch, tmp_path):
+    # A Homebrew Python lives under a versioned Cellar folder that an upgrade removes; client
+    # configs must name the opt link that survives it.
+    from kitden import command
+    from kitden.update.install import Install
+
+    opt = tmp_path / "opt" / "kitden" / "bin" / "kitden"
+    opt.parent.mkdir(parents=True)
+    opt.write_text("")
+    brew = Install("brew", opt, ("brew", "upgrade", "kitden"))
+    monkeypatch.setattr(command, "detect", lambda: brew)
+    assert command.installed_command() == str(opt)
+
+
 def test_server_stops_quickly_even_with_an_open_page(monkeypatch):
     # An open page keeps an event stream; Ctrl+C must not wait for it forever.
     import uvicorn
