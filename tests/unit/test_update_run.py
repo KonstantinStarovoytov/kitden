@@ -1,6 +1,7 @@
 """Running the installer: the ring moves only on the installer's own lines."""
 
 import json
+import os
 import stat
 import sys
 from pathlib import Path
@@ -37,6 +38,15 @@ def test_brew_lines_move_the_ring():
     assert step_for("brew", "==> Pouring kitden--0.7.3.arm64_sonoma.bottle.tar.gz") == 1
     assert step_for("brew", "==> Upgrading kitden") is None
     assert step_for("brew", "Updated 1 tap.") is None
+
+
+def test_a_brew_source_build_moves_to_installing():
+    # Without a bottle brew builds: the header (shown when it installed dependencies first), a
+    # dependency, or the first command the formula runs ends the downloads.
+    assert step_for("brew", "==> Installing konstantinstarovoytov/tap/kitden") == 1
+    assert step_for("brew", "==> Installing konstantinstarovoytov/tap/kitden dependency: rust") == 1
+    assert step_for("brew", "==> python3.13 -m venv --system-site-packages --without-pip /x") == 1
+    assert step_for("brew", "==> python3.13 -m pip --python=/x/bin/python install kitden") == 1
 
 
 def test_a_line_from_the_other_tool_does_nothing():
@@ -110,6 +120,57 @@ async def test_brew_steps_come_in_order(tmp_path):
     steps = []
     await upgrade(_install(tmp_path, "brew", script), steps.append, "0.7.1")
     assert steps == [0, 1]
+
+
+async def test_brew_bottle_run(tmp_path):
+    lines = [
+        "==> Fetching downloads for: konstantinstarovoytov/tap/kitden",
+        "==> Upgrading konstantinstarovoytov/tap/kitden",
+        "  0.7.1 -> 0.7.2",
+        "==> Pouring kitden--0.7.2.arm64_tahoe.bottle.1.tar.gz",
+        "/opt/homebrew/Cellar/kitden/0.7.2: 1,234 files, 40MB",
+    ]
+    steps = []
+    script = _installer(tmp_path, lines, new_version="0.7.2")
+    out = await upgrade(_install(tmp_path, "brew", script), steps.append, "0.7.1")
+    assert steps == [0, 1]
+    assert out.state == "updated"
+
+
+async def test_brew_source_build_run(tmp_path):
+    # No "Pouring": the ring says Installing once the build starts, not Downloading to the end.
+    lines = [
+        "==> Fetching downloads for: konstantinstarovoytov/tap/kitden",
+        "==> Upgrading konstantinstarovoytov/tap/kitden",
+        "  0.7.1 -> 0.7.2",
+        "==> python3.13 -m venv --system-site-packages --without-pip /c/kitden/0.7.2/libexec",
+        "==> python3.13 -m pip --python=/c/kitden/0.7.2/libexec/bin/python install kitden",
+        "/c/kitden/0.7.2: 1,234 files, 40MB, built in 3 minutes",
+    ]
+    steps = []
+    script = _installer(tmp_path, lines, new_version="0.7.2")
+    out = await upgrade(_install(tmp_path, "brew", script), steps.append, "0.7.1")
+    assert steps == [0, 1]
+    assert out.state == "updated"
+
+
+async def test_brew_keeps_the_old_keg(tmp_path, monkeypatch):
+    # Old gateways still run from the old keg until they move; brew must fetch the tap.
+    monkeypatch.delenv("HOMEBREW_NO_INSTALL_CLEANUP", raising=False)
+    monkeypatch.delenv("HOMEBREW_NO_AUTO_UPDATE", raising=False)
+    monkeypatch.setenv("KITDEN_TEST_KEPT", "yes")
+    script = tmp_path / "installer.py"
+    names = ("HOMEBREW_NO_INSTALL_CLEANUP", "HOMEBREW_NO_AUTO_UPDATE", "KITDEN_TEST_KEPT")
+    script.write_text(
+        f"import os\nfor name in {names!r}:\n    print(name, os.environ.get(name), flush=True)\n"
+    )
+    brew = await upgrade(_install(tmp_path, "brew", script), lambda step: None, "0.7.1")
+    assert "HOMEBREW_NO_INSTALL_CLEANUP 1" in brew.tail
+    assert "HOMEBREW_NO_AUTO_UPDATE None" in brew.tail
+    assert "KITDEN_TEST_KEPT yes" in brew.tail
+    uv = await upgrade(_install(tmp_path, "uv", script), lambda step: None, "0.7.1")
+    assert "HOMEBREW_NO_INSTALL_CLEANUP None" in uv.tail
+    assert os.environ.get("HOMEBREW_NO_INSTALL_CLEANUP") is None  # this process is not changed
 
 
 async def test_same_version_is_not_an_update(tmp_path):

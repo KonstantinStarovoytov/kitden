@@ -25,6 +25,19 @@ def test_brew_install_uses_the_opt_link(tmp_path):
     assert got.command == (str(tmp_path / "bin" / "brew"), "upgrade", "kitden")
 
 
+def test_brew_install_reached_through_the_opt_link(tmp_path):
+    # Python can run from opt/kitden/libexec, a link to the version's folder in the Cellar.
+    cellar = tmp_path / "Cellar" / "kitden" / "0.7.2"
+    (cellar / "libexec").mkdir(parents=True)
+    (tmp_path / "opt").mkdir()
+    (tmp_path / "opt" / "kitden").symlink_to(cellar)
+    got = detect(tmp_path / "opt" / "kitden" / "libexec", which=lambda n: None)
+    assert got is not None
+    assert got.method == "brew"
+    assert got.launcher == tmp_path.resolve() / "opt" / "kitden" / "bin" / "kitden"
+    assert got.command == (str(tmp_path.resolve() / "bin" / "brew"), "upgrade", "kitden")
+
+
 def test_uvx_pip_or_source_get_no_install(tmp_path):
     assert detect(tmp_path / "cache" / "archive-v0" / "abc", which=lambda n: "/usr/bin/uv") is None
 
@@ -81,5 +94,5 @@ def test_manual_command_names_each_way():
     assert MANUAL_COMMAND == {
         "uv": "uv tool upgrade kitden",
         "brew": "brew upgrade kitden",
-        None: "uv tool upgrade kitden",
+        None: "uv tool install --python 3.13 kitden",  # the README line: uvx, pip, source
     }

@@ -9,11 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-# What to tell the user to run when Kitden cannot update itself. None: not installed by uv or brew.
+# What to tell the user to run when Kitden cannot update itself. None: not installed by uv or
+# brew (uvx, pip, source), where `uv tool upgrade` fails: the README's install line.
 MANUAL_COMMAND: dict[str | None, str] = {
     "uv": "uv tool upgrade kitden",
     "brew": "brew upgrade kitden",
-    None: "uv tool upgrade kitden",
+    None: "uv tool install --python 3.13 kitden",
 }
 
 _VERSION = re.compile(r"^kitden (\S+)$")
@@ -29,8 +30,13 @@ class Install:
 def detect(
     prefix: Path | None = None, which: Callable[[str], str | None] = shutil.which
 ) -> Install | None:
-    """The install that owns this Python, or None (uvx, pip, source checkout)."""
+    """The install that owns this Python, or None (uvx, pip, source checkout). A Homebrew
+    Python can run through the opt/kitden link, so the real folder is tried too."""
     prefix = Path(sys.prefix) if prefix is None else prefix
+    return _detect_at(prefix, which) or _detect_at(prefix.resolve(), which)
+
+
+def _detect_at(prefix: Path, which: Callable[[str], str | None]) -> Install | None:
     if (prefix / "uv-receipt.toml").exists():
         uv = which("uv")
         if uv is None:

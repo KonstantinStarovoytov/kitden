@@ -71,7 +71,7 @@ def test_without_an_install_there_is_no_button_but_the_command(tmp_path):
             "version": __version__,
             "latest": NEWER,
             "can_update": False,
-            "command": "uv tool upgrade kitden",
+            "command": "uv tool install --python 3.13 kitden",
             "notes_url": f"https://github.com/KonstantinStarovoytov/kitden/releases/tag/v{NEWER}",
             "state": "idle",
             "step": None,

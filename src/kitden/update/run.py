@@ -32,10 +32,26 @@ TAIL_LINES = 20
 #   heading "==> Fetching downloads for: kitden" (or "==> Downloading bottle manifests"), and
 #   formula_installer.rb prints "==> Pouring <bottle file>". Older Homebrew printed
 #   "==> Fetching kitden" and "==> Downloading <url>", which the same prefixes match.
+# - Homebrew without a bottle (the tap has them only for arm64 Tahoe and x86_64 Linux) builds
+#   from source and prints no "Pouring". Checked 2026-11-11 from brew source: after the
+#   downloads, formula_installer.rb prints "==> Installing <tap>/kitden" (only when it installed
+#   dependencies first) and "==> Installing <tap>/kitden dependency: <name>"; then build.rb runs
+#   the formula's install, where language/python.rb (virtualenv_install_with_resources) runs
+#   "python3.13 -m venv ..." and "python3.13 -m pip ...", which Formula#system echoes as
+#   "==> python3.13 ...". The tap's formula names "python@3.13", so the command has no path.
 _STEP_LINES: dict[str, tuple[tuple[int, str], ...]] = {
     "uv": ((1, "Updated "),),
-    "brew": ((0, "==> Fetching "), (0, "==> Downloading "), (1, "==> Pouring ")),
+    "brew": (
+        (0, "==> Fetching "),
+        (0, "==> Downloading "),
+        (1, "==> Pouring "),
+        (1, "==> Installing "),
+        (1, "==> python"),
+    ),
 }
+# Homebrew keeps the old keg, so a gateway that still runs the old version keeps its files
+# until it moves to the new one.
+_ENV = {"brew": {"HOMEBREW_NO_INSTALL_CLEANUP": "1"}}
 
 
 def step_for(method: str, line: str) -> int | None:
@@ -71,7 +87,10 @@ async def upgrade(install: Install, on_step: Callable[[int], None], before: str)
     reached = -1
     try:
         process = await anyio.open_process(
-            list(install.command), stdin=subprocess.DEVNULL, stderr=subprocess.STDOUT
+            list(install.command),
+            stdin=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT,
+            env={**os.environ, **_ENV.get(install.method, {})},
         )
     except OSError as error:
         return Outcome("failed", None, [str(error)])
