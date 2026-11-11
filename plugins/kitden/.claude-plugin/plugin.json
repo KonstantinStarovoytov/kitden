@@ -7,6 +7,8 @@
   "homepage": "https://github.com/KonstantinStarovoytov/kitden",
   "repository": "https://github.com/KonstantinStarovoytov/kitden",
   "license": "Apache-2.0",
+  "documentationUrl": "https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md",
+  "privacyPolicyUrl": "https://github.com/KonstantinStarovoytov/kitden/blob/main/PRIVACY.md",
   "icon": "./icon.png",
   "keywords": ["mcp", "setup", "claude-code", "codex", "cursor"]
 }

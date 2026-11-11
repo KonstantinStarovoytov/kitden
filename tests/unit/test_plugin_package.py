@@ -43,6 +43,17 @@ def test_both_manifests_carry_the_package_version():
     assert claude["license"] == portable["license"] == "Apache-2.0"
 
 
+def test_the_listing_links_to_the_guide_and_the_privacy_page():
+    # Anthropic's directory shows these two links on the plugin's card.
+    claude = _json(PLUGIN / ".claude-plugin/plugin.json")
+    pages = "https://github.com/KonstantinStarovoytov/kitden/blob/main/"
+    assert claude["documentationUrl"] == pages + "docs/guide.md"
+    assert claude["privacyPolicyUrl"] == pages + "PRIVACY.md"
+    privacy = " ".join((ROOT / "PRIVACY.md").read_text().split())
+    for words in ("no telemetry", "no account", "[secret]", "your agent"):
+        assert words in privacy
+
+
 def _skill(name: str) -> tuple[str, str]:
     """A skill's head and body."""
     head, body = (PLUGIN / f"skills/{name}/SKILL.md").read_text().split("---\n")[1:3]
