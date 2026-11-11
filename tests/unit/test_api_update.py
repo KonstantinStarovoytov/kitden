@@ -207,8 +207,41 @@ def test_a_new_page_that_cannot_start_is_a_failure(tmp_path):
     with update_page(tmp_path, upgrade=upgrade, start_page=start_page) as page:
         assert page.post("/api/update", headers=POST).status_code == 202
         until(lambda: view(page)["state"] == "failed")
-        assert view(page)["tail"][-1] == f"No such file: {UV.launcher}"
+        # Step 2: the files are new but this old page still runs (update.js says so).
+        assert view(page)["step"] == 2
+        assert view(page)["tail"] == ["Updated kitden", f"No such file: {UV.launcher}"]
         assert not page.app.state.activity.handed_over()
+        assert not page.app.state.activity.busy()
+        # Changes work again on this page.
+        assert page.post("/api/changes/nope/apply", headers=POST).status_code == 404
+
+
+def test_a_change_during_an_update_is_refused_at_once(tmp_path):
+    gate = threading.Event()
+
+    async def upgrade(install, on_step, before):
+        await anyio.to_thread.run_sync(gate.wait, 5)
+        return Outcome("updated", NEWER, ["Updated kitden"])
+
+    def start_page(launcher, value):
+        pass
+
+    try:
+        with update_page(tmp_path, upgrade=upgrade, start_page=start_page) as page:
+            assert page.post("/api/update", headers=POST).status_code == 202
+            for verb in ("apply", "undo", "cancel"):
+                asked = time.monotonic()
+                answer = page.post(f"/api/changes/c1/{verb}", headers=POST)
+                assert time.monotonic() - asked < 2  # no wait on the update
+                assert answer.status_code == 409
+                assert answer.json()["detail"] == "Kitden is updating. Try again in a moment."
+            gate.set()
+            until(lambda: view(page)["state"] == "done")
+            answer = page.post("/api/changes/c1/apply", headers=POST)  # the page hands over
+            assert answer.status_code == 409
+            assert answer.json()["detail"] == "Kitden is updating. Try again in a moment."
+    finally:
+        gate.set()
 
 
 def test_the_update_answers_before_the_first_scan(tmp_path):

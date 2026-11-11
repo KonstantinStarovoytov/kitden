@@ -1850,6 +1850,8 @@ def create_app(
     async def change_action(request: Request) -> JSONResponse:
         change_id = request.path_params["change_id"]
         verb = request.path_params["verb"]
+        if update.state == "running" or update.handed_over:  # the update holds write_lock
+            return _error("Kitden is updating. Try again in a moment.", 409)
         if change_id not in change_engine().changes:
             return _error("Unknown change.", 404)
         method = {

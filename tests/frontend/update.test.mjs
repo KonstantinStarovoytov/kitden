@@ -4,7 +4,7 @@ import { test } from 'node:test';
 
 // motion.js reads matchMedia when it loads.
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
-const { STEPS, updateView, watchStep } = await import('../../src/kitden/web/static/js/update.js');
+const { STEPS, failedWords, pollMs, updateView, watchStep } = await import('../../src/kitden/web/static/js/update.js');
 
 const NOTES = 'https://github.com/KonstantinStarovoytov/kitden/releases/tag/v0.7.3';
 const OUT = { version: '0.7.2', latest: '0.7.3', can_update: true, notes_url: NOTES, state: 'idle', step: null, tail: [] };
@@ -77,10 +77,40 @@ test('a failed installer shows the red button', () => {
   assert.deepEqual(v, { version: 'Kitden 0.7.2', button: 'failed', tip: 'Update failed', ring: 0 });
 });
 
-test('files replaced but no new page: it did not start again', () => {
-  const v = updateView({ ...OUT, state: 'failed', step: 2 }, null);
+test('files replaced but the new page could not start: this old page still runs', () => {
+  const api = { ...OUT, state: 'failed', step: 2, tail: ['Updated kitden', 'No such file'] };
+  const v = updateView(api, null);
   assert.equal(v.button, 'failed');
-  assert.equal(v.tip, 'Kitden did not start again');
+  assert.equal(v.tip, 'The new version did not start');
+  assert.deepEqual(failedWords(api, null), {
+    title: 'The new version did not start',
+    text: 'Kitden was updated, but the new page could not start. Stop this page, then run this in a terminal:',
+    command: 'kitden open',
+  });
+});
+
+test('no new page and no old page: it did not start again', () => {
+  assert.deepEqual(failedWords({ ...OUT, state: 'done', step: 2 }, 'gone'), {
+    title: 'Kitden did not start again',
+    text: 'Run this in a terminal to open it:',
+    command: 'kitden open',
+  });
+});
+
+test('a failed installer keeps the old version and names the command', () => {
+  const api = { ...OUT, state: 'failed', step: 1, command: 'uv tool upgrade kitden' };
+  assert.deepEqual(failedWords(api, null), {
+    title: 'Update failed',
+    text: 'The old version keeps running.',
+    command: 'uv tool upgrade kitden',
+  });
+});
+
+test('the watch reads every 500 ms, and every 3 s once no page came back', () => {
+  assert.equal(pollMs(null), 500);
+  assert.equal(pollMs('waiting'), 500);
+  assert.equal(pollMs('reloading'), 500);
+  assert.equal(pollMs('gone'), 3000);
 });
 
 test('waiting more than 30 s says it did not start', () => {

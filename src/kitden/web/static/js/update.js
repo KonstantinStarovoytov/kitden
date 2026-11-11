@@ -14,6 +14,7 @@ export const STEPS = ["Downloading…", "Installing…", "Restarting Kitden…",
 const RING = [0.25, 0.55, 0.8, 1];
 const FAILED = "Update failed";
 const NOT_STARTED = "Kitden did not start again";
+const NEW_NOT_STARTED = "The new version did not start";
 const SAME = "Already up to date";
 
 const POLL_MS = 500; // while an update runs or the page waits for the new one
@@ -38,12 +39,27 @@ export function updateView(api, phase) {
   if (phase === "waiting" || api.state === "done") return { ...view, ...running(2) };
   if (phase === "updated") return { ...view, button: "done", tip: `Updated to ${api.version}` };
   if (api.state === "running") return { ...view, ...running(api.step ?? 0) };
-  if (api.state === "failed") return { ...view, button: "failed", tip: api.step === 2 ? NOT_STARTED : FAILED };
+  if (api.state === "failed") return { ...view, button: "failed", tip: api.step === 2 ? NEW_NOT_STARTED : FAILED };
   if (api.state === "same") return { ...view, tip: SAME };
   if (!api.notes_url) return view;
   if (!api.can_update) return { ...view, tip: `${api.latest} is out` };
   return { ...view, button: "available", tip: `${api.version} → ${api.latest}` };
 }
+
+// The words of the box behind the red button. "gone": the old page stopped and no new one
+// answered. Failed at step 2: the files are new, but the new page could not start, so this old
+// page still runs and holds the port. Otherwise the installer failed.
+export function failedWords(api, phase) {
+  if (phase === "gone") return { title: NOT_STARTED, text: "Run this in a terminal to open it:", command: "kitden open" };
+  if (api.step === 2) {
+    const text = "Kitden was updated, but the new page could not start. Stop this page, then run this in a terminal:";
+    return { title: NEW_NOT_STARTED, text, command: "kitden open" };
+  }
+  return { title: FAILED, text: "The old version keeps running.", command: api.command };
+}
+
+// How long until the watch reads again: no page came back in 30 s, so now and then.
+export const pollMs = (phase) => (phase === "gone" ? LOOK_MS : POLL_MS);
 
 // One read while the page watches an update. `watch.mine` is the version this page runs;
 // `watch.last` is the old page's last real answer; `watch.since` is when the old page first said
@@ -190,11 +206,12 @@ export function startUpdate(spot) {
     }
   }
 
-  // While an update runs: every 500 ms. While the button shows: now and then, as another tab may
-  // start it. Until the server knows the latest version (it asks in the background): a few times.
+  // While an update runs: every 500 ms, and every 3 s once no page came back. While the button
+  // shows: now and then, as another tab may start it. Until the server knows the latest version
+  // (it asks in the background): a few times.
   function schedule() {
     clearTimeout(timer);
-    if (watch) timer = setTimeout(poll, POLL_MS);
+    if (watch) timer = setTimeout(poll, pollMs(phase));
     else if (shown === "available" || (api.latest === null && asks++ < ASKS)) timer = setTimeout(poll, LOOK_MS);
   }
 
@@ -304,18 +321,19 @@ export function startUpdate(spot) {
   }
 
   function failedParts() {
+    const what = failedWords(api, phase);
     if (phase === "gone" || api.step === 2) {
-      const body = [el("p", null, "Run this in a terminal to open it:"), copyRow("kitden open")];
+      const body = [el("p", null, what.text), copyRow(what.command)];
       if (api.tail?.length && phase !== "gone") body.push(detailsNode([tailNode(api.tail)]));
-      return { title: NOT_STARTED, body };
+      return { title: what.title, body };
     }
     const refused = refusedNode();
     const acts = el("div", "update-acts");
     acts.append(button("Try again", () => runUpdate(refused), "btn primary small"));
     const why = api.tail?.length ? [tailNode(api.tail)] : [];
     return {
-      title: FAILED,
-      body: [el("p", null, "The old version keeps running."), refused, acts, detailsNode([...why, el("p", null, "Or run it yourself:"), copyRow(api.command)])],
+      title: what.title,
+      body: [el("p", null, what.text), refused, acts, detailsNode([...why, el("p", null, "Or run it yourself:"), copyRow(what.command)])],
     };
   }
 
