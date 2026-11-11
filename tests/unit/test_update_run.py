@@ -36,7 +36,7 @@ def test_brew_lines_move_the_ring():
     assert step_for("brew", "==> Fetching kitden") == 0
     assert step_for("brew", "==> Downloading https://example.org/kitden.tar.gz") == 0
     assert step_for("brew", "==> Pouring kitden--0.7.3.arm64_sonoma.bottle.tar.gz") == 1
-    assert step_for("brew", "==> Upgrading kitden") is None
+    assert step_for("brew", "==> Upgrading kitden") == 1
     assert step_for("brew", "Updated 1 tap.") is None
 
 
@@ -47,6 +47,9 @@ def test_a_brew_source_build_moves_to_installing():
     assert step_for("brew", "==> Installing konstantinstarovoytov/tap/kitden dependency: rust") == 1
     assert step_for("brew", "==> python3.13 -m venv --system-site-packages --without-pip /x") == 1
     assert step_for("brew", "==> python3.13 -m pip --python=/x/bin/python install kitden") == 1
+    # `brew upgrade` that builds from source: seen 2026-11-12 with Homebrew 7.0.13.
+    assert step_for("brew", "==> Upgrading local/kitden-test/kitden") == 1
+    assert step_for("brew", "==> Upgrading 1 outdated package, with result:") is None
 
 
 def test_a_line_from_the_other_tool_does_nothing():

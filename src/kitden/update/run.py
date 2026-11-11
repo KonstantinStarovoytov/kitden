@@ -39,6 +39,10 @@ TAIL_LINES = 20
 #   the formula's install, where language/python.rb (virtualenv_install_with_resources) runs
 #   "python3.13 -m venv ..." and "python3.13 -m pip ...", which Formula#system echoes as
 #   "==> python3.13 ...". The tap's formula names "python@3.13", so the command has no path.
+# - Homebrew 7.0.13, seen 2026-11-12 with a real `brew upgrade` from a local tap that builds from
+#   source: "==> Fetching downloads for: <tap>/kitden", then "==> Upgrading <tap>/kitden" while
+#   it builds, with no "Installing" or "Pouring". A plain `brew upgrade` heads its list with
+#   "==> Upgrading 1 outdated package", which comes before the downloads and proves nothing.
 _STEP_LINES: dict[str, tuple[tuple[int, str], ...]] = {
     "uv": ((1, "Updated "),),
     "brew": (
@@ -47,6 +51,7 @@ _STEP_LINES: dict[str, tuple[tuple[int, str], ...]] = {
         (1, "==> Pouring "),
         (1, "==> Installing "),
         (1, "==> python"),
+        (1, "==> Upgrading "),
     ),
 }
 # Homebrew keeps the old keg, so a gateway that still runs the old version keeps its files
@@ -56,6 +61,8 @@ _ENV = {"brew": {"HOMEBREW_NO_INSTALL_CLEANUP": "1"}}
 
 def step_for(method: str, line: str) -> int | None:
     """The step this installer line ends, or None when it proves nothing."""
+    if "outdated package" in line:
+        return None
     for step, prefix in _STEP_LINES.get(method, ()):
         if line.startswith(prefix):
             return step
