@@ -315,6 +315,6 @@ test('only presses and small parts use the spring in CSS', () => {
     .filter(([, , body]) => body.includes('var(--spring)'))
     .map(([, selector]) => selector.trim().replace(/\s+/g, ' '));
   assert.deepEqual(users.sort(), [
-    '.brand', '.btn', '.chk .ic', '.dock .ib, .dock .x', '.nav a', '.ov-fold svg', '.port', '.seg button', '.switch .thumb', '.switch.flipped .thumb', 'div.map .block', 'div.map .block-count', 'div.map .block-x',
+    '.brand', '.btn', '.chk .ic', '.dock .ib, .dock .x', '.nav a', '.ov-fold svg', '.port', '.seg button', '.switch .thumb', '.switch.flipped .thumb', '.update-btn', 'div.map .block', 'div.map .block-count', 'div.map .block-x',
   ]);
 });

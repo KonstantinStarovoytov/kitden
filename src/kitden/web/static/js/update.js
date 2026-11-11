@@ -1,0 +1,384 @@
+// The version and the Update button at the top of the rail's bottom group (spec 2026-11-11,
+// "Place and look"). Normally only "Kitden 0.7.2" shows. When a newer version is out and Kitden
+// can update itself, a round button glows beside it; a confirm starts the update, the ring fills
+// as the server reports each step, and the page reloads on the new version. Every word comes
+// from GET /api/update or from the page's own wait for the new page.
+import { getJson, postJson } from "./api.js";
+import { button, el, icon, reportError } from "./dom.js";
+import { animateTo, D, rollTo } from "./motion.js";
+import { say } from "./toast.js";
+
+// The steps, as kitden.update.run.STEPS says them. The server reports 0 to 2; the page shows 3
+// itself while it waits for the new page.
+export const STEPS = ["Downloading…", "Installing…", "Restarting Kitden…", "Reloading the page…"];
+const RING = [0.25, 0.55, 0.8, 1];
+const FAILED = "Update failed";
+const NOT_STARTED = "Kitden did not start again";
+const SAME = "Already up to date";
+
+const POLL_MS = 500; // while an update runs or the page waits for the new one
+const LOOK_MS = 3000; // while the button shows: another tab may start the update
+const ASKS = 10; // looks while the server has not heard the latest version yet (the demo never does)
+const WAIT_MS = 30000; // no new page in this time: it did not start
+const RELOAD_MS = 500; // the last step shows this long before the page reloads
+const DONE_MS = 2400; // the green check shows this long, then the button fades
+const FADE_MS = 500;
+const FROM_KEY = "kitden-updated-from"; // the old version, kept across the reload (sessionStorage)
+
+const running = (step) => ({ button: "running", tip: STEPS[step], ring: RING[step] });
+
+// What the spot shows for `api` (GET /api/update) and the page's own `phase`: "confirm" (the
+// confirm is open), "waiting" (the old page stopped or handed over), "reloading" (the new page
+// answered), "gone" (no new page in 30 s), "updated" (the page reloaded on the new version), or
+// null. The button shows only when the server says the latest version is newer (`notes_url`).
+export function updateView(api, phase) {
+  const view = { version: `Kitden ${api.version}`, button: null, tip: "", ring: 0 };
+  if (phase === "gone") return { ...view, button: "failed", tip: NOT_STARTED };
+  if (phase === "reloading") return { ...view, ...running(3) };
+  if (phase === "waiting" || api.state === "done") return { ...view, ...running(2) };
+  if (phase === "updated") return { ...view, button: "done", tip: `Updated to ${api.version}` };
+  if (api.state === "running") return { ...view, ...running(api.step ?? 0) };
+  if (api.state === "failed") return { ...view, button: "failed", tip: api.step === 2 ? NOT_STARTED : FAILED };
+  if (api.state === "same") return { ...view, tip: SAME };
+  if (!api.notes_url) return view;
+  if (!api.can_update) return { ...view, tip: `${api.latest} is out` };
+  return { ...view, button: "available", tip: `${api.version} → ${api.latest}` };
+}
+
+// One read while the page watches an update. `watch.mine` is the version this page runs;
+// `watch.since` is when the old page first stopped answering or said it handed over. `answer` is
+// GET /api/update, or null when no page answered. A page with another version is the new one:
+// this page reloads. Each tab watches on its own clock.
+export function watchStep(watch, answer, now) {
+  if (answer && answer.version !== watch.mine) return { ...watch, phase: "reloading", reload: true };
+  if (answer && answer.state === "running") return { ...watch, since: null, phase: null };
+  if (answer && answer.state !== "done") return { ...watch, phase: null, stop: true };
+  const since = watch.since ?? now;
+  return { ...watch, since, phase: now - since >= WAIT_MS ? "gone" : "waiting" };
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const RING_LENGTH = 85; // 2π × 13.5
+
+function ringNode() {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "update-ring");
+  svg.setAttribute("viewBox", "0 0 30 30");
+  svg.setAttribute("aria-hidden", "true");
+  for (const name of ["track", "fill"]) {
+    const circle = document.createElementNS(SVG_NS, "circle");
+    for (const [key, value] of Object.entries({ class: name, cx: "15", cy: "15", r: "13.5" })) circle.setAttribute(key, value);
+    svg.append(circle);
+  }
+  return svg;
+}
+
+async function read() {
+  try {
+    return await getJson("/api/update");
+  } catch {
+    return null; // the page stopped, or is not up yet
+  }
+}
+
+function copyRow(command) {
+  const row = el("div", "update-command");
+  const copy = button("Copy", () => {
+    const said = (words) => { copy.textContent = words; say(words); };
+    const clipboard = globalThis.navigator && navigator.clipboard;
+    if (!clipboard) return said("Could not copy");
+    return clipboard.writeText(command).then(() => said("Copied"), () => said("Could not copy"));
+  }, "btn ghost small");
+  copy.setAttribute("aria-label", `Copy ${command}`);
+  row.append(el("code", null, command), copy);
+  return row;
+}
+
+function tailNode(tail) {
+  return el("pre", "update-tail", tail.join("\n"));
+}
+
+export function startUpdate(spot) {
+  const version = el("span", "update-version roll");
+  const press = el("button", "update-btn");
+  press.type = "button";
+  press.hidden = true;
+  const ring = ringNode();
+  const fill = ring.lastElementChild;
+  press.append(ring);
+  const row = el("div", "update-row");
+  row.append(version, press);
+  const words = el("span");
+  const more = el("button", "update-more", "Details");
+  more.type = "button";
+  more.hidden = true;
+  // The step or note under the version. It is said through the page's live region (say), so a
+  // line that shows and goes is never a live region a screen reader misses.
+  const line = el("p", "update-say");
+  line.append(words, more);
+  const pop = el("div", "update-pop");
+  pop.setAttribute("role", "dialog");
+  pop.hidden = true;
+  spot.append(row, line, pop);
+
+  let api = null;
+  let mine = null; // the version this page runs
+  let phase = null;
+  let watch = null;
+  let timer = 0;
+  let shown = null; // the button's look as drawn
+  let popFor = null; // the control that opened the box, for focus back
+  let asks = 0; // reads while the latest version is not known yet
+
+  function draw() {
+    const view = updateView(api, phase);
+    if (version.lastElementChild?.textContent !== view.version) {
+      if (version.lastElementChild) rollTo(version, view.version, { up: true });
+      else version.append(el("span", null, view.version));
+    }
+    const tip = view.button === "available" ? "" : view.tip;
+    if (tip && tip !== words.textContent) say(tip);
+    words.textContent = tip;
+    more.hidden = view.button !== null || !(api.state === "same" || (api.notes_url && !api.can_update));
+    line.hidden = !tip && more.hidden;
+    drawButton(view);
+    spot.hidden = false;
+  }
+
+  function drawButton(view) {
+    fill.style.strokeDashoffset = String(RING_LENGTH * (1 - view.ring));
+    if (view.button === shown) {
+      if (view.button === "available") press.title = view.tip;
+      return;
+    }
+    const was = shown;
+    shown = view.button;
+    if (!view.button) {
+      // The button fades, then goes by time.
+      if (press.hidden) return;
+      press.classList.add("leaving");
+      setTimeout(() => { if (!shown) press.hidden = true; }, D(FADE_MS));
+      return;
+    }
+    press.hidden = false;
+    press.className = `update-btn ${view.button}`;
+    press.querySelector(".ic")?.remove();
+    const mark = { available: "download", done: "check", failed: "x" }[view.button];
+    if (mark) press.append(icon(mark, 14));
+    press.removeAttribute("title");
+    press.removeAttribute("aria-disabled");
+    if (view.button === "available") {
+      press.title = view.tip;
+      press.setAttribute("aria-label", `Update Kitden to ${api.latest}`);
+    } else if (view.button === "running") {
+      press.setAttribute("aria-label", "Updating Kitden");
+      press.setAttribute("aria-disabled", "true");
+    } else if (view.button === "failed") {
+      press.setAttribute("aria-label", `${view.tip}. Show why`);
+    } else {
+      press.setAttribute("aria-label", view.tip);
+      press.setAttribute("aria-disabled", "true");
+      // The check draws as the button turns green (it pops from the full ring).
+      const path = press.querySelector(".ic path");
+      if (path && was === "running") animateTo(path, [{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }], { dur: 320, delay: 120 });
+    }
+  }
+
+  // While an update runs: every 500 ms. While the button shows: now and then, as another tab may
+  // start it. Until the server knows the latest version (it asks in the background): a few times.
+  function schedule() {
+    clearTimeout(timer);
+    if (watch) timer = setTimeout(poll, POLL_MS);
+    else if (shown === "available" || (api.latest === null && asks++ < ASKS)) timer = setTimeout(poll, LOOK_MS);
+  }
+
+  async function poll() {
+    const answer = await read();
+    if (!watch && answer && (answer.version !== mine || ["running", "done"].includes(answer.state))) watch = { mine, since: null };
+    if (watch) {
+      watch = watchStep(watch, answer, Date.now());
+      phase = watch.phase;
+      if (answer && !watch.reload) api = answer;
+      if (watch.reload) {
+        draw();
+        try { sessionStorage.setItem(FROM_KEY, mine); } catch { /* the new version just shows */ }
+        setTimeout(() => location.reload(), RELOAD_MS);
+        return;
+      }
+      if (watch.stop) watch = null;
+    } else if (answer) {
+      api = answer;
+    }
+    draw();
+    schedule();
+  }
+
+  // The confirm, why it failed, or the details of a quiet note: a small box beside the spot.
+  function openPop(parts, from) {
+    closePop(false);
+    popFor = from;
+    const head = el("h3", null, parts.title);
+    head.id = "update-pop-title";
+    pop.setAttribute("aria-labelledby", head.id);
+    pop.replaceChildren(head, ...parts.body);
+    pop.hidden = false;
+    animateTo(pop, [{ opacity: 0, transform: "translateY(6px) scale(.96)" }, { opacity: 1, transform: "none" }], { dur: 180 });
+    document.addEventListener("pointerdown", outside);
+    pop.querySelector("button, a")?.focus();
+  }
+
+  function closePop(back = true) {
+    if (pop.hidden) return;
+    document.removeEventListener("pointerdown", outside);
+    if (back && popFor?.isConnected && !popFor.hidden) popFor.focus();
+    popFor = null;
+    if (!D(140)) {
+      pop.hidden = true;
+      return;
+    }
+    animateTo(pop, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(4px) scale(.98)" }], { dur: 140, ease: "ease-in", fill: "forwards" });
+    setTimeout(() => {
+      if (popFor) return; // opened again meanwhile
+      pop.hidden = true;
+      for (const move of pop.getAnimations()) move.cancel();
+    }, D(140));
+  }
+
+  function outside(event) {
+    if (!spot.contains(event.target)) closePop(false);
+  }
+
+  // Update and Try again: the server starts the installer, or says why not.
+  async function runUpdate(refused) {
+    const reply = await postJson("/api/update");
+    const now = reply.ok ? reply.data : await read();
+    if (now && now.state === "running") {
+      api = now;
+      phase = null;
+      watch = { mine, since: null };
+      closePop(false);
+      draw();
+      press.focus();
+      schedule();
+      return;
+    }
+    refused.textContent = (reply.data && reply.data.detail) || "Kitden could not start the update.";
+    refused.hidden = false;
+  }
+
+  function refusedNode() {
+    const node = el("p", "update-refused");
+    node.setAttribute("role", "alert");
+    node.hidden = true;
+    return node;
+  }
+
+  function whatsNew() {
+    const link = el("a", "btn ghost small", "What's new");
+    link.href = api.notes_url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    return link;
+  }
+
+  function confirmParts() {
+    const refused = refusedNode();
+    const acts = el("div", "update-acts");
+    acts.append(button("Update", () => runUpdate(refused), "btn primary small"), whatsNew());
+    return {
+      title: `Update to Kitden ${api.latest}?`,
+      body: [el("p", null, "Kitden restarts and this page reloads. Your agents keep working."), refused, acts],
+    };
+  }
+
+  function detailsNode(parts) {
+    const box = el("details", "update-details");
+    box.append(el("summary", null, "Details"), ...parts);
+    return box;
+  }
+
+  function failedParts() {
+    if (phase === "gone" || api.step === 2) {
+      const body = [el("p", null, "Run this in a terminal to open it:"), copyRow("kitden open")];
+      if (api.tail?.length && phase !== "gone") body.push(detailsNode([tailNode(api.tail)]));
+      return { title: NOT_STARTED, body };
+    }
+    const refused = refusedNode();
+    const acts = el("div", "update-acts");
+    acts.append(button("Try again", () => runUpdate(refused), "btn primary small"));
+    const why = api.tail?.length ? [tailNode(api.tail)] : [];
+    return {
+      title: FAILED,
+      body: [el("p", null, "The old version keeps running."), refused, acts, detailsNode([...why, el("p", null, "Or run it yourself:"), copyRow(api.command)])],
+    };
+  }
+
+  function moreParts() {
+    if (api.state === "same") {
+      const body = [el("p", null, "The installer did not change Kitden.")];
+      if (api.tail?.length) body.push(tailNode(api.tail));
+      return { title: SAME, body };
+    }
+    const acts = el("div", "update-acts");
+    acts.append(whatsNew());
+    return {
+      title: `Kitden ${api.latest} is out`,
+      body: [el("p", null, "Kitden cannot update itself here. Run this in a terminal:"), copyRow(api.command), acts],
+    };
+  }
+
+  press.addEventListener("click", () => {
+    if (shown === "available") {
+      if (!pop.hidden) return closePop();
+      openPop(confirmParts(), press);
+    } else if (shown === "failed") {
+      if (!pop.hidden) return closePop();
+      openPop(failedParts(), press);
+    }
+  });
+  more.addEventListener("click", () => {
+    if (more.hidden) return;
+    if (pop.hidden) openPop(moreParts(), more);
+    else closePop();
+  });
+  pop.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    closePop();
+  });
+
+  // After a reload on the new version: the check, the version rolls from the old one, the button fades.
+  function landed(from) {
+    phase = "reloading";
+    api = { ...api, version: from };
+    draw();
+    api = { ...api, version: mine };
+    // A moment later, so the button turns green and pops from the full ring. A timer, not a
+    // frame: a hidden tab draws no frames.
+    setTimeout(() => {
+      phase = "updated";
+      draw();
+      setTimeout(() => {
+        phase = null;
+        draw();
+        schedule();
+      }, DONE_MS);
+    }, 60);
+  }
+
+  read().then((answer) => {
+    if (!answer) return;
+    api = answer;
+    mine = answer.version;
+    let from = null;
+    try {
+      from = sessionStorage.getItem(FROM_KEY);
+      sessionStorage.removeItem(FROM_KEY);
+    } catch { /* no storage: the new version just shows */ }
+    if (["running", "done"].includes(answer.state)) watch = { mine, since: null };
+    if (from && from !== mine && !watch) return landed(from);
+    draw();
+    schedule();
+  }).catch(reportError);
+}
+

@@ -7,8 +7,8 @@ const { tipFor } = await import('../../src/kitden/web/static/js/tips.js');
 const JS = new URL('../../src/kitden/web/static/js/', import.meta.url);
 const source = readdirSync(JS).filter((f) => f.endsWith('.js')).map((f) => readFileSync(new URL(f, JS), 'utf8')).join('\n');
 
-// Words that end in "…" but are not actions: a wait, a placeholder, a search box.
-const NOT_ACTIONS = new Set(['Applying…', 'Bearer …', 'Checking the version…', 'Checking…', 'Find a project…', 'Loading…', 'Reading what it holds…', 'Search MCP servers…', 'Search plugins and skills…', 'Searching…', 'Still checking …', 'Waiting for browser…']);
+// Words that end in "…" but are not actions: a wait, a placeholder, a search box, a step of an update.
+const NOT_ACTIONS = new Set(['Applying…', 'Bearer …', 'Checking the version…', 'Checking…', 'Downloading…', 'Find a project…', 'Installing…', 'Loading…', 'Reading what it holds…', 'Reloading the page…', 'Restarting Kitden…', 'Search MCP servers…', 'Search plugins and skills…', 'Searching…', 'Still checking …', 'Waiting for browser…']);
 // Actions whose label says it all: hover words would only repeat it.
 const SAYS_IT_ALL = new Set(['Add…', 'Add to Codex…', 'Add to Claude Code or Codex…', 'Show…', 'Update…']);
 

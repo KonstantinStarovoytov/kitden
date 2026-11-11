@@ -63,6 +63,14 @@ def test_the_cell_tag_is_readable_on_its_fill_in_both_themes():
         assert contrast(theme["--route"], theme["--route-soft"]) >= 4.5
 
 
+def test_the_update_buttons_mark_keeps_3_to_1_on_its_fill_in_both_themes():
+    # The download icon on the brand fill, the check on green, the cross on red (update.js).
+    for theme in (LIGHT, DARK):
+        assert contrast(theme["--on-action"], theme["--brand"]) >= 3
+        assert contrast(theme["--on-success"], theme["--success"]) >= 3
+        assert contrast(theme["--on-danger"], theme["--danger"]) >= 3
+
+
 def test_system_dark_theme_has_the_same_success_tokens():
     for name in ("--success", "--on-success"):
         assert DARK_AUTO[name] == DARK_RULE[name]

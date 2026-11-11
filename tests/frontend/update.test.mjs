@@ -1,0 +1,149 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { test } from 'node:test';
+
+// motion.js reads matchMedia when it loads.
+globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
+const { STEPS, updateView, watchStep } = await import('../../src/kitden/web/static/js/update.js');
+
+const NOTES = 'https://github.com/KonstantinStarovoytov/kitden/releases/tag/v0.7.3';
+const OUT = { version: '0.7.2', latest: '0.7.3', can_update: true, notes_url: NOTES, state: 'idle', step: null, tail: [] };
+
+test('only the version when nothing is newer', () => {
+  assert.deepEqual(updateView({ version: '0.7.2', latest: null, state: 'idle' }, null),
+    { version: 'Kitden 0.7.2', button: null, tip: '', ring: 0 });
+});
+
+test('available shows from and to', () => {
+  const v = updateView(OUT, null);
+  assert.equal(v.button, 'available');
+  assert.equal(v.tip, '0.7.2 → 0.7.3');
+});
+
+test('a latest version that is not newer shows no button', () => {
+  // The server sends notes_url only when the latest version is newer than this one.
+  const v = updateView({ ...OUT, latest: '0.7.2', notes_url: null }, null);
+  assert.deepEqual(v, { version: 'Kitden 0.7.2', button: null, tip: '', ring: 0 });
+});
+
+test('the confirm keeps the button as it is', () => {
+  assert.deepEqual(updateView(OUT, 'confirm'), updateView(OUT, null));
+});
+
+test('running follows the real step', () => {
+  const v = updateView({ ...OUT, state: 'running', step: 1 }, null);
+  assert.equal(v.button, 'running');
+  assert.equal(v.tip, 'Installing…');
+  assert.equal(v.ring, 0.55);
+  assert.equal(updateView({ ...OUT, state: 'running', step: 0 }, null).ring, 0.25);
+  assert.equal(updateView({ ...OUT, state: 'running', step: 2 }, null).tip, 'Restarting Kitden…');
+});
+
+test('a page that handed over waits on the restart step', () => {
+  const v = updateView({ ...OUT, state: 'done', step: 2 }, null);
+  assert.deepEqual(v, { version: 'Kitden 0.7.2', button: 'running', tip: 'Restarting Kitden…', ring: 0.8 });
+  assert.deepEqual(updateView({ ...OUT, state: 'running', step: 1 }, 'waiting'), v);
+});
+
+test('the new page answered: the last step, then the page reloads', () => {
+  const v = updateView({ ...OUT, state: 'done', step: 2 }, 'reloading');
+  assert.equal(v.tip, 'Reloading the page…');
+  assert.equal(v.ring, 1);
+});
+
+test('after the reload it says what it was updated to', () => {
+  const v = updateView({ ...OUT, version: '0.7.3', latest: '0.7.3', notes_url: null }, 'updated');
+  assert.deepEqual(v, { version: 'Kitden 0.7.3', button: 'done', tip: 'Updated to 0.7.3', ring: 0 });
+});
+
+test('no button when Kitden cannot update itself', () => {
+  const v = updateView({ ...OUT, can_update: false, command: 'uv tool upgrade kitden' }, null);
+  assert.equal(v.button, null);
+  assert.equal(v.tip, '0.7.3 is out');
+});
+
+test('the demo shows only the version', () => {
+  const v = updateView({ version: '0.7.2', latest: null, can_update: false, notes_url: null, state: 'idle', step: null, tail: [] }, null);
+  assert.deepEqual(v, { version: 'Kitden 0.7.2', button: null, tip: '', ring: 0 });
+});
+
+test('an installer that changed nothing says so and the button goes', () => {
+  const v = updateView({ ...OUT, state: 'same', step: 1, tail: ['Nothing to upgrade'] }, null);
+  assert.deepEqual(v, { version: 'Kitden 0.7.2', button: null, tip: 'Already up to date', ring: 0 });
+});
+
+test('a failed installer shows the red button', () => {
+  const v = updateView({ ...OUT, state: 'failed', step: 1, tail: ['error: no network'] }, null);
+  assert.deepEqual(v, { version: 'Kitden 0.7.2', button: 'failed', tip: 'Update failed', ring: 0 });
+});
+
+test('files replaced but no new page: it did not start again', () => {
+  const v = updateView({ ...OUT, state: 'failed', step: 2 }, null);
+  assert.equal(v.button, 'failed');
+  assert.equal(v.tip, 'Kitden did not start again');
+});
+
+test('waiting more than 30 s says it did not start', () => {
+  const v = updateView({ ...OUT, state: 'done', step: 2 }, 'gone');
+  assert.deepEqual(v, { version: 'Kitden 0.7.2', button: 'failed', tip: 'Kitden did not start again', ring: 0 });
+});
+
+test('the steps are the server\'s own words', () => {
+  const run = readFileSync(new URL('../../src/kitden/update/run.py', import.meta.url), 'utf8');
+  const line = run.match(/^STEPS = \((.+)\)$/m)[1];
+  assert.deepEqual(STEPS, [...line.matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+});
+
+// The page's watch while an update runs: GET /api/update every 500 ms (answer null: no page answered).
+const running = (step) => ({ ...OUT, state: 'running', step });
+
+test('the watch follows the old page, then waits for the new one and reloads', () => {
+  let w = { mine: '0.7.2', since: null };
+  w = watchStep(w, running(1), 0);
+  assert.equal(w.phase, null);
+  assert.ok(!w.stop && !w.reload);
+  w = watchStep(w, { ...OUT, state: 'done', step: 2 }, 500);
+  assert.equal(w.phase, 'waiting');
+  w = watchStep(w, null, 1000);
+  assert.equal(w.phase, 'waiting');
+  w = watchStep(w, { ...OUT, version: '0.7.3', notes_url: null }, 6000);
+  assert.equal(w.phase, 'reloading');
+  assert.equal(w.reload, true);
+});
+
+test('no new page within 30 s: it did not start again', () => {
+  let w = { mine: '0.7.2', since: null };
+  w = watchStep(w, null, 1000);
+  w = watchStep(w, null, 30500);
+  assert.equal(w.phase, 'waiting');
+  w = watchStep(w, null, 31000);
+  assert.equal(w.phase, 'gone');
+  assert.ok(!w.stop);
+  // A new page that comes later still reloads this one.
+  w = watchStep(w, { ...OUT, version: '0.7.3' }, 40000);
+  assert.equal(w.reload, true);
+});
+
+test('an update that ended on the old page stops the watch', () => {
+  for (const state of ['failed', 'same']) {
+    const w = watchStep({ mine: '0.7.2', since: 3000 }, { ...OUT, state, step: 1 }, 4000);
+    assert.equal(w.stop, true);
+    assert.equal(w.phase, null);
+  }
+});
+
+test('two tabs both reach the new page and neither says it did not start', () => {
+  // Each tab reads on its own clock; the new page answers 25 s after the old one stopped.
+  const answer = (t) => (t < 4000 ? running(1) : t < 5000 ? { ...OUT, state: 'done', step: 2 } : t < 30000 ? null : { ...OUT, version: '0.7.3' });
+  for (const offset of [0, 230]) {
+    let w = { mine: '0.7.2', since: null };
+    const seen = new Set();
+    for (let t = offset; !w.reload; t += 500) {
+      w = watchStep(w, answer(t), t);
+      seen.add(w.phase);
+      assert.ok(t < 40000, 'never reloaded');
+    }
+    assert.ok(!seen.has('gone'));
+    assert.ok(seen.has('waiting'));
+  }
+});

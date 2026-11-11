@@ -21,6 +21,7 @@ import {
   switchProject,
 } from "./store.js";
 import { checkTrayStale, tray } from "./tray.js";
+import { startUpdate } from "./update.js";
 
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
@@ -387,6 +388,7 @@ function start() {
   startGlow($("#content"));
   startLogo($(".brand"));
   startTips();
+  startUpdate($("#update-spot"));
 
   // Markers measured before a font arrived sit on the old widths; a resize re-seats them.
   document.fonts?.addEventListener("loadingdone", () => dispatchEvent(new Event("resize")));
