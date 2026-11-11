@@ -118,6 +118,8 @@ source, which takes a few minutes the first time.
 
 ## Privacy and limits
 
+The short version for the plugin and the program is in [Privacy](../PRIVACY.md).
+
 - The page runs locally at `127.0.0.1`, with a private access link. No account or telemetry.
 - Credentials go to the server they belong to, or to a gateway you move that server into.
   Secrets you type or sign in with are kept in the macOS Keychain or the Linux keyring only;
