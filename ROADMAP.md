@@ -19,8 +19,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **A strip when an agent needs a restart:** after an Apply, an amber strip under the top bar
   names each client that must be restarted to see it, with "Got it". Kitden never restarts an
   agent for you.
-- The first update from the page to this version still needs one restart of your agents; later
-  updates from the page do not.
+- After you update to this version, restart your agents once; later updates from the page need
+  no restart. If a gateway cannot move to the new version by itself, it keeps working on the old
+  one until the agent restarts.
 
 ### 0.7.2
 
