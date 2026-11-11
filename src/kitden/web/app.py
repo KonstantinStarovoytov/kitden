@@ -154,7 +154,7 @@ from kitden.sign_in import SIGNED_OUT, SignIn, SignIns
 from kitden.system import process_starts, secret_store_name
 from kitden.update.check import EVERY, cached_latest, newer
 from kitden.update.check import fetch as fetch_latest
-from kitden.update.install import MANUAL_COMMAND, Install
+from kitden.update.install import MANUAL_COMMAND, Found, Install
 from kitden.update.run import Outcome, write_marker
 from kitden.update.run import upgrade as run_upgrade
 from kitden.views.after import after_words
@@ -646,6 +646,7 @@ def create_app(
     upgrade: Callable[[Install, Callable[[int], None], str], Awaitable[Outcome]] = run_upgrade,
     start_page: Callable[[Path, str], Any] | None = None,
     processes: Callable[[], list[tuple[datetime, str]]] = process_starts,
+    copies: Callable[[], list[Found]] = list,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown).
     `version_refresh` reads the clients' versions after the first scan; by default the ones
@@ -773,6 +774,8 @@ def create_app(
 
     def update_view() -> dict:
         notes = NOTES_URL.format(update.latest) if newer(__version__, update.latest) else None
+        # Every copy uv or Homebrew installed; each updates only itself.
+        found = [] if demo else [{"method": c.method, "remove": c.remove} for c in copies()]
         return {
             "version": __version__,
             "latest": update.latest,
@@ -782,6 +785,8 @@ def create_app(
             "state": update.state,
             "step": update.step,
             "tail": update.tail,
+            "method": install.method if install else None,
+            "installs": found,
         }
 
     async def run_update() -> None:

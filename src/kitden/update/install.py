@@ -1,5 +1,6 @@
 """How Kitden was installed. Only `uv tool install` and Homebrew can be updated from the page."""
 
+import os
 import re
 import shutil
 import subprocess
@@ -52,6 +53,49 @@ def _detect_at(prefix: Path, which: Callable[[str], str | None]) -> Install | No
                 (str(brew / "bin" / "brew"), "upgrade", "kitden"),
             )
     return None
+
+
+@dataclass(frozen=True)
+class Found:
+    method: Literal["uv", "brew"]
+    launcher: Path
+    remove: str  # the command that removes this copy
+
+
+UNINSTALL = {"uv": "uv tool uninstall kitden", "brew": "brew uninstall kitden"}
+BREW_PREFIXES = (
+    Path("/opt/homebrew"),
+    Path("/usr/local"),
+    Path("/home/linuxbrew/.linuxbrew"),
+    Path.home() / ".linuxbrew",
+)
+
+
+def _tool_dirs() -> list[Path]:
+    """Where `uv tool install` keeps tools: UV_TOOL_DIR, else uv's data folder."""
+    if os.environ.get("UV_TOOL_DIR"):
+        return [Path(os.environ["UV_TOOL_DIR"])]
+    data = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return [Path(data) / "uv" / "tools"]
+
+
+def installs(
+    tool_dirs: list[Path] | None = None, brew_prefixes: list[Path] | None = None
+) -> list[Found]:
+    """Every copy of Kitden that uv or Homebrew installed on this computer. Each copy updates
+    only itself, so more than one is worth a word on the page."""
+    found: list[Found] = []
+    for folder in _tool_dirs() if tool_dirs is None else tool_dirs:
+        launcher = folder / "kitden" / "bin" / "kitden"
+        if (folder / "kitden" / "uv-receipt.toml").is_file() and launcher.is_file():
+            found.append(Found("uv", launcher, UNINSTALL["uv"]))
+            break
+    for prefix in BREW_PREFIXES if brew_prefixes is None else brew_prefixes:
+        launcher = prefix / "opt" / "kitden" / "bin" / "kitden"
+        if launcher.is_file():
+            found.append(Found("brew", launcher, UNINSTALL["brew"]))
+            break
+    return found
 
 
 def installed_version(install: Install, run=subprocess.run) -> str | None:

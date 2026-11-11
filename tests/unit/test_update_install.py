@@ -2,7 +2,7 @@
 
 import subprocess
 
-from kitden.update.install import MANUAL_COMMAND, Install, detect, installed_version
+from kitden.update.install import MANUAL_COMMAND, Install, detect, installed_version, installs
 
 
 def test_uv_tool_install(tmp_path):
@@ -96,3 +96,32 @@ def test_manual_command_names_each_way():
         "brew": "brew upgrade kitden",
         None: "uv tool install --python 3.13 kitden",  # the README line: uvx, pip, source
     }
+
+
+def _launcher(path):
+    path.parent.mkdir(parents=True)
+    path.write_text("")
+    return path
+
+
+def test_installs_finds_a_uv_tool_and_a_homebrew_copy(tmp_path):
+    tools = tmp_path / "uv-tools"
+    _launcher(tools / "kitden" / "bin" / "kitden")
+    (tools / "kitden" / "uv-receipt.toml").write_text("")
+    brew = tmp_path / "homebrew"
+    _launcher(brew / "opt" / "kitden" / "bin" / "kitden")
+    found = installs(tool_dirs=[tools], brew_prefixes=[brew])
+    assert [(i.method, i.remove) for i in found] == [
+        ("uv", "uv tool uninstall kitden"),
+        ("brew", "brew uninstall kitden"),
+    ]
+
+
+def test_installs_finds_nothing_on_a_clean_computer(tmp_path):
+    assert installs(tool_dirs=[tmp_path / "none"], brew_prefixes=[tmp_path / "none"]) == []
+
+
+def test_installs_skips_a_uv_folder_without_a_receipt(tmp_path):
+    tools = tmp_path / "uv-tools"
+    _launcher(tools / "kitden" / "bin" / "kitden")
+    assert installs(tool_dirs=[tools], brew_prefixes=[]) == []

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 
 // motion.js reads matchMedia when it loads.
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
-const { STEPS, failedWords, pollMs, updateView, watchStep } = await import('../../src/kitden/web/static/js/update.js');
+const { STEPS, failedWords, pollMs, twiceWords, updateView, watchStep } = await import('../../src/kitden/web/static/js/update.js');
 
 const NOTES = 'https://github.com/KonstantinStarovoytov/kitden/releases/tag/v0.7.3';
 const OUT = { version: '0.7.2', latest: '0.7.3', can_update: true, notes_url: NOTES, state: 'idle', step: null, tail: [] };
@@ -206,4 +206,23 @@ test('two tabs both reach the new page and neither says it did not start', () =>
     assert.ok(!seen.has('gone'));
     assert.ok(seen.has('waiting'));
   }
+});
+
+test('two copies: names both and says which one this page runs', () => {
+  const api = { ...OUT, method: 'uv', installs: [
+    { method: 'uv', remove: 'uv tool uninstall kitden' },
+    { method: 'brew', remove: 'brew uninstall kitden' },
+  ] };
+  assert.deepEqual(twiceWords(api), {
+    line: 'Installed twice: uv and Homebrew',
+    title: 'Kitden is installed twice',
+    text: 'This page runs the uv copy. Each copy updates only itself. Keep one and remove the other:',
+    commands: ['uv tool uninstall kitden', 'brew uninstall kitden'],
+  });
+});
+
+test('one copy or none: no word', () => {
+  assert.equal(twiceWords({ ...OUT, installs: [{ method: 'uv', remove: 'uv tool uninstall kitden' }] }), null);
+  assert.equal(twiceWords({ ...OUT, installs: [] }), null);
+  assert.equal(twiceWords(OUT), null);
 });

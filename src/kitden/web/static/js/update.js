@@ -58,6 +58,21 @@ export function failedWords(api, phase) {
   return { title: FAILED, text: "The old version keeps running.", command: api.command };
 }
 
+// Where Kitden is installed more than once (uv and Homebrew), each copy updates only itself:
+// a quiet line under the version, and the commands that remove a copy behind Details.
+const NAMES = { uv: "uv", brew: "Homebrew" };
+export function twiceWords(api) {
+  const copies = api.installs || [];
+  if (copies.length < 2) return null;
+  const runs = api.method ? `This page runs the ${NAMES[api.method]} copy. ` : "";
+  return {
+    line: `Installed twice: ${copies.map((c) => NAMES[c.method]).join(" and ")}`,
+    title: "Kitden is installed twice",
+    text: `${runs}Each copy updates only itself. Keep one and remove the other:`,
+    commands: copies.map((c) => c.remove),
+  };
+}
+
 // How long until the watch reads again: no page came back in 30 s, so now and then.
 export const pollMs = (phase) => (phase === "gone" ? LOOK_MS : POLL_MS);
 
@@ -138,10 +153,16 @@ export function startUpdate(spot) {
   // line that shows and goes is never a live region a screen reader misses.
   const line = el("p", "update-say");
   line.append(words, more);
+  const twiceText = el("span");
+  const twiceMore = el("button", "update-more", "Details");
+  twiceMore.type = "button";
+  const twice = el("p", "update-say");
+  twice.append(twiceText, twiceMore);
+  twice.hidden = true;
   const pop = el("div", "update-pop");
   pop.setAttribute("role", "dialog");
   pop.hidden = true;
-  spot.append(row, line, pop);
+  spot.append(row, line, twice, pop);
 
   let api = null;
   let mine = null; // the version this page runs
@@ -163,6 +184,9 @@ export function startUpdate(spot) {
     words.textContent = tip;
     more.hidden = view.button !== null || !(api.state === "same" || (api.notes_url && !api.can_update));
     line.hidden = !tip && more.hidden;
+    const two = twiceWords(api);
+    twice.hidden = !two;
+    twiceText.textContent = two ? two.line : "";
     drawButton(view);
     spot.hidden = false;
   }
@@ -359,6 +383,12 @@ export function startUpdate(spot) {
       if (!pop.hidden) return closePop();
       openPop(failedParts(), press);
     }
+  });
+  twiceMore.addEventListener("click", () => {
+    const two = twiceWords(api);
+    if (!two) return;
+    if (!pop.hidden) return closePop();
+    openPop({ title: two.title, body: [el("p", null, two.text), ...two.commands.map(copyRow)] }, twiceMore);
   });
   more.addEventListener("click", () => {
     if (more.hidden) return;

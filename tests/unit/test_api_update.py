@@ -11,7 +11,7 @@ from starlette.testclient import TestClient
 
 from kitden import __version__
 from kitden.gateways import data_dir
-from kitden.update.install import Install
+from kitden.update.install import Found, Install
 from kitden.update.run import Outcome
 from kitden.views.inventory import Inventory
 from kitden.web.app import create_app
@@ -76,6 +76,8 @@ def test_without_an_install_there_is_no_button_but_the_command(tmp_path):
             "state": "idle",
             "step": None,
             "tail": [],
+            "method": None,
+            "installs": [],
         }
         assert page.post("/api/update", headers=POST).status_code == 409
 
@@ -266,3 +268,24 @@ def test_the_update_answers_before_the_first_scan(tmp_path):
             gate.set()
     finally:
         gate.set()
+
+
+def test_get_lists_every_copy_of_kitden(tmp_path):
+    def two():
+        return [
+            Found("uv", Path("/u/kitden"), "uv tool uninstall kitden"),
+            Found("brew", Path("/b/kitden"), "brew uninstall kitden"),
+        ]
+
+    with update_page(tmp_path, copies=two) as page:
+        view = page.get("/api/update").json()
+    assert view["method"] == "uv"
+    assert view["installs"] == [
+        {"method": "uv", "remove": "uv tool uninstall kitden"},
+        {"method": "brew", "remove": "brew uninstall kitden"},
+    ]
+
+
+def test_get_lists_no_copies_by_default(tmp_path):
+    with update_page(tmp_path) as page:
+        assert page.get("/api/update").json()["installs"] == []

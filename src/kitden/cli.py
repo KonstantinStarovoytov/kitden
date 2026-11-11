@@ -143,7 +143,7 @@ def _serve(args: argparse.Namespace) -> int:
     """Run the page here until stopped; only one page runs per home folder (FR-009, FR-013).
     With `--take-over` this is the new version's page after an update: it waits for the old
     page to stop, then serves on its port with its token and session."""
-    from kitden.update.install import detect
+    from kitden.update.install import detect, installs
     from kitden.web.app import create_app
 
     home = _home(args)
@@ -173,6 +173,7 @@ def _serve(args: argparse.Namespace) -> int:
             token=token,
             session=session,
             install=detect(),
+            copies=installs,
             start_page=lambda launcher, value: page.start_background(
                 root, args.home, launcher, value
             ),
