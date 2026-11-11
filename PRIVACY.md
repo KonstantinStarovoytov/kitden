@@ -23,7 +23,8 @@ nothing from it.
 - To read the catalogs you open and the GitHub sources you add.
 - To install or update Kitden, after your yes.
 - At most once a day, when the page opens, to ask PyPI (or, for a Homebrew install, the Homebrew
-  tap on GitHub) for the latest version number. The request carries only the Kitden version.
+  tap on GitHub) for the latest version number. The request carries the Kitden version;
+  as with any web request, PyPI or GitHub also see your IP address.
   This also happens when Kitden cannot update itself, and then the page shows the command to run.
 
 ## The plugin and your agent
