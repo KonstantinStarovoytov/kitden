@@ -51,8 +51,8 @@ chat files. To learn versions and plugins it may run the clients' own commands, 
 values, such as tokens in a server's settings, are replaced with `[secret]`. There is no account
 and no telemetry.
 
-The install is the one step that goes online, and only after your yes. The agent uses uv, or
-Homebrew, or Kitden's own `install.sh` from this repository.
+The install is the one step that goes online, and only after your yes. The agent uses uv or
+Homebrew. With neither, it gives you a link to Kitden's install steps.
 
 ## If something goes wrong
 

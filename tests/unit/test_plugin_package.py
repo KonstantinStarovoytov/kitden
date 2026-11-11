@@ -108,7 +108,10 @@ def test_the_install_skill_asks_first_and_names_each_way():
     assert "install" in head and "update" in head and "not found" in head
     for rule in ("kitden --version", NEEDS, INSTALL, UPGRADE, BREW, "brew upgrade kitden"):
         assert rule in body
-    assert "install.sh" in body and "uvx --python 3.13 kitden" in body
+    assert "uvx --python 3.13 kitden" in body
+    # No line that downloads a script and runs it: without uv or Homebrew the user gets a link.
+    assert "curl" not in body and "| sh" not in body
+    assert "https://github.com/KonstantinStarovoytov/kitden#get-started" in body
     # Nothing is installed without the user's yes.
     assert "Ask" in body and "Without a yes" in body
     assert body.index("Ask") < body.index(INSTALL)
