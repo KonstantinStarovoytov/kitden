@@ -225,8 +225,28 @@ async def test_the_agent_leaving_ends_the_server():
         with pytest.raises(anyio.EndOfStream):
             with anyio.fail_after(5):
                 await agent.tap.server_read.receive()
-        assert agent.tap.left
+        assert agent.tap.ended
         assert not agent.tap.stopped.is_set()
+
+    await running(agent, body)
+
+
+async def test_replies_still_go_out_after_the_agent_closes_its_input():
+    agent = Agent()
+
+    async def body():
+        agent.send(INIT, request(1))
+        os.close(agent.send_fd)  # as `printf ... | kitden mcp` does
+        await agent.to_server()
+        await agent.to_server()
+        with pytest.raises(anyio.EndOfStream):
+            with anyio.fail_after(5):
+                await agent.tap.server_read.receive()
+        await agent.answer(0)
+        await agent.answer(1)
+        with anyio.move_on_after(0.1):
+            await agent.tap.stop_when_idle()
+        assert not agent.tap.stopped.is_set()  # no restart once the input ended
 
     await running(agent, body)
 
@@ -323,6 +343,7 @@ def test_with_an_install_kitden_mcp_watches_for_updates(tmp_path, monkeypatch, h
         write_settings(home, "echo-unused")
     monkeypatch.setattr(install, "detect", lambda: install.Install("uv", tmp_path / "k", ()))
     monkeypatch.setattr(sys, "argv", ["kitden", "mcp"])
+    monkeypatch.setattr(resume, "stdin_can_wait", lambda: True)  # pytest's stdin is no pipe
     calls = []
     monkeypatch.setattr(resume, "serve_stdio", lambda *args: calls.append(args))
     mcp_server.run(home)
@@ -457,3 +478,43 @@ async def test_a_launcher_that_cannot_start_keeps_the_gateway_running(tmp_path):
             await changed.wait()
         assert not after.exists()
         assert not (await client.call_tool("list_projects", {})).is_error
+
+
+def run_first(tmp_path, stdin=None, data=None):
+    """`kitden mcp` from a uv tool install, with the given stdin (or `data` through a pipe that
+    closes at once), until it ends by itself."""
+    home = make_home(tmp_path, "claude_code/2.1.283")
+    launcher = launcher_at(tmp_path / "kitden")
+    args = ["-c", FIRST, str(tmp_path / "pid"), str(launcher), "mcp", "--home", str(home)]
+    done = subprocess.run(
+        [sys.executable, *args], stdin=stdin, input=data, capture_output=True, timeout=30, cwd=home
+    )
+    return done.returncode, [json.loads(line) for line in done.stdout.splitlines()]
+
+
+HANDSHAKE = b"".join(json.dumps(m).encode() + b"\n" for m in (INIT, INITIALIZED, request(1)))
+
+
+# At the end of input the SDK's server ends and cancels what still runs (mcp 2.3.0, checked
+# 2026-11-11: as before, tools/list here is mostly not answered). `initialize` runs inline, so
+# its reply always comes; the Tap test above covers a reply the server sends after the end.
+def test_input_closed_at_once_still_gets_its_replies(tmp_path):
+    code, replies = run_first(tmp_path, data=HANDSHAKE)
+    assert code == 0
+    assert [r.get("id") for r in replies][:1] == [0]
+    assert replies[0]["result"]["capabilities"]["tools"]["listChanged"] is True
+
+
+def test_stdin_from_dev_null_ends_quietly(tmp_path):
+    with open(os.devnull, "rb") as nothing:
+        assert run_first(tmp_path, nothing) == (0, [])
+
+
+def test_stdin_from_a_file_is_answered(tmp_path):
+    requests = tmp_path / "requests.jsonl"
+    requests.write_bytes(HANDSHAKE)
+    with requests.open("rb") as given:
+        code, replies = run_first(tmp_path, given)
+    assert code == 0
+    assert [r.get("id") for r in replies][:1] == [0]
+    assert replies[0]["result"]["capabilities"]["tools"]["listChanged"] is False  # as before

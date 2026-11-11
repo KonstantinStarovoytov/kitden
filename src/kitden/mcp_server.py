@@ -136,7 +136,7 @@ def run(home: Path | None = None, read_only: bool = False) -> None:
     # Only a uv tool or Homebrew install is updated in place, so only such a gateway watches
     # for updates. One that an update started again goes on with the agent's session.
     watch = install.detect() is not None
-    if watch or resume.RESUME in os.environ:
+    if (watch or resume.RESUME in os.environ) and resume.stdin_can_wait():
 
         def make_low_level() -> Server:
             if held:

@@ -22,6 +22,7 @@ import fcntl
 import json
 import math
 import os
+import stat
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -64,7 +65,8 @@ class Tap:
         self.want_stop = False
         self.stopped = anyio.Event()
         self.written = anyio.Event()  # the server ended and its output is on the wire
-        self.left = False  # the agent closed the pipe
+        self.ended = False  # the agent's input ended (or its output broke): no restart now
+        self.broken = False  # writing to the agent failed: nothing more goes out
         self.drop: types.RequestId | None = None
         if saved and saved.get("init"):
             self.init, self.initialized = saved["init"], saved.get("initialized")
@@ -100,7 +102,7 @@ class Tap:
             if not data:
                 if self.rest.strip():
                     self._take(self.rest.decode("utf-8", "replace"))
-                self.left = True
+                self.ended = True  # the server still answers what it has
                 self.to_server.close()
                 return
             *lines, self.rest = (self.rest + data).split(b"\n")
@@ -143,19 +145,19 @@ class Tap:
 
     def _maybe_stop(self) -> None:
         idle = not self.open and not self.rest.strip()
-        if self.want_stop and idle and not self.left and not self.stopped.is_set():
+        if self.want_stop and idle and not self.ended and not self.stopped.is_set():
             self.stopped.set()
             self.to_server.close()  # the server ends as on EOF
 
     async def _write(self, message: types.JSONRPCMessage) -> None:
-        if self.left:
+        if self.broken:
             return
         # The same form as the SDK's stdio writer (mcp/server/stdio.py, checked 2026-11-11).
         data = (message.model_dump_json(by_alias=True, exclude_unset=True) + "\n").encode()
         try:
             await anyio.to_thread.run_sync(self._write_all, data)
         except OSError:
-            self.left = True  # the agent is gone; the server ends
+            self.broken = self.ended = True  # the agent is gone; the server ends
             self.to_server.close()
 
     def _write_all(self, data: bytes) -> None:
@@ -199,6 +201,16 @@ def _launcher(raw: bytes | None, running: str) -> str | None:
     if not isinstance(launcher, str) or version == running:
         return None
     return launcher if os.path.isfile(launcher) and os.access(launcher, os.X_OK) else None
+
+
+def stdin_can_wait() -> bool:
+    """The Tap waits on fd 0 in the event loop, which works for a pipe, a socket or a terminal.
+    kqueue and epoll refuse /dev/null and regular files, so those run as before."""
+    try:
+        mode = os.fstat(0).st_mode
+    except OSError:
+        return False
+    return stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode) or os.isatty(0)
 
 
 def serve_stdio(
@@ -246,7 +258,7 @@ async def _serve(
         if tap.stopped.is_set():
             await done.wait()  # only wait_for_update stops the Tap
         group.cancel_scope.cancel()
-    return tap, found[0] if tap.stopped.is_set() else None
+    return tap, found[0] if tap.stopped.is_set() and not tap.ended else None
 
 
 def _claim(fd: int, diversion: int) -> int:
