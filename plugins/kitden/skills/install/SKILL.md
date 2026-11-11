@@ -4,7 +4,8 @@ description: Use when the `kitden` command is not found or is too old for a kitd
 ---
 
 Kitden is a separate open-source program; the kitden skills run its command. It runs on macOS
-and Linux. Install or update it only when the user says yes.
+and Linux. Install or update it only when the user says yes. On Windows, say that Kitden does not
+run there yet, and stop.
 
 1. Run `kitden --version`. If it prints 0.7.2 or later, nothing is missing: go back to the task.
 2. Ask the user first. Say that Kitden is not installed or is too old, and show the one line you
@@ -13,9 +14,8 @@ and Linux. Install or update it only when the user says yes.
    - `uv` is there: `uv tool install --python 3.13 kitden`. To update: `uv tool upgrade kitden`.
    - Homebrew is there: `brew install konstantinstarovoytov/tap/kitden`. To update:
      `brew upgrade kitden`.
-   - Neither: Kitden's own script installs uv and then Kitden:
-     `curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh | sh`.
-     It downloads and runs a script: say so when you ask.
+   - Neither: install nothing. Give the user the link
+     https://github.com/KonstantinStarovoytov/kitden#get-started and stop.
 4. Run `kitden --version` again. If the shell still does not find it, ask the user to open a new
    terminal, or run `uv tool update-shell`.
 5. If the user wants an answer without installing, and `uv` is there, run the command once as
