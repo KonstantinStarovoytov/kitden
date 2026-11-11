@@ -151,7 +151,7 @@ from kitden.model import (
 )
 from kitden.redact import masked_command, redact_text
 from kitden.sign_in import SIGNED_OUT, SignIn, SignIns
-from kitden.system import secret_store_name
+from kitden.system import process_starts, secret_store_name
 from kitden.update.check import EVERY, cached_latest, newer
 from kitden.update.check import fetch as fetch_latest
 from kitden.update.install import MANUAL_COMMAND, Install
@@ -179,6 +179,7 @@ from kitden.views.library import KINDS, LIST_SHOWS, LIST_TABS, SHOWS, library, l
 from kitden.views.library_map import cursor_imports, library_map
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
+from kitden.views.restarts_view import pending_restarts
 from kitden.views.review import app_notes, change_target, mark_reach, undo_note
 from kitden.views.setup_server import enable_steps, is_old_entry, setup_server_state
 from kitden.views.skills import (
@@ -635,6 +636,7 @@ def create_app(
     fetch: Callable[[str], bytes] = fetch_latest,
     upgrade: Callable[[Install, Callable[[int], None], str], Awaitable[Outcome]] = run_upgrade,
     start_page: Callable[[Path, str], Any] | None = None,
+    processes: Callable[[], list[tuple[datetime, str]]] = process_starts,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown).
     `version_refresh` reads the clients' versions after the first scan; by default the ones
@@ -647,7 +649,8 @@ def create_app(
     Kitden updates itself from the page only with `install` (how it was installed) and
     `start_page`, which starts the new version's page with its launcher and the
     "port:token:session" it takes over. `session` is the old page's, after such an update.
-    `fetch` asks for the latest version; `upgrade` runs the installer.
+    `fetch` asks for the latest version; `upgrade` runs the installer. `processes` lists the
+    running processes with their start times, for the restart strips.
     """
     session = session or secrets.token_urlsafe(32)
     events = Broadcaster()
@@ -1939,6 +1942,14 @@ def create_app(
             return JSONResponse([])
         return JSONResponse(change_entries(engine.store.entries(), engine, state.inventory))
 
+    async def restarts(request: Request) -> JSONResponse:
+        """The clients that still run from before an Apply that asked for a restart (one `ps`
+        a call). The sample page has no real change to restart for."""
+        if engine is None or demo:
+            return JSONResponse([])
+        starts = await asyncio.to_thread(processes)
+        return JSONResponse(pending_restarts(engine.store.entries(), starts))
+
     def _inherits() -> dict:
         """Whether Cursor loads Claude Code's plugins and the skills in its folder."""
         cursor = _found_cursor()
@@ -2084,6 +2095,7 @@ def create_app(
                 "/api/gateway/tools/refresh", _with_changes(gateway_tools_refresh), methods=["POST"]
             ),
             Route("/api/changes", changes),
+            Route("/api/restarts", restarts),
             Route("/api/changes/preview", _with_changes(preview), methods=["POST"]),
             Route("/api/batch/preview", _with_changes(batch_preview), methods=["POST"]),
             Route("/api/batch/check", _with_changes(batch_check), methods=["POST"]),

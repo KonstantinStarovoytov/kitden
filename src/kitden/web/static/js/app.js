@@ -20,6 +20,7 @@ import {
   arrival, busy, current, data, followHash, freshness, go, isOldAddress, loadShared, onIdle, parseHash, projectGone, readLibraryMap, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
 } from "./store.js";
+import { refreshRestarts, startRestarts } from "./restarts.js";
 import { checkTrayStale, tray } from "./tray.js";
 import { startUpdate } from "./update.js";
 
@@ -197,6 +198,7 @@ async function rescan() {
   await busyWhile($("#rescan"), (async () => {
     await postJson("/api/rescan");
     await refresh();
+    refreshRestarts();
   })());
 }
 
@@ -389,6 +391,7 @@ function start() {
   startLogo($(".brand"));
   startTips();
   startUpdate($("#update-spot"));
+  startRestarts($("#restarts"));
 
   // Markers measured before a font arrived sit on the old widths; a resize re-seats them.
   document.fonts?.addEventListener("loadingdone", () => dispatchEvent(new Event("resize")));

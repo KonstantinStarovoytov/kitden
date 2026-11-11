@@ -15,7 +15,10 @@ short list), and a sample or test home must never reach the person's own folders
 """
 
 import os
+import subprocess
 import sys
+from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
 PLATFORMS = {"darwin": "mac", "linux": "linux"}
@@ -71,3 +74,35 @@ def app_commands(name: str) -> tuple[str, ...]:
 
 def secret_store_name() -> str:
     return "Keychain" if SYSTEM == "mac" else "keyring"
+
+
+def process_starts(
+    run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+) -> list[tuple[datetime, str]]:
+    """When each running process started and its command line, from `ps`. macOS and Linux say
+    it the same way with LC_ALL=C: "Tue Nov 11 09:15:02 2026 <args>", a short day padded with a
+    space. If `ps` fails, nothing is returned; a line that does not read is skipped."""
+    try:
+        done = run(
+            ["ps", "-A", "-o", "lstart=,args="],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if done.returncode != 0:
+        return []
+    found = []
+    for text in done.stdout.splitlines():
+        words = text.split(None, 5)
+        if len(words) < 6:
+            continue
+        try:
+            started = datetime.strptime(" ".join(words[:5]), "%a %b %d %H:%M:%S %Y")
+        except ValueError:
+            continue
+        found.append((started.astimezone(), words[5]))
+    return found
