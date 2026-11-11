@@ -1,5 +1,6 @@
 """The latest Kitden version: asked once a day, never an error."""
 
+import http.client
 import json
 import os
 import stat
@@ -41,6 +42,18 @@ def test_brew_reads_the_tap_formula():
 
 def test_offline_gives_none():
     assert latest_version("uv", _down) is None
+
+
+def test_a_dropped_connection_gives_none(tmp_path):
+    def cut(url):
+        raise http.client.IncompleteRead(b"")
+
+    def garbled(url):
+        raise http.client.BadStatusLine("x")
+
+    for fetch in (cut, garbled):
+        assert latest_version("uv", fetch) is None
+        assert cached_latest(tmp_path, "uv", NOW, fetch) is None
 
 
 def test_odd_answers_give_none():

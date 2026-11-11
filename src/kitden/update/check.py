@@ -1,5 +1,6 @@
 """The latest Kitden version, asked at most once a day. A failure is never an error."""
 
+import http.client
 import json
 import os
 import re
@@ -44,7 +45,7 @@ def latest_version(method: str, fetch: Callable[[str], bytes]) -> str | None:
         if method == "brew":
             found = _FORMULA.search(fetch(TAP_URL).decode("utf-8", "replace"))
             return found.group(1) if found else None
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError, http.client.HTTPException):
         pass
     return None
 
