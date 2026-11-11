@@ -14,6 +14,8 @@
   mechanism that works, no speculative options.
 - Check changing facts about other tools (client file formats, gateway APIs) against their
   own docs, and write the date you checked next to the claim.
+- A change to how Kitden reads or writes a client's files updates `docs/clients.md` in the same
+  pull request.
 - When you finish a task that changes what Kitden does or plans, update ROADMAP.md in the same
   change.
 - Every release has a notes file; see [docs/development.md](docs/development.md).
