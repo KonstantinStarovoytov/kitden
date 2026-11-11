@@ -22,6 +22,9 @@ nothing from it.
 - To reach the remote servers you add.
 - To read the catalogs you open and the GitHub sources you add.
 - To install or update Kitden, after your yes.
+- Once a day, while the page is open, to ask PyPI (or, for a Homebrew install, the Homebrew tap
+  on GitHub) for the latest version number. Nothing about you is sent. This also happens when
+  Kitden cannot update itself, and then the page shows the command to run.
 
 ## The plugin and your agent
 

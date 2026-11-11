@@ -1,11 +1,26 @@
 # Kitden roadmap
 
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
+
+### Not yet released
+
+- **Update from the page:** once a day, while the page is open, Kitden asks PyPI (or the
+  Homebrew tap) for the latest version number. When a newer one is out, the rail shows an Update
+  button beside the version. After your yes it runs `uv tool upgrade kitden` or
+  `brew upgrade kitden`, shows each real step, and reloads the page on the new version. Installs
+  Kitden cannot update itself (uvx, pip, source) show the command to run. `kitden show` and
+  `kitden mcp` still never go online.
+- **The gateway restarts in place:** the Kitden gateway moves to the new version by itself, and
+  your agents keep their connection.
+- **A strip when an agent needs a restart:** after an Apply, an amber strip under the top bar
+  names each client that must be restarted to see it, with "Got it". Kitden never restarts an
+  agent for you.
+- The first update to this version still needs one restart of your agents; later updates do not.
 
 ### 0.7.2
 
