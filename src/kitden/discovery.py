@@ -36,6 +36,8 @@ HOSTS = {
 }
 # A skill's or a plugin's folder name.
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
+# Results sent at a time; the window asks for the next page.
+PAGE = 60
 PUBLIC_REPO = "Use a public GitHub repository: owner/repo."
 DEFAULTS = [
     {"id": "skills.sh", "name": "skills.sh", "kind": "skills"},
@@ -116,6 +118,15 @@ def words_match(query: str, value: str) -> bool:
         return re.sub(r"[-_\s]+", " ", text.casefold()).strip()
 
     return all(word in normalize(value) for word in normalize(query).split())
+
+
+def rank(query: str, row: dict) -> tuple:
+    """Sort key: the exact name, then names that start with the query, plugins before skills,
+    then the most installed. Otherwise the source's own order stays."""
+    words = re.sub(r"[-_\s]+", " ", query.casefold()).strip()
+    name = re.sub(r"[-_\s]+", " ", row["name"].casefold())
+    match = 0 if name == words else 1 if words and name.startswith(words) else 2
+    return (match, row["kind"] != "plugin", -(row.get("installs") or 0))
 
 
 def short_name(name: str) -> str:
@@ -455,9 +466,10 @@ class Discovery:
                             "description": str(manifest.get("description", ""))[:600],
                         }
                     )
-        return rows[:60]
+        return rows
 
-    def search(self, source: str, query: str, kind: str) -> list[dict]:
+    def search(self, source: str, query: str, kind: str, offset: int = 0) -> dict:
+        """One page of results, best first, and how many there are in all."""
         known = next((s for s in self.sources() if s["id"] == source), None)
         if known is None:
             raise ValueError("Choose a known source.")
@@ -524,7 +536,9 @@ class Discovery:
                 )
         else:
             rows = self.github(source, query, kind)
-        return [self.public(self._remember(row)) for row in rows]
+        rows.sort(key=lambda row: rank(query, row))
+        page = rows[offset : offset + PAGE]
+        return {"results": [self.public(self._remember(row)) for row in page], "total": len(rows)}
 
     def _remember(self, row: dict) -> dict:
         """Keep a result by its id, also on disk, so an add can find it again after a restart."""

@@ -84,7 +84,7 @@ def test_sources_persist_without_a_client_settings_write(tmp_path):
 def test_skill_metadata_survives_restart_and_download_is_pinned(tmp_path, monkeypatch):
     skill_source(monkeypatch)
     source = Discovery(tmp_path)
-    row = source.search("skills.sh", "tidy", "skill")[0]
+    row = source.search("skills.sh", "tidy", "skill")["results"][0]
     assert row["installs"] == 42
     source = Discovery(tmp_path)
     info = source.skill(source.get(row["id"]), {"codex"})
@@ -316,7 +316,7 @@ def test_popular_skills_uses_leaderboard_counts(tmp_path, monkeypatch):
     )
     page = "<script>self.__next_f.push(" + json.dumps([1, payload]) + ")</script>"
     monkeypatch.setattr(discovery, "download", lambda url: page.encode())
-    rows = Discovery(tmp_path).search("skills.sh", "", "skill")
+    rows = Discovery(tmp_path).search("skills.sh", "", "skill")["results"]
     assert [r["name"] for r in rows] == ["high", "low"]
     assert [r["installs"] for r in rows] == [100, 2]
 
@@ -325,7 +325,7 @@ def test_popular_skills_uses_leaderboard_counts(tmp_path, monkeypatch):
 def test_ambiguous_or_renamed_skill_offers_pinned_choices(tmp_path, monkeypatch, name):
     skill_source(monkeypatch)
     source = Discovery(tmp_path)
-    row = source.search("skills.sh", "tidy", "skill")[0]
+    row = source.search("skills.sh", "tidy", "skill")["results"][0]
     source.results[row["id"]]["name"] = name
     source.trees["acme/skills"] = (SHA, ["one/tidy/SKILL.md", "two/tidy/SKILL.md"])
     choices = source.details(row["id"])["choices"]
@@ -341,7 +341,7 @@ def test_ambiguous_or_renamed_skill_offers_pinned_choices(tmp_path, monkeypatch,
 def test_missing_skill_does_not_claim_multiple_matches(tmp_path, monkeypatch):
     skill_source(monkeypatch)
     source = Discovery(tmp_path)
-    row = source.search("skills.sh", "tidy", "skill")[0]
+    row = source.search("skills.sh", "tidy", "skill")["results"][0]
     source.trees["acme/skills"] = (SHA, ["README.md"])
     with pytest.raises(ValueError, match="no longer contains"):
         source.details(row["id"])
@@ -350,7 +350,7 @@ def test_missing_skill_does_not_claim_multiple_matches(tmp_path, monkeypatch):
 def test_details_pin_exact_folder_and_can_read_after_restart(tmp_path, monkeypatch):
     skill_source(monkeypatch)
     source = Discovery(tmp_path)
-    row = source.search("skills.sh", "tidy", "skill")[0]
+    row = source.search("skills.sh", "tidy", "skill")["results"][0]
     detail = source.details(row["id"])
     assert detail["path"] == "skills/tidy"
     assert detail["commit"] == SHA
@@ -363,7 +363,7 @@ def test_details_pin_exact_folder_and_can_read_after_restart(tmp_path, monkeypat
 def test_root_skill_opens_and_previews_without_folder_choice(tmp_path, monkeypatch):
     skill_source(monkeypatch)
     source = Discovery(tmp_path)
-    row = source.search("skills.sh", "tidy", "skill")[0]
+    row = source.search("skills.sh", "tidy", "skill")["results"][0]
     source.trees["acme/skills"] = (SHA, ["SKILL.md", "reference.md"])
     downloads = []
     content = archive(
@@ -686,3 +686,29 @@ def test_a_version_that_is_not_text_is_skipped_not_an_error():
     npm = {"registryType": "npm", "identifier": "@acme/mcp", "transport": {"type": "stdio"}}
     for odd in (None, 1, 1.2, ["1.2.3"]):
         assert server_entry({"packages": [{**npm, "version": odd}]})[0] is None
+
+
+def test_github_source_pages_results_with_plugins_first(tmp_path, monkeypatch):
+    skills = [f"skills/s{n:03}/SKILL.md" for n in range(70)]
+    plugins = {"name": "acme", "plugins": [{"name": "zeta"}, {"name": "alpha"}]}
+
+    def read(url):
+        if "/commits/" in url:
+            return {"sha": SHA}
+        if "/git/trees/" in url:
+            paths = [*skills, ".claude-plugin/marketplace.json"]
+            return {"tree": [{"path": p, "type": "blob"} for p in paths]}
+        if url.endswith("marketplace.json"):
+            return plugins
+        raise AssertionError(url)
+
+    monkeypatch.setattr(discovery, "read_json", read)
+    source = Discovery(tmp_path)
+    source.add_source("acme/skills")
+    first = source.search("acme/skills", "", "all")
+    assert first["total"] == 72
+    assert len(first["results"]) == discovery.PAGE
+    assert [r["name"] for r in first["results"][:2]] == ["zeta", "alpha"]
+    rest = source.search("acme/skills", "", "all", discovery.PAGE)
+    assert [r["name"] for r in rest["results"]] == [f"s{n:03}" for n in range(58, 70)]
+    assert source.search("acme/skills", "s06", "all")["results"][0]["name"] == "s060"
