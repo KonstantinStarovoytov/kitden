@@ -7,6 +7,7 @@ a real `kitden mcp` and restart it in place once, through a marker as the page w
 import json
 import os
 import shlex
+import socket
 import stat
 import subprocess
 import sys
@@ -518,3 +519,25 @@ def test_stdin_from_a_file_is_answered(tmp_path):
     assert code == 0
     assert [r.get("id") for r in replies][:1] == [0]
     assert replies[0]["result"]["capabilities"]["tools"]["listChanged"] is False  # as before
+
+
+def test_only_a_pipe_or_a_socket_can_wait(tmp_path):
+    # A terminal runs as before: `kitden mcp` typed by hand needs no restart in place.
+    read_end, write_end = os.pipe()
+    left, right = socket.socketpair()
+    leader, follower = os.openpty()
+    regular = tmp_path / "file"
+    regular.write_text("")
+    with open(os.devnull, "rb") as nothing, regular.open("rb") as given:
+        try:
+            assert resume.stdin_can_wait(read_end)
+            assert resume.stdin_can_wait(left.fileno())
+            assert not resume.stdin_can_wait(follower)
+            assert not resume.stdin_can_wait(nothing.fileno())
+            assert not resume.stdin_can_wait(given.fileno())
+        finally:
+            for fd in (read_end, write_end, leader, follower):
+                os.close(fd)
+            left.close()
+            right.close()
+    assert not resume.stdin_can_wait(read_end)  # closed

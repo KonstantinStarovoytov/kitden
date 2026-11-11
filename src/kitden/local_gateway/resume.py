@@ -203,14 +203,14 @@ def _launcher(raw: bytes | None, running: str) -> str | None:
     return launcher if os.path.isfile(launcher) and os.access(launcher, os.X_OK) else None
 
 
-def stdin_can_wait() -> bool:
-    """The Tap waits on fd 0 in the event loop, which works for a pipe, a socket or a terminal.
-    kqueue and epoll refuse /dev/null and regular files, so those run as before."""
+def stdin_can_wait(fd: int = 0) -> bool:
+    """An agent gives a pipe or a socket, which the Tap waits on in the event loop. A terminal,
+    /dev/null or a file runs as before (kqueue and epoll refuse the last two)."""
     try:
-        mode = os.fstat(0).st_mode
+        mode = os.fstat(fd).st_mode
     except OSError:
         return False
-    return stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode) or os.isatty(0)
+    return stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)
 
 
 def serve_stdio(
