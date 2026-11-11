@@ -9,8 +9,9 @@ import os
 from datetime import datetime
 
 # What a client's process is called. A name with a "/" is looked for in the whole command line.
+# The Claude app is not Claude Code, so "Claude" is not here.
 CLIENT_PROCESSES = {
-    "claude_code": ("claude", "Claude", "@anthropic-ai/claude-code"),
+    "claude_code": ("claude", "@anthropic-ai/claude-code"),
     "codex": ("codex", "Codex"),
     "cursor": ("Cursor", "cursor"),
 }
@@ -27,9 +28,21 @@ def _time(text: object) -> datetime | None:
 
 
 def _belongs(client: str, args: str) -> bool:
-    names = CLIENT_PROCESSES[client]
-    first = [os.path.basename(word) for word in args.split(None, 2)[:2]]
-    return any(name in first or ("/" in name and name in args) for name in names)
+    """The command's first word is the client's program, or a later word is (a script run by
+    node), or the command holds the client's package. A folder like ".codex" does not count."""
+    words = args.split()
+    if not words:
+        return False
+    for name in CLIENT_PROCESSES[client]:
+        if "/" in name:
+            found = name in args
+        else:
+            found = os.path.basename(words[0]) == name or (
+                name.islower() and any(word.endswith(f"/{name}") for word in words)
+            )
+        if found:
+            return True
+    return False
 
 
 def _changes(log: list[dict]) -> list[dict]:

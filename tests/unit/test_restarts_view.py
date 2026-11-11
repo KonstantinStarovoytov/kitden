@@ -132,6 +132,19 @@ def test_each_client_has_its_own_strip():
     ]
 
 
+def test_one_change_for_two_clients_gives_two_strips():
+    steps = [
+        {"client": "cursor", "restart_note": CURSOR_NOTE},
+        {"client": "codex", "restart_note": CODEX_NOTE},
+    ]
+    log = [{"id": "c1", "time": applied_at(10), "state": "verified", "steps": steps}]
+    both = [*starts(cursor=at(9)), *starts(codex=at(9))]
+    assert pending_restarts(log, both) == [
+        {"client": "codex", "note": CODEX_NOTE, "change": "c1"},
+        {"client": "cursor", "note": CURSOR_NOTE, "change": "c1"},
+    ]
+
+
 def test_a_step_without_a_note_gives_none():
     log = [line("c1", applied_at(10), note=None), line("c0", applied_at(9, 50), note="")]
     assert pending_restarts(log, starts(cursor=at(9))) == []
@@ -183,11 +196,15 @@ def test_which_processes_belong_to_a_client():
 
     assert one("/Users/me/.local/bin/claude --resume")
     assert one("node /opt/homebrew/bin/claude")
-    assert one("/Applications/Claude.app/Contents/MacOS/Claude")
-    assert one("node /x/node_modules/@anthropic-ai/claude-code/cli.js")
+    assert not one("/Applications/Claude.app/Contents/MacOS/Claude")
+    assert one("node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js")
     assert one(CURSOR_APP, client="cursor")
     assert one("/usr/share/cursor/cursor --type=zygote", client="cursor")
     assert one("/Applications/ChatGPT.app/Resources/codex-cli/bin/codex app-server", client="codex")
+    assert one("/opt/homebrew/bin/codex", client="codex")
+    assert not one("/Users/x/.codex/bin/SkyComputerUseService", client="codex")
+    assert not one("/Users/x/.codex/plugins/helper --serve", client="codex")
+    assert not one("vim cursor", client="cursor")
     assert not one("/bin/zsh -c claude-notes")
     assert not one("vim claude.txt")
     assert not one("/usr/bin/cursor-agent-helper", client="cursor")
