@@ -633,6 +633,38 @@ test('catalog folder choices stay inline and a failed read stops progress', asyn
   }
 });
 
+test('catalog search says when results are cut and shows the next page', async () => {
+  const original = globalThis.fetch;
+  const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+  const offsets = [];
+  const row = (n) => ({ id: `r${n}`, name: `skill-${n}`, kind: 'skill', repo: 'acme/skills', installed: [] });
+  globalThis.fetch = async (url, init = {}) => {
+    if (url === '/api/discovery/search') {
+      const offset = JSON.parse(init.body).offset || 0; offsets.push(offset);
+      const results = Array.from({ length: offset ? 10 : 60 }, (_, i) => row(offset + i));
+      return { ok: true, json: async () => ({ clients: [], results, total: 70 }) };
+    }
+    return original(url, init);
+  };
+  try {
+    await openDiscovery('all');
+    await flush();
+    // An earlier test left a saved answer for this window; search again.
+    for (const listener of find((n) => n.tagName === 'FORM')[0].listeners.submit) listener({ preventDefault() {} });
+    await flush();
+    assert.ok(find((n) => text(n) === 'Showing 60 of 70 results').length);
+    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'Show 10 more')[0]);
+    await flush();
+    assert.deepEqual(offsets.slice(-2), [0, 60]);
+    assert.ok(find((n) => text(n) === '70 results').length);
+    assert.equal(find((n) => n.classList.contains('res')).length, 70);
+    assert.equal(find((n) => n.tagName === 'BUTTON' && text(n).startsWith('Show ')).length, 0);
+  } finally {
+    globalThis.fetch = original;
+    await done();
+  }
+});
+
 test('MCP sources exclude the built-in plugin catalog but keep personal GitHub sources', async () => {
   const { sourceFitsPage } = await import('../../src/kitden/web/static/js/discovery.js');
   const plugins = { id: 'anthropics/claude-plugins-official', kind: 'github' };

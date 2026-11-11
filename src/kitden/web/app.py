@@ -1883,9 +1883,17 @@ def create_app(
             kind = str(body.get("kind", "all"))
             if kind not in ("all", "skill", "plugin", "mcp"):
                 raise ValueError("Choose skills, plugins or MCP servers.")
-            rows = await asyncio.to_thread(
-                discovery.search, str(body.get("source", "")), str(body.get("query", "")), kind
+            offset = body.get("offset", 0)
+            if not isinstance(offset, int) or offset < 0:
+                raise ValueError("Choose a page of results.")
+            found = await asyncio.to_thread(
+                discovery.search,
+                str(body.get("source", "")),
+                str(body.get("query", "")),
+                kind,
+                offset,
             )
+            rows = found["results"]
             held = set(load_settings(home_dir())["servers"])
             for row in rows:
                 item_kind = "mcp_server" if row["kind"] == "mcp" else row["kind"]
@@ -1898,7 +1906,7 @@ def create_app(
                     }
                 )
             clients = [c["id"] for c in state.data["clients"] if c["status"] == "found"]
-            return JSONResponse({"results": rows, "clients": clients})
+            return JSONResponse({"results": rows, "total": found["total"], "clients": clients})
         except ValueError as error:
             return _error(str(error), 400)
         except (OSError, KeyError, TypeError):

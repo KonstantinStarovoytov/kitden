@@ -12,6 +12,8 @@ import { cancelTray, inTray, keyFor, tray, trayRow } from "./tray.js";
 const TOKEN_FIELD = { field: "headers", name: "Authorization", label: "Access token", prefix: "Bearer " };
 
 const LABELS = { skill: "Skill", plugin: "Plugin", mcp: "MCP server" };
+// Results the server sends at a time (`PAGE` in discovery.py).
+const PAGE = 60;
 
 export function sourceFitsPage(source, kind) {
   if (kind !== "mcp") return source.kind !== "mcp";
@@ -108,10 +110,11 @@ export async function openDiscovery(kind = "all", options = {}) {
   const remember = (answer) => sessions.set(kind, { ...model, query: input.value, answer });
   const draw = (answer) => {
     results.replaceChildren();
-    status.textContent = answer.results.length ? `${answer.results.length} results` : "No matches. Try another search or catalog.";
-    const query = input.value.trim().toLowerCase().replace(/[-_]/g, " ");
-    const score = (r) => { const name = r.name.toLowerCase().replace(/[-_]/g, " "); return name === query ? 3 : name.startsWith(query) ? 2 : 1; };
-    for (const row of [...answer.results].sort((a, b) => score(b) - score(a) || (b.installs || 0) - (a.installs || 0))) {
+    // The server sends the best first, one page at a time; `total` counts every match.
+    const shown = answer.results.length, total = answer.total ?? shown;
+    status.textContent = !shown ? "No matches. Try another search or catalog."
+      : total > shown ? `Showing ${shown} of ${total} results` : `${shown} results`;
+    for (const row of answer.results) {
       const line = button("", () => {
         for (const sibling of results.children) sibling.setAttribute("aria-pressed", "false");
         line.setAttribute("aria-pressed", "true");
@@ -146,6 +149,20 @@ export async function openDiscovery(kind = "all", options = {}) {
       paint();
       results.append(line);
     }
+    if (total > shown) {
+      const more = button(`Show ${Math.min(total - shown, PAGE)} more`, () => showMore(answer, more), "btn small discovery-more");
+      results.append(more);
+    }
+  };
+  const showMore = async (answer, more) => {
+    const turn = sequence; more.disabled = true;
+    try {
+      const next = await postJson("/api/discovery/search", { source: model.source, query: input.value, kind: model.kind, offset: answer.results.length });
+      if (turn !== sequence || !body.isConnected) return;
+      if (!next.ok) throw new Error(next.data?.detail || "Could not load more results. Try again.");
+      answer.results.push(...next.data.results); answer.total = next.data.total;
+      remember(answer); draw(answer);
+    } catch (error) { if (turn === sequence && body.isConnected) { status.textContent = error.message; more.disabled = false; } }
   };
   const paintSources = () => {
     const available = sources.filter((source) => model.kind !== "plugin" || source.kind === "github");

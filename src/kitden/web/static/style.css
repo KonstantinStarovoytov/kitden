@@ -1361,6 +1361,7 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .discovery-source-add > summary { display: none; }
 .discovery-source-add[open] { padding: 16px; border: 1px solid var(--wire); border-radius: 8px; }
 .discovery-results .res[aria-pressed="true"] { border-color: var(--focus); background: var(--route-soft); }
+.discovery-more { align-self: flex-start; }
 
 /* A narrow catalog leaves the map available for dragging. Details stay compact. */
 #drawer.floating:has(.discovery-workspace) { width: min(580px, calc(100vw - 48px)); top: 110px; bottom: auto; max-height: calc(100vh - 150px); padding: 14px; gap: 10px; }
