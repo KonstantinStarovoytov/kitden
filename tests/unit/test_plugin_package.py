@@ -115,6 +115,9 @@ def test_the_install_skill_asks_first_and_names_each_way():
     # Nothing is installed without the user's yes.
     assert "Ask" in body and "Without a yes" in body
     assert body.index("Ask") < body.index(INSTALL)
+    # Kitden does not run on Windows: the skill says so and stops before any command.
+    assert "On Windows" in body and "stop" in body
+    assert body.index("On Windows") < body.index("kitden --version")
 
 
 def test_the_context_skill_says_what_kitden_measured():

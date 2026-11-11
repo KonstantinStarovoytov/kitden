@@ -4,7 +4,8 @@ description: Use when the `kitden` command is not found or is too old for a kitd
 ---
 
 Kitden is a separate open-source program; the kitden skills run its command. It runs on macOS
-and Linux. Install or update it only when the user says yes.
+and Linux. Install or update it only when the user says yes. On Windows, say that Kitden does not
+run there yet, and stop.
 
 1. Run `kitden --version`. If it prints 0.7.2 or later, nothing is missing: go back to the task.
 2. Ask the user first. Say that Kitden is not installed or is too old, and show the one line you
