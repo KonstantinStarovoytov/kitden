@@ -417,7 +417,8 @@ def update_steps(
     added_clients: set[str],
     command: str | None,
 ) -> list[Step]:
-    """Replace old `agentsetup` entries with `kitden` (feature 002, FR-006).
+    """Replace old `agentsetup` entries with `kitden` (feature 002, FR-006), and point a
+    `kitden` entry whose program is gone at this Kitden.
 
     Per client: remove the old entry, then add `kitden` unless that client already has it. Both
     steps edit one settings file; the engine applies them in order.
@@ -429,6 +430,12 @@ def update_steps(
         adapter = adapters.get(item.client)
         if adapter is None:
             raise ValueError("Choose an old Kitden entry.")
+        if item.name == SETUP_NAME:
+            # Its program is gone: point the same entry at this Kitden, keep the rest.
+            if command is None or not Path(command).is_absolute():
+                raise ValueError(NEEDS_COMMAND)
+            steps.append(adapter.setup_entry_step("command", command))
+            continue
         steps.append(adapter.remove_step(item))
         if item.client not in added_clients:
             if command is None or not Path(command).is_absolute():

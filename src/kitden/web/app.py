@@ -181,7 +181,12 @@ from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.restarts_view import pending_restarts
 from kitden.views.review import app_notes, change_target, mark_reach, undo_note
-from kitden.views.setup_server import enable_steps, is_old_entry, setup_server_state
+from kitden.views.setup_server import (
+    enable_steps,
+    is_moved_entry,
+    is_old_entry,
+    setup_server_state,
+)
 from kitden.views.skills import (
     library_offers,
     project_skills,
@@ -1500,10 +1505,13 @@ def create_app(
             steps = setup_server_steps(adapters, _clients(targets), command)
         elif action == SETUP_SERVER_UPDATE:
             items = _items(targets)
-            if not items or any(i is None or not is_old_entry(i) for i in items):
+            if not items or any(
+                i is None or not (is_old_entry(i) or is_moved_entry(i)) for i in items
+            ):
                 raise ValueError("Choose an old Kitden entry.")
             added = _states_in(state.inventory, "added")
-            command = _kitden_command() if any(i.client not in added for i in items) else None
+            needs = any(i.client not in added or is_moved_entry(i) for i in items)
+            command = _kitden_command() if needs else None
             steps = update_steps(adapters, items, added, command)
         elif action == SETUP_SERVER_ENABLE:
             clients = _clients(targets)

@@ -231,6 +231,23 @@ def _no_real_client_homes(monkeypatch):
     monkeypatch.delenv("CODEX_HOME", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _kitden_paths_count_as_present(monkeypatch):
+    """Tests write `kitden` entries with made-up paths such as /opt/kitden/bin/kitden. They count
+    as present, so an entry is not taken for one whose program is gone. `real_programs` undoes
+    it."""
+    from kitden.views import setup_server
+
+    monkeypatch.setattr(setup_server, "_gone", lambda command: False)
+
+
+@pytest.fixture
+def real_programs(monkeypatch):
+    from kitden.views import setup_server
+
+    monkeypatch.setattr(setup_server, "_gone", setup_server.gone)
+
+
 @pytest.fixture
 def no_version():
     return lambda: None

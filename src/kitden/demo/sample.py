@@ -130,7 +130,7 @@ BULK_TOOLS = (
 
 
 def demo_command(home: Path) -> str:
-    """The `kitden` command the sample's entries run. Nothing runs it, and it does not exist."""
+    """The `kitden` command the sample's entries run: an empty file that nothing runs."""
     return str(home / ".local/bin/kitden")
 
 
@@ -146,6 +146,10 @@ def build_demo_home(root: Path, size: str) -> Path:
         raise ValueError("Choose small, medium or large.")
     home = root / "home"
     home.mkdir(parents=True)
+    # An empty stand-in for the command the entries run, so they read as set up, not moved.
+    command = Path(demo_command(home))
+    command.parent.mkdir(parents=True)
+    command.write_text("")
     medium = size != "small"
     _claude_code(home, medium)
     if medium:

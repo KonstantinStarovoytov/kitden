@@ -53,6 +53,7 @@ def test_an_agentsetup_entry_running_another_program_is_ignored(home):
         "item": None,
         "command_exists": None,
         "enabled": None,
+        "moved": False,
     }
 
 
@@ -191,6 +192,57 @@ def test_update_needs_the_kitden_command_installed(home):
         response = client.post("/api/changes/preview", json=body, headers=POST)
     assert response.status_code == 422
     assert "Install the tool first" in response.json()["detail"]
+
+
+# A kitden entry whose program is gone (Kitden moved from uv to Homebrew, or was removed) ------
+
+
+def _kitden_entry(home, command):
+    config = home / ".codex/config.toml"
+    entry = {"command": command, "args": ["mcp"], "enabled": False}
+    config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "kitden"), entry))
+
+
+def test_a_kitden_entry_whose_program_is_gone_is_old(home, real_programs):
+    _kitden_entry(home, str(home / "gone/bin/kitden"))
+    state = _states(home)["codex"]
+    assert state["state"] == "old" and state["moved"] is True
+    assert state["command_exists"] is False
+    inventory = build_inventory(home)
+    mine = next(i for i in inventory.items if i.client == "codex" and i.name == "kitden")
+    assert state["item"] == mine.id
+
+
+def test_a_kitden_entry_whose_program_is_there_is_added(home, real_programs):
+    present = home / "here/bin/kitden"
+    present.parent.mkdir(parents=True)
+    present.write_text("")
+    _kitden_entry(home, str(present))
+    state = _states(home)["codex"]
+    assert state["state"] == "added" and state["moved"] is False
+
+
+def test_update_points_a_moved_kitden_entry_at_this_kitden_and_keeps_the_rest(home, real_programs):
+    _kitden_entry(home, str(home / "gone/bin/kitden"))
+    config = home / ".codex/config.toml"
+    present = home / "opt/kitden/bin/kitden"
+    present.parent.mkdir(parents=True)
+    present.write_text("")
+    original = config.read_bytes()
+    with _client(home, setup_command=lambda: str(present)) as client:
+        client.get("/?token=tok")
+        states = {s["client"]: s for s in client.get("/api/setup-server").json()}
+        body = {"action": "setup_server.update", "targets": [{"item": states["codex"]["item"]}]}
+        change = client.post("/api/changes/preview", json=body, headers=POST).json()
+        assert [s["name"] for s in change["steps"]] == ["kitden"]
+        done = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert done["state"] == "verified"
+        entry = toml_edit.get_value(config.read_text(), ("mcp_servers", "kitden"))
+        assert entry == {"command": str(present), "args": ["mcp"], "enabled": False}
+        after = {s["client"]: s for s in client.get("/api/setup-server").json()}
+        assert after["codex"]["state"] == "added"
+        client.post(f"/api/changes/{change['id']}/undo", headers=POST)
+    assert config.read_bytes() == original
 
 
 def test_a_turned_off_kitden_entry_is_added_but_off(home):
