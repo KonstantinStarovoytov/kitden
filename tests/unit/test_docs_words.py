@@ -124,3 +124,9 @@ def test_the_readme_has_four_parts_and_three_pictures_in_both_themes():
             assert image.stat().st_size <= 1_600_000, image.name
     # The sharing animation is kept for posts, not shown here.
     assert "pick-" not in readme
+
+
+def test_the_security_page_says_how_to_report_in_private():
+    text = " ".join((ROOT / "SECURITY.md").read_text().split())
+    assert "https://github.com/KonstantinStarovoytov/kitden/security/advisories/new" in text
+    assert "do not open a public issue" in text.lower()
