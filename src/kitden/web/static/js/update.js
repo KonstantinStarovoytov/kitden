@@ -23,7 +23,7 @@ const ASKS = 10; // looks while the server has not heard the latest version yet 
 const WAIT_MS = 30000; // no new page in this time: it did not start
 const RELOAD_MS = 500; // the last step shows this long before the page reloads
 const LAND_MS = 400; // the reloaded page shows the full ring this long, then the button fades
-const SLIDE_MS = 200; // the line under the version slides open and shut, so the rail does not jump
+const SLIDE_MS = 260; // the line under the version slides open and shut, so the rail does not jump
 const SWAP_MS = 260; // one step's words fade out, the next fade in, each this long
 const ROLL = { outMs: 320, inMs: 460 }; // the version's figures roll slowly: it happens once
 const FADE_MS = 500;
@@ -159,11 +159,11 @@ function slide(node, open) {
   if (open) {
     delete node.dataset.closing;
     node.hidden = false;
-    animateTo(node, [shut, { height: `${node.scrollHeight}px`, marginTop: "0px", opacity: 1 }], { dur: SLIDE_MS, fill: "none" });
+    animateTo(node, [shut, { height: `${node.scrollHeight}px`, marginTop: "0px", opacity: 1 }], { dur: SLIDE_MS, ease: "ease-in-out", fill: "none" });
     return;
   }
   node.dataset.closing = "1";
-  animateTo(node, [{ height: `${node.offsetHeight}px`, marginTop: "0px", opacity: 1 }, shut], { dur: SLIDE_MS, fill: "forwards" });
+  animateTo(node, [{ height: `${node.offsetHeight}px`, marginTop: "0px", opacity: 1 }, shut], { dur: SLIDE_MS, ease: "ease-in-out", fill: "forwards" });
   setTimeout(() => {
     if (!node.dataset.closing) return;
     delete node.dataset.closing;
