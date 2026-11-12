@@ -1,13 +1,13 @@
 # Kitden roadmap
 
-Last updated: 2026-11-11
+Last updated: 2026-11-12
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not yet released
+### 0.8.0
 
 - **Update from the page:** when a newer version is out, the rail shows an Update button beside
   the version (the page checks at most once a day, when it opens). After your yes it runs
@@ -32,6 +32,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 - After you update to this version, restart your agents once; later updates from the page need
   no restart. If a gateway cannot move to the new version by itself, it keeps working on the old
   one until the agent restarts.
+- **Catalog search counts its results:** results come 60 at a time with Show more, plugins come
+  before skills, and a GitHub source shows all its MCP servers (#61).
+- **Reads by shape, not by version:** a client's chat log, settings and Cursor switches are read
+  by their shape, so a new client version less often hides what Kitden shows (#54).
+- **Privacy and security pages:** PRIVACY.md and SECURITY.md; the plugin links the privacy page,
+  and its `install` skill no longer runs a downloaded script (#52, #53, #55).
 
 ### 0.7.2
 

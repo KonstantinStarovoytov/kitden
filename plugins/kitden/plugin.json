@@ -1,10 +1,11 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "kitden",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Ask what your coding agents load and whether your skills fit. Uses the Kitden program and offers to install it.",
   "author": { "name": "Konstantin Starovoytov" },
   "homepage": "https://github.com/KonstantinStarovoytov/kitden",
   "repository": "https://github.com/KonstantinStarovoytov/kitden",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "keywords": ["mcp", "setup", "claude-code", "codex", "cursor"]
 }
