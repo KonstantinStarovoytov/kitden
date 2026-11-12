@@ -5,15 +5,18 @@ releases it when the process ends, so a crash never leaves a "running" page behi
 `page.json` (mode 0600) holds its port and start link, so `kitden open` can reopen it.
 """
 
+import contextlib
 import fcntl
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from kitden import __version__
 from kitden.gateways import data_dir, private_data_dir
 
 HOST = "127.0.0.1"
@@ -70,6 +73,7 @@ def page_running(home: Path) -> bool:
 def write_record(home: Path, port: int, token: str, background: bool) -> None:
     record = {
         "pid": os.getpid(),
+        "version": __version__,
         "port": port,
         "token": token,
         "background": background,
@@ -104,6 +108,18 @@ def wait_for_record(home: Path, seconds: float = WAIT_SECONDS) -> dict | None:
             return record
         time.sleep(0.1)
     return None
+
+
+def stop_page(home: Path, record: dict) -> bool:
+    """Stop the running page and wait until it has ended. For a page of another Kitden version:
+    after `brew upgrade` or `uv tool upgrade` in a terminal its files are gone or changed."""
+    with contextlib.suppress(KeyError, TypeError, ValueError, OSError):
+        os.kill(int(record["pid"]), signal.SIGTERM)
+    lock = PageLock(home)
+    if not lock.acquire(wait=TAKE_OVER_SECONDS):
+        return False
+    lock.release()
+    return True
 
 
 class IdleClock:

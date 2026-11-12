@@ -74,6 +74,8 @@
   --lamp-warn-soft: rgba(151, 89, 10, 0.10);
   /* Past the limit on the Context picture: amber hatching. */
   --hatch: repeating-linear-gradient(135deg, rgb(151 89 10 / .5) 0 2px, transparent 2px 6px);
+  /* The fill of the warmest skill pill on Context (--heat 1): brand orange over the pill. */
+  --heat-fill: 24%;
   --lamp-off: #80868f;
   /* The door's light in the logo's gesture (logo.js): the warm sand of the mockup, never a text colour. */
   --hearth: #e6b46d;
@@ -117,7 +119,7 @@
     --route: #f09a7c; --route-soft: #382a27;
     --success: #47c27a; --on-success: #0b1a12;
     --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886; --hearth: #f3cc8f;
-    --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px);
+    --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px); --heat-fill: 30%;
     --danger: #f07070; --on-danger: #2a0d0d; --focus: #f09a7c;
     --diff-add: #47c27a; --diff-del: #f07070;
     --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
@@ -134,7 +136,7 @@
   --route: #f09a7c; --route-soft: #382a27;
   --success: #47c27a; --on-success: #0b1a12;
   --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886; --hearth: #f3cc8f;
-  --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px);
+  --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px); --heat-fill: 30%;
   --danger: #f07070; --on-danger: #2a0d0d; --focus: #f09a7c;
   --diff-add: #47c27a; --diff-del: #f07070;
   --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
@@ -787,8 +789,33 @@ div.map .block.addslot .block-icon { color: var(--route); }
 div.map .block.addslot .block-meta { color: var(--ink-3); }
 div.map .block-icon.bare { width: auto; height: auto; border: 0; background: none; }
 div.map .block-grip { flex: none; display: grid; margin-right: -4px; color: var(--lamp-off); }
-div.map .block.more { justify-content: center; border-style: dashed; background: transparent; color: var(--ink-2); }
-div.map .block.more .block-text { flex: none; }
+/* A stack of cards (a group folded, or the pages either side of the one shown, map.js): the node
+   draws nothing itself; its cards do. The first cards show only their top, a strip with their name,
+   each 20, 18 or 15 px under the one before (map-view.js sets each top); the last of the first three
+   shows whole; a pill at the top right counts the cards under it. A stack of one card shows a thin
+   edge under it. Hover spreads the strips 4 px each, to say it opens. */
+div.map .block.stack { display: block; padding: 0; border: 0; background: transparent; }
+div.map .stack-strip, div.map .stack-face, div.map .stack-edge { position: absolute; left: 0; right: 0; box-sizing: border-box; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); transition: border-color var(--t-fast) ease, translate 180ms var(--calm); }
+div.map .stack-strip + .stack-strip, div.map .stack-strip + .stack-face { box-shadow: 0 -2px 6px -4px rgb(0 0 0 / .35); }
+div.map .stack-strip { display: flex; align-items: flex-start; gap: 6px; padding: 3px 11px 0; color: var(--ink); font-size: 11px; font-weight: 600; line-height: 14px; }
+div.map .stack-strip .ic { flex: none; margin-top: 1px; color: var(--ink-3); }
+/* A card's tile, drawn small in its strip: only its icon. */
+div.map .stack-strip .block-icon, div.map .stack-strip .block-tile { display: contents; }
+div.map .stack-strip svg { flex: none; width: 12px; height: 12px; margin-top: 1px; color: var(--ink-3); }
+div.map .stack-strip .lamp { margin-top: 4px; }
+div.map .stack-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+div.map .stack-face { display: flex; align-items: center; gap: 10px; padding: 0 12px; }
+div.map .stack-edge { left: 6px; right: 6px; bottom: 0; height: 8px; border-top: 0; border-radius: 0 0 8px 8px; }
+div.map .block.stack.cards-outside .stack-strip, div.map .block.stack.cards-outside .stack-face, div.map .block.stack.cards-outside .stack-edge { background: var(--dim); }
+div.map .block.stack:hover > .stack-strip, div.map .block.stack:hover > .stack-face { border-color: color-mix(in srgb, var(--route) 38%, var(--wire)); }
+div.map .block.stack.lit > .stack-strip, div.map .block.stack.lit > .stack-face, div.map .block.stack.found > .stack-face { border-color: var(--route); }
+div.map .stack-pill { position: absolute; top: -9px; right: 8px; z-index: 1; height: 18px; box-sizing: border-box; padding: 0 6px; border: 1px solid var(--wire-strong); border-radius: 9px; background: var(--panel-raised); color: var(--ink-2); font-size: 10px; font-weight: 600; line-height: 16px; font-variant-numeric: tabular-nums; }
+div.map .block.stack:hover > .stack-strip[data-lift="1"] { translate: 0 -4px; }
+div.map .block.stack:hover > .stack-strip[data-lift="2"] { translate: 0 -8px; }
+/* Collapse: under an open group, at its column's right edge, a small pill that folds it. */
+div.map .block.collapse { justify-content: center; gap: 4px; padding: 0 8px 0 6px; border-radius: 10px; color: var(--ink-2); font-size: 10.5px; font-weight: 500; line-height: 1; white-space: nowrap; }
+div.map .block.collapse .ic { rotate: 180deg; }
+div.map .block.collapse:hover { border-color: var(--route); color: var(--route); }
 div.map .block.lit { border-color: var(--route); }
 /* A pick dragged as one (gateway-drag.js group): the picked blocks fade; their ghost rides in a
    page-wide map, a stack of three cards with its count. */
@@ -1286,11 +1313,12 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-hold { position: relative; margin: 0 0 26px; }
 .ctx-bar { position: relative; height: 56px; border: 1px solid var(--wire); border-radius: 7px; overflow: hidden; background: var(--inset); }
 .ctx-seg { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--inset); cursor: pointer; transition: background-color var(--t-fast) ease; }
-.ctx-seg.sent { background-color: var(--link); }
+/* --heat (0 to 1, context.js): a skill's size against the largest on the first side, grey to orange. */
+.ctx-seg.sent { background-color: color-mix(in oklab, var(--brand) calc(var(--heat, 0) * 100%), var(--link)); }
 .ctx-seg.over { background-image: var(--hatch); border-right-color: var(--lamp-warn-soft); }
 .ctx-seg.names { background-color: var(--panel-raised); cursor: default; }
 .ctx-seg.hot { background-color: var(--ink-3); }
-.ctx-seg.sel { background-color: var(--route); background-image: none; }
+.ctx-seg.sel { background-color: var(--ink); background-image: none; }
 .ctx-limit { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); pointer-events: none; }
 .ctx-chip { position: absolute; top: 29px; transform: translate(-50%, -50%); padding: 2px 8px; border: 1px solid var(--wire); border-radius: 6px; background: var(--panel); font-size: 11px; font-weight: 500; white-space: nowrap; pointer-events: none; }
 .ctx-flag { position: absolute; bottom: calc(100% + 6px); font-size: 11px; font-weight: 500; color: var(--ink); white-space: nowrap; pointer-events: none; }
@@ -1305,14 +1333,14 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-side.calm h3 i { background: none; box-shadow: inset 0 0 0 1px var(--link); }
 .ctx-cloud { display: flex; flex-wrap: wrap; gap: 5px; }
 .ctx-apart { max-width: 900px; margin-top: 10px; }
-.ctx-pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border: 1px solid var(--wire); border-radius: 7px; background: var(--panel-raised); color: var(--ink); font: inherit; font-size: 11.5px; white-space: nowrap; cursor: pointer; transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease; }
-.ctx-pill u { text-decoration: none; font-size: 10px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+.ctx-pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border: 1px solid color-mix(in oklab, var(--brand) calc(var(--heat, 0) * 100%), var(--wire)); border-radius: 7px; background: color-mix(in oklab, var(--brand) calc(var(--heat, 0) * var(--heat-fill)), var(--panel-raised)); color: var(--ink); font: inherit; font-size: 11.5px; white-space: nowrap; cursor: pointer; transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease; }
+.ctx-pill u { text-decoration: none; font-size: 10px; font-weight: calc(400 + var(--heat, 0) * 200); color: color-mix(in oklab, var(--route) calc(var(--heat, 0) * 100%), var(--ink-4)); font-variant-numeric: tabular-nums; }
 .lo .ctx-pill, .ctx-apart .ctx-pill { background: transparent; color: var(--ink-3); }
 .ctx-pill:hover, .ctx-pill.hot { border-color: var(--ink-3); }
 .ctx-pill.chg { border-style: dashed; border-color: var(--preview-line); }
 .ctx-pill.back { border-color: var(--preview-line); background: var(--preview-fill); color: var(--ink); }
 .ctx-pill.lost { border-color: var(--lamp-warn); color: var(--ink); }
-.ctx-pill.sel { border-color: var(--route); background: var(--route-soft); color: var(--ink); }
+.ctx-pill.sel { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); color: var(--ink); }
 /* A skill's switch in Details: the pressed state rests raised; dashed while its row waits in the tray. */
 .ctx-switch { justify-self: start; }
 .ctx-switch button[aria-pressed="true"] { background: var(--panel-raised); box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
@@ -1331,6 +1359,8 @@ html.map-entrance::view-transition-new(page) { animation: none; }
   /* No sweep: a still line says a long scan runs. */
   .topbar.scanning:not(.progress)::after { transform: none; opacity: 0.6; }
   .topbar.progress::after { transition: none; }
+  /* A stack's strips stay put on hover. */
+  div.map .block.stack:hover > .stack-strip { translate: none; }
   *, *::before, *::after { animation: none !important; transition-property: opacity, color, background-color !important; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

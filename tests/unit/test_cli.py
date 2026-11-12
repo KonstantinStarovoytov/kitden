@@ -197,6 +197,64 @@ def test_open_with_a_running_page_opens_it_and_starts_nothing(tmp_path, monkeypa
     assert "http://127.0.0.1:47899/?token=tok" in capsys.readouterr().out
 
 
+def _other_version_page(home, version, stops=True):
+    """A page of another Kitden version in its own process, as after `brew upgrade` in a
+    terminal; `version` None is a page from before records had one."""
+    script = (
+        "import json, signal, sys, time\n"
+        "from pathlib import Path\n"
+        "from kitden import page\n"
+        "home = Path(sys.argv[1])\n"
+        "if sys.argv[3] == 'no': signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "lock = page.PageLock(home)\n"
+        "assert lock.acquire()\n"
+        "page.write_record(home, port=47897, token='old', background=True)\n"
+        "path = page.data_dir(home) / page.RECORD\n"
+        "record = json.loads(path.read_text())\n"
+        "record.pop('version')\n"
+        "if sys.argv[2]: record['version'] = sys.argv[2]\n"
+        "path.write_text(json.dumps(record))\n"
+        "print('ready', flush=True)\n"
+        "time.sleep(60)\n"
+    )
+    child = subprocess.Popen(
+        [sys.executable, "-c", script, str(home), version or "", "yes" if stops else "no"],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    assert child.stdout.readline().strip() == "ready"
+    return child
+
+
+@pytest.mark.parametrize("version", ["0.0.1", None])
+def test_open_replaces_a_page_of_another_version(tmp_path, monkeypatch, version):
+    old = _other_version_page(tmp_path, version)
+    locks = []
+    monkeypatch.setattr(page, "start_background", lambda home, arg: locks.append(_hold_page(home)))
+    opened = []
+    monkeypatch.setattr(cli.webbrowser, "open", opened.append)
+    try:
+        assert main(["open", "--home", str(tmp_path)]) == 0
+        assert old.wait(timeout=5) is not None
+    finally:
+        old.kill()
+        for lock in locks:
+            lock.release()
+    assert opened == ["http://127.0.0.1:47899/?token=tok"]
+
+
+def test_open_says_so_when_the_old_version_page_does_not_stop(tmp_path, monkeypatch, capsys):
+    old = _other_version_page(tmp_path, "0.0.1", stops=False)
+    monkeypatch.setattr(page, "TAKE_OVER_SECONDS", 0.3)
+    monkeypatch.setattr(page, "start_background", lambda *a: pytest.fail("started a second page"))
+    try:
+        assert main(["open", "--home", str(tmp_path)]) == cli.EXIT_NOT_STARTED
+    finally:
+        old.kill()
+        old.wait()
+    assert "did not stop" in capsys.readouterr().err
+
+
 def test_open_starts_nothing_while_a_page_is_still_starting(tmp_path, monkeypatch):
     """The page holds the lock but has not written its record yet: no second page starts."""
     lock = page.PageLock(tmp_path)

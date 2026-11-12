@@ -133,7 +133,9 @@ const { allBody, libraryRowWords, openLocalLibraryAdd: openLibraryAdd } = await 
 const { initLibraryDetails } = await import('../../src/kitden/web/static/js/library-details.js');
 const { libraryTree, withWaiting } = await import('../../src/kitden/web/static/js/library-map.js');
 const { renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
-const { layoutTree } = await import('../../src/kitden/web/static/js/map.js');
+const { layoutTree: layoutAsIs } = await import('../../src/kitden/web/static/js/map.js');
+// The tests here look at the cards, so every group is open out of its stack.
+const layoutTree = (tree, options = {}) => layoutAsIs(tree, { spread: new Set(tree.blocks.filter((b) => b.folds).map((b) => b.id)), ...options });
 const { closePanel, initPanel, isPanelOpen, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, state } = await import('../../src/kitden/web/static/js/store.js');
@@ -192,6 +194,10 @@ const press = async (target) => { fire(target, 'click'); await wait(); await wai
 const pointer = (type, x, y) => { for (const fn of [...(docHeard[type] || [])]) fn({ type, clientX: x, clientY: y }); };
 const bodies = () => tray.rows.map((r) => r.body);
 
+// Most tests look at the cards: every group opens out of its stack first.
+function spreadAll(box) {
+  for (const n of walk(box).filter((one) => /^block:stack:.*:all$/.test(one.dataset.focus || ''))) n.listeners.click[0]({ target: n });
+}
 function showMap(sample = MAP) {
   Object.assign(data, { libraryMap: sample, projects: [] });
   data.scope.libraryMap = '';
@@ -199,6 +205,7 @@ function showMap(sample = MAP) {
   main.replaceChildren();
   setHint('');
   renderLibrary(main);
+  if (map()) spreadAll(map());
   settle();
   return map();
 }
@@ -449,16 +456,15 @@ const shownOn = (box, id) => Boolean(node(box, `block:${id}`));
 test('in a group that pages, a new card stays in view and an item on another page comes to it', async () => {
   const { box } = await open(BIG, [...OFFERS, ZETA]);
   try {
-    assert.ok(shownOn(box, 'more:group:marketplace:demo-market'), 'the group pages');
+    assert.ok(shownOn(box, 'stack:group:marketplace:demo-market:after'), 'the group pages');
     await press(row('db-tools'));
     await flush();
-    // The new card is never behind "N more", and the group pages as it did.
+    // The new card is never in a stack, and the group pages as it did.
     const id = 'item:new:plugin:db-tools@demo-market';
     assert.ok(shownOn(box, id), 'the new card shows');
     const layout = layoutTree(withWaiting(libraryTree(BIG), tray.rows, ''), { open: new Set(), narrow: false });
     assert.ok(layout.blocks.some((b) => b.id === id));
-    assert.ok(layout.blocks.some((b) => b.id === 'more:group:marketplace:demo-market'));
-    assert.equal(text(node(box, 'block:more:group:marketplace:demo-market')), '2 more');
+    assert.equal(layout.blocks.find((b) => b.id === 'stack:group:marketplace:demo-market:after').holds.length, 2);
     // zeta is on the second page: its add brings that page.
     assert.equal(shownOn(box, 'item:p7'), false);
     await press(row('zeta'));

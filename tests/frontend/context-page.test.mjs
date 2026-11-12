@@ -464,6 +464,24 @@ test('the two sides list the pills by side, and hovering one lights its piece an
   assert.deepEqual(pills().filter((p) => p.classList.contains('hot')).map((p) => p.dataset.skill), ['alpha']);
 });
 
+test('a skill on the first side warms with its size against the largest there, pill and piece alike', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(TIGHT, CODEX, CURSOR));
+  const heat = (node) => node.style['--heat'];
+  assert.deepEqual(['alpha', 'beta'].map((name) => [heat(pillOf(name)), heat(pieceOf(name))]), [['1.00', '1.00'], ['0.50', '0.50']]);
+  // Name only stays grey: its pill and its piece past the limit.
+  assert.equal(heat(pillOf('gamma')), undefined);
+  assert.equal(heat(pieceOf('gamma', 'over')), undefined);
+  // On a window where gamma is sent too, it warms against alpha.
+  const wide = { ...TIGHT.windows[0], tag: 'Estimate', result: { ...TIGHT.windows[0].result, sent: { alpha: 4000, beta: 2000, gamma: 3000 }, over: {}, misfit: null } };
+  show(answer({ ...TIGHT, windows: [TIGHT.windows[0], wide] }, CODEX, CURSOR));
+  await fire(cards()[1], 'click');
+  assert.equal(heat(pillOf('gamma')), '0.75');
+  assert.equal(heat(pieceOf('gamma')), '0.75');
+  await fire(cards()[0], 'click');
+});
+
 test('Details shows no size for a skill whose description Kitden could not read', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };

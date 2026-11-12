@@ -140,8 +140,10 @@ export function renderContext(main, { again = false } = {}) {
   // A message beside windows (the estimate could not be checked) is a note under the verdict.
   if (windows.length && card.message) main.append(el("p", "ctx-note", card.message));
   const result = shown ? (after ? after.result : shown.result) : null;
-  if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`));
-  if (card.skills.length) main.append(sidesFor(card, result, after, Boolean(after) || index > 0));
+  const estimate = Boolean(after) || index > 0;
+  const heat = heatOf(card, result, estimate);
+  if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`, heat));
+  if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
   if (card.how.length) main.append(howFor(card.how));
   markAll();
   followDraft();
@@ -152,8 +154,8 @@ export function renderContext(main, { again = false } = {}) {
 // The context window as a thin strip whose small slice opens into the skill list's bar: a piece
 // per skill as wide as what was sent, the names' characters as one piece, then past the limit
 // line, hatched, what was not sent (Codex: cut off). The scale is the limit (or what was sent,
-// when it is larger) plus what did not fit.
-function zoom(card, w, r, at) {
+// when it is larger) plus what did not fit. A sent piece takes its skill's heat.
+function zoom(card, w, r, at, heat) {
   const sent = r.sent || {};
   const over = r.over || {};
   const total = (part) => Object.values(part).reduce((sum, n) => sum + n, 0);
@@ -189,6 +191,7 @@ function zoom(card, w, r, at) {
       place(piece, `${kind}:${skill.name}`, kind === "sent" ? used : past, size);
       if (kind === "sent") used += size;
       else past += size;
+      if (kind === "sent" && heat.has(skill.name)) piece.style.setProperty("--heat", heat.get(skill.name));
       lights(piece, skill.name);
       piece.addEventListener("click", () => openSkill(card.client, skill.name));
       bar.append(piece);
@@ -263,7 +266,16 @@ function sideOf(card, skill, result, estimate) {
   return skill.name in (result.sent || {}) ? 0 : 1;
 }
 
-function sidesFor(card, result, after, estimate) {
+// How warm each skill on the first side is, grey to orange: its size against the largest there,
+// "0.00" to "1.00". The sizes to weigh at a glance; the other side stays grey.
+function heatOf(card, result, estimate) {
+  const states = draftFrom(current("context"))[card.client] || {};
+  const first = card.skills.filter((s) => states[s.name] !== "off" && sideOf(card, s, result, estimate) === 0);
+  const top = Math.max(0, ...first.map((s) => s.size));
+  return new Map(first.map((s) => [s.name, (top ? s.size / top : 0).toFixed(2)]));
+}
+
+function sidesFor(card, result, after, estimate, heat) {
   const states = draftFrom(current("context"))[card.client] || {};
   const box = el("div", "ctx-sides");
   const clouds = card.sides.map((name, i) => {
@@ -281,7 +293,7 @@ function sidesFor(card, result, after, estimate) {
     // A skill the tray turns off leaves the list.
     if (states[skill.name] === "off") continue;
     const side = sideOf(card, skill, result, estimate);
-    (clouds[side] || apart).append(pillFor(card, skill, states, after));
+    (clouds[side] || apart).append(pillFor(card, skill, states, after, heat));
   }
   const wrap = el("div");
   wrap.append(box);
@@ -289,11 +301,13 @@ function sidesFor(card, result, after, estimate) {
   return wrap;
 }
 
-// A skill's pill: its name and size. A dashed line while the tray changes it; after Apply, a skill
-// that gets its description is filled, one that loses it is lit amber.
-function pillFor(card, skill, states, after) {
+// A skill's pill: its name and size, warmed by its heat on the first side. A dashed line while the
+// tray changes it; after Apply, a skill that gets its description is filled, one that loses it is
+// lit amber.
+function pillFor(card, skill, states, after, heat) {
   const node = button("", () => openSkill(card.client, skill.name), "ctx-pill");
   node.dataset.skill = skill.name;
+  if (heat.has(skill.name)) node.style.setProperty("--heat", heat.get(skill.name));
   node.dataset.focus = `skill:${card.client}:${skill.name}`;
   node.append(el("span", null, skill.shown));
   if (skill.size) node.append(el("u", null, fmt(skill.size)));

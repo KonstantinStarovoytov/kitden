@@ -10,6 +10,9 @@ they can run code with your permissions. Undo does not reverse actions a tool al
 
 Open **Library** and choose **All projects** or one project. **List → Differences** shows
 what differs between Claude Code, Codex and Cursor. Click an item for its **Details**.
+On the map, a group of two or more starts folded as a stack of cards. Press a stack to open it;
+a big group shows five at a time, with the rest in the stack below. **Collapse** folds it again.
+The Gateway's groups work the same way.
 
 | What | How to manage it |
 | --- | --- |
@@ -29,7 +32,9 @@ the skill list from the last chat log, plus the settings, skill files and use co
 to size and check that list; it keeps none of it and sends nothing. Estimates for another
 window, or for a change you are about to make, show only while Kitden's rule rebuilds that last
 list. Claude Code's log does not say the window, so Kitden names it only when one window alone
-gives that list. Cursor gets no verdict, because Kitden cannot see what Cursor sends. In a skill's
+gives that list. Cursor gets no verdict, because Kitden cannot see what Cursor sends. Skills
+whose descriptions are sent go from grey to orange with the length of their description, so the
+few that take most of the list stand out. In a skill's
 **Details**, switch it to **On**, **Name only** (Claude Code) or **Off** where the client
 allows it; built-in skills, Claude Code plugin skills and Cursor have no switch. The change goes through preview,
 **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list

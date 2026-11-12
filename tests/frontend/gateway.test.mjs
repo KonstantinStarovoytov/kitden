@@ -10,11 +10,15 @@ globalThis.window = {
   addEventListener: (type, fn) => { (windowHeard[type] ||= []).push(fn); },
   removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
 };
-const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, letGoCloses, linkRemoval, linkTip, listRows, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, letGoCloses, linkRemoval, linkTip, listRows, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, pressRow, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { heldServer, offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, litFor, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree: layoutAsIs, linkClass, litFor, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+// The tests here look at the servers, so every group is open out of its stack unless a test says
+// otherwise with its own `spread`.
+const openAll = (tree) => new Set(tree.blocks.filter((b) => b.folds).map((b) => b.id));
+const layoutTree = (tree, options = {}) => layoutAsIs(tree, { spread: openAll(tree), ...options });
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, setBusy, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
@@ -333,16 +337,15 @@ test('a row that stays gets no Move in…', () => {
   assert.equal(none.find((r) => r.id === 'outside:move:github').action, 'open');
 });
 
-test('the large sample opens in List', () => {
+test('the large sample opens on the map, its groups folded', () => {
   const view = {
     ...MEDIUM_VIEW,
     gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: Array.from({ length: 12 }, (_, i) => ({ name: `held-${i}`, kind: 'remote', state: 'on', tool_list: [] })) }],
     groups: { move: Array.from({ length: 157 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: [], stays: null })), local: [], plugin: [] },
   };
-  const LARGE_SERVER_COUNT = serverCount(view);
-  assert.equal(LARGE_SERVER_COUNT, 169);
-  assert.equal(viewMode({ mode: '' }, LARGE_SERVER_COUNT), 'list');
-  assert.equal(viewMode({ mode: '' }, serverCount(MEDIUM_VIEW)), 'map');
+  assert.equal(viewMode({ mode: '' }), 'map');
+  const folded = layoutAsIs(gatewayTree(view, OPTS), { open: new Set(), narrow: false });
+  assert.deepEqual(folded.blocks.filter((b) => b.kind === 'stack').map((b) => b.id), ['stack:group:kitden:remote:all', 'stack:group:outside:all']);
 });
 
 // A first run: every client found, none with a kitden entry, an empty Kitden gateway, and two
@@ -508,13 +511,13 @@ test('in atlas the docs block says This project', () => {
   assert.equal(block(gatewayTree(view, OPTS), 'outside:move:docs').tag, null);
 });
 
-test('N more is as high as the blocks it stands for', () => {
+test('every server group folds; a stack of outside servers takes their height', () => {
   const rows = Array.from({ length: 8 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: ['x'], stays: null, override: false }));
   const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { move: rows, local: [], plugin: [] } }, OPTS);
-  const more = layoutTree(tree, { open: new Set(), narrow: false }).blocks.find((b) => b.kind === 'more');
-  assert.equal(more.id, 'more:group:outside');
-  // An outside server's block is 50 high, not a plain 60.
-  assert.equal(more.h, 50);
+  assert.ok(tree.blocks.filter((b) => b.kind === 'group').every((b) => b.folds));
+  const stack = layoutTree(tree, { open: new Set(), spread: new Set(), narrow: false }).blocks.find((b) => b.id === 'stack:group:outside:all');
+  // An outside server's block is 50 high, not a plain 60: two strips of 18 and one whole card.
+  assert.equal(stack.h, 2 * 18 + 50);
 });
 
 test('the map goes narrow by the window rule, or where the wide map does not fit its box', () => {
@@ -615,7 +618,7 @@ test('a search match turns its group to the page that holds it; a match on the p
   assert.ok(!shownWith(tree, new Map(), found.open).includes('outside:move:direct-11'));
   const pages = pagesWith(tree, new Map(), found.matches);
   assert.deepEqual([...pages], [['group:outside', 2]]);
-  assert.ok(shownWith(tree, pages).includes('outside:move:direct-11') && shownWith(tree, pages).includes('more:group:outside'));
+  assert.ok(shownWith(tree, pages).includes('outside:move:direct-11') && shownWith(tree, pages).includes('stack:group:outside:before'));
   // Every server matches "direct", and the page shown has some: nothing turns.
   assert.equal(pagesWith(tree, pages, findIn(tree, 'direct').matches), pages);
   // A selection that is no block (a link's key) turns nothing.
@@ -2085,23 +2088,23 @@ test('a moving server is drawn once, in the gateway, and the Outside list closes
 });
 
 // Review Focus
-test('a server behind N more moves up into the freed place and back after a take-out', async () => {
+test('a server in the stack below moves up into the freed place and back after a take-out', async () => {
   await freshTray();
   const many = Array.from({ length: 8 }, (_, i) => ({ name: `s${i + 1}`, clients: ['codex'], columns: ['codex'], items: [`i${i + 1}`], client_items: { codex: [`i${i + 1}`] }, stays: null }));
   const view = { ...MEDIUM_VIEW, groups: { move: many, local: [], plugin: [] } };
   const shown = () => {
     const tree = gatewayTree(view, { ...OPTS, rows: rowsOnMap(tray) });
     const layout = layoutTree(tree, { open: new Set(), narrow: false });
-    return layout.blocks.filter((b) => b.id.startsWith('outside:') || b.id.startsWith('more:')).map((b) => (b.kind === 'more' ? b.name : b.id.split(':').at(-1)));
+    return layout.blocks.filter((b) => b.id.startsWith('outside:') || b.kind === 'stack').map((b) => (b.kind === 'stack' ? `${b.role} ${b.holds.length}` : b.id.split(':').at(-1)));
   };
-  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', '3 more']);
+  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', 'after 3']);
   queue(PREVIEW, batch('c1'));
   await addToTray(dropBody(many[1], view));
   // s6 moves up into the place s2 left.
-  assert.deepEqual(shown(), ['s1', 's3', 's4', 's5', 's6', '2 more']);
+  assert.deepEqual(shown(), ['s1', 's3', 's4', 's5', 's6', 'after 2']);
   await takeOut(tray.rows[0].key);
   await flush();
-  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', '3 more']);
+  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', 'after 3']);
   await freshTray();
 });
 
@@ -3127,4 +3130,23 @@ test('a row that waits for access is not one the tray still asks, so its block l
   assert.equal(rowAsked(t([{ key: 'k', part: null, waits: { server: 'neon' } }]), 'k'), false);
   assert.equal(rowAsked(t([{ key: 'k', part: { id: 'p' }, waits: null }]), 'k'), false);
   assert.equal(rowAsked(t([{ key: 'k', part: null, waits: null }], 'ready'), 'k'), false);
+});
+
+test('a server with a rule waiting for it or its tools never goes into a stack', () => {
+  const files = MEDIUM_VIEW.gateways[0].servers[0];
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [{ ...files, tool_list: [tool('read_file', 'on', 'reads')] }] }] };
+  const server = (options) => gatewayTree(view, { ...OPTS, ...options }).blocks.find((b) => b.id === 'held:kitden:files');
+  const saved = data.projects;
+  data.projects = [{ id: 'a', path: '/w/atlas' }];
+  try {
+    assert.ok(!server({}).pinned);
+    // A whole-server rule for another project, a tool rule for another project, a tool rule here.
+    assert.equal(server({ rows: [trayRow(ruleBody('files', null, 'off', 'a'))] }).pinned, true);
+    assert.equal(server({ rows: [trayRow(ruleBody('files', 'read_file', 'off', 'a'))] }).pinned, true);
+    assert.equal(server({ rows: [trayRow(ruleBody('files', 'read_file', 'on', null))] }).pinned, true);
+    // A row with no answer yet changes nothing.
+    assert.ok(!server({ rows: [trayRow(ruleBody('files', null, 'off', 'a'), null)] }).pinned);
+  } finally {
+    data.projects = saved;
+  }
 });

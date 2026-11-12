@@ -28,6 +28,8 @@ jobs:
       actions: read # today's runs are counted
     with:
       model: claude-sonnet-5-5
+      # Reviews a day: the repository variable AGENTS_REVIEW_DAILY_CAP, or 20 without it.
+      daily_cap: ${{ fromJSON(vars.AGENTS_REVIEW_DAILY_CAP || '20') }}
       app_client_id: ${{ vars.AGENTS_APP_CLIENT_ID }} # the Lantern app posts the comment
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
