@@ -63,12 +63,13 @@ def newer(current: str, latest: str | None) -> bool:
 
 
 def _read(path: Path, method: str, now: datetime) -> tuple[bool, str | None]:
-    """(fresh, latest): fresh when a check for this method was made in the last 24 hours."""
+    """(fresh, latest): fresh when any check was made in the last 24 hours, so Kitden asks at most
+    once a day even with a uv and a Homebrew copy. The answer counts only for its own method."""
     try:
         record = json.loads(path.read_text())
         checked = datetime.fromisoformat(record["checked"])
-        latest = record["latest"]
-        fresh = record["method"] == method and timedelta(0) <= now - checked < EVERY
+        latest = record["latest"] if record["method"] == method else None
+        fresh = timedelta(0) <= now - checked < EVERY
     except (OSError, ValueError, KeyError, TypeError):
         return False, None
     return fresh, _stable(latest)
@@ -93,9 +94,9 @@ def _write(home: Path, method: str, now: datetime, latest: str | None) -> None:
 def cached_latest(
     home: Path, method: str, now: datetime, fetch: Callable[[str], bytes] = fetch
 ) -> str | None:
-    """The latest version, asking the network only when the last check is over 24 hours old or
-    was for another install method. A failed check is remembered too, so an offline machine
-    does not try on every page load."""
+    """The latest version, asking the network only when the last check is over 24 hours old.
+    A check for the other install method counts too (None until the next day), and a failed
+    check is remembered, so an offline machine does not try on every page load."""
     fresh, latest = _read(data_dir(home) / RECORD, method, now)
     if fresh:
         return latest

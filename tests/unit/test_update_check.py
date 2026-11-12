@@ -86,10 +86,15 @@ def test_checks_at_most_once_a_day(tmp_path):
     assert len(calls) == 2
 
 
-def test_a_new_method_asks_again(tmp_path):
+def test_another_method_waits_for_the_same_day_limit(tmp_path):
+    # With uv and Homebrew copies, pages from both still ask at most once a day; the other
+    # copy learns nothing until the next day's check.
     calls = []
     cached_latest(tmp_path, "uv", NOW, lambda url: calls.append(url) or _pypi("0.7.3"))
-    cached_latest(tmp_path, "brew", NOW, lambda url: calls.append(url) or b"kitden-0.7.2.tar.gz")
+    tap = lambda url: calls.append(url) or b"kitden-0.7.2.tar.gz"  # noqa: E731
+    assert cached_latest(tmp_path, "brew", NOW + timedelta(hours=2), tap) is None
+    assert len(calls) == 1
+    assert cached_latest(tmp_path, "brew", NOW + timedelta(hours=25), tap) == "0.7.2"
     assert len(calls) == 2
 
 
