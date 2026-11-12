@@ -7,6 +7,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **`kitden open` after an update in a terminal:** when the page still running is from another
+  Kitden version, `kitden open` stops it and starts the new one, instead of giving a link to a
+  page that can only fail.
+
 ### 0.8.0
 
 - **Update from the page:** when a newer version is out, the rail shows an Update button beside
