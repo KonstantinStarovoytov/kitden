@@ -74,6 +74,8 @@
   --lamp-warn-soft: rgba(151, 89, 10, 0.10);
   /* Past the limit on the Context picture: amber hatching. */
   --hatch: repeating-linear-gradient(135deg, rgb(151 89 10 / .5) 0 2px, transparent 2px 6px);
+  /* The fill of the warmest skill pill on Context (--heat 1): brand orange over the pill. */
+  --heat-fill: 24%;
   --lamp-off: #80868f;
   /* The door's light in the logo's gesture (logo.js): the warm sand of the mockup, never a text colour. */
   --hearth: #e6b46d;
@@ -117,7 +119,7 @@
     --route: #f09a7c; --route-soft: #382a27;
     --success: #47c27a; --on-success: #0b1a12;
     --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886; --hearth: #f3cc8f;
-    --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px);
+    --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px); --heat-fill: 30%;
     --danger: #f07070; --on-danger: #2a0d0d; --focus: #f09a7c;
     --diff-add: #47c27a; --diff-del: #f07070;
     --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
@@ -134,7 +136,7 @@
   --route: #f09a7c; --route-soft: #382a27;
   --success: #47c27a; --on-success: #0b1a12;
   --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886; --hearth: #f3cc8f;
-  --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px);
+  --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px); --heat-fill: 30%;
   --danger: #f07070; --on-danger: #2a0d0d; --focus: #f09a7c;
   --diff-add: #47c27a; --diff-del: #f07070;
   --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
@@ -1311,11 +1313,12 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-hold { position: relative; margin: 0 0 26px; }
 .ctx-bar { position: relative; height: 56px; border: 1px solid var(--wire); border-radius: 7px; overflow: hidden; background: var(--inset); }
 .ctx-seg { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--inset); cursor: pointer; transition: background-color var(--t-fast) ease; }
-.ctx-seg.sent { background-color: var(--link); }
+/* --heat (0 to 1, context.js): a skill's size against the largest on the first side, grey to orange. */
+.ctx-seg.sent { background-color: color-mix(in oklab, var(--brand) calc(var(--heat, 0) * 100%), var(--link)); }
 .ctx-seg.over { background-image: var(--hatch); border-right-color: var(--lamp-warn-soft); }
 .ctx-seg.names { background-color: var(--panel-raised); cursor: default; }
 .ctx-seg.hot { background-color: var(--ink-3); }
-.ctx-seg.sel { background-color: var(--route); background-image: none; }
+.ctx-seg.sel { background-color: var(--ink); background-image: none; }
 .ctx-limit { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); pointer-events: none; }
 .ctx-chip { position: absolute; top: 29px; transform: translate(-50%, -50%); padding: 2px 8px; border: 1px solid var(--wire); border-radius: 6px; background: var(--panel); font-size: 11px; font-weight: 500; white-space: nowrap; pointer-events: none; }
 .ctx-flag { position: absolute; bottom: calc(100% + 6px); font-size: 11px; font-weight: 500; color: var(--ink); white-space: nowrap; pointer-events: none; }
@@ -1330,14 +1333,14 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-side.calm h3 i { background: none; box-shadow: inset 0 0 0 1px var(--link); }
 .ctx-cloud { display: flex; flex-wrap: wrap; gap: 5px; }
 .ctx-apart { max-width: 900px; margin-top: 10px; }
-.ctx-pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border: 1px solid var(--wire); border-radius: 7px; background: var(--panel-raised); color: var(--ink); font: inherit; font-size: 11.5px; white-space: nowrap; cursor: pointer; transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease; }
-.ctx-pill u { text-decoration: none; font-size: 10px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+.ctx-pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border: 1px solid color-mix(in oklab, var(--brand) calc(var(--heat, 0) * 100%), var(--wire)); border-radius: 7px; background: color-mix(in oklab, var(--brand) calc(var(--heat, 0) * var(--heat-fill)), var(--panel-raised)); color: var(--ink); font: inherit; font-size: 11.5px; white-space: nowrap; cursor: pointer; transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease; }
+.ctx-pill u { text-decoration: none; font-size: 10px; font-weight: calc(400 + var(--heat, 0) * 200); color: color-mix(in oklab, var(--route) calc(var(--heat, 0) * 100%), var(--ink-4)); font-variant-numeric: tabular-nums; }
 .lo .ctx-pill, .ctx-apart .ctx-pill { background: transparent; color: var(--ink-3); }
 .ctx-pill:hover, .ctx-pill.hot { border-color: var(--ink-3); }
 .ctx-pill.chg { border-style: dashed; border-color: var(--preview-line); }
 .ctx-pill.back { border-color: var(--preview-line); background: var(--preview-fill); color: var(--ink); }
 .ctx-pill.lost { border-color: var(--lamp-warn); color: var(--ink); }
-.ctx-pill.sel { border-color: var(--route); background: var(--route-soft); color: var(--ink); }
+.ctx-pill.sel { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); color: var(--ink); }
 /* A skill's switch in Details: the pressed state rests raised; dashed while its row waits in the tray. */
 .ctx-switch { justify-self: start; }
 .ctx-switch button[aria-pressed="true"] { background: var(--panel-raised); box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
