@@ -6,7 +6,7 @@
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
-import { collapseGroup, findIn, groupOfStack, groupsWith, layoutTree, linkKey, litFor, litFrom, newBlocks, pagesNow, pagesWith, pressStack, shownFound, turnPage, turnWords } from "./map.js";
+import { collapseGroup, findIn, groupOfStack, groupsWith, layoutTree, linkKey, litFor, litFrom, newBlocks, pagesNow, pagesWith, pressStack, shownFound, turnWords } from "./map.js";
 import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
 import { drawChip, glidePill } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
@@ -730,16 +730,13 @@ function foldPlugin(id) {
   drawOrLetGo();
 }
 
-// A press on a block. "N more" turns its group's page. A press that folded a plugin, or a second
-// press on the selected block, lets go. Any other block is selected: its path lights.
+// A press on a block. A stack opens or turns its group, and Collapse folds it. A press that folded
+// a plugin, or a second press on the selected block, lets go. Any other block is selected: its
+// path lights.
 function pressBlock(id) {
   // The Add a plugin card opens the add panel; focus comes back to the card.
   if (id === ADD_CARD.id) {
     pressLibraryAdd(withFocusKey($("#main"), `block:${id}`));
-    return;
-  }
-  if (id.startsWith("more:")) {
-    turnOnMap(id);
     return;
   }
   if (id.startsWith("stack:") || id.startsWith("collapse:")) {
@@ -763,14 +760,6 @@ function pressBlock(id) {
   onMap.selected = id;
   drawMap({ lightLater: unfolds });
   if (selectHook) selectHook(id);
-}
-
-// "N more" shows the next page in place, and a screen reader hears which ones show. A selection
-// the turn hides is let go.
-function turnOnMap(id) {
-  onMap.pages = turnPage(onMap.model, onMap.pages, id);
-  say(turnWords(onMap.model, onMap.pages, id));
-  drawOrLetGo();
 }
 
 // A press on a stack opens its group or turns its page, and Collapse folds the group. A turn says

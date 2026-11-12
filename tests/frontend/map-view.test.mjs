@@ -662,42 +662,37 @@ const PAGED = {
 const paged = (page) => layoutTree(PAGED, { open: new Set(), pages: new Map([['g', page]]), narrow: false });
 const words = (n) => walk(n).map((child) => child.textContent).join('');
 
-test('a page turn folds the five shown into their caption in 180 ms IN3 and unfolds the next five as tools do', async () => {
+test('a page turn slides the five shown into the stack above and the next five out of the stack below', async () => {
   const v = view();
-  await v.draw(PAGED, paged(0), { motion: 'none' });
-  const [s0, more] = [v.node('s0'), v.node('more:g')];
-  const from = pos(s0);
-  const cap = place(paged(1), 'g');
-  v.draw(PAGED, paged(1), {});
-  // Each of the five shown shrinks toward its caption.
-  tick(90);
-  assert.ok(near(pos(s0).s, 0.9125)); assert.equal(s0.style.opacity, '0.875');
-  assert.ok(near(pos(s0).y, from.y + (cap.y + cap.h / 2 - 25 - from.y) * 0.125));
-  // The next five wait while their solid links draw (170 ms), then fade in 120 ms OUT3, 15 ms apart.
-  tick(80);
-  assert.equal(v.node('s5').style.opacity, '0');
-  assert.deepEqual(v.node('c1>s5').animations[0].keyframes, [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }]);
-  tick(60);
-  assert.equal(v.node('s0'), null);
-  assert.equal(v.node('s5').style.opacity, '0.875');
-  // A dotted line comes in with its block: it is not drawn as a solid line first.
+  const first = paged(0);
+  await v.draw(PAGED, first, { motion: 'none' });
+  const s0 = v.node('s0');
+  const below = place(first, 'stack:g:after');
+  const next = paged(1);
+  v.draw(PAGED, next, {});
+  // The next five start where the stack below stood, unseen.
+  assert.deepEqual([pos(v.node('s5')).x, pos(v.node('s5')).y, v.node('s5').style.opacity], [below.x, below.y, '0']);
+  tick(300);
+  const above = place(next, 'stack:g:before');
+  assert.deepEqual([pos(s0).x, pos(s0).y], [above.x, above.y]);
+  // A dotted line comes with its block: it is not drawn in as a solid line first.
   assert.equal(v.node('c1>s6').animations.length, 0);
   settle();
-  assert.deepEqual([v.node('s6').style.opacity, v.node('more:g'), words(v.node('g'))], ['', more, 'Remote · 6–10 of 12']);
+  assert.deepEqual([v.node('s0'), v.node('s6').style.opacity, words(v.node('g'))], [null, '', 'Remote · 6–10 of 12']);
 });
 
 test('under reduced motion a turn lands at once', async () => {
   reduce(true);
   const v = view();
   await v.draw(PAGED, paged(0), {});
-  const more = v.node('more:g');
-  more.focus();
+  const after = v.node('stack:g:after');
+  after.focus();
   await v.draw(PAGED, paged(1), {});
   assert.deepEqual([v.node('s0'), v.node('s5').style.opacity, v.node('s5').style.transform], [null, '', '']);
   assert.ok(walk(v.area).every((n) => !n.animations?.length));
-  // "N more" is the same button, with its new words, and keeps focus.
-  assert.deepEqual([v.node('more:g'), document.activeElement], [more, more]);
-  assert.equal(more.getAttribute('aria-label'), '2 more');
+  // The stack below is the same button, with its new words, and keeps focus.
+  assert.deepEqual([v.node('stack:g:after'), document.activeElement], [after, after]);
+  assert.equal(after.getAttribute('aria-label'), 'Show 2 more: s10, s11');
 });
 
 test('under reduced motion every block and link is at its end at once', async () => {

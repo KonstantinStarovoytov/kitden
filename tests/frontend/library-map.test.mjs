@@ -263,19 +263,19 @@ test('a big group and a big plugin page in place and nothing overflows', () => {
   const model = libraryTree(LARGE);
   const layout = layoutTree(model, { open, spread: new Set(['group:marketplace:bench-market', 'group:skills']), narrow: false });
   const shown = new Map(layout.blocks.map((b) => [b.id, b]));
-  // Plugins and skills page five at a time with a stack of the rest under them, the Inside column
-  // eight at a time with "N more".
+  // Plugins and skills page five at a time, the Inside column eight at a time, each with a stack of
+  // the rest under them.
   assert.equal(layout.blocks.filter((b) => b.kind === 'plugin').length, 5);
   assert.equal(shown.get('stack:group:marketplace:bench-market:after').holds.length, 25);
   assert.equal(shown.get('group:marketplace:bench-market').name, 'bench-market · 1–5 of 30');
   assert.equal(layout.blocks.filter((b) => b.kind === 'skill').length, 5);
   assert.equal(shown.get('stack:group:skills:after').holds.length, 122);
   assert.equal(layout.blocks.filter((b) => b.kind === 'part').length, 8);
-  assert.equal(shown.get('more:inside:item:b0').name, '12 more');
+  assert.equal(shown.get('stack:inside:item:b0:after').holds.length, 12);
   assert.equal(shown.get('inside:item:b0').name, 'plugin-00 · 1–8 of 20');
   // Every block sits in its column, none on another (Collapse at its right edge), and the Inside
   // stack never starts above 26.
-  const of = (b) => (b.kind === 'stack' || b.kind === 'collapse' ? 'plugins' : model.blocks.find((m) => m.id === b.id)?.column || layout.columns.find((c) => c.x === b.x)?.id);
+  const of = (b) => model.blocks.find((m) => m.id === (b.group || b.id))?.column || layout.columns.find((c) => c.x === b.x)?.id;
   for (const b of layout.blocks.filter((at) => at.kind !== 'column')) {
     const column = layout.columns.find((c) => c.id === of(b));
     if (b.kind === 'collapse') assert.ok(column && b.x + b.w === column.x + column.w, b.id);
@@ -1302,10 +1302,11 @@ test('the Library map starts with every source folded; Inside and Instructions d
   assert.equal(node(box, 'block:item:p1'), null);
   // A group of one card never folds.
   assert.ok(node(box, 'block:item:p4') && node(box, 'block:item:h1'));
-  // A plugin's Inside opens as before, eight a page, and has no Collapse.
+  // A plugin's Inside opens as before, eight a page with a stack below, and has no Collapse.
   const inside = layoutTree(libraryTree(LARGE), { open: new Set(['item:b0']), spread: new Set(['group:marketplace:bench-market']), narrow: false });
   assert.equal(inside.blocks.filter((b) => b.kind === 'part').length, 8);
   assert.ok(!inside.blocks.some((b) => b.id === 'collapse:inside:item:b0'));
+  assert.equal(inside.blocks.find((b) => b.id === 'stack:inside:item:b0:after').holds.length, 12);
   assert.ok(instructionsTree(INSTR).blocks.filter((b) => b.kind === 'group').every((b) => !b.folds));
   spreadAll(box);
   settle();

@@ -787,8 +787,6 @@ div.map .block.addslot .block-icon { color: var(--route); }
 div.map .block.addslot .block-meta { color: var(--ink-3); }
 div.map .block-icon.bare { width: auto; height: auto; border: 0; background: none; }
 div.map .block-grip { flex: none; display: grid; margin-right: -4px; color: var(--lamp-off); }
-div.map .block.more { justify-content: center; border-style: dashed; background: transparent; color: var(--ink-2); }
-div.map .block.more .block-text { flex: none; }
 /* A stack of cards (a group folded, or the pages either side of the one shown, map.js): the node
    draws nothing itself; its cards do. The first cards show only their top, a strip with their name,
    each 20, 18 or 15 px under the one before (map-view.js sets each top); the last of the first three

@@ -7,7 +7,7 @@ import { addForm, connectAction, connectBody, followProject, heldServer, liveHel
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { flipToolPick, onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
-import { collapseGroup, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, newBlocks, pagesNow, pagesWith, pressCount, pressOpen, pressStack, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
+import { collapseGroup, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, newBlocks, pagesNow, pagesWith, pressCount, pressOpen, pressStack, shownFound, toggleOpen, turnWords, wideWidth } from "./map.js";
 import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
@@ -1324,16 +1324,12 @@ function mapHint() {
 // "+ Add servers" in the page header and Details' More.
 onOpenAdd(letGoIfSelected);
 
-// A press on a block (a held server opened or folded first, by onOpen). "N more" turns its group's
-// page (turnOnMap). A second press on the selected block lets go. The first run's slot adds the
-// change that sets every client up; the slot of a drag does nothing. A preview block takes its row
-// out of the tray (D12), unless it waits for access: then it opens the access panel. Any other
-// block is selected.
+// A press on a block (a held server opened or folded first, by onOpen). A stack opens or turns its
+// group, and Collapse folds it (foldOnMap). A second press on the selected block lets go. The
+// first run's slot adds the change that sets every client up; the slot of a drag does nothing. A
+// preview block takes its row out of the tray (D12), unless it waits for access: then it opens the
+// access panel. Any other block is selected.
 export function pressBlock(model, id) {
-  if (id.startsWith("more:")) {
-    turnOnMap(model, id);
-    return;
-  }
   if (id.startsWith("stack:") || id.startsWith("collapse:")) {
     foldOnMap(model, id);
     return;
@@ -1356,16 +1352,6 @@ export function pressBlock(model, id) {
     if (row && row.waits) openAccess(row);
   } else if (block.kind === "preview") takeOutHere(model, block.row).catch(reportError);
   else if (block.kind !== "slot" || block.gateway) selectOnMap(block);
-}
-
-// "N more" turns its group to the next five in place, and the last page back to the first; focus
-// stays on it, and a screen reader hears the caption once ("Remote · 6–10 of 12", in the page's live
-// region). A selection the turn hides is let go, so its Details close.
-function turnOnMap(model, id) {
-  onMap.pages = turnPage(model, onMap.pages, id);
-  say(turnWords(model, onMap.pages, id));
-  if (onMap.selected && !shownOnMap(model, onMap.selected)) letGoOnMap();
-  else drawAgain();
 }
 
 // A press on a stack opens its group or turns its page, and Collapse folds the group. A turn says
