@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 from kitden.context.claude_log import SentList, Unreadable, last_claude_list
@@ -108,6 +109,28 @@ def test_a_chat_with_no_list_yet_falls_back_to_the_next_older(tmp_path):
     write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
     write_chat(tmp_path, "p", "new", [assistant()], 200)
     assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
+
+
+def stamp(at: str) -> float:
+    return datetime.fromisoformat(at).timestamp()
+
+
+def test_the_newest_list_wins_not_the_newest_file(tmp_path):
+    # An old chat's file can change later with no new list (the app touched it).
+    old = list_entry(["a"], "- a: Old.", at="2026-10-26T19:00:00Z")
+    new = list_entry(["a"], "- a: New.", at="2026-11-11T23:00:00Z")
+    write_chat(tmp_path, "p", "old", [old], stamp("2026-11-12T17:10:00Z"))
+    write_chat(tmp_path, "p", "new", [new], stamp("2026-11-11T23:05:00Z"))
+    got = last_claude_list(tmp_path, None)
+    assert (got.at, got.skills) == ("2026-11-11T23:00:00Z", (("a", "New."),))
+
+
+def test_a_newer_unreadable_list_wins_over_an_older_good_one(tmp_path):
+    good = list_entry(["a"], "- a: Old.", at="2026-11-10T09:00:00Z")
+    odd = list_entry("a", "- a: New.", at="2026-11-11T09:00:00Z")
+    write_chat(tmp_path, "p", "good", [good], stamp("2026-11-12T09:00:00Z"))
+    write_chat(tmp_path, "p", "odd", [odd], stamp("2026-11-11T09:05:00Z"))
+    assert isinstance(last_claude_list(tmp_path, None), Unreadable)
 
 
 def test_a_picked_folder_reads_only_its_own_chats(tmp_path):

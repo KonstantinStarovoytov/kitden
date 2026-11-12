@@ -8,11 +8,13 @@ from kitden.context.rules import (
     claude_rule,
     claude_weight,
     codex_budget,
+    codex_catalog,
     codex_line,
     codex_rule,
+    codex_table,
     codex_tokens,
 )
-from kitden.context.tables import CODEX_FIXED_TOKENS, CODEX_MAX_LIMIT
+from kitden.context.tables import CODEX_MAX_LIMIT
 
 DAY_MS = 86_400_000
 
@@ -86,27 +88,28 @@ def codex(name, description):
     return CodexSkill(name, description, f"/s/{name}/SKILL.md")
 
 
-def total(skills, m):
-    return sum(codex_tokens(codex_line(s, s.description[:m])) for s in skills)
+def test_codex_sends_every_description_whole_when_they_fit():
+    skills = [codex("a", "x" * 500), codex("b", "short one")]
+    fit = codex_rule(skills, 10_000)
+    assert fit.sent == {"a": 500, "b": 9}
+    assert fit.used == fit.size == sum(codex_tokens(codex_line(s, s.description)) for s in skills)
 
 
-def test_codex_cuts_every_long_description_to_one_length():
-    skills = [codex("a", "x" * 500), codex("b", "short one"), codex("c", "y" * 600)]
-    budget = CODEX_FIXED_TOKENS + 150
-    fit = codex_rule(skills, budget)
-    cap = fit.sent["a"]
-    assert fit.sent["c"] == cap
-    assert 0 < cap < 500
-    assert fit.sent["b"] == len("short one")
-    assert fit.cap == cap
-    assert fit.used <= budget
-    assert CODEX_FIXED_TOKENS + total(skills, cap + 1) > budget  # the largest cap that fits
+def test_codex_shares_the_room_one_character_at_a_time():
+    # Worked by hand from codex-rs/ext/skills/src/render.rs (allocate_description_chars):
+    # each name line `- a: (file: p)` costs 4 tokens, so 12 leaves 4 tokens for descriptions.
+    # Each turn gives every skill one more character while the tokens it adds still fit:
+    # "a" ends whole at 4, "b" stops at 12 (a 13th character would cost a 5th token).
+    skills = [CodexSkill("a", "xxxx", "p"), CodexSkill("b", "y" * 40, "p")]
+    fit = codex_rule(skills, 12)
+    assert fit.sent == {"a": 4, "b": 12}
+    assert (fit.used, fit.size, fit.cap) == (12, 19, 12)
 
 
 def test_codex_leaves_skills_out_when_names_do_not_fit():
     skills = [codex(n, "x" * 100) for n in "abcdef"]
     names_only = [codex_tokens(codex_line(s, "")) for s in skills]
-    budget = CODEX_FIXED_TOKENS + names_only[0] + names_only[1]
+    budget = names_only[0] + names_only[1]
     fit = codex_rule(skills, budget)
     assert fit.sent == {"a": 0, "b": 0, "c": None, "d": None, "e": None, "f": None}
     assert fit.used == budget
@@ -116,8 +119,27 @@ def test_codex_leaves_skills_out_when_names_do_not_fit():
 def test_codex_keeps_a_short_name_after_a_long_one_that_does_not_fit():
     skills = [codex("a", "x"), codex("b" * 200, "x"), codex("c", "x")]
     line = codex_tokens(codex_line(skills[0], ""))
-    fit = codex_rule(skills, CODEX_FIXED_TOKENS + 2 * line)
+    fit = codex_rule(skills, 2 * line)
     assert fit.sent == {"a": 0, "b" * 200: None, "c": 0}
+
+
+def test_codex_spends_part_of_the_budget_on_the_skill_roots_table():
+    # Short paths need the roots table; Codex takes its cost off the budget first: the tokens
+    # of the list's text with the table and its own opening words, less those of the plain list
+    # (451 bytes, 113 tokens). Its opening words are shorter, so one short root costs nothing.
+    assert codex_table(()) == 0
+    assert codex_table(("- `r0` = `/Users/me/.codex/skills`",)) == 0
+    roots = tuple(
+        f"- `r{i}` = `/Users/me/.codex/plugins/cache/market/plugin{i}/1.0.0/skills`"
+        for i in range(4)
+    )
+    table = codex_table(roots)
+    assert table == 35  # 590 bytes, 148 tokens
+    skills = [CodexSkill("a", "xxxx", "r0/a/SKILL.md"), CodexSkill("b", "y" * 400, "r0/b")]
+    fit = codex_rule(skills, 60, roots)
+    assert fit.used <= 60
+    assert fit.sent == codex_rule(skills, 60 - table).sent
+    assert fit.used == codex_rule(skills, 60 - table).used + table
 
 
 def test_codex_counts_bytes_so_russian_costs_more():
@@ -125,6 +147,8 @@ def test_codex_counts_bytes_so_russian_costs_more():
 
 
 def test_codex_never_sends_more_than_1024():
+    assert codex_catalog("x" * 2000) == "x" * 1021 + "..."
+    assert codex_catalog("x" * 1024) == "x" * 1024
     fit = codex_rule([codex("a", "x" * 2000)], 100_000)
     assert fit.sent == {"a": 1024}
     assert fit.cap == 1024

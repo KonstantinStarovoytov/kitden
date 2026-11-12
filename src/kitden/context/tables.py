@@ -53,9 +53,20 @@ CLAUDE_DESCRIPTION_CAP = 1536
 # checked 2026-11-06 (codex-rs/ext/skills/src/render.rs): the list may use 2% of the window,
 # and one description is cut at 1024 characters.
 CODEX_SHARE = 0.02
-# Fitted to the real list of 2026-10-30, not read from Codex: tokens the list spends on its
-# own text before the first skill.
-CODEX_FIXED_TOKENS = 166
 CODEX_DESCRIPTION_CAP = 1024
+# checked 2026-11-12 (codex-rs/ext/skills/src/catalog_prompt.rs): the list's opening words, with
+# full paths and with short paths and a roots table. Only the difference in tokens is charged.
+CODEX_INTRO = (
+    "A skill is a set of instructions provided through a `SKILL.md` source. Below is the list of "
+    "skills that can be used. Each entry includes a name, description, and source locator. `file` "
+    "locators are on the host filesystem, `executor package` locators are owned by their "
+    "execution environment, `cloud package` locators are opaque package identifiers, and `custom "
+    "resource` locators use their provider's access mechanism."
+)
+CODEX_INTRO_ROOTS = (
+    "A skill is a set of local instructions to follow that is stored in a `SKILL.md` file. Below "
+    "is the list of skills that can be used. Each entry includes a name, description, and a short "
+    "path that can be expanded into an absolute path using the skill roots table."
+)
 # checked 2026-11-06 (Codex docs, skills.max_context_tokens: "up to 10,000 tokens")
 CODEX_MAX_LIMIT = 10_000

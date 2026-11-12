@@ -551,7 +551,7 @@ def rule_skills(paths):
 
 def a_budget(paths, wanted):
     """The smallest budget whose rule result passes `wanted`."""
-    return next(b for b in range(100, 2000) if wanted(codex_rule(rule_skills(paths), b)))
+    return next(b for b in range(1, 2000) if wanted(codex_rule(rule_skills(paths), b)))
 
 
 def window_for(budget):
@@ -1097,7 +1097,7 @@ def test_a_codex_limit_above_the_most_codex_allows_says_so(home):
 
 def test_codex_estimate_says_one_description_for_one_skill():
     one = [CodexSkill("alpha", CODEX_A, "/work/skills/alpha/SKILL.md")]
-    budget = next(b for b in range(100, 400) if (codex_rule(one, b).cap or 0) >= 30)
+    budget = next(b for b in range(1, 400) if (codex_rule(one, b).cap or 0) >= 30)
     fit = codex_rule(one, budget)
     assert fit.cap < len(CODEX_A)
     say = _codex_estimate(one, fit, "On a 9K window", "Estimate: {}")["say"]
@@ -1118,10 +1118,14 @@ def test_codex_estimate_with_a_cut_of_a_few_characters_does_not_round_it_to_zero
     )
 
 
-def test_codex_estimate_that_removes_every_description_says_so(home):
-    paths = codex_home(home)
-    _, size, other = a_small_window(home, paths, lambda f: f.cap == 0)
-    assert other["say"] == (
-        f"Estimate: On a {size} window, Codex would remove every description. "
+def test_codex_estimate_that_removes_every_description_says_so():
+    # `- ab: (file: p)` and its line break are 16 bytes, 4 tokens; one more character costs a
+    # 5th token, so a budget of 4 keeps the name and no description.
+    one = [CodexSkill("ab", CODEX_A, "p")]
+    fit = codex_rule(one, 4)
+    assert (fit.sent, fit.cap) == ({"ab": 0}, 0)
+    say = _codex_estimate(one, fit, "On a 1K window", "Estimate: {}")["say"]
+    assert say == (
+        "Estimate: On a 1K window, Codex would remove every description. "
         "The agent would see only the names."
     )

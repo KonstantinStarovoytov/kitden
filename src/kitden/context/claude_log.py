@@ -1,9 +1,12 @@
-"""Claude Code's last skill list, read from the newest chat log."""
+"""Claude Code's last skill list: the newest one sent, from the chat logs."""
 
 import json
 import re
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
+from typing import Protocol
 
 CLIENT = "claude_code"
 
@@ -30,6 +33,7 @@ class SentList:
 class Unreadable:
     client: str
     version: str
+    at: str = field(default="", compare=False)  # when the list Kitden could not read was sent
 
 
 def _find_entry(content: str, name: str, at: int) -> int:
@@ -123,7 +127,7 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                 version = version if isinstance(version, str) else ""
                 at = str(entry.get("timestamp", ""))
                 if not _known_shape(attachment):
-                    result = Unreadable(CLIENT, version)
+                    result = Unreadable(CLIENT, version, at)
                     continue
                 if attachment.get("skillCount") != len(attachment["names"]):  # cut short
                     continue
@@ -151,19 +155,43 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
     return result
 
 
-def last_claude_list(home: Path, folder: str | None) -> SentList | Unreadable | None:
-    """The list from the newest chat that has one. With a folder, only that folder's chats."""
+def _time(at: str) -> float:
+    """Seconds since 1970 for a log's time; 0 for a time Kitden cannot read."""
+    try:
+        return datetime.fromisoformat(at).timestamp()
+    except ValueError:
+        return 0.0
+
+
+class _Dated(Protocol):
+    @property
+    def at(self) -> str: ...
+
+
+def newest[T: _Dated](paths: Iterable[Path], read: Callable[[Path], T | None]) -> T | None:
+    """The list sent last among these logs, by the time in the log, not by when the file last
+    changed: an app may rewrite an old chat's file with no new list. Files are read newest first;
+    one that last changed before the best list so far cannot hold a newer one."""
     files = []
-    for path in (home / ".claude/projects").glob("*/*.jsonl"):  # not */*/subagents/*
+    for path in paths:
         try:
             files.append((path.stat().st_mtime, path))
         except OSError:  # gone since the folder was listed
             continue
-    for _, path in sorted(files, reverse=True):
+    best: T | None = None
+    for changed, path in sorted(files, reverse=True):
+        if best is not None and changed < _time(best.at):
+            break
         try:
-            found = _read_chat(path, folder)
-        except OSError:  # removed or unreadable: this chat only
+            found = read(path)
+        except OSError:  # removed or unreadable: this log only
             continue
-        if found is not None:
-            return found
-    return None
+        if found is not None and (best is None or _time(found.at) > _time(best.at)):
+            best = found
+    return best
+
+
+def last_claude_list(home: Path, folder: str | None) -> SentList | Unreadable | None:
+    """The newest list sent in a chat. With a folder, only that folder's chats."""
+    chats = (home / ".claude/projects").glob("*/*.jsonl")  # not */*/subagents/*
+    return newest(chats, lambda path: _read_chat(path, folder))

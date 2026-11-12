@@ -22,6 +22,7 @@ from kitden.context.rules import (
     claude_rule,
     claude_weight,
     codex_budget,
+    codex_catalog,
     codex_line,
     codex_rule,
 )
@@ -277,7 +278,9 @@ def write_codex_chat(home: Path) -> None:
     ]
     sent = codex_rule(skills, codex_budget(window, None)).sent
     listed = [
-        codex_line(s, s.description[: sent[s.name]]) for s in skills if sent[s.name] is not None
+        codex_line(s, codex_catalog(s.description)[:kept])
+        for s in skills
+        if (kept := sent[s.name]) is not None
     ]
     text = "<skills_instructions>\n" + "\n".join(listed) + "\n</skills_instructions>"
     meta = {

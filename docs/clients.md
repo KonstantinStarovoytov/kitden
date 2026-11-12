@@ -67,7 +67,9 @@ The table shape is fixed, because a daily check reads it. `Source` is a full add
 | `models_cache.json` holds `models[]` with `slug`, `display_name`, `context_window` (2026-11-09) | path | `src/kitden/context/codex_log.py` | skill list | same | install |
 | The skill list may use 2% of the window; one description is cut at 1024 characters (2026-11-06) | limit | `src/kitden/context/tables.py` | skill list | same | guess |
 | `skills.max_context_tokens` is at most 10,000 tokens (2026-11-06) | limit | `src/kitden/context/tables.py` | skill list | same | guess |
-| The list spends 166 tokens of its own text before the first skill; fitted to one real list, not read from Codex (2026-10-30) | limit | `src/kitden/context/tables.py` | skill list | same | install |
+| A list that does not fit: the roots table is paid first, then the room is shared one character at a time across the skills; read from `codex-rs/ext/skills/src/render.rs` and matched on a real list of 0.167.0 (2026-11-12) | limit | `src/kitden/context/rules.py`, `src/kitden/context/tables.py` | skill list | same | install |
+| The newest list is the one with the latest time in the log, not the newest file: the Codex app rewrites an old chat's file when it opens it (2026-11-12, version 0.167.0) | key | `src/kitden/context/codex_log.py` | skill list | same | install |
+| `model_context_window` in `config.toml` replaces the window, at most the model's `max_context_window` in `models_cache.json` (2026-11-12) | key | `src/kitden/context/codex_log.py` | skill list | same | https://developers.openai.com/codex/config-reference |
 
 ## Cursor
 

@@ -26,8 +26,10 @@ from kitden.context.rules import (
     claude_rule,
     claude_weight,
     codex_budget,
+    codex_catalog,
     codex_line,
     codex_rule,
+    codex_table,
     codex_tokens,
 )
 from kitden.context.tables import (
@@ -37,7 +39,6 @@ from kitden.context.tables import (
     CLAUDE_OTHER_WINDOW,
     CLAUDE_WINDOWS,
     CODEX_DESCRIPTION_CAP,
-    CODEX_FIXED_TOKENS,
 )
 from kitden.local_gateway.settings import as_dict
 from kitden.model import CLIENT_WORDS, Item, ItemKind, Project, Scope
@@ -660,25 +661,28 @@ def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
         full = len(r.full or "")
         if _codex_kind(logged, full) != _codex_kind(fit.sent.get(r.name), full):
             return False
-    if names_only or fit.cap is None:
-        return names_only and fit.cap is None
+    if names_only:
+        return True
     cuts = _codex_cuts(rows)
-    return not cuts or min(cuts) <= fit.cap <= max(cuts)
+    return not cuts or (fit.cap is not None and min(cuts) <= fit.cap <= max(cuts))
 
 
-def _codex_fact(rows: list[_Row], names_only: bool, when: str) -> dict:
-    """What the last chat sent: tokens per line sent, and those of the parts not sent."""
+def _codex_fact(
+    rows: list[_Row], names_only: bool, when: str, shown: dict[str, str], table: int
+) -> dict:
+    """What the last chat sent: tokens per line sent, and those of the parts not sent. `shown`:
+    each skill's path as the list shows it; `table`: tokens of the list's roots table."""
     sent: dict[str, int] = {}
     over: dict[str, int] = {}
     for r in rows:
-        skill = CodexSkill(r.name, r.full or "", r.path)
+        skill = CodexSkill(r.name, r.full or "", shown.get(r.name, r.path))
         if r.sent is not None:
             sent[r.name] = codex_tokens(codex_line(skill, r.sent))
         if r.full is not None:
-            whole = codex_tokens(codex_line(skill, r.full[:CODEX_DESCRIPTION_CAP]))
+            whole = codex_tokens(codex_line(skill, codex_catalog(r.full)))
             if whole > sent.get(r.name, 0):
                 over[r.name] = whole - sent.get(r.name, 0)
-    used = CODEX_FIXED_TOKENS + sum(sent.values())
+    used = table + sum(sent.values())
     n = len(rows)
     out = sum(r.sent is None for r in rows)
     cuts = _codex_cuts(rows)
@@ -733,8 +737,8 @@ def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str
     for s in skills:
         kept = fit.sent.get(s.name)
         if kept is not None:
-            sent[s.name] = codex_tokens(codex_line(s, s.description[:kept]))
-        whole = codex_tokens(codex_line(s, s.description[:CODEX_DESCRIPTION_CAP]))
+            sent[s.name] = codex_tokens(codex_line(s, codex_catalog(s.description)[:kept]))
+        whole = codex_tokens(codex_line(s, codex_catalog(s.description)))
         if whole > sent.get(s.name, 0):
             over[s.name] = whole - sent.get(s.name, 0)
     n = len(skills)
@@ -774,6 +778,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     if found is None or isinstance(found, Unreadable):
         return _no_list(client, _skills(inventory, client, folder), found)
     sent_list = found.list
+    as_shown, roots = found.shown, found.roots
     if not sent_list.skills:
         return _disk_card(client, [], words.NOTHING_TO_FIT, [])
     date, at_ms = _when(sent_list.at)
@@ -807,13 +812,17 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     known = all(r.full is not None for r in rows)
 
     def run(states: dict[str, str], budget: int) -> tuple[list[CodexSkill], CodexFit]:
-        skills = [CodexSkill(r.name, r.full or "", r.path) for r in rows if states[r.name] != "off"]
-        return skills, codex_rule(skills, budget)
+        skills = [
+            CodexSkill(r.name, r.full or "", as_shown.get(r.name) or r.path)
+            for r in rows
+            if states[r.name] != "off"
+        ]
+        return skills, codex_rule(skills, budget, roots)
 
     base = run(states, budget) if budget and known else None
     checked = base is not None and _codex_same(rows, base[1], names_only)
 
-    fact = _codex_fact(rows, names_only, when)
+    fact = _codex_fact(rows, names_only, when, as_shown, codex_table(roots))
     bad = fact.pop("bad")
     unknown = fact.pop("unknown")
     if checked and not bad:
@@ -844,7 +853,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
             size, shown = other
             limit_there = codex_budget(size, None)
             skills = base[0]
-            fit = codex_rule(skills, limit_there)
+            fit = codex_rule(skills, limit_there, roots)
             result = _codex_estimate(skills, fit, _on(size), words.ESTIMATE)
             title = words.WINDOW_TITLE.format(size=_size(size))
             windows.append(_window_card(title, shown, words.ESTIMATE_TAG, limit_there, result))
