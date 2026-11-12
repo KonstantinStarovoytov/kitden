@@ -58,7 +58,7 @@ export function updateView(api, phase) {
 export function failedWords(api, phase) {
   if (phase === "gone") return { title: NOT_STARTED, text: "Run this in a terminal to open it:", command: "kitden open" };
   if (api.step === 2) {
-    const text = "Kitden was updated, but the new page could not start. Close this tab: the old page stops within 10 minutes. Then run this in a terminal:";
+    const text = "Kitden was updated, but the new page could not start. Close this tab and stop the old page (Ctrl+C where it runs; a background page stops by itself after a while). Then run this in a terminal:";
     return { title: NEW_NOT_STARTED, text, command: "kitden open" };
   }
   return { title: FAILED, text: "The old version keeps running.", command: api.command };
@@ -151,22 +151,27 @@ function tailNode(tail) {
 }
 
 // The rail's foot sits at the bottom, so a line that shows or goes moves the version: it grows from
-// nothing (height, and the 4 px gap above it) and shrinks back instead of jumping.
+// nothing (height, and the 4 px gap above it) and shrinks back instead of jumping. Each slide
+// takes a new number, so the timer of an earlier shut does nothing once the line moved again.
+const slides = new WeakMap(); // node → { closing, count }
 function slide(node, open) {
-  if (open === (!node.hidden && !node.dataset.closing)) return;
+  const was = slides.get(node) || { closing: false, count: 0 };
+  slides.set(node, was);
+  if (open === (!node.hidden && !was.closing)) return;
   node.getAnimations().forEach((a) => a.cancel());
+  const count = ++was.count;
   const shut = { height: "0px", marginTop: "-4px", opacity: 0 };
   if (open) {
-    delete node.dataset.closing;
+    was.closing = false;
     node.hidden = false;
     animateTo(node, [shut, { height: `${node.scrollHeight}px`, marginTop: "0px", opacity: 1 }], { dur: SLIDE_MS, ease: "ease-in-out", fill: "none" });
     return;
   }
-  node.dataset.closing = "1";
+  was.closing = true;
   animateTo(node, [{ height: `${node.offsetHeight}px`, marginTop: "0px", opacity: 1 }, shut], { dur: SLIDE_MS, ease: "ease-in-out", fill: "forwards" });
   setTimeout(() => {
-    if (!node.dataset.closing) return;
-    delete node.dataset.closing;
+    if (was.count !== count) return;
+    was.closing = false;
     node.hidden = true;
     node.getAnimations().forEach((a) => a.cancel());
   }, D(SLIDE_MS));
@@ -175,7 +180,7 @@ function slide(node, open) {
 export function startUpdate(spot) {
   // The version: "Kitden 0.7." stays, and the figures that change roll (splitVersions).
   const version = el("span", "update-version");
-  const versionHead = el("span");
+  const versionHead = el("span", "update-head");
   const versionTail = el("span", "roll");
   version.append(versionHead, versionTail);
   const press = el("button", "update-btn");
@@ -194,6 +199,7 @@ export function startUpdate(spot) {
   // line that shows and goes is never a live region a screen reader misses.
   const line = el("p", "update-say");
   line.append(words, more);
+  line.hidden = true;
   const twiceText = el("span");
   const twiceMore = el("button", "update-more", "Details");
   twiceMore.type = "button";
@@ -218,9 +224,14 @@ export function startUpdate(spot) {
   let wordsFor = ""; // the words the line shows, or is fading to
 
   // A step's words change: the old ones fade out and the new ones fade in. Words that come or go
-  // with the line itself just change, as the line slides.
-  function swapWords(tip) {
-    if (tip === wordsFor) return;
+  // with the line itself just change, as the line slides; a line that shuts (`open` false) keeps
+  // its words until it is gone, so it shrinks from its own height.
+  function swapWords(tip, open) {
+    if (!open) {
+      wordsFor = "";
+      return;
+    }
+    if (tip === wordsFor && (tip || !words.textContent)) return;
     const was = wordsFor;
     wordsFor = tip;
     if (!was || !tip || line.hidden) {
@@ -256,9 +267,10 @@ export function startUpdate(spot) {
     }
     const tip = view.button === "available" || view.quiet ? "" : view.tip;
     if (tip && tip !== wordsFor) say(tip);
-    swapWords(tip);
     more.hidden = view.button !== null || !(api.state === "same" || (api.notes_url && !api.can_update));
-    slide(line, Boolean(tip) || !more.hidden);
+    const open = Boolean(tip) || !more.hidden;
+    swapWords(tip, open);
+    slide(line, open);
     const two = twiceWords(api);
     twice.hidden = !two;
     twiceText.textContent = two ? two.line : "";

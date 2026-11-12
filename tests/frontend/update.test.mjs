@@ -89,7 +89,7 @@ test('files replaced but the new page could not start: this old page still runs'
   assert.equal(v.tip, 'The new version did not start');
   assert.deepEqual(failedWords(api, null), {
     title: 'The new version did not start',
-    text: 'Kitden was updated, but the new page could not start. Close this tab: the old page stops within 10 minutes. Then run this in a terminal:',
+    text: 'Kitden was updated, but the new page could not start. Close this tab and stop the old page (Ctrl+C where it runs; a background page stops by itself after a while). Then run this in a terminal:',
     command: 'kitden open',
   });
 });
