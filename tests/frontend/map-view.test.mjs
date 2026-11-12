@@ -2010,3 +2010,128 @@ test('chosen blocks take the selected look, several at once', async () => {
   assert.ok(v.node('s2').classList.contains('selected'));
   assert.ok(!v.node('c1').classList.contains('selected'));
 });
+
+// Card stacks: a folded group is one stack node; its cards slide out of it and back in.
+const STACKED = {
+  columns: [{ id: 'a', w: 150, h: 54 }, { id: 'b', w: 170, h: 50 }],
+  blocks: [
+    { id: 'c1', column: 'a', kind: 'client', name: 'Codex' },
+    { id: 'g', column: 'b', kind: 'group', name: 'Remote', folds: true },
+    ...Array.from({ length: 12 }, (_, i) => ({ id: `s${i}`, column: 'b', parent: 'g', kind: 'held', name: `s${i}`, icon: 'globe', meta: 'On', lamp: 'on', count: 3 })),
+  ],
+  links: [{ from: 'c1', to: 's0', kind: 'on' }, { from: 'c1', to: 's5', kind: 'on' }, { from: 'c1', to: 's6', kind: 'direct' }],
+};
+const shelfAt = (spread, page = 0) => layoutTree(STACKED, { spread: new Set(spread), pages: new Map([['g', page]]), narrow: false });
+const inside = (n, selector) => walk(n).filter((child) => matches(child, selector));
+
+test('a folded group draws one stack: two strips, one whole card and a +9 pill', async () => {
+  const v = view();
+  const l = shelfAt([]);
+  await v.draw(STACKED, l, { motion: 'none' });
+  const n = v.node('stack:g:all');
+  assert.ok(matches(n, '.block.stack'));
+  const strips = inside(n, '.stack-strip');
+  assert.deepEqual(strips.map(words), ['s0', 's1']);
+  // Each strip is a card 18 px under the one before; the whole card comes last.
+  assert.deepEqual(strips.map((s) => s.style.top), ['0px', '18px']);
+  const [face] = inside(n, '.stack-face');
+  assert.deepEqual([face.style.top, face.style.height], ['36px', '50px']);
+  assert.ok(words(face).includes('s2'));
+  assert.equal(inside(face, '.block-count').length, 0);
+  assert.equal(inside(n, '.stack-pill')[0].textContent, '+9');
+  assert.equal(n.getAttribute('aria-label'), 'Open Remote, 12: s0, s1, s2');
+  assert.equal(v.node('s0'), null);
+});
+
+test('a stack of one card shows its edge', async () => {
+  const v = view();
+  const eleven = { ...STACKED, blocks: STACKED.blocks.filter((b) => b.id !== 's11') };
+  await v.draw(eleven, layoutTree(eleven, { spread: new Set(['g']), pages: new Map([['g', 1]]), narrow: false }), { motion: 'none' });
+  const n = v.node('stack:g:after');
+  assert.ok(matches(n, '.block.stack.one'));
+  assert.deepEqual([inside(n, '.stack-strip').length, inside(n, '.stack-face')[0].style.top], [0, '0px']);
+});
+
+test('opening a stack slides its cards out of it in 300 ms OUT3, 15 ms apart', async () => {
+  const v = view();
+  const folded = shelfAt([]);
+  await v.draw(STACKED, folded, { motion: 'none' });
+  const from = place(folded, 'stack:g:all');
+  const open = shelfAt(['g']);
+  v.draw(STACKED, open, {});
+  const [s0, s1] = [v.node('s0'), v.node('s1')];
+  assert.deepEqual([pos(s0).x, pos(s0).y, s0.style.opacity], [from.x, from.y, '0']);
+  tick(150);
+  const to = place(open, 's0');
+  // OUT3 at half time: 87.5 % of the way.
+  assert.ok(near(pos(s0).y, from.y + (to.y - from.y) * 0.875));
+  // s1 started 15 ms later.
+  const to1 = place(open, 's1');
+  assert.ok(near(pos(s1).y, from.y + (to1.y - from.y) * (1 - (1 - 135 / 300) ** 3)));
+  settle();
+  for (const id of ['s0', 's1', 's2', 's3', 's4']) {
+    const at = place(open, id);
+    assert.deepEqual([pos(v.node(id)).x, pos(v.node(id)).y, v.node(id).style.opacity], [at.x, at.y, ''], id);
+  }
+  // The link to a card that slides out shows at once and follows its card: it is not drawn in.
+  assert.equal(v.node('c1>s0').animations.length, 0);
+});
+
+test('a page turn slides the five shown into the stack above and the next five out of the stack below', async () => {
+  const v = view();
+  const first = shelfAt(['g'], 0);
+  await v.draw(STACKED, first, { motion: 'none' });
+  const below = place(first, 'stack:g:after');
+  const s0 = v.node('s0');
+  const next = shelfAt(['g'], 1);
+  v.draw(STACKED, next, {});
+  const above = place(next, 'stack:g:before');
+  assert.deepEqual([pos(v.node('s5')).x, pos(v.node('s5')).y], [below.x, below.y]);
+  tick(300);
+  assert.deepEqual([pos(s0).x, pos(s0).y], [above.x, above.y]);
+  settle();
+  assert.equal(v.node('s0'), null);
+});
+
+test('Collapse slides every card into one stack', async () => {
+  const v = view();
+  await v.draw(STACKED, shelfAt(['g']), { motion: 'none' });
+  const s2 = v.node('s2');
+  const folded = shelfAt([]);
+  v.draw(STACKED, folded, {});
+  tick(300);
+  const into = place(folded, 'stack:g:all');
+  assert.deepEqual([pos(s2).x, pos(s2).y, s2.style.opacity], [into.x, into.y, '0']);
+  settle();
+  assert.equal(v.node('s2'), null);
+});
+
+test('a stack link has no hit and lights when a card it holds is lit', async () => {
+  const v = view({ links: { canHit: () => true, tip: () => null, waits: () => false } });
+  await v.draw(STACKED, shelfAt([]), { motion: 'none', lit: new Set(['s0', 'c1>s0']) });
+  assert.ok(v.node('stack:g:all').classList.contains('lit'));
+  const link = v.node('c1>stack:g:all');
+  assert.ok(link);
+  assert.ok(!walk(v.area).some((n) => n.dataset?.focus === 'link:c1>stack:g:all'));
+});
+
+test('Collapse is a button with its word, after the stack below in reading order', async () => {
+  const v = view();
+  const l = shelfAt(['g']);
+  await v.draw(STACKED, l, { motion: 'none' });
+  const c = v.node('collapse:g');
+  assert.ok(matches(c, '.block.collapse'));
+  assert.ok(words(c).includes('Collapse'));
+  const order = blockOrder(l);
+  assert.equal(order.indexOf('collapse:g'), order.indexOf('stack:g:after') + 1);
+});
+
+test('under reduced motion stacks open and turn at once', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(STACKED, shelfAt([]), {});
+  await v.draw(STACKED, shelfAt(['g']), {});
+  await v.draw(STACKED, shelfAt(['g'], 1), {});
+  assert.deepEqual([v.node('s0'), v.node('s5').style.opacity], [null, '']);
+  assert.ok(walk(v.area).every((n) => !n.animations?.length));
+});

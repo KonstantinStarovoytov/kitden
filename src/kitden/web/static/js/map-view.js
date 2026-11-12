@@ -5,7 +5,7 @@
 // small × on its middle. A selection dims what is off its path and lays an accent line over each
 // lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
 import { button, byKeys, cutName, el, icon, plural, showWaits } from "./dom.js";
-import { blockLabel, crossPoint, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, unfoldDelays } from "./map.js";
+import { blockLabel, crossPoint, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, stackOf, unfoldDelays, withStacks } from "./map.js";
 import { animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -21,6 +21,10 @@ const FOLD_SCALE = 0.3; // how small a folded child gets as it goes
 const FOLD_IN = 100; // a folded child goes this far left of its opener's right side
 const GROW_STEP = 15; // between two children of an unfold that grow out of their opener
 const FOLD_BACK_MS = 160; // ... and they fold back into it this fast
+const STACK_MS = 300; // a card slides out of its stack, or back into one
+const STACK_STEP = 15; // ... the cards out of a stack 15 ms apart
+const STRIP_ICON = 12; // the icon on a card's strip in a stack
+const STACK_SHOWS = 3; // a stack draws its first three cards
 const ROOM = 24; // under the lowest block
 const ENTER_RISE = 6; // an entering block starts this far below its place
 const CAPTION_ICON = 13; // a group caption's icon
@@ -162,6 +166,46 @@ function blockParts(block, { tile }) {
   }
   if (block.takeOut) parts.push(quiet(withIcon("block-x", "x", TAKE_OUT_ICON)));
   return { parts, lamp, nums, projects };
+}
+
+// A stack's parts (`place`, a layout's stack; `byId`, the model's blocks): the first cards as
+// strips, each the top of a whole card under the one before, the last of the first three whole
+// (its own parts, with no count), a pill "+N" for the cards under them, a thin edge under a stack
+// of one card, and the left port of its first card.
+function stackParts(place, byId, { tile }) {
+  const cards = place.holds.slice(0, STACK_SHOWS).map((id) => byId.get(id)).filter(Boolean);
+  const peek = cards.length > 1 ? (place.h - place.cardH) / (cards.length - 1) : 0;
+  const parts = [];
+  cards.slice(0, -1).forEach((card, i) => {
+    const strip = el("span", "stack-strip");
+    strip.style.top = `${i * peek}px`;
+    strip.style.height = `${place.cardH}px`;
+    strip.dataset.lift = String(cards.length - 1 - i);
+    strip.append(card.icon ? icon(card.icon, STRIP_ICON) : el("span", lampClass("lamp", card.lamp || "on")), el("span", "stack-name", cutName(card.name)));
+    parts.push(quiet(strip));
+  });
+  const last = cards.at(-1);
+  if (cards.length === 1) parts.push(quiet(el("span", "stack-edge")));
+  const face = el("span", "stack-face");
+  face.style.top = `${(cards.length - 1) * peek}px`;
+  face.style.height = `${place.cardH}px`;
+  face.append(...blockParts({ ...last, count: undefined, grip: false, ports: undefined, takeOut: undefined, action: undefined }, { tile }).parts);
+  parts.push(quiet(face));
+  if (place.more) parts.push(quiet(el("span", "stack-pill", `+${place.more}`)));
+  const left = cards[0].ports && cards[0].ports.left;
+  if (left) parts.push(quiet(el("span", ["port l", left !== true && left].filter(Boolean).join(" "))));
+  return { parts, lamp: null, nums: new Map(), projects: null };
+}
+
+// Collapse's parts: a chevron and its word.
+function collapseParts(place) {
+  const parts = [quiet(icon("chevron-down", LABEL_ICON)), el("span", null, place.name)];
+  return { parts, lamp: null, nums: new Map(), projects: null };
+}
+
+// What a stack's parts depend on: its name and pill, its size, and the words of the cards it draws.
+function stackKey(place, byId) {
+  return JSON.stringify([place.kind, place.name, place.more, place.h, place.cardH, place.holds.slice(0, STACK_SHOWS).map((id) => wordsKey(byId.get(id) || {}))]);
 }
 
 // Everything a block's parts depend on (its tile too), as one key: they are drawn again only when
@@ -505,7 +549,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
 
   // A block's node as this draw shows it: its look, words, size and what a screen reader hears. The
   // layout's words win (a group that pages names which ones show).
-  function fill(item, place, source, { selected, chosen, lit, found, open, motion }) {
+  function fill(item, place, source, { selected, chosen, lit, found, open, motion, byId }) {
     const block = place.name !== undefined && source !== place ? { ...source, name: place.name } : source;
     const { node } = item;
     const name = String(block.name || "");
@@ -528,18 +572,20 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
       const group = place.kind === "group";
       const folding = folds.has(place.id);
       // A block whose removal waits in the tray looks leaving too, and stays a Tab stop.
-      item.look = [group ? "caption" : `block ${place.kind}`, !group && folding && typeof block.count === "number" && "counted", block.leaving && "leaving", block.drags && "drags", block.needs && "needs", (place.id === selected || chosen.has(place.id)) && "selected", matched && "found"].filter(Boolean).join(" ");
+      const stacked = place.kind === "stack";
+      const cardsKind = stacked && byId.get(place.holds[0])?.kind;
+      item.look = [group ? "caption" : `block ${place.kind}`, stacked && place.holds.length === 1 && "one", cardsKind && `cards-${cardsKind}`, !group && folding && typeof block.count === "number" && "counted", block.leaving && "leaving", block.drags && "drags", block.needs && "needs", (place.id === selected || chosen.has(place.id)) && "selected", matched && "found"].filter(Boolean).join(" ");
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
       node.title = block.takeOut || block.title || name;
       node.setAttribute("aria-label", blockLabel(block));
-      const words = group ? JSON.stringify([name, block.icon]) : wordsKey(block);
+      const words = group ? JSON.stringify([name, block.icon]) : stacked ? stackKey(place, byId) : wordsKey(block);
       if (words !== item.words) {
         item.words = words;
         if (group) captionWords(node, name, block.icon);
         else {
-          const drawn = blockParts(block, { tile });
+          const drawn = stacked ? stackParts(place, byId, { tile }) : place.kind === "collapse" ? collapseParts(place) : blockParts(block, { tile });
           node.replaceChildren(...drawn.parts);
           if (canMove()) liven(drawn, block, item.shown);
           item.shown = shownOf(drawn, block, item.shown);
@@ -832,7 +878,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
   // A link has a hit while the page acts on it, named for a screen reader by its two blocks; its
   // removal, when it has one, is its description and Delete its key.
   function syncHit(item, names) {
-    if (!pointer.canHit(item.link)) {
+    if (item.link.stack || !pointer.canHit(item.link)) {
       dropHit(item);
       return;
     }
@@ -1103,7 +1149,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
     selecting = selected !== null;
     if (selecting || lit.size) glanced = null;
     drawnLit = lit;
-    const shown = glanced || lit;
+    const shown = withStacks(glanced || lit, layout);
     box.classList.toggle("focus", shown.size > 0);
     folds = foldable(model);
     const unfold = new Map(plan.unfold.map((id, i) => [id, i]));
@@ -1111,6 +1157,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
     const waves = enterDelays(layout.blocks.length); // when each block of an entrance starts
     const opened = new Set(); // new blocks of an unfold: their links draw in first
     const pace = arrivals(layout, byId, after); // how long the blocks of this draw move
+    let slid = 0; // the cards that slid out of a stack so far in this draw
 
     for (const [i, place] of layout.blocks.entries()) {
       const block = place.kind === "column" ? columns.get(place.column) : byId.get(place.id) || place;
@@ -1121,7 +1168,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
         blocks.set(place.id, item);
       } else if (item.div !== isWords(place)) swap(item, place);
       item.leaving = false;
-      fill(item, place, block, { selected, chosen, lit: shown, found, open, motion });
+      fill(item, place, block, { selected, chosen, lit: shown, found, open, motion, byId });
       const end = { x: place.x, y: place.y, s: 1, o: 1 };
       if (item.held) continue;
       if (!moves) {
@@ -1136,6 +1183,11 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
         // The entrance: it waits below its place, unseen, then rises in its turn.
         put(item, { ...end, y: end.y + ENTER_RISE, o: 0 });
         go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[i] + enterDelay) });
+      } else if (fresh && last && stackOf(last, place.id)) {
+        // A card out of a stack starts unseen where its stack stood, and slides to its place.
+        const out = stackOf(last, place.id);
+        put(item, { x: out.x, y: out.y, s: 1, o: 0 });
+        go(item, end, { dur: D(STACK_MS), ease: OUT3, start: start + D(slid++ * STACK_STEP) });
       } else if (fresh && unfold.has(place.id)) {
         if (unfoldIn(item, place, end, { start, at: unfold.get(place.id), delays })) opened.add(place.id);
       } else {
@@ -1152,6 +1204,12 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
       paint(item);
       if (!moves) {
         drop(item);
+        continue;
+      }
+      // A card into a stack slides to where the stack stands, fading as it goes.
+      const into = stackOf(layout, id);
+      if (into) {
+        go(item, { x: into.x, y: into.y, s: 1, o: 0 }, { dur: D(STACK_MS), ease: OUT3, start, then: drop });
         continue;
       }
       const to = leaveTo(item, plan.fold.includes(id) ? after.get(foldsInto(before.get(id))) : null);

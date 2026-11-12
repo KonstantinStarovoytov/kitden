@@ -391,10 +391,12 @@ export function layoutTree(model, { open = new Set(), pages = new Map(), spread 
     const group = block.kind === "group";
     let h = block.h ?? (group ? (narrow ? GROUP_H : CAPTION_H) : size.h);
     if (block.kind === "stack") h = stackHeight(block.holds.length, block.firstH ?? size.h);
+    const cardH = block.kind === "stack" ? block.firstH ?? size.h : undefined;
     if (block.kind === "collapse") [h, left, w] = [COLLAPSE_H, left + w - COLLAPSE_W, COLLAPSE_W];
     const at = { id: block.id, kind: block.kind, x: left, y, w, h };
     if (opener) at.opener = opener;
     Object.assign(at, pageParts(block, children.get(block.id) || [], pages, spread, flagged));
+    if (cardH !== undefined) at.cardH = cardH;
     for (const id of block.holds || []) heldBy.set(id, block.id);
     if (block.details) at.details = true;
     placed.set(block.id, at);
