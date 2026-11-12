@@ -22,7 +22,9 @@ function cell(entry) {
     if (entry.item) box.append(el("span", "muted", "An old entry is still there."), button("Remove old entry…", () => update(entry.item)));
   } else if (entry.state === "old") {
     box.append(socket({ state: "unk", word: "Old entry" }));
-    const note = entry.command_exists ? "Made by the working version, agentsetup." : "Made by the working version; its command is missing.";
+    const note = entry.moved
+      ? "Its program is gone: Kitden was moved or removed."
+      : entry.command_exists ? "Made by the working version, agentsetup." : "Made by the working version; its command is missing.";
     box.append(el("span", "muted", note), button("Update to Kitden…", () => update(entry.item)));
   } else {
     box.append(el("span", "muted", "Not added"), button("Add…", () => review({ action: "setup_server.register", targets: [{ client: entry.client }], params: {} })));

@@ -78,6 +78,8 @@
   /* The door's light in the logo's gesture (logo.js): the warm sand of the mockup, never a text colour. */
   --hearth: #e6b46d;
   --danger: #c23b3b;
+  /* The cross on the red Update button (update.js): 3:1 or better on --danger (tests/unit/test_contrast.py). */
+  --on-danger: #ffffff;
   /* Added and removed diff text: 4.5:1 or better on its tint and on the drawer (tests/unit/test_contrast.py). */
   --diff-add: #136a39;
   --diff-del: #b23434;
@@ -116,7 +118,7 @@
     --success: #47c27a; --on-success: #0b1a12;
     --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886; --hearth: #f3cc8f;
     --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px);
-    --danger: #f07070; --focus: #f09a7c;
+    --danger: #f07070; --on-danger: #2a0d0d; --focus: #f09a7c;
     --diff-add: #47c27a; --diff-del: #f07070;
     --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
     --glow: 240 154 124;
@@ -133,7 +135,7 @@
   --success: #47c27a; --on-success: #0b1a12;
   --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886; --hearth: #f3cc8f;
   --hatch: repeating-linear-gradient(135deg, #eac27c80 0 2px, transparent 2px 6px);
-  --danger: #f07070; --focus: #f09a7c;
+  --danger: #f07070; --on-danger: #2a0d0d; --focus: #f09a7c;
   --diff-add: #47c27a; --diff-del: #f07070;
   --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
   --glow: 240 154 124;
@@ -210,6 +212,49 @@ a { color: var(--route); }
 .rail-foot .btn { margin-left: -10px; }
 .appearance { align-self: flex-start; display: flex; align-items: center; gap: 8px; min-height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font-size: 12px; cursor: pointer; transition: color var(--t-fast) ease; }
 .appearance:hover { color: var(--ink); }
+/* The version and the Update button (update.js): a spot of its own at the top of the rail's bottom
+   group, with a line under it. Only the version shows until a newer one is out. */
+.update-spot { position: relative; display: grid; gap: 4px; padding-bottom: 14px; border-bottom: 1px solid var(--wire); }
+.update-row { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+.update-version { display: inline-flex; align-items: baseline; color: var(--ink-3); font-size: 12px; }
+/* Keeps the space of "Kitden " when the whole number rolls (0.9.9 to 1.0.0). */
+.update-head { white-space: pre; }
+.update-say { display: flex; flex-wrap: wrap; gap: 0 6px; margin: 0; overflow: hidden; line-height: 1.45; }
+.update-more { padding: 0; border: 0; background: none; color: var(--ink-3); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; transition: color var(--t-fast) ease; }
+.update-more:hover { color: var(--ink); }
+/* A round 19 px button in the brand colour: outlined while an update is out, filled on hover. It
+   glows slowly then (a halo that grows and fades, about 3 s a cycle; none under reduced motion),
+   becomes a ring that fills by
+   the server's steps, then fades while the version rolls to the new one, or turns red with a
+   cross. */
+.update-btn { position: relative; isolation: isolate; flex: none; display: grid; place-items: center; width: 19px; height: 19px; padding: 0; border: 0; border-radius: 50%; background: var(--brand); color: var(--on-action); cursor: pointer; transition: background-color 200ms ease, color 200ms ease, opacity 500ms ease, transform 300ms var(--spring); }
+.update-btn.available { background: var(--panel); color: var(--brand); box-shadow: inset 0 0 0 1.5px var(--brand); }
+.update-btn.available:hover, .update-btn.available:focus-visible { background: var(--brand); color: var(--on-action); }
+.update-btn.available:active, .update-btn.failed:active { transform: scale(0.97); transition-duration: 200ms, 200ms, 500ms, 80ms; }
+.update-btn.available::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 50%; background: color-mix(in srgb, var(--brand) 20%, transparent); opacity: 0; animation: update-glow 3.2s ease-in-out infinite; }
+@keyframes update-glow { 50% { opacity: 1; transform: scale(1.43); } }
+.update-btn .ic { width: 11px; height: 11px; stroke-width: 2.4; }
+.update-btn.running { cursor: default; }
+.update-btn.running { background: var(--panel-raised); }
+.update-ring { position: absolute; inset: -1px; display: none; width: 21px; height: 21px; transform: rotate(-90deg); }
+.update-btn.running .update-ring { display: block; }
+.update-ring circle { fill: none; stroke-width: 2.6; }
+.update-ring .track { stroke: color-mix(in srgb, var(--brand) 20%, transparent); }
+.update-ring .fill { stroke: var(--brand); stroke-linecap: round; stroke-dasharray: 85; stroke-dashoffset: 85; transition: stroke-dashoffset 480ms var(--ease-out); }
+.update-btn.failed { background: var(--danger); color: var(--on-danger); }
+.update-btn.leaving { opacity: 0; transform: scale(0.6); pointer-events: none; }
+/* The confirm, why an update failed, or a note's details: a small box beside the rail. */
+.update-pop { position: absolute; z-index: 30; left: calc(100% + 28px); bottom: 0; display: grid; gap: 10px; width: 280px; max-width: calc(100vw - 32px); padding: 14px; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); color: var(--ink-2); font-size: 12px; line-height: 1.5; transform-origin: bottom left; }
+.update-pop h3 { margin: 0; color: var(--ink); font-size: 13px; font-weight: 600; }
+.update-pop p { margin: 0; }
+.update-pop .btn { margin-left: 0; }
+.update-acts { display: flex; gap: 6px; }
+.update-command { display: flex; align-items: center; gap: 6px; padding: 3px 3px 3px 10px; border-radius: 6px; background: var(--inset); }
+.update-command code { flex: 1; min-width: 0; color: var(--ink); font: 12px/1.5 var(--mono); overflow-wrap: anywhere; }
+.update-tail { max-height: 140px; margin: 0; padding: 8px 10px; overflow: auto; border-radius: 6px; background: var(--inset); color: var(--ink-2); font: 11px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.update-details summary { cursor: pointer; color: var(--ink-3); }
+.update-details > * + * { margin-top: 8px; }
+.update-refused { color: var(--diff-del); }
 .roll { display: inline-grid; overflow: hidden; height: 1.45em; vertical-align: bottom; }
 .roll > span { grid-area: 1 / 1; }
 
@@ -1139,6 +1184,13 @@ pre.diff .del { color: var(--diff-del); background: color-mix(in srgb, var(--dan
 .callout { display: flex; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--lamp-warn-soft); color: var(--ink-2); }
 .callout.error { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .callout.stale { margin-bottom: 12px; }
+/* Under the top bar on every page: a client that must restart to see an Apply. Amber needs you. */
+.restarts { position: relative; z-index: 1; flex: none; display: grid; gap: 8px; padding: 14px 22px 0; }
+.restarts:empty { display: none; }
+.restart-strip { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--lamp-warn) 45%, transparent); background: var(--lamp-warn-soft); color: var(--ink-2); }
+.restart-strip > svg { flex: none; color: var(--lamp-warn); }
+.restart-note { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.restart-strip .btn { flex: none; }
 .checklist { margin: 0; padding-left: 18px; color: var(--ink-2); }
 .commands { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .looks-for { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
@@ -1295,6 +1347,9 @@ html.map-entrance::view-transition-new(page) { animation: none; }
   .rail-foot { margin: 0 0 0 auto; padding: 0; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
   .scan-line { flex-direction: row; align-items: center; gap: 6px; }
   .rail-foot .btn { margin-left: 0; }
+  /* In the top row the version sits beside Rescan, with no line, and its box opens below. */
+  .update-spot { display: flex; align-items: center; gap: 4px 8px; padding: 0; border: 0; }
+  .update-pop { left: auto; right: 0; bottom: auto; top: calc(100% + 8px); transform-origin: top right; }
   .appearance { min-width: 24px; justify-content: center; }
   .ov-grid { grid-template-columns: 1fr; }
   .conn { grid-template-columns: 1fr; }

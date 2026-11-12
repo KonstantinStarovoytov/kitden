@@ -173,6 +173,19 @@ def test_old_kitden_entries_get_one_card(home):
     assert data["counts"]["attention"] == 3
 
 
+def test_kitden_entries_whose_program_is_gone_say_so(home, real_programs):
+    from kitden.changes import toml_edit
+
+    config = home / ".codex/config.toml"
+    gone = {"command": str(home / "gone/bin/kitden"), "args": ["mcp"]}
+    config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "kitden"), gone))
+    data = overview(build_inventory(home), [], None)
+    [card] = [c for c in data["cards"] if c["name"].startswith("Old Kitden")]
+    assert card["line"] == (
+        "Its program is gone: Kitden was moved or removed. Update it so Codex starts this Kitden."
+    )
+
+
 def test_overview_duplicate_points_at_a_row_the_map_has(home):
     inventory = build_inventory(home)
     by_id = {i.id: i for i in inventory.items}

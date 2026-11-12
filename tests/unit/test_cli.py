@@ -44,6 +44,31 @@ def test_pick_port_skips_a_busy_port():
         busy.close()
 
 
+def test_a_port_the_old_page_just_closed_is_free_again():
+    # The old page closes its connections itself, which leaves the port in TIME_WAIT. The new
+    # page takes that port over after an update; uvicorn's own bind allows it, so must the probe.
+    listener = socket.socket()
+    # The old page listened as uvicorn does; Linux reuses a TIME_WAIT port only for such a socket.
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    port = listener.getsockname()[1]
+    client = socket.create_connection(("127.0.0.1", port))
+    accepted, _ = listener.accept()
+    accepted.close()  # the server side closes first: its port goes to TIME_WAIT
+    client.close()
+    listener.close()
+    assert pick_port(port, tries=1) == port
+    busy = socket.socket()  # the new page listens there, bound as uvicorn binds
+    busy.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    busy.bind(("127.0.0.1", port))
+    busy.listen()
+    try:
+        assert pick_port(port, tries=1) is None  # a page that still listens keeps it
+    finally:
+        busy.close()
+
+
 def test_serve_runs_on_loopback_and_prints_a_token_link(monkeypatch, capsys):
     calls = {}
     monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47811)
@@ -107,6 +132,20 @@ def test_installed_command_is_an_absolute_path():
     command = installed_command()
     assert command is not None and command.startswith("/")
     assert command.endswith("/kitden")
+
+
+def test_installed_command_is_the_stable_launcher_of_an_install(monkeypatch, tmp_path):
+    # A Homebrew Python lives under a versioned Cellar folder that an upgrade removes; client
+    # configs must name the opt link that survives it.
+    from kitden import command
+    from kitden.update.install import Install
+
+    opt = tmp_path / "opt" / "kitden" / "bin" / "kitden"
+    opt.parent.mkdir(parents=True)
+    opt.write_text("")
+    brew = Install("brew", opt, ("brew", "upgrade", "kitden"))
+    monkeypatch.setattr(command, "detect", lambda: brew)
+    assert command.installed_command() == str(opt)
 
 
 def test_server_stops_quickly_even_with_an_open_page(monkeypatch):
@@ -247,9 +286,113 @@ def test_only_a_background_page_stops_by_itself(tmp_path, monkeypatch, extra, st
         cli, "run_server", lambda app, host, port, stop_when=None, **kw: seen.update(s=stop_when)
     )
     main(["serve", "--no-browser", "--home", str(tmp_path), *extra])
-    assert (seen["s"] is not None) == stops
-    if stops:
-        assert seen["s"]() is False  # just started: no reason to stop yet
+    assert seen["s"]() is False  # just started: no reason to stop yet
+    monkeypatch.setattr(page, "IDLE_SECONDS", 0)
+    main(["serve", "--no-browser", "--home", str(tmp_path), *extra])
+    assert seen["s"]() is stops  # no tab and nothing running: only a background page stops
+
+
+@pytest.mark.parametrize("extra", [[], ["--background"]])
+def test_a_page_stops_once_it_handed_over(tmp_path, monkeypatch, extra):
+    seen = {}
+
+    def fake_run(app, host, port, stop_when=None, **kw):
+        assert stop_when() is False
+        app.state.activity.handed_over = lambda: True
+        seen["stops"] = stop_when()
+
+    monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47813)
+    monkeypatch.setattr(cli, "run_server", fake_run)
+    assert main(["serve", "--no-browser", "--home", str(tmp_path), *extra]) == 0
+    assert seen["stops"] is True
+
+
+def test_serve_can_update_kitden_and_starts_the_new_page_with_its_home(tmp_path, monkeypatch):
+    import kitden.update.install
+    import kitden.web.app as web
+    from kitden.update.install import Install
+
+    install = Install("uv", tmp_path / "bin/kitden", ("uv", "tool", "upgrade", "kitden"))
+    monkeypatch.setattr(kitden.update.install, "detect", lambda: install)
+    seen = {}
+    real = web.create_app
+    monkeypatch.setattr(web, "create_app", lambda *a, **kw: seen.update(kw) or real(*a, **kw))
+    monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47817)
+    monkeypatch.setattr(cli, "run_server", lambda *a, **kw: None)
+    started = []
+    monkeypatch.setattr(page, "start_background", lambda *a: started.append(a))
+    main(["serve", "--no-browser", "--home", str(tmp_path)])
+    assert seen["install"] == install
+    seen["start_page"](install.launcher, "47817:tok:session")
+    assert started == [(tmp_path, str(tmp_path), install.launcher, "47817:tok:session")]
+
+
+def _take_over(monkeypatch, value, seen):
+    monkeypatch.setenv(page.TAKE_OVER, value)
+
+    def fake_pick(start, tries=20):
+        seen["ports"] = (start, tries)
+        return start
+
+    monkeypatch.setattr(cli, "pick_port", fake_pick)
+
+    def fake_run(app, host, port, on_started, **kw):
+        on_started()
+        with TestClient(app, base_url=f"http://127.0.0.1:{port}") as tab:
+            tab.cookies.set(f"kitden_session_{port}", "SESSION")
+            seen["about"] = tab.get("/api/about").status_code
+        seen.update(port=port, record=page.read_record(seen["home"]))
+
+    monkeypatch.setattr(cli, "run_server", fake_run)
+
+
+def test_take_over_serves_on_the_old_port_with_the_old_token_and_session(tmp_path, monkeypatch):
+    seen = {"home": tmp_path}
+    _take_over(monkeypatch, "47816:TOK:SESSION", seen)
+    argv = ["serve", "--background", "--no-browser", "--take-over", "--home", str(tmp_path)]
+    assert main(argv) == 0
+    assert seen["ports"] == (47816, 1)  # that port or none
+    assert (seen["port"], seen["record"]["token"], seen["about"]) == (47816, "TOK", 200)
+    assert page.TAKE_OVER not in os.environ  # no program it starts sees the token
+
+
+def test_take_over_waits_for_the_old_page_to_stop(tmp_path, monkeypatch):
+    import threading
+
+    seen = {"home": tmp_path}
+    _take_over(monkeypatch, "47816:TOK:SESSION", seen)
+    old = _hold_page(tmp_path)
+    threading.Timer(0.3, old.release).start()
+    argv = ["serve", "--background", "--no-browser", "--take-over", "--home", str(tmp_path)]
+    assert main(argv) == 0
+    assert seen["about"] == 200
+
+
+def test_take_over_gives_up_when_the_old_page_never_stops(tmp_path, monkeypatch, capsys):
+    seen = {"home": tmp_path}
+    _take_over(monkeypatch, "47816:TOK:SESSION", seen)
+    monkeypatch.setattr(page, "TAKE_OVER_SECONDS", 0.2)
+    old = _hold_page(tmp_path)
+    try:
+        argv = ["serve", "--background", "--no-browser", "--take-over", "--home", str(tmp_path)]
+        assert main(argv) == cli.EXIT_NOT_STARTED
+    finally:
+        old.release()
+    assert "port" not in seen
+    assert "did not stop" in capsys.readouterr().err
+
+
+def test_take_over_needs_the_old_page_values(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv(page.TAKE_OVER, raising=False)
+    monkeypatch.setattr(cli, "run_server", lambda *a, **kw: pytest.fail("served"))
+    argv = ["serve", "--background", "--no-browser", "--take-over", "--home", str(tmp_path)]
+    assert main(argv) == cli.EXIT_USAGE
+
+
+def test_take_over_is_not_in_the_help(capsys):
+    with pytest.raises(SystemExit):
+        main(["serve", "--help"])
+    assert "take-over" not in capsys.readouterr().out
 
 
 # Final review fixes (feature 002) ----------------------------------------------------------

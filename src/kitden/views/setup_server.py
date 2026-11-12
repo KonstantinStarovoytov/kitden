@@ -52,6 +52,26 @@ def is_old_entry(item: Item) -> bool:
     return summary.get("command", "").endswith(f"/{OLD_NAME}") and args == ["mcp"]
 
 
+def gone(command: str) -> bool:
+    """An absolute program path that is no longer there."""
+    path = Path(command)
+    return path.is_absolute() and not path.exists()
+
+
+_gone = gone  # tests make their made-up paths count as present
+
+
+def is_moved_entry(item: Item) -> bool:
+    """The client's own `kitden` entry runs a program that is gone: Kitden moved (uv to
+    Homebrew, or back) or was removed. Or it runs one versioned Homebrew folder
+    (`Cellar/kitden/<version>`), which an upgrade can keep: the stable launcher is the opt
+    link. Update points it at the Kitden that runs now."""
+    command = dict(item.summary).get("command", "")
+    return _user_entry(item, item.client, SETUP_NAME) and (
+        _gone(command) or "/Cellar/kitden/" in command
+    )
+
+
 # The clients whose docs name the key that turns a user entry off, as Kitden reads it, and the
 # key. Checked 2026-10-24:
 # - Codex: `enabled = false` in the entry's `[mcp_servers.<name>]` table turns it off without
@@ -79,8 +99,17 @@ def kitden_on(entry: dict) -> bool:
     return entry["state"] == "added" and entry["enabled"] is not False
 
 
+def with_entry(inventory) -> set[str]:
+    """The clients with their own `kitden` entry: added, or moved (Update fixes its path). A
+    change that adds the entry leaves these alone."""
+    return {
+        s["client"] for s in setup_server_state(inventory) if s["state"] == "added" or s["moved"]
+    }
+
+
 def setup_server_state(inventory) -> list[dict]:
-    """Per client: `added`, `old`, `missing` or `not_installed`, and the old entry to update."""
+    """Per client: `added`, `old`, `missing` or `not_installed`, and the old entry to update.
+    `moved`: the old entry is the client's own `kitden` entry, whose program is gone."""
     found = found_clients(inventory)
     states = []
     for client in CLIENTS:
@@ -92,13 +121,17 @@ def setup_server_state(inventory) -> list[dict]:
                     "item": None,
                     "command_exists": None,
                     "enabled": None,
+                    "moved": False,
                 }
             )
             continue
         mine = next((i for i in inventory.items if _user_entry(i, client, SETUP_NAME)), None)
         old = next((i for i in inventory.items if i.client == client and is_old_entry(i)), None)
-        state = "added" if mine else "old" if old else "missing"
-        exists = Path(dict(old.summary)["command"]).exists() if old else None
+        moved = mine is not None and is_moved_entry(mine)
+        if moved:
+            old = mine
+        state = "old" if moved else "added" if mine else "old" if old else "missing"
+        exists = False if moved else Path(dict(old.summary)["command"]).exists() if old else None
         states.append(
             {
                 "client": client,
@@ -106,6 +139,7 @@ def setup_server_state(inventory) -> list[dict]:
                 "item": old.id if old else None,
                 "command_exists": exists,
                 "enabled": None if mine is None else mine.enabled is not Enabled.OFF,
+                "moved": moved,
             }
         )
     return states

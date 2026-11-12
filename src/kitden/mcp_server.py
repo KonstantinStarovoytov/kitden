@@ -6,10 +6,12 @@ When servers are moved into the Kitden gateway, it also offers their tools (loca
 """
 
 import os
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
 
+from mcp.server import Server
 from mcp.server.mcpserver import MCPServer
 from mcp_types import ToolAnnotations
 from pydantic import Field
@@ -17,8 +19,9 @@ from pydantic import Field
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import CursorAdapter
-from kitden.local_gateway import proxy
+from kitden.local_gateway import proxy, resume
 from kitden.local_gateway.settings import load_settings
+from kitden.update import install
 from kitden.views import answers
 from kitden.views.answers import NO_CHANGES, NO_EDITS, read_setup, resolve_project
 from kitden.views.inventory import Inventory, build_inventory
@@ -143,13 +146,31 @@ def run(home: Path | None = None, read_only: bool = False) -> None:
     """Serve over stdio until the client closes the connection.
 
     With servers moved into the Kitden gateway, the same server also offers their tools. With
-    `read_only` it offers only its own tools: the kitden plugin starts it so.
+    `read_only` it offers only its own tools: the kitden plugin starts it so. After an update
+    from the page it moves to the new version in the same process (local_gateway.resume).
     """
     root = home or Path.home()
     held = {} if read_only else load_settings(root)["servers"]
-    server = create_server(
-        lambda: read_setup(root), instructions=GATEWAY_INSTRUCTIONS if held else INSTRUCTIONS
-    )
+
+    def make() -> MCPServer:
+        return create_server(
+            lambda: read_setup(root), instructions=GATEWAY_INSTRUCTIONS if held else INSTRUCTIONS
+        )
+
+    # Only a uv tool or Homebrew install is updated in place, so only such a gateway watches
+    # for updates. One that an update started again goes on with the agent's session.
+    watch = install.detect() is not None
+    if (watch or resume.RESUME in os.environ) and resume.stdin_can_wait():
+
+        def make_low_level() -> Server:
+            if held:
+                return proxy.gateway_server(root, make(), lambda: known_projects(root))
+            # MCPServer.run() serves this low-level server (mcp 2.3.0, checked 2026-11-11).
+            return make()._lowlevel_server
+
+        resume.serve_stdio(make_low_level, root, sys.argv[1:], watch)
+        return
+    server = make()
     if not held:
         server.run()
         return

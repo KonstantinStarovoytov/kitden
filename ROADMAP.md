@@ -1,11 +1,37 @@
 # Kitden roadmap
 
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
+
+### Not yet released
+
+- **Update from the page:** when a newer version is out, the rail shows an Update button beside
+  the version (the page checks at most once a day, when it opens). After your yes it runs
+  `uv tool upgrade kitden` or `brew upgrade kitden`, shows each real step, and reloads the page
+  on the new version. Installs Kitden cannot update itself (uvx, pip, source) show the command to
+  run. `kitden show` and `kitden mcp` never check for updates.
+- **The gateway restarts in place:** the Kitden gateway moves to the new version by itself, and
+  your agents keep their connection.
+- **A strip when an agent needs a restart:** after an Apply, an amber strip under the top bar
+  names each client that must be restarted to see it, with "Got it". Kitden never restarts an
+  agent for you.
+- **Client entries use the stable launcher:** the `kitden` entry Kitden adds to a client runs
+  the install's own launcher (uv's tool folder or Homebrew's `opt` link), so an upgrade does not
+  break it.
+- **Update for an old `kitden` entry:** when a client's `kitden` entry runs a program that is
+  gone, or a versioned Homebrew folder, the page offers Update. It changes only the entry's
+  command.
+- **Installed twice:** when both uv and Homebrew installed Kitden, a quiet line under the version
+  says "Installed twice: uv and Homebrew", and Details shows how to remove one copy.
+- **Hidden tabs give their connection back:** a tab in the background closes its live
+  connection, so a new tab no longer hangs when many tabs are open.
+- After you update to this version, restart your agents once; later updates from the page need
+  no restart. If a gateway cannot move to the new version by itself, it keeps working on the old
+  one until the agent restarts.
 
 ### 0.7.2
 

@@ -5,7 +5,9 @@ import contextlib
 import html
 import importlib
 import json
+import secrets
 import sys
+import time
 import webbrowser
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
@@ -149,7 +151,12 @@ from kitden.model import (
 )
 from kitden.redact import masked_command, redact_text
 from kitden.sign_in import SIGNED_OUT, SignIn, SignIns
-from kitden.system import secret_store_name
+from kitden.system import process_starts, secret_store_name
+from kitden.update.check import EVERY, cached_latest, newer
+from kitden.update.check import fetch as fetch_latest
+from kitden.update.install import MANUAL_COMMAND, Found, Install
+from kitden.update.run import Outcome, write_marker
+from kitden.update.run import upgrade as run_upgrade
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
 from kitden.views.changes_view import came_back, change_entries
@@ -172,8 +179,15 @@ from kitden.views.library import KINDS, LIST_SHOWS, LIST_TABS, SHOWS, library, l
 from kitden.views.library_map import cursor_imports, library_map
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
+from kitden.views.restarts_view import pending_restarts
 from kitden.views.review import app_notes, change_target, mark_reach, undo_note
-from kitden.views.setup_server import enable_steps, is_old_entry, setup_server_state
+from kitden.views.setup_server import (
+    enable_steps,
+    is_moved_entry,
+    is_old_entry,
+    setup_server_state,
+    with_entry,
+)
 from kitden.views.skills import (
     library_offers,
     project_skills,
@@ -191,6 +205,8 @@ UNREADABLE = "Kitden could not read the gateway settings."
 
 
 Event = str | tuple[str, dict]
+# Put in every queue when the page stops, so open event streams end and the stop does not wait.
+_END = None
 
 
 class Broadcaster:
@@ -198,14 +214,14 @@ class Broadcaster:
     carry a little data, such as how many steps of a change are done."""
 
     def __init__(self) -> None:
-        self._queues: set[asyncio.Queue[Event]] = set()
+        self._queues: set[asyncio.Queue[Event | None]] = set()
 
-    def subscribe(self) -> asyncio.Queue[Event]:
-        queue: asyncio.Queue[Event] = asyncio.Queue()
+    def subscribe(self) -> asyncio.Queue[Event | None]:
+        queue: asyncio.Queue[Event | None] = asyncio.Queue()
         self._queues.add(queue)
         return queue
 
-    def unsubscribe(self, queue: asyncio.Queue[Event]) -> None:
+    def unsubscribe(self, queue: asyncio.Queue[Event | None]) -> None:
         self._queues.discard(queue)
 
     @property
@@ -217,17 +233,24 @@ class Broadcaster:
         for queue in self._queues:
             queue.put_nowait((event, data) if data is not None else event)
 
+    def close(self) -> None:
+        """End every open event stream: the page is stopping."""
+        for queue in self._queues:
+            queue.put_nowait(_END)
+
 
 async def event_lines(
-    queue: asyncio.Queue[Event],
+    queue: asyncio.Queue[Event | None],
     is_disconnected: Callable[[], Awaitable[bool]],
     heartbeat: float = HEARTBEAT_SECONDS,
 ) -> AsyncIterator[str]:
-    """Server-sent event lines until the browser goes away."""
+    """Server-sent event lines until the browser goes away or the page stops."""
     yield ": connected\n\n"
     while not await is_disconnected():
         try:
             event = await asyncio.wait_for(queue.get(), heartbeat)
+            if event is _END:
+                return
             name, data = event if isinstance(event, tuple) else (event, {})
             yield f"event: {name}\ndata: {json.dumps(data)}\n\n"
         except TimeoutError:
@@ -396,6 +419,7 @@ class State:
         self.follow_ups: set[asyncio.Task] = set()
         self.reading_versions = False
         self.ready = asyncio.Event()
+        self.called: float | None = None  # when a tab last asked the API (monotonic)
         self.inventory = build() if scan_now else Inventory()
         self.data = inventory_dict(self.inventory)
         self.lock = asyncio.Lock()
@@ -495,6 +519,10 @@ class State:
         finally:
             self.progress.done(WARM_STEP)
 
+    def recently_called(self) -> bool:
+        """A tab asked the API within TAB_SEEN_S: it is open, maybe hidden."""
+        return self.called is not None and time.monotonic() - self.called < TAB_SEEN_S
+
     async def rescan(self) -> dict:
         async with self.lock:
             self.events.publish("rescan_started")
@@ -571,7 +599,26 @@ SIGNED_IN_PAGE = "Back in Kitden. You can close this tab."
 NOT_SIGNED_IN_PAGE = "Sign-in did not finish. You can close this tab and try again in Kitden."
 
 # The API calls that answer before the first scan is done.
-NO_WAIT = ("/api/events", "/api/progress", "/api/about")
+# /api/update: after an update the browser asks the new page for its version while it scans.
+NO_WAIT = ("/api/events", "/api/progress", "/api/about", "/api/update")
+NOTES_URL = "https://github.com/KonstantinStarovoytov/kitden/releases/tag/v{}"
+
+
+@dataclass
+class UpdateRun:
+    """Where updating Kitden from the page is, for GET /api/update."""
+
+    state: str = "idle"  # idle, running, done, same or failed
+    step: int | None = None  # the index in kitden.update.run.STEPS
+    tail: list[str] = field(default_factory=list)  # the installer's last lines
+    latest: str | None = None  # None until the check has answered
+    asked: float | None = None  # when the last check started (monotonic)
+    handed_over: bool = False  # the new version's page was started: this one stops
+
+
+# A hidden tab closes its event stream, so the browser keeps a connection free (it allows six per
+# address), and checks in every minute instead (app.js). It counts as open this long.
+TAB_SEEN_S = 150.0
 
 
 class WaitForFirstScan:
@@ -584,14 +631,11 @@ class WaitForFirstScan:
     async def __call__(self, scope, receive, send) -> None:
         path = scope.get("path", "")
         waits = path.startswith("/api/") and path not in NO_WAIT
+        if scope["type"] == "http" and path.startswith("/api/") and path != "/api/events":
+            self.state.called = time.monotonic()  # a tab is open, also one with no event stream
         if scope["type"] == "http" and waits:
             await self.state.ready.wait()
         await self.app(scope, receive, send)
-
-
-def _states_in(inventory, *states: str) -> set[str]:
-    """Clients whose "show my setup" server is in one of the given states."""
-    return {s["client"] for s in setup_server_state(inventory) if s["state"] in states}
 
 
 def create_app(
@@ -609,6 +653,13 @@ def create_app(
     version_refresh: Callable[[], dict[str, str | None]] | None = None,
     demo: bool = False,
     open_browser: Callable[[str], Any] = webbrowser.open,
+    session: str | None = None,
+    install: Install | None = None,
+    fetch: Callable[[str], bytes] = fetch_latest,
+    upgrade: Callable[[Install, Callable[[int], None], str], Awaitable[Outcome]] = run_upgrade,
+    start_page: Callable[[Path, str], Any] | None = None,
+    processes: Callable[[], list[tuple[datetime, str]]] = process_starts,
+    copies: Callable[[], list[Found]] = list,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown).
     `version_refresh` reads the clients' versions after the first scan; by default the ones
@@ -617,7 +668,14 @@ def create_app(
     With `demo`, `home` is the sample's, and stand-ins keep everything inside it: no client
     command, Keychain, MCP server, version read or network. What would go online is refused.
     `open_browser` shows a server's sign-in page; tests pass a stand-in.
+
+    Kitden updates itself from the page only with `install` (how it was installed) and
+    `start_page`, which starts the new version's page with its launcher and the
+    "port:token:session" it takes over. `session` is the old page's, after such an update.
+    `fetch` asks for the latest version; `upgrade` runs the installer. `processes` lists the
+    running processes with their start times, for the restart strips.
     """
+    session = session or secrets.token_urlsafe(32)
     events = Broadcaster()
     watcher_ref: list[Watcher] = []
     make_adapters = default_adapters
@@ -702,6 +760,94 @@ def create_app(
         return engine
 
     write_lock = asyncio.Lock()
+
+    # Updating Kitden (spec 2026-11-11). Only the page server asks for the latest version, at
+    # most once a day; the demo never does. Without an install the command says uv.
+    update = UpdateRun()
+    update_tasks: set[asyncio.Task] = set()
+    can_update = install is not None and start_page is not None and home is not None and not demo
+
+    def check_later() -> None:
+        """Ask for the latest version in a worker thread, so the page never waits for it."""
+        if home is None or demo:
+            return
+        now = time.monotonic()
+        if update.asked is not None and now - update.asked < EVERY.total_seconds():
+            return
+        update.asked = now
+        method = install.method if install else "uv"
+
+        async def ask() -> None:
+            when = datetime.now(UTC)
+            update.latest = await asyncio.to_thread(cached_latest, home_dir(), method, when, fetch)
+
+        task = asyncio.ensure_future(ask())
+        update_tasks.add(task)
+        task.add_done_callback(update_tasks.discard)
+
+    def update_view() -> dict:
+        notes = NOTES_URL.format(update.latest) if newer(__version__, update.latest) else None
+        # Every copy uv or Homebrew installed; each updates only itself.
+        found = [] if demo else [{"method": c.method, "remove": c.remove} for c in copies()]
+        return {
+            "version": __version__,
+            "latest": update.latest,
+            "can_update": can_update,
+            "command": MANUAL_COMMAND[install.method if install else None],
+            "notes_url": notes,
+            "state": update.state,
+            "step": update.step,
+            "tail": update.tail,
+            "method": install.method if install else None,
+            "installs": found,
+        }
+
+    async def run_update() -> None:
+        """Run the installer; when it changed the version, start the new page and stop this one.
+        It holds `write_lock`, so no change runs meanwhile; after a hand-over the lock stays
+        taken, so no change starts on a page that is stopping."""
+        assert install is not None and start_page is not None
+
+        def on_step(step: int) -> None:
+            update.step = step
+
+        try:
+            outcome = await upgrade(install, on_step, __version__)
+            update.tail = outcome.tail
+            if outcome.state != "updated" or outcome.version is None:
+                update.state = outcome.state
+                return
+            try:
+                write_marker(home_dir(), outcome.version, install.launcher)
+                update.step = 2  # "Restarting Kitden…"
+                start_page(install.launcher, f"{port}:{token}:{session}")
+            except OSError as error:
+                update.state, update.tail = "failed", [*outcome.tail, str(error)]
+                return
+            update.state, update.handed_over = "done", True
+        except Exception as error:  # noqa: BLE001 - shown on the page; the old version runs on
+            update.state, update.tail = "failed", [str(error)]
+        finally:
+            if not update.handed_over:
+                write_lock.release()
+
+    async def update_kitden(request: Request) -> JSONResponse:
+        """GET: the version, the latest one, and how an update goes. POST: start the update."""
+        if request.method == "GET":
+            check_later()
+            return JSONResponse(update_view())
+        if not can_update:
+            return _error("Kitden cannot update itself here.", 409)
+        if write_lock.locked():  # a change or an update runs, or this page handed over
+            return _error("Kitden is busy. Try again when it is done.", 409)
+        await write_lock.acquire()
+        # The installer starts now; uv prints nothing until it has downloaded (ruling R12).
+        update.state, update.step, update.tail = "running", 0, []
+        task = asyncio.ensure_future(run_update())
+        update_tasks.add(task)
+        task.add_done_callback(update_tasks.discard)
+        return JSONResponse(update_view(), status_code=202)
+
     # Browser sign-ins (Part 3b): the tokens wait here, in memory, until Apply.
     signins = SignIns()
     redirect_uri = f"http://127.0.0.1:{port}/sign-in/done"
@@ -836,7 +982,7 @@ def create_app(
             yield
         finally:
             watcher.stop()
-            for running in (task, scan, *refreshing):
+            for running in (task, scan, *refreshing, *update_tasks):
                 if running is not None:
                     running.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
@@ -1367,10 +1513,13 @@ def create_app(
             steps = setup_server_steps(adapters, _clients(targets), command)
         elif action == SETUP_SERVER_UPDATE:
             items = _items(targets)
-            if not items or any(i is None or not is_old_entry(i) for i in items):
+            if not items or any(
+                i is None or not (is_old_entry(i) or is_moved_entry(i)) for i in items
+            ):
                 raise ValueError("Choose an old Kitden entry.")
-            added = _states_in(state.inventory, "added")
-            command = _kitden_command() if any(i.client not in added for i in items) else None
+            added = with_entry(state.inventory)
+            needs = any(i.client not in added or is_moved_entry(i) for i in items)
+            command = _kitden_command() if needs else None
             steps = update_steps(adapters, items, added, command)
         elif action == SETUP_SERVER_ENABLE:
             clients = _clients(targets)
@@ -1385,7 +1534,7 @@ def create_app(
         elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
             items = _known_servers(targets)
             known = _known_paths()
-            added = _states_in(state.inventory, "added")
+            added = with_entry(state.inventory)
             command = _kitden_command(needed=bool({i.client for i in items} - added))
             # A Codex entry that keeps only some tools on: Kitden needs the whole list.
             wanted = await asyncio.to_thread(tools_to_read, adapters, items, home_dir(), known)
@@ -1731,6 +1880,8 @@ def create_app(
     async def change_action(request: Request) -> JSONResponse:
         change_id = request.path_params["change_id"]
         verb = request.path_params["verb"]
+        if update.state == "running" or update.handed_over:  # the update holds write_lock
+            return _error("Kitden is updating. Try again in a moment.", 409)
         if change_id not in change_engine().changes:
             return _error("Unknown change.", 404)
         method = {
@@ -1822,6 +1973,14 @@ def create_app(
         if engine is None:
             return JSONResponse([])
         return JSONResponse(change_entries(engine.store.entries(), engine, state.inventory))
+
+    async def restarts(request: Request) -> JSONResponse:
+        """The clients that still run from before an Apply that asked for a restart (one `ps`
+        a call). The sample page has no real change to restart for."""
+        if engine is None or demo:
+            return JSONResponse([])
+        starts = await asyncio.to_thread(processes)
+        return JSONResponse(pending_restarts(engine.store.entries(), starts))
 
     def _inherits() -> dict:
         """Whether Cursor loads Claude Code's plugins and the skills in its folder."""
@@ -1968,6 +2127,7 @@ def create_app(
                 "/api/gateway/tools/refresh", _with_changes(gateway_tools_refresh), methods=["POST"]
             ),
             Route("/api/changes", changes),
+            Route("/api/restarts", restarts),
             Route("/api/changes/preview", _with_changes(preview), methods=["POST"]),
             Route("/api/batch/preview", _with_changes(batch_preview), methods=["POST"]),
             Route("/api/batch/check", _with_changes(batch_check), methods=["POST"]),
@@ -1998,16 +2158,22 @@ def create_app(
             Route("/api/events", stream),
             Route("/api/progress", progress),
             Route("/api/about", about),
+            Route("/api/update", update_kitden, methods=["GET", "POST"]),
             Mount("/static", StaticFiles(directory=STATIC), name="static"),
         ],
         middleware=[
-            Middleware(SecurityMiddleware, token=token, port=port),
+            Middleware(SecurityMiddleware, token=token, port=port, session=session),
             Middleware(WaitForFirstScan, state=state),
         ],
         lifespan=lifespan,
     )
     app.state.inventory = state
     app.state.events = events
-    # What a background page checks before it stops by itself (feature 002, research R6).
-    app.state.activity = SimpleNamespace(tabs=lambda: events.count, busy=write_lock.locked)
+    # What a background page checks before it stops by itself (feature 002, research R6), and
+    # whether any page stops because the new version's page takes over.
+    app.state.activity = SimpleNamespace(
+        tabs=lambda: max(events.count, int(state.recently_called())),
+        busy=write_lock.locked,
+        handed_over=lambda: update.handed_over,
+    )
     return app

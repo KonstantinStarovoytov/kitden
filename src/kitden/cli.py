@@ -3,6 +3,7 @@
 import argparse
 import contextlib
 import json
+import os
 import secrets
 import shutil
 import signal
@@ -32,9 +33,11 @@ EXIT_UNSUPPORTED = 5
 
 
 def pick_port(start: int, tries: int = 20) -> int | None:
-    """The first free loopback port from `start`, or None."""
+    """The first free loopback port from `start`, or None. A port left in TIME_WAIT by a page
+    that just stopped counts as free, as it does for uvicorn's own bind."""
     for port in range(start, start + tries):
         with socket.socket() as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 sock.bind((HOST, port))
             except OSError:
@@ -64,6 +67,13 @@ def run_server(
             if await super().on_tick(counter):
                 return True
             return bool(stop_when and stop_when())
+
+        async def shutdown(self, sockets=None) -> None:
+            # End the open pages' event streams first, so the stop needs no forced cancel.
+            events = getattr(getattr(app, "state", None), "events", None)
+            if events is not None:
+                events.close()
+            await super().shutdown(sockets=sockets)
 
     # Open pages keep an event stream; do not wait for them when stopping.
     config = uvicorn.Config(
@@ -120,20 +130,53 @@ def _open(args: argparse.Namespace) -> int:
     return 0
 
 
+def _take_over() -> tuple[int, str, str] | None:
+    """The old page's port, token and session after an update, taken out of the env so no
+    program this page starts sees them; None when they are missing or odd."""
+    parts = os.environ.pop(page.TAKE_OVER, "").split(":")
+    if len(parts) != 3 or not all(parts) or not parts[0].isdigit():
+        return None
+    return int(parts[0]), parts[1], parts[2]
+
+
 def _serve(args: argparse.Namespace) -> int:
-    """Run the page here until stopped; only one page runs per home folder (FR-009, FR-013)."""
+    """Run the page here until stopped; only one page runs per home folder (FR-009, FR-013).
+    With `--take-over` this is the new version's page after an update: it waits for the old
+    page to stop, then serves on its port with its token and session."""
+    from kitden.update.install import detect, installs
     from kitden.web.app import create_app
 
     home = _home(args)
     root = home or Path.home()
+    old = None
+    if args.take_over:
+        old = _take_over()
+        if old is None:
+            print("Nothing to take over.", file=sys.stderr)
+            return EXIT_USAGE
     lock = page.PageLock(root)
-    if not lock.acquire():
+    if not lock.acquire(wait=page.TAKE_OVER_SECONDS if old else 0):
+        if old:
+            print("The old page did not stop.", file=sys.stderr)
+            return EXIT_NOT_STARTED
         # Another page runs. A background start just ends; a person gets that page opened.
         return 0 if args.background else _open(args)
     try:
         page.remove_record(root)  # left by a page that ended without cleaning up
+        port, token, session = old or (None, None, None)
         made = _page(
-            create_app, lambda **options: build_inventory(home, **options), root, DEFAULT_PORT
+            create_app,
+            lambda **options: build_inventory(home, **options),
+            root,
+            DEFAULT_PORT,
+            port=port,
+            token=token,
+            session=session,
+            install=detect(),
+            copies=installs,
+            start_page=lambda launcher, value: page.start_background(
+                root, args.home, launcher, value
+            ),
         )
         if made is None:
             return EXIT_NO_PORT
@@ -147,33 +190,50 @@ def _serve(args: argparse.Namespace) -> int:
             if not args.no_browser:
                 webbrowser.open(url)
 
-        stop_when: Callable[[], bool] | None = None
-        if args.background:
-            clock = page.IdleClock(page.IDLE_SECONDS, time.monotonic())
-            activity = app.state.activity
-            stop_when = lambda: clock.tick(  # noqa: E731 - one line, used once
-                activity.tabs(), activity.busy(), time.monotonic()
-            )
+        activity = app.state.activity
+        clock = page.IdleClock(page.IDLE_SECONDS, time.monotonic())
+
+        def stop_when() -> bool:
+            """Any page stops once the new version's page takes over; a background page also
+            after a while with no tab and nothing running."""
+            if activity.handed_over():
+                return True
+            idle = clock.tick(activity.tabs(), activity.busy(), time.monotonic())
+            return args.background and idle
 
         run_server(app, HOST, port, on_started=started, stop_when=stop_when)
+        if activity.handed_over() and not args.background:
+            print("Kitden was updated. The new version runs in the background.", flush=True)
         return 0
     finally:
         page.remove_record(root)
         lock.release()
 
 
-def _page(create_app: Callable, build: Callable, home: Path, start: int, **more):
+def _page(
+    create_app: Callable,
+    build: Callable,
+    home: Path,
+    start: int,
+    port: int | None = None,
+    token: str | None = None,
+    session: str | None = None,
+    **more,
+):
     """The page app on the first free port from `start`, watching `home`'s setup folders, with
-    its port, token and start link; None (and why) when no port is free."""
-    port = pick_port(start)
+    its port, token and start link; None (and why) when no port is free. A page that takes over
+    after an update gives the old page's `port` (that one or none), `token` and `session`."""
+    first = port or start
+    port = pick_port(first, tries=1) if port else pick_port(start)
     if port is None:
-        print(f"No free port from {start}.", file=sys.stderr)
+        print(f"No free port from {first}.", file=sys.stderr)
         return None
-    token = secrets.token_urlsafe(32)
+    token = token or secrets.token_urlsafe(32)
     app = create_app(
         build,
         token=token,
         port=port,
+        session=session,
         watch_folders=system.watched(home),  # the home folder itself: flat, below
         flat_folders=[home],
         home=home,
@@ -293,6 +353,8 @@ def main(argv: list[str] | None = None) -> int:
     opener = commands.add_parser("open", help="open the page; start it in the background if needed")
     serve = commands.add_parser("serve", help="run the page here until Ctrl+C")
     serve.add_argument("--background", action="store_true", help=argparse.SUPPRESS)
+    # The new version's page after an update; the old page's values come in KITDEN_TAKE_OVER.
+    serve.add_argument("--take-over", action="store_true", help=argparse.SUPPRESS)
     demo = commands.add_parser("demo", help="run the page on a sample setup until Ctrl+C")
     demo.add_argument("--size", choices=SIZES, default="medium", help="how big the sample is")
     scan = commands.add_parser("scan", help="print what each client loads, then exit")
@@ -317,6 +379,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     args = parser.parse_args(argv)
     args.background = getattr(args, "background", False)
+    args.take_over = getattr(args, "take_over", False)
 
     if args.version:
         print(f"kitden {__version__}")

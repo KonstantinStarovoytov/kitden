@@ -21,6 +21,7 @@
         <a href="#changes" data-view="changes"><span class="label">Changes</span><span class="count roll" id="nav-changes"></span></a>
       </div>
       <div class="rail-foot">
+        <div class="update-spot" id="update-spot" hidden></div>
         <div class="scan-line"><span>Scanned <span id="scanned">…</span></span><button class="btn ghost small" type="button" id="rescan">Rescan</button></div>
         <a href="#agents" data-view="agents" class="muted">Let agents read this setup</a>
         <button class="appearance" type="button" id="theme"><span class="label">Appearance</span></button>
@@ -40,6 +41,7 @@
         <span class="scan-status" id="scan-status" role="status"></span>
       </div>
       <canvas class="dots" id="dots" aria-hidden="true"></canvas>
+      <div class="restarts" id="restarts"></div>
       <main id="main" class="page" tabindex="-1"></main>
       <div class="hint-band"><p class="hint-line" id="hint" hidden></p></div>
       <div class="hint-dock"><div class="dock" id="dock"></div></div>

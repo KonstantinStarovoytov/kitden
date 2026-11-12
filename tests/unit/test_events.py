@@ -47,6 +47,14 @@ def test_an_event_can_carry_a_little_data():
     assert lines[1] == 'event: change_progress\ndata: {"id": "c1", "done": 1, "total": 3}\n\n'
 
 
+def test_closing_ends_every_event_stream():
+    events = Broadcaster()
+    queue = events.subscribe()
+    events.close()
+    lines = _collect(queue, [False, False, False])
+    assert lines == [": connected\n\n"]
+
+
 def test_event_stream_sends_heartbeats_when_idle():
     lines = _collect(asyncio.Queue(), [False, True], heartbeat=0.01)
     assert lines == [": connected\n\n", ": heartbeat\n\n"]
@@ -70,3 +78,14 @@ def test_a_changed_file_triggers_a_rescan(tmp_path):
         while len(builds) < 2 and time.monotonic() < deadline:
             time.sleep(0.1)
     assert len(builds) >= 2  # the first build at start, then one after the change
+
+
+def test_a_tab_that_only_checks_in_still_counts_as_open(tmp_path):
+    # A hidden tab closes its event stream, so the browser keeps a free connection, and checks
+    # in now and then instead; the background page must not stop under it.
+    app = create_app(lambda **o: Inventory(), token="tok", port=47800)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
+        page.get("/?token=tok")
+        assert app.state.activity.tabs() == 0
+        page.get("/api/progress")
+        assert app.state.activity.tabs() == 1
