@@ -7,7 +7,7 @@ import { addForm, connectAction, connectBody, followProject, heldServer, liveHel
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { flipToolPick, onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
-import { collapseGroup, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, newCards, pagesNow, pagesWith, pressCount, pressOpen, pressStack, shownFound, toggleOpen, turnWords, wideWidth } from "./map.js";
+import { findIn, focusAfter, foldable, foldStep, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, newCards, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, wideWidth } from "./map.js";
 import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
@@ -1350,21 +1350,16 @@ export function pressBlock(model, id) {
   else if (block.kind !== "slot" || block.gateway) selectOnMap(block);
 }
 
-// A press on a stack opens its group or turns its page, and Collapse folds the group. A turn says
-// the caption to a screen reader ("Remote · 6–10 of 12"). A selection the press hides is let go.
-// Focus stays on a stack that still shows; else it goes to the first card shown, or after Collapse
-// to the group's stack.
+// A press on a stack opens its group or turns its page, and Collapse folds the group (map.js
+// foldStep). A turn says the caption to a screen reader. A selection the press hides is let go.
+// Focus goes where focusAfter says.
 function foldOnMap(model, id) {
-  const view = { spread: onMap.spread, pages: onMap.pages };
-  Object.assign(onMap, id.startsWith("collapse:") ? collapseGroup(view, id) : pressStack(model, view, id));
-  const words = id.startsWith("stack:") ? turnWords(model, onMap.pages, id) : "";
-  if (words) say(words);
+  const step = foldStep(model, { spread: onMap.spread, pages: onMap.pages }, id);
+  Object.assign(onMap, { spread: step.spread, pages: step.pages });
+  if (step.words) say(step.words);
   if (onMap.selected && !shownOnMap(model, onMap.selected)) letGoOnMap();
   else drawAgain();
-  const shown = onMap.layout ? onMap.layout.blocks : [];
-  if (!onMap.view || shown.some((at) => at.id === id)) return;
-  const group = groupOfStack(id);
-  const next = id.startsWith("collapse:") ? `stack:${group}:all` : shown.find((at) => at.turns === group)?.id;
+  const next = onMap.layout && focusAfter(onMap.layout, id);
   if (next) onMap.view.node(next)?.focus({ preventScroll: true });
 }
 

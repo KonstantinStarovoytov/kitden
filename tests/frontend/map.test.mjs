@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, collapseGroup, drawPlan, enterDelays, findChip, findIn, foldable, groupOfStack, groupsWith, isNarrow, newCards, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, pressStack, shownFound, stackOf, toggleOpen, turnWords, unfoldDelays, wideWidth, withStacks } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, collapseGroup, drawPlan, focusAfter, foldStep, enterDelays, findChip, findIn, foldable, groupOfStack, groupsWith, isNarrow, newCards, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, pressStack, shownFound, stackOf, toggleOpen, turnWords, unfoldDelays, wideWidth, withStacks } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -778,4 +778,34 @@ test('only a new card in a group that was there opens it', () => {
   const bare = { ...was, blocks: was.blocks.filter((b) => b.id !== 'group:outside' && !b.id.startsWith('outside:')) };
   assert.deepEqual(newCards(bare, was), []);
   assert.deepEqual(newCards(model(6, 0, FOLDS), model(6, 0, { folds: true, tools: true })), []);
+});
+
+test('a group that does not fold gets Collapse past its first page, which takes it back there', () => {
+  const m = model(0, 12);
+  assert.ok(!layoutTree(m, { open: new Set(), ...WIDE }).blocks.some((b) => b.kind === 'collapse'));
+  const last = onPage(m, 2);
+  const c = last.blocks.find((b) => b.id === 'collapse:group:outside');
+  assert.ok(c && last.blocks.at(-1).id === c.id);
+  const back = collapseGroup({ spread: new Set(), pages: new Map([['group:outside', 2]]) }, c.id);
+  assert.deepEqual(outsideShown(layoutTree(m, { open: new Set(), pages: back.pages, ...WIDE })), ['docs', 'analytics', 'n8n', 'direct-3', 'direct-4']);
+});
+
+test('a fold step says the caption after a press on a stack, and nothing after Collapse', () => {
+  const m = model(0, 12, FOLDS);
+  const step = foldStep(m, { spread: spreadOut(), pages: new Map() }, 'stack:group:outside:after');
+  assert.deepEqual([[...step.pages], step.words], [[['group:outside', 1]], 'Outside the gateway · 6–10 of 12']);
+  const back = foldStep(m, step, 'collapse:group:outside');
+  assert.deepEqual([[...back.spread], [...back.pages], back.words], [[], [], '']);
+});
+
+test('focus after a press: the stack while it shows, else the first block shown, or the folded stack', () => {
+  const m = model(0, 12, FOLDS);
+  m.blocks.find((b) => b.id === 'outside:move:docs').wait = ' · in preview';
+  const open = layoutTree(m, { spread: spreadOut(), ...WIDE });
+  assert.equal(focusAfter(open, 'stack:group:outside:after'), null);
+  // The first block shown, a pinned one too.
+  assert.equal(focusAfter(open, 'stack:group:outside:all'), 'outside:move:docs');
+  assert.equal(focusAfter(layoutTree(m, WIDE), 'collapse:group:outside'), 'stack:group:outside:all');
+  // A group that does not fold goes back to its first card.
+  assert.equal(focusAfter(onPage(model(0, 12), 0), 'collapse:group:outside'), 'outside:move:docs');
 });

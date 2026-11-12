@@ -148,15 +148,16 @@ function stackOfCards(group, role, cards, size) {
 // The children a block shows: a group's always, any other block's only while it is open. A group
 // that folds shows one stack while it is not in `spread`. A group past six shows the cards of its
 // page between a stack of the cards before and one of the cards after; a pinned block shows where
-// it stands among them. A group that folds ends with Collapse. A card on a page, or of a group that
-// folds, is marked as turning with its group.
+// it stands among them. A group that folds ends with Collapse, and so does one past its first page.
+// A card on a page, or of a group that folds, is marked as turning with its group.
 function shownChildren(block, children, open, pages, spread = NONE, flagged = NONE) {
   if (block.kind !== "group") return open.has(block.id) ? children : [];
   const kept = children.filter((child) => pinned(child, flagged));
   const cards = stackable(block, children, flagged);
   if (cards && !spread.has(block.id)) return [stackOfCards(block, "all", cards), ...kept];
-  const collapse = cards ? [{ id: `collapse:${block.id}`, column: block.column, parent: block.id, kind: "collapse", group: block.id, name: COLLAPSE }] : [];
   const paged = paging(block, children, pages, flagged);
+  // Collapse folds a group that folds; one that does not, it takes back to its first page.
+  const collapse = cards || (paged && paged.page > 0) ? [{ id: `collapse:${block.id}`, column: block.column, parent: block.id, kind: "collapse", group: block.id, name: COLLAPSE }] : [];
   if (!paged) return [...(cards ? children.map((child) => (kept.includes(child) ? child : { ...child, turns: block.id })) : children), ...collapse];
   const { rest, size, page } = paged;
   const onPage = new Set(rest.slice(page * size, (page + 1) * size));
@@ -274,13 +275,37 @@ export function pressStack(model, { spread, pages }, id) {
   return next;
 }
 
-// What shows after a press on Collapse: its group folds, and opens again on its first page.
+// What shows after a press on Collapse: its group folds, and opens again on its first page; a group
+// that does not fold goes back to its first page.
 export function collapseGroup({ spread, pages }, id) {
   const group = groupOfStack(id);
   const next = { spread: new Set(spread), pages: new Map(pages) };
   next.spread.delete(group);
   next.pages.delete(group);
   return next;
+}
+
+// What a press on a stack or on Collapse (`id`) changes: the open groups, the pages, and the caption
+// a screen reader hears after a press on a stack ("" after Collapse, or where the group does not page).
+export function foldStep(model, view, id) {
+  const next = id.startsWith("collapse:") ? collapseGroup(view, id) : pressStack(model, view, id);
+  return { ...next, words: id.startsWith("stack:") ? turnWords(model, next.pages, id) : "" };
+}
+
+// Where focus goes after a press on a stack or Collapse (`id`), on the layout drawn next: nowhere new
+// while that block still shows; after Collapse to the group's folded stack; else to the first block
+// the group shows, a pinned one too.
+export function focusAfter(layout, id) {
+  if (layout.blocks.some((at) => at.id === id)) return null;
+  const group = groupOfStack(id);
+  const folded = `stack:${group}:all`;
+  if (id.startsWith("collapse:") && layout.blocks.some((at) => at.id === folded)) return folded;
+  const after = layout.blocks.slice(layout.blocks.findIndex((at) => at.id === group) + 1);
+  for (const at of after) {
+    if (at.kind === "group" || at.kind === "column") break;
+    if (at.kind !== "stack" && at.kind !== "collapse") return at.id;
+  }
+  return null;
 }
 
 // The groups open with `ids` shown (a search's matches, a selection): `spread` and every folded

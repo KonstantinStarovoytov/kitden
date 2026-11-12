@@ -6,7 +6,7 @@
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
-import { collapseGroup, findIn, groupOfStack, groupsWith, layoutTree, linkKey, litFor, litFrom, newCards, pagesNow, pagesWith, pressStack, shownFound, turnWords } from "./map.js";
+import { findIn, focusAfter, foldStep, groupsWith, layoutTree, linkKey, litFor, litFrom, newCards, pagesNow, pagesWith, shownFound } from "./map.js";
 import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
 import { drawChip, glidePill } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
@@ -502,18 +502,11 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
 function keepWhatShows(answer, { opens = true } = {}) {
   onMap.answer = answer;
   const rows = rowsShown(tray);
-  const waited = waitingIds(onMap.model);
   const was = onMap.model;
   onMap.model = treeOf(answer, rows);
   // A card that comes with a change or a rescan opens its group: it never lands inside a stack.
   // Not on a new map, another project or another tab (`opens` false), where every card is new.
   if (was && opens) onMap.spread = groupsWith(onMap.model, onMap.spread, newCards(was, onMap.model));
-  // An item whose add has just come into the tray shows: its group turns to its page.
-  const fresh = [...waitingIds(onMap.model)].filter((id) => !waited.has(id));
-  if (fresh.length) {
-    onMap.pages = pagesWith(onMap.model, pagesNow(onMap.model, onMap.pages), fresh);
-    onMap.spread = groupsWith(onMap.model, onMap.spread, fresh);
-  }
   const ids = new Set([...onMap.model.blocks.map((block) => block.id), ...onMap.model.links.map(linkKey)]);
   if (onMap.tab === "plugins") onMap.open = new Set([...onMap.open].filter((id) => ids.has(id)));
   if (onMap.selected && !ids.has(onMap.selected)) onMap.selected = null;
@@ -524,11 +517,6 @@ function treeOf(answer, rows) {
   if (onMap.tab === "instructions") return instructionsTree(answer);
   const tree = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows, answer);
   return { ...tree, blocks: [...tree.blocks, { ...ADD_CARD }] };
-}
-
-// The blocks of a tree whose add waits in the tray.
-function waitingIds(model) {
-  return new Set(model ? model.blocks.filter((b) => b.rows).map((b) => b.id) : []);
 }
 
 // What the map lights for a search: its matches, and a folded plugin that holds one (it stays
@@ -757,19 +745,15 @@ function pressBlock(id) {
   if (selectHook) selectHook(id);
 }
 
-// A press on a stack opens its group or turns its page, and Collapse folds the group. A turn says
-// the caption to a screen reader. A selection the press hides is let go. Focus stays on a stack
-// that still shows; else it goes to the first card shown, or after Collapse to the group's stack.
+// A press on a stack opens its group or turns its page, and Collapse folds the group (map.js
+// foldStep). A turn says the caption to a screen reader. A selection the press hides is let go.
+// Focus goes where focusAfter says.
 function foldOnMap(id) {
-  const view = { spread: onMap.spread, pages: onMap.pages };
-  Object.assign(onMap, id.startsWith("collapse:") ? collapseGroup(view, id) : pressStack(onMap.model, view, id));
-  const words = id.startsWith("stack:") ? turnWords(onMap.model, onMap.pages, id) : "";
-  if (words) say(words);
+  const step = foldStep(onMap.model, { spread: onMap.spread, pages: onMap.pages }, id);
+  Object.assign(onMap, { spread: step.spread, pages: step.pages });
+  if (step.words) say(step.words);
   drawOrLetGo();
-  const shown = onMap.layout ? onMap.layout.blocks : [];
-  if (!onMap.view || shown.some((at) => at.id === id)) return;
-  const group = groupOfStack(id);
-  const next = id.startsWith("collapse:") ? `stack:${group}:all` : shown.find((at) => at.turns === group)?.id;
+  const next = onMap.layout && focusAfter(onMap.layout, id);
   if (next) onMap.view.node(next)?.focus({ preventScroll: true });
 }
 
