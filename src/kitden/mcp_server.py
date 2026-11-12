@@ -66,12 +66,23 @@ def create_server(
         description=(
             "Show what each AI coding client loads for a project: MCP servers, skills, plugins, "
             "hooks, marketplaces and instruction files, with source, scope and on/off state. "
-            "Start here for the full picture; use list_findings for problems only and "
-            "explain_item for one name. client (claude_code, claude_desktop_code_tab, codex, "
-            "cursor) defaults to all. " + NO_CHANGES
+            "Start here for the full picture; use list_findings for problems only. It does not "
+            "compare the copies of one name: when the request names one item, use explain_item. "
+            "Returns one view per client with its items. " + NO_CHANGES
         ),
     )
-    def show_setup(project_path: ProjectPath = None, client: str | None = None) -> dict[str, Any]:
+    def show_setup(
+        project_path: ProjectPath = None,
+        client: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Only this client: claude_code, claude_desktop_code_tab, codex or cursor. "
+                    "All clients by default."
+                )
+            ),
+        ] = None,
+    ) -> dict[str, Any]:
         return answers.setup_answer(build(), project_path or cwd(), client)
 
     @server.tool(
@@ -90,14 +101,27 @@ def create_server(
     @server.tool(
         annotations=READ_ONLY,
         description=(
-            "Explain one name: every definition across clients and scopes, which one loads in "
-            "the project, and why. Use it after show_setup or list_findings names an item; "
-            "show_setup lists everything. kind is optional (mcp_server, skill, plugin, hook, "
-            "marketplace, instructions). " + NO_CHANGES
+            "Show every definition of one named item (for example the skill pdf or the MCP "
+            "server github) across clients and scopes, which one loads in the project, and why. "
+            "Use it whenever the request names one item, even if it asks to show every "
+            "definition; show_setup lists all items. Returns each definition with its client, "
+            "scope, source file and whether it loads. " + NO_CHANGES
         ),
     )
     def explain_item(
-        name: str, kind: str | None = None, project_path: ProjectPath = None
+        name: Annotated[
+            str, Field(description="The item name as the clients show it, for example pdf.")
+        ],
+        kind: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Only this kind: mcp_server, skill, plugin, hook, marketplace or "
+                    "instructions. Any kind by default."
+                )
+            ),
+        ] = None,
+        project_path: ProjectPath = None,
     ) -> dict[str, Any]:
         return answers.item_answer(build(), project_path or cwd(), name, kind)
 
