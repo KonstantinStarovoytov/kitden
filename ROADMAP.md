@@ -15,6 +15,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **`kitden open` after an update in a terminal:** when the page still running is from another
   Kitden version, `kitden open` stops it and starts the new one, instead of giving a link to a
   page that can only fail.
+- **Context shows the large skills:** on the side whose descriptions are sent, each skill and its
+  piece of the skill list turn from grey to orange with the length of its description, so the
+  few skills that take most of the list stand out.
 
 ### 0.8.0
 
