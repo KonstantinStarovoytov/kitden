@@ -227,10 +227,13 @@ const DISCONNECT_CODEX = { action: 'client.disconnect', targets: [{ client: 'cod
 const MOVE_FILES_OUT = { action: 'gateway.move_out', targets: [{ client: 'claude_code' }], params: { server: 'files' } };
 const CALM = 'cubic-bezier(.2,.8,.2,1)';
 
-function freshMap() {
+// Most tests look at the servers: every group opens out of its stack first, unless `open` is false.
+function freshMap({ open = true } = {}) {
   state.mode = 'map';
   main.replaceChildren();
   renderGateway(main);
+  settle();
+  if (open) for (const stack of walk(map()).filter((n) => /^block:stack:.*:all$/.test(n.dataset.focus || ''))) stack.listeners.click[0]();
   settle();
   return map();
 }
@@ -324,44 +327,92 @@ test('the List draws none of them', async (t) => {
 // Twelve servers outside the gateway: three pages of five.
 const TWELVE = { ...VIEW, groups: { move: Array.from({ length: 12 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: [`d${i}`], stays: null })), local: [], plugin: [] } };
 const outsideShown = (box) => walk(box).filter((n) => n.dataset.focus?.startsWith('block:outside:')).map((n) => n.dataset.focus.split(':').at(-1));
-async function onTwelve(t) {
+// The Outside group starts folded; `open` opens it out of its stack first. After the test it
+// folds again, which also takes it back to its first page.
+const collapse = (group) => {
+  const c = map() && walk(map()).find((n) => n.dataset.focus === `block:collapse:${group}`);
+  if (c) c.listeners.click[0]();
+  settle();
+};
+async function onTwelve(t, { open = true } = {}) {
   data.gateway = TWELVE;
   t.after(() => {
+    collapse('group:outside');
     data.gateway = VIEW;
     state.q = '';
     state.selected = null;
   });
-  const box = freshMap();
+  const box = freshMap({ open });
+  if (!open) collapse('group:outside');
   return box;
 }
 
-test('a press on N more turns the page in place; focus stays on it', async (t) => {
+test('the Gateway map starts with a big group folded into one stack', async (t) => {
+  const box = await onTwelve(t, { open: false });
+  assert.deepEqual(outsideShown(box), []);
+  const stack = node(box, 'block:stack:group:outside:all');
+  assert.equal(stack.getAttribute('aria-label'), 'Open Outside the gateway, 12: direct-0, direct-1, direct-2');
+  stack.focus();
+  stack.listeners.click[0]();
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+  // The stack is gone; focus goes to the first card shown.
+  assert.equal(document.activeElement, node(box, 'block:outside:move:direct-0'));
+});
+
+test('Collapse folds the group, lets go of a card in it, and focus goes to its stack', async (t) => {
   const box = await onTwelve(t);
-  const more = node(box, 'block:more:group:outside');
-  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
-  more.focus();
-  more.listeners.click[0]();
-  settle();
-  assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
-  // The List does not open: the same map and button, its focus kept.
-  assert.deepEqual([state.mode, map(), node(box, 'block:more:group:outside'), document.activeElement], ['map', box, more, more]);
-  assert.equal(more.getAttribute('aria-label'), '2 more');
-  more.listeners.click[0]();
-  settle();
-  assert.equal(more.getAttribute('aria-label'), 'Show the first 5');
-  more.listeners.click[0]();
-  settle();
-  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
-  // A turn that hides the selected server lets go of it.
   node(box, 'block:outside:move:direct-1').listeners.click[0]();
   settle();
   assert.match(node(box, 'block:outside:move:direct-1').className, /\bselected\b/);
-  more.listeners.click[0]();
+  node(box, 'block:collapse:group:outside').listeners.click[0]();
   settle();
+  assert.deepEqual(outsideShown(box), []);
   assert.ok(!walk(box).some((n) => /\bselected\b/.test(n.className)));
-  more.listeners.click[0]();
-  more.listeners.click[0]();
+  assert.equal(document.activeElement, node(box, 'block:stack:group:outside:all'));
+});
+
+test('a search opens the folded group that holds a match, and it stays open after', async (t) => {
+  const box = await onTwelve(t, { open: false });
+  state.q = 'direct-11';
+  renderGateway(main, { again: true });
   settle();
+  assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+  state.q = '';
+  renderGateway(main, { again: true });
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+  assert.ok(node(box, 'block:collapse:group:outside'));
+});
+
+test('a press on the stack below turns the page in place; focus stays on it', async (t) => {
+  const box = await onTwelve(t);
+  const after = node(box, 'block:stack:group:outside:after');
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+  after.focus();
+  after.listeners.click[0]();
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
+  // The List does not open: the same map and stack, its focus kept.
+  assert.deepEqual([state.mode, map(), node(box, 'block:stack:group:outside:after'), document.activeElement], ['map', box, after, after]);
+  assert.equal(after.getAttribute('aria-label'), 'Show 2 more: direct-10, direct-11');
+  // The last page has no stack below: focus goes to its first card.
+  after.listeners.click[0]();
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+  assert.equal(document.activeElement, node(box, 'block:outside:move:direct-10'));
+  // The stack above turns back, one page a press.
+  node(box, 'block:stack:group:outside:before').listeners.click[0]();
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
+  // A turn that hides the selected server lets go of it.
+  node(box, 'block:outside:move:direct-6').listeners.click[0]();
+  settle();
+  assert.match(node(box, 'block:outside:move:direct-6').className, /\bselected\b/);
+  node(box, 'block:stack:group:outside:before').listeners.click[0]();
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+  assert.ok(!walk(box).some((n) => /\bselected\b/.test(n.className)));
 });
 
 // Review Focus
@@ -376,9 +427,6 @@ test('a search match on page 3 shows page 3 and stays after the search', async (
   renderGateway(main, { again: true });
   settle();
   assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
-  // Turn back to the first page for the next test.
-  node(box, 'block:more:group:outside').listeners.click[0]();
-  settle();
 });
 
 test('an arrival on another page brings its page and selects its server', async (t) => {
@@ -390,12 +438,8 @@ test('an arrival on another page brings its page and selects its server', async 
   settle();
   assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
   assert.match(node(box, 'block:outside:move:direct-7').className, /\bselected\b/);
-  // Let go, and back to the first page, for the next tests.
   node(box, 'block:outside:move:direct-7').listeners.click[0]();
-  node(box, 'block:more:group:outside').listeners.click[0]();
-  node(box, 'block:more:group:outside').listeners.click[0]();
   settle();
-  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
 });
 
 // Fix round 1: a row taken out gives its server back on its page; a turn during a search stays.
@@ -407,8 +451,8 @@ test('a move in taken out brings its server back on its page in the Outside list
   const box = await onTwelve(t);
   t.after(() => cancelTray());
   // On the last page, direct-11 moves into the gateway.
-  press(box, 'block:more:group:outside');
-  press(box, 'block:more:group:outside');
+  press(box, 'block:stack:group:outside:after');
+  press(box, 'block:stack:group:outside:after');
   settle();
   assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
   queue(PREVIEW, batch('p1'));
@@ -416,7 +460,8 @@ test('a move in taken out brings its server back on its page in the Outside list
   settle();
   assert.deepEqual(outsideShown(box), ['direct-10']);
   // Back on the first page, a press on its preview block takes it out.
-  press(box, 'block:more:group:outside');
+  press(box, 'block:stack:group:outside:before');
+  press(box, 'block:stack:group:outside:before');
   settle();
   const preview = node(box, 'block:preview:direct-11');
   preview.focus();
@@ -425,15 +470,13 @@ test('a move in taken out brings its server back on its page in the Outside list
   settle();
   assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
   assert.equal(document.activeElement, node(box, 'block:outside:move:direct-11'));
-  press(box, 'block:more:group:outside');
-  settle();
 });
 
 test('a move out taken out brings its server back on its page in the gateway, with focus', async (t) => {
   const local = Array.from({ length: 8 }, (_, i) => ({ ...VIEW.gateways[0].servers[0], name: `l${i}`, tool_list: [tool(`t${i}`, 'on')] }));
   const view = { ...VIEW, gateways: [{ ...VIEW.gateways[0], servers: local }], connections: { kitden: { claude_code: [], codex: [], cursor: [] } } };
   data.gateway = view;
-  t.after(() => { data.gateway = VIEW; return cancelTray(); });
+  t.after(() => { collapse('group:kitden:local'); data.gateway = VIEW; return cancelTray(); });
   const box = freshMap();
   assert.deepEqual(heldShown(box), ['l0', 'l1', 'l2', 'l3', 'l4']);
   // l7, on the second page, moves out while the first page shows.
@@ -447,8 +490,6 @@ test('a move out taken out brings its server back on its page in the gateway, wi
   settle();
   assert.deepEqual(heldShown(box), ['l5', 'l6', 'l7']);
   assert.equal(document.activeElement, node(box, 'block:held:kitden:l7'));
-  press(box, 'block:more:group:kitden:local');
-  settle();
 });
 
 test('a turn during a search stays when the tray draws the map again', async (t) => {
@@ -459,7 +500,8 @@ test('a turn during a search stays when the tray draws the map again', async (t)
   settle();
   assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
   // The person turns to the first page; the search is still on.
-  press(box, 'block:more:group:outside');
+  press(box, 'block:stack:group:outside:before');
+  press(box, 'block:stack:group:outside:before');
   settle();
   queue(PREVIEW, batch('p3'));
   await addToTray(REMOVE_FILES);
@@ -473,8 +515,6 @@ test('a turn during a search stays when the tray draws the map again', async (t)
   assert.ok(outsideShown(box).includes('direct-7'));
   state.q = '';
   renderGateway(main, { again: true });
-  press(box, 'block:more:group:outside');
-  press(box, 'block:more:group:outside');
   settle();
 });
 
@@ -684,11 +724,12 @@ test('the chip counts what lights on the shown page, and counts again when a pag
   const servers = Array.from({ length: 8 }, (_, i) => ({ ...VIEW.gateways[0].servers[0], name: `srv-${i + 1}`, kind: 'remote' }));
   data.gateway = { ...VIEW, gateways: [{ ...VIEW.gateways[0], servers }], connections: { kitden: { claude_code: [], codex: [], cursor: [] } } };
   t.after(() => {
+    collapse('group:kitden:remote');
     data.gateway = VIEW;
     state.q = '';
     state.mode = 'map';
   });
-  // Eight servers match; the group shows five of them.
+  // Eight servers match; the search opens their folded group, which shows five of them.
   state.q = 'srv';
   state.mode = 'map';
   main.replaceChildren();
@@ -700,7 +741,7 @@ test('the chip counts what lights on the shown page, and counts again when a pag
   assert.equal(lit.length, 5);
   assert.equal(pages['#find-chip'].textContent, '5 matches');
   // The turn shows the other three, and the chip says so.
-  press(box, 'block:more:group:kitden:remote');
+  press(box, 'block:stack:group:kitden:remote:after');
   settle();
   assert.equal(pages['#find-chip'].textContent, '3 matches');
 });
@@ -844,7 +885,8 @@ test('a project switch keeps each page, and a search brings its matches there', 
   renderGateway(main, { again: true });
   settle();
   // The person turns to the first page while the search is on; another project brings its match.
-  press(box, 'block:more:group:outside');
+  press(box, 'block:stack:group:outside:before');
+  press(box, 'block:stack:group:outside:before');
   settle();
   assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
   pickProject('atlas', TWELVE);
@@ -852,16 +894,12 @@ test('a project switch keeps each page, and a search brings its matches there', 
   assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
   // With no search, a switch keeps the page shown.
   state.q = '';
-  press(box, 'block:more:group:outside');
-  press(box, 'block:more:group:outside');
+  press(box, 'block:stack:group:outside:before');
   settle();
   assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
   pickProject('', TWELVE);
   settle();
   assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
-  press(box, 'block:more:group:outside');
-  press(box, 'block:more:group:outside');
-  settle();
 });
 
 // Fix round 1: "Show" in a tool's panel goes the picker's way (switchProject), and the page draws
@@ -1128,15 +1166,15 @@ test('a turn of a page says which ones show to a screen reader', async (t) => {
   const said = pages['#said'];
   // The live region takes its words in a later timer task (toast.js say).
   const heard = () => new Promise((resolve) => setTimeout(resolve, 5));
-  press(box, 'block:more:group:outside');
+  press(box, 'block:stack:group:outside:after');
   await heard();
   assert.equal(said.textContent, 'Outside the gateway · 6–10 of 12');
-  press(box, 'block:more:group:outside');
+  press(box, 'block:stack:group:outside:after');
   await heard();
   assert.equal(said.textContent, 'Outside the gateway · 11–12 of 12');
-  press(box, 'block:more:group:outside');
+  press(box, 'block:stack:group:outside:before');
   await heard();
-  assert.equal(said.textContent, 'Outside the gateway · 1–5 of 12');
+  assert.equal(said.textContent, 'Outside the gateway · 6–10 of 12');
   settle();
 });
 
@@ -1159,8 +1197,7 @@ test('a search keeps the page of the selected block, and the selection with it',
   assert.ok(outsideShown(box).includes('direct-8'));
   state.q = '';
   renderGateway(main, { again: true });
-  press(box, 'block:more:group:outside');
-  press(box, 'block:more:group:outside');
+  press(box, 'block:stack:group:outside:before');
   settle();
   assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
 });
@@ -1171,20 +1208,22 @@ test("a move taken out by the bar's × or by Cancel brings its server back on it
   const box = await onTwelve(t);
   t.after(() => cancelTray());
   for (const takeAway of [() => takeOut(keyFor(dropBody(TWELVE.groups.move[11], TWELVE))), () => cancelTray()]) {
-    press(box, 'block:more:group:outside');
-    press(box, 'block:more:group:outside');
+    press(box, 'block:stack:group:outside:after');
+    press(box, 'block:stack:group:outside:after');
     settle();
     queue(PREVIEW, batch('x1'));
     await addToTray(dropBody(TWELVE.groups.move[11], TWELVE));
     settle();
-    press(box, 'block:more:group:outside');
+    press(box, 'block:stack:group:outside:before');
+    press(box, 'block:stack:group:outside:before');
     settle();
     assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
     await takeAway();
     await done();
     settle();
     assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
-    press(box, 'block:more:group:outside');
+    press(box, 'block:stack:group:outside:before');
+    press(box, 'block:stack:group:outside:before');
     settle();
   }
 });

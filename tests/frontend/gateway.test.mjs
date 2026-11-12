@@ -14,7 +14,11 @@ const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clic
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, pressRow, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { heldServer, offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, litFor, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree: layoutAsIs, linkClass, litFor, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+// The tests here look at the servers, so every group is open out of its stack unless a test says
+// otherwise with its own `spread`.
+const openAll = (tree) => new Set(tree.blocks.filter((b) => b.folds).map((b) => b.id));
+const layoutTree = (tree, options = {}) => layoutAsIs(tree, { spread: openAll(tree), ...options });
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, setBusy, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
@@ -508,13 +512,13 @@ test('in atlas the docs block says This project', () => {
   assert.equal(block(gatewayTree(view, OPTS), 'outside:move:docs').tag, null);
 });
 
-test('N more is as high as the blocks it stands for', () => {
+test('every server group folds; a stack of outside servers takes their height', () => {
   const rows = Array.from({ length: 8 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: ['x'], stays: null, override: false }));
   const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { move: rows, local: [], plugin: [] } }, OPTS);
-  const more = layoutTree(tree, { open: new Set(), narrow: false }).blocks.find((b) => b.kind === 'more');
-  assert.equal(more.id, 'more:group:outside');
-  // An outside server's block is 50 high, not a plain 60.
-  assert.equal(more.h, 50);
+  assert.ok(tree.blocks.filter((b) => b.kind === 'group').every((b) => b.folds));
+  const stack = layoutTree(tree, { open: new Set(), spread: new Set(), narrow: false }).blocks.find((b) => b.id === 'stack:group:outside:all');
+  // An outside server's block is 50 high, not a plain 60: two strips of 18 and one whole card.
+  assert.equal(stack.h, 2 * 18 + 50);
 });
 
 test('the map goes narrow by the window rule, or where the wide map does not fit its box', () => {
@@ -615,7 +619,7 @@ test('a search match turns its group to the page that holds it; a match on the p
   assert.ok(!shownWith(tree, new Map(), found.open).includes('outside:move:direct-11'));
   const pages = pagesWith(tree, new Map(), found.matches);
   assert.deepEqual([...pages], [['group:outside', 2]]);
-  assert.ok(shownWith(tree, pages).includes('outside:move:direct-11') && shownWith(tree, pages).includes('more:group:outside'));
+  assert.ok(shownWith(tree, pages).includes('outside:move:direct-11') && shownWith(tree, pages).includes('stack:group:outside:before'));
   // Every server matches "direct", and the page shown has some: nothing turns.
   assert.equal(pagesWith(tree, pages, findIn(tree, 'direct').matches), pages);
   // A selection that is no block (a link's key) turns nothing.
@@ -2085,23 +2089,23 @@ test('a moving server is drawn once, in the gateway, and the Outside list closes
 });
 
 // Review Focus
-test('a server behind N more moves up into the freed place and back after a take-out', async () => {
+test('a server in the stack below moves up into the freed place and back after a take-out', async () => {
   await freshTray();
   const many = Array.from({ length: 8 }, (_, i) => ({ name: `s${i + 1}`, clients: ['codex'], columns: ['codex'], items: [`i${i + 1}`], client_items: { codex: [`i${i + 1}`] }, stays: null }));
   const view = { ...MEDIUM_VIEW, groups: { move: many, local: [], plugin: [] } };
   const shown = () => {
     const tree = gatewayTree(view, { ...OPTS, rows: rowsOnMap(tray) });
     const layout = layoutTree(tree, { open: new Set(), narrow: false });
-    return layout.blocks.filter((b) => b.id.startsWith('outside:') || b.id.startsWith('more:')).map((b) => (b.kind === 'more' ? b.name : b.id.split(':').at(-1)));
+    return layout.blocks.filter((b) => b.id.startsWith('outside:') || b.kind === 'stack').map((b) => (b.kind === 'stack' ? `${b.role} ${b.holds.length}` : b.id.split(':').at(-1)));
   };
-  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', '3 more']);
+  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', 'after 3']);
   queue(PREVIEW, batch('c1'));
   await addToTray(dropBody(many[1], view));
   // s6 moves up into the place s2 left.
-  assert.deepEqual(shown(), ['s1', 's3', 's4', 's5', 's6', '2 more']);
+  assert.deepEqual(shown(), ['s1', 's3', 's4', 's5', 's6', 'after 2']);
   await takeOut(tray.rows[0].key);
   await flush();
-  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', '3 more']);
+  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', 'after 3']);
   await freshTray();
 });
 

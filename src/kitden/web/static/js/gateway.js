@@ -7,7 +7,7 @@ import { addForm, connectAction, connectBody, followProject, heldServer, liveHel
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { flipToolPick, onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
-import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
+import { collapseGroup, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, pressStack, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
 import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
@@ -311,7 +311,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
       const last = ends.filter((end) => end.kind === kind).map((end) => end.block);
       if (!mine.length && !last.length) continue;
       const group = `group:${gateway.id}:${kind}`;
-      blocks.push({ id: group, column: "servers", kind: "group", name: word, icon: mark, before: 3, under: id });
+      blocks.push({ id: group, column: "servers", kind: "group", name: word, icon: mark, before: 3, under: id, folds: true });
       for (const each of mine) {
         const block = { id: `held:${gateway.id}:${each.name}`, column: "servers", parent: group, kind: "held", name: each.name, state: "on", lamp: "on", icon: SERVER_ICONS[kind], ports: { left: true }, server: each, gateway };
         server(block, word);
@@ -413,7 +413,7 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
       links.push({ from: `gateway:${kitden.id}`, to: id, kind: "on", leaving: true, row: move.key });
     }
   }
-  if (blocks.length) blocks.unshift({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE_MAP, pageName: OUTSIDE_PAGED, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
+  if (blocks.length) blocks.unshift({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE_MAP, pageName: OUTSIDE_PAGED, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6, folds: true });
   return { blocks, links };
 }
 
@@ -797,12 +797,13 @@ function keepBeside() {
 // The map: the blocks open and the one selected, its view (map-view.js, one per visit) and the
 // tree it shows, what the search found, and the box's width as last measured. Kept across redraws,
 // and across projects. `pages`: the page each group that pages shows (map.js);
-// `searched`, the search text whose matches brought their pages; `back`, the block a row taken out
+// `spread`, the groups open out of their stacks (all fold when the page loads); `searched`, the
+// search text whose matches brought their pages; `back`, the block a row taken out
 // gives back, whose page the next draw brings; `layout`, what the last draw laid out; `folds`, the
 // blocks the count folded during the search `foldsFor` (keepFolds).
 const onMap = {
   project: null, open: new Set(), selected: null, view: null, model: null, found: null, width: null, narrow: false, watch: null,
-  unfolds: false, pages: new Map(), searched: "", back: null, layout: null, folds: new Set(), foldsFor: "",
+  unfolds: false, pages: new Map(), spread: new Set(), searched: "", back: null, layout: null, folds: new Set(), foldsFor: "",
 };
 
 // What pointing at a block lights while nothing is selected: a client's paths, or the lines from the
@@ -849,6 +850,8 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   if (fresh) onMap.width = contentWidth(onMap.view.box) ?? onMap.width;
   const was = onMap.model;
   Object.assign(onMap, { model, found: keepFolds(found) });
+  // A card that comes with a change or a rescan opens its group: it never lands inside a stack.
+  if (was && !fresh && !projectChanged) onMap.spread = groupsWith(model, onMap.spread, newIn(was, model));
   bringPages(model, { fresh, projectChanged });
   // An Undo the page has just read: the map plays its rows back (landRows).
   const undid = undone.id;
@@ -856,6 +859,12 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   if (fresh || projectChanged) landing.due = null;
   else if (landRows(was, model, undid)) return;
   drawOnMap(model, { fresh, projectChanged, switched });
+}
+
+// The blocks of `now` that `was` did not have.
+function newIn(was, now) {
+  const had = new Set(was.blocks.map((block) => block.id));
+  return now.blocks.filter((block) => !had.has(block.id)).map((block) => block.id);
 }
 
 // The pages a draw shows, before it: those of groups that still page, then the page of a block a
@@ -870,6 +879,7 @@ function bringPages(model, { fresh = false, projectChanged = false } = {}) {
   const ids = [onMap.back, matches.length && onMap.selected, ...matches, fresh && onMap.selected].filter(Boolean);
   Object.assign(onMap, { searched: text, back: null });
   onMap.pages = pagesWith(model, pagesNow(model, onMap.pages), ids);
+  onMap.spread = groupsWith(model, onMap.spread, ids);
   if (matches.length) letGoHidden(model);
 }
 
@@ -1202,7 +1212,7 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   const flipped = narrow !== onMap.narrow;
   onMap.narrow = narrow;
   const open = openNow();
-  const layout = layoutTree(model, { open, pages: onMap.pages, narrow });
+  const layout = layoutTree(model, { open, pages: onMap.pages, spread: onMap.spread, narrow });
   onMap.layout = layout;
   drawChip(shownFound(onMap.found, layout));
   // A selected block lights every client's path to it; a selected client lights what it reaches; a
@@ -1330,6 +1340,10 @@ export function pressBlock(model, id) {
     turnOnMap(model, id);
     return;
   }
+  if (id.startsWith("stack:") || id.startsWith("collapse:")) {
+    foldOnMap(model, id);
+    return;
+  }
   const block = model.blocks.find((b) => b.id === id);
   if (!block) return;
   // The Add a server card opens the add panel; focus comes back to the card.
@@ -1360,10 +1374,29 @@ function turnOnMap(model, id) {
   else drawAgain();
 }
 
+// A press on a stack opens its group or turns its page, and Collapse folds the group. A turn says
+// the caption to a screen reader ("Remote · 6–10 of 12"). A selection the press hides is let go.
+// Focus stays on a stack that still shows; else it goes to the first card shown, or after Collapse
+// to the group's stack.
+function foldOnMap(model, id) {
+  const view = { spread: onMap.spread, pages: onMap.pages };
+  Object.assign(onMap, id.startsWith("collapse:") ? collapseGroup(view, id) : pressStack(model, view, id));
+  const words = id.startsWith("stack:") ? turnWords(model, onMap.pages, id) : "";
+  if (words) say(words);
+  if (onMap.selected && !shownOnMap(model, onMap.selected)) letGoOnMap();
+  else drawAgain();
+  const box = onMap.view && onMap.view.box;
+  const shown = onMap.layout ? onMap.layout.blocks : [];
+  if (!box || shown.some((at) => at.id === id)) return;
+  const group = groupOfStack(id);
+  const next = id.startsWith("collapse:") ? `stack:${group}:all` : shown.find((at) => at.turns === group)?.id;
+  if (next) withFocusKey(box, `block:${next}`)?.focus({ preventScroll: true });
+}
+
 // Whether the map shows a block, or both ends of a link (its key), as it lays out now.
 function shownOnMap(model, selected) {
   const link = model.links.find((l) => linkKey(l) === selected);
-  const shown = new Set(layoutTree(model, { open: openNow(), pages: onMap.pages, narrow: onMap.narrow }).blocks.map((at) => at.id));
+  const shown = new Set(layoutTree(model, { open: openNow(), pages: onMap.pages, spread: onMap.spread, narrow: onMap.narrow }).blocks.map((at) => at.id));
   return (link ? [link.from, link.to] : [selected]).every((id) => shown.has(id));
 }
 
@@ -1373,6 +1406,7 @@ function selectOnMap(block) {
   // Its page shows, and what a search opened to show it stays open, so the selection is still on
   // the map when the search ends.
   onMap.pages = pagesWith(onMap.model, onMap.pages, [block.id]);
+  onMap.spread = groupsWith(onMap.model, onMap.spread, [block.id]);
   onMap.open = keepOpen(onMap.model, onMap.open, block, onMap.pages);
   onMap.selected = block.id;
   onList.current = block.id;
