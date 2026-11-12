@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, enterDelays, findChip, findIn, foldable, isNarrow, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, shownFound, toggleOpen, turnPage, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, collapseGroup, drawPlan, enterDelays, findChip, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, pressStack, shownFound, stackOf, toggleOpen, turnPage, turnWords, unfoldDelays, wideWidth, withStacks } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -689,4 +689,54 @@ test('opening a stack unfolds its cards; Collapse folds them back', () => {
   assert.equal(five.length, 5);
   assert.deepEqual(drawPlan(folded, open).unfold, five);
   assert.deepEqual(drawPlan(open, folded).fold, five);
+});
+
+test('a press on a stack opens it, turns forward and back; Collapse folds it', () => {
+  const m = model(0, 12, FOLDS);
+  const start = { spread: new Set(), pages: new Map() };
+  let v = pressStack(m, start, 'stack:group:outside:all');
+  assert.deepEqual([[...v.spread], [...v.pages]], [['group:outside'], []]);
+  assert.deepEqual([[...start.spread], [...start.pages]], [[], []]);
+  v = pressStack(m, v, 'stack:group:outside:after');
+  assert.deepEqual([...v.pages], [['group:outside', 1]]);
+  v = pressStack(m, v, 'stack:group:outside:before');
+  assert.deepEqual([...v.pages], [['group:outside', 0]]);
+  v = pressStack(m, v, 'stack:group:outside:before');
+  assert.deepEqual([...v.pages], [['group:outside', 0]]);
+  v = collapseGroup({ ...v, pages: new Map([['group:outside', 2]]) }, 'collapse:group:outside');
+  assert.deepEqual([[...v.spread], [...v.pages]], [[], []]);
+});
+
+test('stack and Collapse ids give back group ids that hold colons', () => {
+  assert.equal(groupOfStack('stack:group:kitden:remote:after'), 'group:kitden:remote');
+  assert.equal(groupOfStack('collapse:group:marketplace:a-b'), 'group:marketplace:a-b');
+  assert.equal(groupOfStack('stack:group:files:all'), 'group:files');
+});
+
+test('turn words name the page a press shows', () => {
+  const m = model(0, 12, FOLDS);
+  assert.equal(turnWords(m, new Map([['group:outside', 1]]), 'stack:group:outside:after'), 'Outside the gateway · 6–10 of 12');
+  assert.equal(turnWords(model(0, 4, FOLDS), new Map(), 'stack:group:outside:all'), '');
+});
+
+test('a search or a selection opens the folded group that holds it', () => {
+  const m = model(0, 12, FOLDS);
+  const spread = new Set();
+  assert.deepEqual([...groupsWith(m, spread, ['outside:local:direct-9'])], ['group:outside']);
+  assert.equal(groupsWith(m, spread, ['client:codex']), spread);
+  const open = new Set(['group:outside']);
+  assert.equal(groupsWith(m, open, ['outside:local:direct-9']), open);
+});
+
+test("a lit card lights its stack and that stack's link", () => {
+  const m = model(0, 12, FOLDS);
+  const folded = layoutTree(m, WIDE);
+  const lit = withStacks(litFrom(m, 'client:codex'), folded);
+  assert.ok(lit.has('stack:group:outside:all'));
+  assert.ok(lit.has('client:codex>stack:group:outside:all'));
+  assert.ok(!lit.has('client:cursor>stack:group:outside:all'));
+  assert.equal(stackOf(folded, 'outside:local:direct-9').id, 'stack:group:outside:all');
+  assert.equal(stackOf(folded, 'client:codex'), null);
+  const none = new Set(['client:a']);
+  assert.equal(withStacks(none, folded), none);
 });

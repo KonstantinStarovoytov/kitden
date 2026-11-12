@@ -222,10 +222,11 @@ export function turnPage(model, pages, id) {
   return new Map(pages).set(group.id, (paged.page + 1) % paged.count);
 }
 
-// What the caption of the group of "N more" (`more:<group id>`) says with `pages`, or "" when it
-// does not page: a turn says it to a screen reader.
+// What the caption of the group of "N more" (`more:<group id>`) or of a stack (`stack:<group
+// id>:<role>`) says with `pages`, or "" when it does not page: a turn says it to a screen reader.
 export function turnWords(model, pages, id) {
-  const group = model.blocks.find((block) => `more:${block.id}` === id);
+  const groupId = id.startsWith("more:") ? id.slice("more:".length) : groupOfStack(id);
+  const group = model.blocks.find((block) => block.id === groupId);
   const paged = group && paging(group, childrenOf(model).get(group.id) || [], pages, flaggedOf(model));
   return paged ? pageWords(group, paged) : "";
 }
@@ -264,6 +265,77 @@ export function pagesWith(model, pages, ids) {
     if (next === pages) next = new Map(pages);
     next.set(group, holds[0]);
   }
+  return next;
+}
+
+// The group of a stack ("stack:<group>:<role>") or of a Collapse ("collapse:<group>"). A group's id
+// may hold colons itself ("group:kitden:remote").
+export function groupOfStack(id) {
+  if (id.startsWith("collapse:")) return id.slice("collapse:".length);
+  return id.slice("stack:".length, id.lastIndexOf(":"));
+}
+
+// What shows after a press on a stack: "all" opens its group on its first page, "after" turns to
+// the next page and "before" to the one before, never past the first or the last. New sets; the
+// ones given stay as they are.
+export function pressStack(model, { spread, pages }, id) {
+  const group = groupOfStack(id);
+  const role = id.slice(id.lastIndexOf(":") + 1);
+  const next = { spread: new Set(spread), pages: new Map(pages) };
+  if (role === "all") {
+    next.spread.add(group);
+    next.pages.delete(group);
+    return next;
+  }
+  const block = model.blocks.find((b) => b.id === group);
+  const paged = block && paging(block, childrenOf(model).get(group) || [], pages, flaggedOf(model));
+  if (paged) next.pages.set(group, Math.min(Math.max(0, paged.page + (role === "after" ? 1 : -1)), paged.count - 1));
+  return next;
+}
+
+// What shows after a press on Collapse: its group folds, and opens again on its first page.
+export function collapseGroup({ spread, pages }, id) {
+  const group = groupOfStack(id);
+  const next = { spread: new Set(spread), pages: new Map(pages) };
+  next.spread.delete(group);
+  next.pages.delete(group);
+  return next;
+}
+
+// The groups open with `ids` shown (a search's matches, a selection): `spread` and every folded
+// group that holds one of them in its stack. `spread` itself when none is added.
+export function groupsWith(model, spread, ids) {
+  const byId = new Map(model.blocks.map((block) => [block.id, block]));
+  const children = childrenOf(model);
+  const flagged = flaggedOf(model);
+  let next = spread;
+  for (const id of ids) {
+    for (let card = byId.get(id), at = card && byId.get(card.parent); at; card = at, at = byId.get(at.parent)) {
+      const cards = next.has(at.id) ? null : stackable(at, children.get(at.id) || [], flagged);
+      if (!cards || !cards.includes(card)) continue;
+      if (next === spread) next = new Set(spread);
+      next.add(at.id);
+    }
+  }
+  return next;
+}
+
+// The stack of a layout that holds `id`, or null.
+export function stackOf(layout, id) {
+  return layout.blocks.find((at) => at.kind === "stack" && at.holds.includes(id)) || null;
+}
+
+// What lights with `lit` on a layout with stacks: also each stack that holds a lit card, and each
+// link to a stack that stands for a lit link. `lit` itself when nothing is added.
+export function withStacks(lit, layout) {
+  let next = lit;
+  const add = (id) => {
+    if (next.has(id)) return;
+    if (next === lit) next = new Set(lit);
+    next.add(id);
+  };
+  for (const at of layout.blocks) if (at.kind === "stack" && at.holds.some((id) => lit.has(id))) add(at.id);
+  for (const link of layout.links) if (link.stack && link.stands.some((key) => lit.has(key))) add(linkKey(link));
   return next;
 }
 
