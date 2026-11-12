@@ -501,7 +501,11 @@ class ClientAdapter(ABC):
             scope=Scope.USER,
             name=SETUP_NAME,
             edit=FileEdit(
-                path=place.edit.path, fmt=place.edit.fmt, key=(*place.edit.key, key), after=value
+                path=place.edit.path,
+                fmt=place.edit.fmt,
+                key=(*place.edit.key, key),
+                after=value,
+                check=place.edit.check,
             ),
             restart_note=place.restart_note,
         )

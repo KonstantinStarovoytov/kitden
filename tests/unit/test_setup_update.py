@@ -245,6 +245,61 @@ def test_update_points_a_moved_kitden_entry_at_this_kitden_and_keeps_the_rest(ho
     assert config.read_bytes() == original
 
 
+def test_update_of_a_moved_claude_code_entry_applies_and_undoes_while_claude_writes(
+    home, real_programs
+):
+    """Claude Code rewrites ~/.claude.json all the time: only the entry is checked."""
+    path = home / ".claude.json"
+    gone = {"type": "stdio", "command": str(home / "gone/bin/kitden"), "args": ["mcp"]}
+    _add_json(path, ("mcpServers", "kitden"), gone)
+    present = home / "opt/kitden/bin/kitden"
+    present.parent.mkdir(parents=True)
+    present.write_text("")
+    with _client(home, setup_command=lambda: str(present)) as client:
+        client.get("/?token=tok")
+        states = {s["client"]: s for s in client.get("/api/setup-server").json()}
+        assert states["claude_code"]["moved"] is True
+        target = [{"item": states["claude_code"]["item"]}]
+        body = {"action": "setup_server.update", "targets": target}
+        change = client.post("/api/changes/preview", json=body, headers=POST).json()
+        assert [s["name"] for s in change["steps"]] == ["kitden"]
+        _add_json(path, ("numStartups",), 4)  # Claude Code writes while the review is open
+        done = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert done["state"] == "verified", done
+        data = json.loads(path.read_text())
+        assert data["mcpServers"]["kitden"] == {**gone, "command": str(present)}
+        assert data["numStartups"] == 4
+        _add_json(path, ("numStartups",), 5)
+        undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+        assert undone["state"] == "undone", undone
+    data = json.loads(path.read_text())
+    assert data["mcpServers"]["kitden"] == gone
+    assert data["numStartups"] == 5
+
+
+# An entry on a versioned Homebrew path: the old keg can stay after an upgrade, so the program
+# is still there, yet restarted agents would keep starting the old version.
+
+
+@pytest.mark.parametrize("inside", ["libexec/bin/kitden", "bin/kitden"])
+def test_a_kitden_entry_on_a_versioned_homebrew_path_is_moved(home, real_programs, inside):
+    kept = home / "homebrew/Cellar/kitden/0.7.1" / inside
+    kept.parent.mkdir(parents=True)
+    kept.write_text("")
+    _kitden_entry(home, str(kept))
+    state = _states(home)["codex"]
+    assert state["state"] == "old" and state["moved"] is True
+
+
+def test_a_kitden_entry_on_the_homebrew_opt_link_is_added(home, real_programs):
+    link = home / "homebrew/opt/kitden/bin/kitden"
+    link.parent.mkdir(parents=True)
+    link.write_text("")
+    _kitden_entry(home, str(link))
+    state = _states(home)["codex"]
+    assert state["state"] == "added" and state["moved"] is False
+
+
 def test_a_turned_off_kitden_entry_is_added_but_off(home):
     config = home / ".codex/config.toml"
     kitden = {"command": "/Users/me/.local/bin/kitden", "args": ["mcp"], "enabled": False}

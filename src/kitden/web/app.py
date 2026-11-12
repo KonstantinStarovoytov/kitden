@@ -186,6 +186,7 @@ from kitden.views.setup_server import (
     is_moved_entry,
     is_old_entry,
     setup_server_state,
+    with_entry,
 )
 from kitden.views.skills import (
     library_offers,
@@ -635,11 +636,6 @@ class WaitForFirstScan:
         if scope["type"] == "http" and waits:
             await self.state.ready.wait()
         await self.app(scope, receive, send)
-
-
-def _states_in(inventory, *states: str) -> set[str]:
-    """Clients whose "show my setup" server is in one of the given states."""
-    return {s["client"] for s in setup_server_state(inventory) if s["state"] in states}
 
 
 def create_app(
@@ -1521,7 +1517,7 @@ def create_app(
                 i is None or not (is_old_entry(i) or is_moved_entry(i)) for i in items
             ):
                 raise ValueError("Choose an old Kitden entry.")
-            added = _states_in(state.inventory, "added")
+            added = with_entry(state.inventory)
             needs = any(i.client not in added or is_moved_entry(i) for i in items)
             command = _kitden_command() if needs else None
             steps = update_steps(adapters, items, added, command)
@@ -1538,7 +1534,7 @@ def create_app(
         elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
             items = _known_servers(targets)
             known = _known_paths()
-            added = _states_in(state.inventory, "added")
+            added = with_entry(state.inventory)
             command = _kitden_command(needed=bool({i.client for i in items} - added))
             # A Codex entry that keeps only some tools on: Kitden needs the whole list.
             wanted = await asyncio.to_thread(tools_to_read, adapters, items, home_dir(), known)

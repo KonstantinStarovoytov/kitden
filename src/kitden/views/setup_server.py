@@ -63,9 +63,12 @@ _gone = gone  # tests make their made-up paths count as present
 
 def is_moved_entry(item: Item) -> bool:
     """The client's own `kitden` entry runs a program that is gone: Kitden moved (uv to
-    Homebrew, or back) or was removed. Update points it at the Kitden that runs now."""
-    return _user_entry(item, item.client, SETUP_NAME) and _gone(
-        dict(item.summary).get("command", "")
+    Homebrew, or back) or was removed. Or it runs one versioned Homebrew folder
+    (`Cellar/kitden/<version>`), which an upgrade can keep: the stable launcher is the opt
+    link. Update points it at the Kitden that runs now."""
+    command = dict(item.summary).get("command", "")
+    return _user_entry(item, item.client, SETUP_NAME) and (
+        _gone(command) or "/Cellar/kitden/" in command
     )
 
 
@@ -94,6 +97,14 @@ def enable_steps(adapters: dict[str, ClientAdapter], client: str) -> list[Step]:
 def kitden_on(entry: dict) -> bool:
     """The client has its own `kitden` entry and it is not turned off."""
     return entry["state"] == "added" and entry["enabled"] is not False
+
+
+def with_entry(inventory) -> set[str]:
+    """The clients with their own `kitden` entry: added, or moved (Update fixes its path). A
+    change that adds the entry leaves these alone."""
+    return {
+        s["client"] for s in setup_server_state(inventory) if s["state"] == "added" or s["moved"]
+    }
 
 
 def setup_server_state(inventory) -> list[dict]:

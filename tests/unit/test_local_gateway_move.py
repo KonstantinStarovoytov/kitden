@@ -36,7 +36,7 @@ from kitden.local_gateway.settings import (
     servers_on,
 )
 from kitden.views.inventory import build_inventory, default_adapters
-from kitden.views.setup_server import setup_server_state
+from kitden.views.setup_server import setup_server_state, with_entry
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 
@@ -169,8 +169,7 @@ def move(home, *wanted, command=KITDEN, headers=None):
     ]
     assert items, wanted
     adapters = {a.id: a for a in default_adapters(home)}
-    states = setup_server_state(inventory)
-    added = {s["client"] for s in states if s["state"] == "added"}
+    added = with_entry(inventory)
     known = [p.path for p in inventory.projects]
     return local_move_steps(
         adapters, items, home, known, command, added_clients=added, headers=headers
@@ -1405,3 +1404,30 @@ def test_on_linux_the_secrets_go_to_the_keyring_and_undo_says_so(
     engine.undo(change.id)
     assert str(change.state) == "undo_blocked"
     assert change.error == "Kitden could not reach the keyring; nothing was changed."
+
+
+def test_a_move_leaves_a_kitden_entry_whose_program_is_gone_alone(home, real_programs):
+    """The client has its `kitden` entry, only its program moved: Update fixes the path. The
+    move neither rewrites the entry nor adds it again."""
+    gone = home / "gone/bin/kitden"
+    add_codex(
+        home,
+        "kitden",
+        f'command = "{gone}"\nargs = ["mcp"]\nenabled = false\n'
+        "startup_timeout_sec = 45\ntool_timeout_sec = 600",
+    )
+    add_codex(home, "files", CODEX_FILES)
+    add_claude(home, "kitden", {"type": "stdio", "command": str(gone), "args": ["mcp"]})
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    states = {s["client"]: s for s in setup_server_state(build_inventory(home))}
+    assert states["codex"]["moved"] and states["claude_code"]["moved"]
+    entry = codex(home)["mcp_servers"]["kitden"]
+    with page_for(home) as page:
+        answer = preview(page, home, ("codex", "files"), ("claude_code", "files"))
+        assert answer.status_code == 200, answer.json()
+        change = answer.json()
+        assert [s["client"] for s in change["steps"] if s["name"] == "kitden"] == []
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified", applied
+    assert codex(home)["mcp_servers"]["kitden"] == entry
+    assert claude(home)["mcpServers"]["kitden"]["command"] == str(gone)
