@@ -204,11 +204,11 @@ Then, with no step from you:
   [Homebrew tap](https://github.com/KonstantinStarovoytov/homebrew-tap), where `brew pr-pull`
   merges it and makes the bottles. When the dependencies changed, the tap's daily autobump
   opens that pull request the next day instead. The run's summary shows each store's version.
-- The Claude plugin directory and both of Kitden's plugin marketplaces read the plugin from
-  the `release` branch, so people get only released plugins. The marketplace files are still
-  read from `main`; their plugin entry is a `git-subdir` source with `"ref": "release"`, which
-  Claude Code and Codex both support (checked 2026-11-12: Claude Code's "Create a marketplace"
-  docs, Codex's "Build plugins" docs).
+- Both of Kitden's plugin marketplaces read the plugin from the `release` branch. The
+  marketplace files are still read from `main`; their plugin entry is a `git-subdir` source
+  with `"ref": "release"`, which Claude Code and Codex both support (checked 2026-11-12:
+  Claude Code's "Create a marketplace" docs, Codex's "Build plugins" docs). The Claude plugin
+  directory reads it from `release` once you set its tracked branch to `release`.
 - Once a day, Release watch (`release-watch.yml`) opens an issue when a store is behind or
   different, and "Time for a release?" when merged changes wait for a release. When a job
   failed, its issue says which one to re-run.
