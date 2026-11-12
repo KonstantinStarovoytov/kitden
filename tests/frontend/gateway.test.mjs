@@ -10,7 +10,7 @@ globalThis.window = {
   addEventListener: (type, fn) => { (windowHeard[type] ||= []).push(fn); },
   removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
 };
-const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, letGoCloses, linkRemoval, linkTip, listRows, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, letGoCloses, linkRemoval, linkTip, listRows, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, pressRow, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { heldServer, offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -337,16 +337,15 @@ test('a row that stays gets no Move in…', () => {
   assert.equal(none.find((r) => r.id === 'outside:move:github').action, 'open');
 });
 
-test('the large sample opens in List', () => {
+test('the large sample opens on the map, its groups folded', () => {
   const view = {
     ...MEDIUM_VIEW,
     gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: Array.from({ length: 12 }, (_, i) => ({ name: `held-${i}`, kind: 'remote', state: 'on', tool_list: [] })) }],
     groups: { move: Array.from({ length: 157 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: [], stays: null })), local: [], plugin: [] },
   };
-  const LARGE_SERVER_COUNT = serverCount(view);
-  assert.equal(LARGE_SERVER_COUNT, 169);
-  assert.equal(viewMode({ mode: '' }, LARGE_SERVER_COUNT), 'list');
-  assert.equal(viewMode({ mode: '' }, serverCount(MEDIUM_VIEW)), 'map');
+  assert.equal(viewMode({ mode: '' }), 'map');
+  const folded = layoutAsIs(gatewayTree(view, OPTS), { open: new Set(), narrow: false });
+  assert.deepEqual(folded.blocks.filter((b) => b.kind === 'stack').map((b) => b.id), ['stack:group:kitden:remote:all', 'stack:group:outside:all']);
 });
 
 // A first run: every client found, none with a kitden entry, an empty Kitden gateway, and two

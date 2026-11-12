@@ -82,14 +82,9 @@ const CLICK_OUT = "Click to take it out.";
 // parts.js ALL_PROJECTS in lower case, as these lines say it after a "·".
 const ALL_PROJECTS_LOWER = "all projects";
 
-// How many blocks the Plugins and skills column holds: plugins, skills and hooks.
-const itemCount = (answer) => answer.groups.reduce((n, group) => n + group.items.length, 0);
-
-// Map or List: the address's choice, else List past MAP_AT plugins and skills (viewMode), else
-// the Map, also before Kitden has read them.
+// Map or List: the address's choice, else the Map at any size (viewMode).
 export function libraryMode() {
-  const answer = current("libraryMap");
-  return answer ? viewMode(state, itemCount(answer)) : state.mode || "map";
+  return viewMode(state);
 }
 
 // Whether the picked project's own settings decide the item there: for `client`, or for any client

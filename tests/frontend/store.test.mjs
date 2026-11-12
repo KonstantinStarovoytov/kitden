@@ -18,7 +18,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadLibraryMap, loadMap, MAP_AT, parseHash, parseSel, projectGone, readLibraryMap, reload, retry, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadLibraryMap, loadMap, parseHash, parseSel, projectGone, readLibraryMap, reload, retry, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -136,15 +136,15 @@ test('a plain place change opens no selection', () => {
   assert.deepEqual(state.selected, { kind: 'skill', name: 'tidy' }); // it stays for the next page
 });
 
-test('the view choice stays in the address, and List opens first past 15 servers', () => {
+test('the view choice stays in the address, and the map opens first at any size', () => {
   assert.equal(parseHash('#gateway?view=list').mode, 'list');
   assert.equal(parseHash('#gateway?view=nope').mode, '');
   // Only the Gateway and the Library have a Map and a List.
   assert.equal(parseHash('#overview?view=map').mode, '');
   assert.equal(hashFor({ ...state, view: 'gateway', mode: 'map', project: '', q: '', selected: null }), '#gateway?view=map');
   assert.equal(hashFor({ ...state, view: 'overview', mode: 'map', project: '', q: '', selected: null }), '#overview');
-  assert.equal(MAP_AT, 15);
-  assert.equal(viewMode({ mode: '' }, 15), 'map'); assert.equal(viewMode({ mode: '' }, 16), 'list'); assert.equal(viewMode({ mode: 'map' }, 157), 'map');
+  // With no choice in the address a page opens on its map, at any size.
+  assert.equal(viewMode({ mode: '' }), 'map'); assert.equal(viewMode({ mode: '' }, 157), 'map'); assert.equal(viewMode({ mode: 'list' }), 'list');
   assert.deepEqual(toolSel('github/push/files'), { server: 'github', tool: 'push/files' });
   assert.equal(toolSel('github'), null);
   assert.deepEqual(parseSel('tool:github/push_files'), { kind: 'tool', name: 'github/push_files' });

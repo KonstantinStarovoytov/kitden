@@ -81,13 +81,6 @@ export async function arrivalServer(view) {
   return null;
 }
 
-// How many blocks the Servers column holds: the Kitden gateway's servers and every row outside it.
-export function serverCount(view) {
-  const kitden = view.gateways.find((g) => g.kind === "kitden");
-  const outside = OUTSIDE_GROUPS.reduce((n, key) => n + (view.groups[key] || []).length, 0);
-  return ((kitden && kitden.servers) || []).length + outside;
-}
-
 // Draws the page. It returns what the top search found on it (map.js findIn), or null with no
 // search or no page to search: app.js shows the chip. The map keeps its blocks while the page
 // draws `again`; a new visit, or the List, starts a new one. A new visit also lifts the head
@@ -126,7 +119,7 @@ export function renderGateway(main, { again = false } = {}) {
     return;
   }
   shownUnder = null;
-  const mode = viewMode(state, serverCount(view));
+  const mode = viewMode(state);
   gatewayShows.mode = mode;
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
   head.append(headActions(addHeadButton("+ Add servers", "add:servers", (node) => openAdd({ from: node })), seg));

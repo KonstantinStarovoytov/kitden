@@ -205,15 +205,16 @@ test('List keeps the head and the tabs, and draws no map', () => {
   assert.equal(hintLine.children.at(-1).textContent, 'One row per item, one column per client. Right opens a plugin, Enter opens Details.');
 });
 
-test('the page opens in List past 15 plugins and skills, unless the address says', () => {
+test('the page opens on the map at any size, unless the address says', () => {
   Object.assign(state, { mode: '', project: '' });
   data.scope.libraryMap = '';
   data.libraryMap = MEDIUM;
   assert.equal(libraryMode(), 'map');
   data.libraryMap = LARGE;
+  assert.equal(libraryMode(), 'map');
+  state.mode = 'list';
   assert.equal(libraryMode(), 'list');
   state.mode = 'map';
-  assert.equal(libraryMode(), 'map');
 });
 
 test('the map draws clients, captions in source order, plugin cards with n items, skill and hook rows', () => {
