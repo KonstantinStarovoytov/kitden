@@ -15,7 +15,7 @@ Fixes #
 ## Checklist
 
 - [ ] The title says what changes for the user, with no prefix and no issue number.
-- [ ] [ROADMAP.md](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) has a line under "Not released yet" if what Kitden does changes.
+- [ ] [ROADMAP.md](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) has a line under "Not yet released" if what Kitden does changes.
 - [ ] User docs ([docs/guide.md](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md)) are updated if what the user sees changes.
 - [ ] I ran all three checks: `uv run pytest -q`, `uv run ruff check .`, `node --test tests/frontend/*.test.mjs`.
 - [ ] Visible changes have before/after screenshots, checked in both themes.

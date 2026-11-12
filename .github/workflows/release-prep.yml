@@ -1,0 +1,34 @@
+# Kitden's release prep: the owner runs it by hand ("Run workflow" on main, usually from the
+# "Time for a release?" issue) and gets one pull request, `Kitden X.Y.Z`, to review and merge.
+# Claude writes the notes, the README and the policy edits with read-only tools; jobs without a
+# model set the version, record the README pictures, commit and open the PR with the release
+# app. Merging it tags the release (release.yml).
+name: Release prep
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version, like 0.9.0. Empty: the agent picks the next minor or patch."
+        type: string
+        required: false
+        default: ""
+
+permissions: {}
+
+jobs:
+  prepare:
+    if: vars.AGENTS_ENABLED == 'true'
+    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/release-prep.yml@main
+    permissions:
+      contents: read # the agent and the scripts read the code
+      pull-requests: read # the merged and the open PRs are read
+    with:
+      model: claude-sonnet-5-5
+      version: ${{ inputs.version }}
+      release_app_client_id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+    secrets:
+      claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # A secret of the `release` environment, passed by name: only the called job that names
+      # that environment (open-pr, which runs no model) gets its value.
+      release_app_private_key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
