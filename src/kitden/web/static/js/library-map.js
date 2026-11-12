@@ -6,7 +6,7 @@
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
-import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, shownFound, turnPage, turnWords } from "./map.js";
+import { findIn, focusAfter, foldStep, groupsWith, layoutTree, linkKey, litFor, litFrom, newCards, pagesNow, pagesWith, shownFound } from "./map.js";
 import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
 import { drawChip, glidePill } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
@@ -82,14 +82,9 @@ const CLICK_OUT = "Click to take it out.";
 // parts.js ALL_PROJECTS in lower case, as these lines say it after a "·".
 const ALL_PROJECTS_LOWER = "all projects";
 
-// How many blocks the Plugins and skills column holds: plugins, skills and hooks.
-const itemCount = (answer) => answer.groups.reduce((n, group) => n + group.items.length, 0);
-
-// Map or List: the address's choice, else List past MAP_AT plugins and skills (viewMode), else
-// the Map, also before Kitden has read them.
+// Map or List: the address's choice, else the Map at any size (viewMode).
 export function libraryMode() {
-  const answer = current("libraryMap");
-  return answer ? viewMode(state, itemCount(answer)) : state.mode || "map";
+  return viewMode(state);
 }
 
 // Whether the picked project's own settings decide the item there: for `client`, or for any client
@@ -162,7 +157,7 @@ export function libraryTree(answer) {
     const id = `group:${group.key}`;
     // A marketplace's caption opens its Details.
     const details = group.kind === "marketplace";
-    blocks.push({ id, column: "plugins", kind: "group", name: group.name, icon: group.icon, before: GROUP_BEFORE, rowGap: LIBRARY_COLUMNS[1].rowGap, details, group });
+    blocks.push({ id, column: "plugins", kind: "group", name: group.name, icon: group.icon, before: GROUP_BEFORE, rowGap: LIBRARY_COLUMNS[1].rowGap, details, group, folds: true });
     for (const item of group.items) {
       const block = itemBlock(item, id);
       blocks.push(block);
@@ -286,7 +281,7 @@ function marketGroup(model, name) {
   const roots = model.blocks.filter((b) => b.kind === "group" && b.column === "plugins" && !b.parent);
   const next = roots.find((b) => !b.group || b.group.kind !== "marketplace" || b.name.toLowerCase() > name.toLowerCase());
   const group = { key: `marketplace:${name}`, name, icon: "store", kind: "marketplace", items: [] };
-  const caption = { id, column: "plugins", kind: "group", name, icon: "store", before: GROUP_BEFORE, rowGap: LIBRARY_COLUMNS[1].rowGap, details: true, group };
+  const caption = { id, column: "plugins", kind: "group", name, icon: "store", before: GROUP_BEFORE, rowGap: LIBRARY_COLUMNS[1].rowGap, details: true, group, folds: true };
   model.blocks.splice(next ? model.blocks.indexOf(next) : model.blocks.length, 0, caption);
   return id;
 }
@@ -379,7 +374,7 @@ function tile(block) {
 // for which words, and the project it was drawn for.
 // It is the drag engine's map too (map-drag.js): the layout drawn last, the drag that runs, the
 // block held off its place, and how to draw again.
-const onMap = { view: null, tabs: null, tab: "plugins", answer: null, model: null, open: new Set(), selected: null, pages: new Map(), tabPages: {}, found: null, searched: "", project: null, unfolds: false, folded: false, layout: null, drag: null, home: null, redraw: () => drawMap() };
+const onMap = { view: null, tabs: null, tab: "plugins", answer: null, model: null, open: new Set(), selected: null, pages: new Map(), spread: new Set(), tabPages: {}, found: null, searched: "", project: null, unfolds: false, folded: false, layout: null, drag: null, home: null, redraw: () => drawMap() };
 
 // "+ Add plugins" in the page header: `fn(button)` opens the add panel (library-add.js).
 let addHook = null;
@@ -484,7 +479,7 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   }
   onMap.tab = tab;
   const had = onMap.selected;
-  keepWhatShows(answer);
+  keepWhatShows(answer, { opens: !fresh && !projectChanged && !swap });
   if (tab === "instructions" && !answer.groups.some((group) => group.files.length)) main.append(el("p", "muted", NO_FILES));
   main.append(onMap.view.box);
   const text = state.q.trim();
@@ -493,6 +488,7 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   const matches = onMap.found && (fresh || text !== onMap.searched) ? [...onMap.found.matches] : [];
   onMap.searched = text;
   onMap.pages = pagesWith(onMap.model, pagesNow(onMap.model, onMap.pages), matches);
+  onMap.spread = groupsWith(onMap.model, onMap.spread, matches);
   const motion = fresh ? (switched ? "none" : "enter") : projectChanged ? "project" : "move";
   drawMap({ motion, swap });
   if (switched) rise([onMap.view.box], { delay: afterOldPage() });
@@ -502,15 +498,15 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
 }
 
 // The tree for a new answer: the open plugin and the selection (a block, or a link) stay while the
-// answer has them. The open plugin stays while the Instructions tab shows, for the way back.
-function keepWhatShows(answer) {
+// answer has them, and a card that came with it opens its group (`opens`). The open plugin stays while the Instructions tab shows, for the way back.
+function keepWhatShows(answer, { opens = true } = {}) {
   onMap.answer = answer;
   const rows = rowsShown(tray);
-  const waited = waitingIds(onMap.model);
+  const was = onMap.model;
   onMap.model = treeOf(answer, rows);
-  // An item whose add has just come into the tray shows: its group turns to its page.
-  const fresh = [...waitingIds(onMap.model)].filter((id) => !waited.has(id));
-  if (fresh.length) onMap.pages = pagesWith(onMap.model, pagesNow(onMap.model, onMap.pages), fresh);
+  // A card that comes with a change or a rescan opens its group: it never lands inside a stack.
+  // Not on a new map, another project or another tab (`opens` false), where every card is new.
+  if (was && opens) onMap.spread = groupsWith(onMap.model, onMap.spread, newCards(was, onMap.model));
   const ids = new Set([...onMap.model.blocks.map((block) => block.id), ...onMap.model.links.map(linkKey)]);
   if (onMap.tab === "plugins") onMap.open = new Set([...onMap.open].filter((id) => ids.has(id)));
   if (onMap.selected && !ids.has(onMap.selected)) onMap.selected = null;
@@ -521,11 +517,6 @@ function treeOf(answer, rows) {
   if (onMap.tab === "instructions") return instructionsTree(answer);
   const tree = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows, answer);
   return { ...tree, blocks: [...tree.blocks, { ...ADD_CARD }] };
-}
-
-// The blocks of a tree whose add waits in the tray.
-function waitingIds(model) {
-  return new Set(model ? model.blocks.filter((b) => b.rows).map((b) => b.id) : []);
 }
 
 // What the map lights for a search: its matches, and a folded plugin that holds one (it stays
@@ -697,7 +688,7 @@ function litOf(model, selected) {
 }
 
 // The map's layout as it is now: the plugin that is open and the pages turned, always wide.
-const layoutNow = () => layoutTree(onMap.model, { open: onMap.open, pages: onMap.pages, narrow: false });
+const layoutNow = () => layoutTree(onMap.model, { open: onMap.open, pages: onMap.pages, spread: onMap.spread, narrow: false });
 
 // Draw the map again; a selection the new layout hides is let go (which draws it).
 function drawOrLetGo() {
@@ -722,16 +713,17 @@ function foldPlugin(id) {
   drawOrLetGo();
 }
 
-// A press on a block. "N more" turns its group's page. A press that folded a plugin, or a second
-// press on the selected block, lets go. Any other block is selected: its path lights.
+// A press on a block. A stack opens or turns its group, and Collapse folds it. A press that folded
+// a plugin, or a second press on the selected block, lets go. Any other block is selected: its
+// path lights.
 function pressBlock(id) {
   // The Add a plugin card opens the add panel; focus comes back to the card.
   if (id === ADD_CARD.id) {
     pressLibraryAdd(withFocusKey($("#main"), `block:${id}`));
     return;
   }
-  if (id.startsWith("more:")) {
-    turnOnMap(id);
+  if (id.startsWith("stack:") || id.startsWith("collapse:")) {
+    foldOnMap(id);
     return;
   }
   const { folded, unfolds } = onMap;
@@ -753,12 +745,16 @@ function pressBlock(id) {
   if (selectHook) selectHook(id);
 }
 
-// "N more" shows the next page in place, and a screen reader hears which ones show. A selection
-// the turn hides is let go.
-function turnOnMap(id) {
-  onMap.pages = turnPage(onMap.model, onMap.pages, id);
-  say(turnWords(onMap.model, onMap.pages, id));
+// A press on a stack opens its group or turns its page, and Collapse folds the group (map.js
+// foldStep). A turn says the caption to a screen reader. A selection the press hides is let go.
+// Focus goes where focusAfter says.
+function foldOnMap(id) {
+  const step = foldStep(onMap.model, { spread: onMap.spread, pages: onMap.pages }, id);
+  Object.assign(onMap, { spread: step.spread, pages: step.pages });
+  if (step.words) say(step.words);
   drawOrLetGo();
+  const next = onMap.layout && focusAfter(onMap.layout, id);
+  if (next) onMap.view.node(next)?.focus({ preventScroll: true });
 }
 
 function letGo() {

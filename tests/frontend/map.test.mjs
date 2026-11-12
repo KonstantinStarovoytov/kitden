@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, enterDelays, findChip, findIn, foldable, isNarrow, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, shownFound, toggleOpen, turnPage, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, collapseGroup, drawPlan, focusAfter, foldStep, enterDelays, findChip, findIn, foldable, groupOfStack, groupsWith, isNarrow, newCards, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, pressStack, shownFound, stackOf, toggleOpen, turnWords, unfoldDelays, wideWidth, withStacks } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -19,8 +19,9 @@ const OTHER_TOOLS = ['list_items', 'get_item', 'create_item', 'summarize', 'dele
 
 // The Gateway as a tree: 3 clients (claude_code and codex linked), the gateway, `held` servers
 // in Remote and Local groups, `outside` rows. `open`: the server whose tools are in the model;
-// `tools`: every server's tools are; `long`: every tenth outside name is long.
-function model(held, outside, { open = null, tools = false, long = false } = {}) {
+// `tools`: every server's tools are; `long`: every tenth outside name is long; `folds`: the three
+// groups fold into stacks.
+function model(held, outside, { open = null, tools = false, long = false, folds = false } = {}) {
   const blocks = [];
   const links = [];
   for (const id of CLIENTS) blocks.push({ id: `client:${id}`, column: 'clients', kind: 'client', name: id, state: LINKED.includes(id) ? 'on' : 'off' });
@@ -29,7 +30,7 @@ function model(held, outside, { open = null, tools = false, long = false } = {})
   const names = Array.from({ length: held }, (_, i) => (i < HELD.length ? HELD[i] : `held-${i - HELD.length}`));
   for (const kind of ['remote', 'local']) {
     const group = `group:kitden:${kind}`;
-    blocks.push({ id: group, column: 'servers', kind: 'group', name: kind === 'remote' ? 'Remote' : 'Local' });
+    blocks.push({ id: group, column: 'servers', kind: 'group', name: kind === 'remote' ? 'Remote' : 'Local', ...(folds ? { folds: true } : {}) });
     names.forEach((name, i) => {
       if ((i % 2 === 0) !== (kind === 'remote')) return;
       const id = `held:kitden:${name}`;
@@ -44,7 +45,7 @@ function model(held, outside, { open = null, tools = false, long = false } = {})
       }
     });
   }
-  blocks.push({ id: 'group:outside', column: 'servers', kind: 'group', name: 'Outside the gateway' });
+  blocks.push({ id: 'group:outside', column: 'servers', kind: 'group', name: 'Outside the gateway', ...(folds ? { folds: true } : {}) });
   for (let i = 0; i < outside; i++) {
     const name = (i < OUTSIDE.length ? OUTSIDE[i] : `direct-${i}`) + (long && i % 10 === 0 ? LONG : '');
     const id = `outside:${i % 2 ? 'local' : 'move'}:${name}`;
@@ -193,26 +194,26 @@ test('one block per column is open', () => {
   assert.deepEqual([...toggleOpen(m, open, 'held:kitden:linear')], []);
 });
 
-test('a group with more than six servers shows five and N more', () => {
+test('a group that does not fold pages five at a time with a stack below', () => {
   const l = layoutTree(model(0, 9), { open: new Set(), width: 1248, narrow: false });
   assert.equal(l.blocks.filter((b) => b.id.startsWith('outside:')).length, 5);
-  assert.ok(l.blocks.some((b) => b.id === 'more:group:outside'));
-  assert.equal(l.blocks.find((b) => b.id === 'more:group:outside').name, '4 more');
-  // A line to a hidden server is not drawn; six or fewer show whole.
-  assert.equal(l.links.filter((link) => link.kind === 'direct').length, 5);
-  assert.ok(!layoutTree(model(0, 6), { open: new Set(), ...WIDE }).blocks.some((b) => b.id.startsWith('more:')));
+  assert.equal(stack(l, 'after').holds.length, 4);
+  // A line to a server in the stack runs to the stack; six or fewer show whole; no Collapse.
+  assert.equal(l.links.filter((link) => link.kind === 'direct' && link.to.startsWith('outside:')).length, 5);
+  assert.ok(l.links.some((link) => link.to === 'stack:group:outside:after'));
+  assert.ok(!layoutTree(model(0, 6), { open: new Set(), ...WIDE }).blocks.some((b) => b.kind === 'stack'));
+  assert.ok(!l.blocks.some((b) => b.kind === 'collapse' || b.kind === 'more'));
 });
 
-// "N more" pages in place (Task 4.9): five a page.
+// A group pages in place (Task 4.9): five a page, the rest in stacks above and below.
 const outsideShown = (l) => l.blocks.filter((b) => b.id.startsWith('outside:')).map((b) => b.id.split(':').at(-1));
 const groupWords = (l) => l.blocks.find((b) => b.id === 'group:outside').name;
-const moreWords = (l) => l.blocks.find((b) => b.id === 'more:group:outside').name;
 const onPage = (m, page) => layoutTree(m, { open: new Set(), pages: new Map([['group:outside', page]]), ...WIDE });
 
-test('a group of 12 shows five and 7 more', () => {
+test('a group of 12 shows five and a stack of 7 below', () => {
   const l = layoutTree(model(0, 12), { open: new Set(), ...WIDE });
   assert.deepEqual(outsideShown(l), ['docs', 'analytics', 'n8n', 'direct-3', 'direct-4']);
-  assert.equal(moreWords(l), '7 more');
+  assert.equal(stack(l, 'after').holds.length, 7);
   // The caption says which ones show; a group of six shows all and names no page.
   assert.equal(groupWords(l), 'Outside the gateway · 1–5 of 12');
   assert.equal(groupWords(layoutTree(model(0, 6), { open: new Set(), ...WIDE })), undefined);
@@ -221,21 +222,18 @@ test('a group of 12 shows five and 7 more', () => {
 test('a press turns to the next five and the caption names them', () => {
   const m = model(0, 12);
   const first = layoutTree(m, { open: new Set(), ...WIDE });
-  const none = new Map();
-  const pages = turnPage(m, none, 'more:group:outside');
-  assert.deepEqual([[...none], [...pages]], [[], [['group:outside', 1]]]);
+  const none = { spread: new Set(), pages: new Map() };
+  const { pages } = pressStack(m, none, 'stack:group:outside:after');
+  assert.deepEqual([[...none.pages], [...pages]], [[], [['group:outside', 1]]]);
   const next = layoutTree(m, { open: new Set(), pages, ...WIDE });
   assert.deepEqual(outsideShown(next), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
-  assert.equal(moreWords(next), '2 more');
+  assert.deepEqual([stack(next, 'before').holds.length, stack(next, 'after').holds.length], [5, 2]);
   assert.equal(groupWords(next), 'Outside the gateway · 6–10 of 12');
-  // The next five take the places of the five shown, and "N more" stays where it is.
-  const ys = (l) => l.blocks.filter((b) => b.id.startsWith('outside:') || b.kind === 'more').map((b) => b.y);
-  assert.deepEqual(ys(next), ys(first));
-  // The five shown fold into their caption and the next five unfold, as a server's tools do.
+  // The five shown fold away and the next five come, as a server's tools do.
   const plan = drawPlan(first, next);
   assert.deepEqual(plan.fold, first.blocks.filter((b) => b.id.startsWith('outside:')).map((b) => b.id));
   assert.deepEqual(plan.unfold, next.blocks.filter((b) => b.id.startsWith('outside:')).map((b) => b.id));
-  assert.ok(plan.stay.includes('more:group:outside') && plan.stay.includes('group:outside'));
+  assert.ok(plan.stay.includes('stack:group:outside:after') && plan.stay.includes('group:outside'));
   // A server that only moves up (one before it left) comes in as any new block, not as a turn.
   const gone = 'outside:local:analytics';
   const fewer = { ...m, blocks: m.blocks.filter((b) => b.id !== gone), links: m.links.filter((l) => l.to !== gone) };
@@ -244,28 +242,29 @@ test('a press turns to the next five and the caption names them', () => {
   assert.deepEqual([up.unfold, up.fold], [[], []]);
 });
 
-test('the last page offers the first five again', () => {
+test('the last page has a stack above and none below', () => {
   const m = model(0, 12);
   const last = onPage(m, 2);
   assert.deepEqual(outsideShown(last), ['direct-10', 'direct-11']);
-  assert.equal(moreWords(last), 'Show the first 5');
+  assert.deepEqual([stack(last, 'before').holds.length, stack(last, 'after')], [10, undefined]);
   assert.equal(groupWords(last), 'Outside the gateway · 11–12 of 12');
-  assert.deepEqual([...turnPage(m, new Map([['group:outside', 2]]), 'more:group:outside')], [['group:outside', 0]]);
+  const at = { spread: new Set(), pages: new Map([['group:outside', 2]]) };
+  assert.deepEqual([...pressStack(m, at, 'stack:group:outside:after').pages], [['group:outside', 2]]);
   // A page past the end (the group has fewer servers now) shows the last one.
   assert.deepEqual(outsideShown(onPage(m, 9)), ['direct-10', 'direct-11']);
 });
 
-test('a preview is never behind the page', () => {
+test('a preview is never in a stack', () => {
   const m = model(0, 12);
   m.blocks.push({ id: 'preview:x', column: 'servers', parent: 'group:outside', kind: 'preview', name: 'x', state: 'preview' });
   for (const page of [0, 1, 2]) {
-    const ids = onPage(m, page).blocks.map((b) => b.id);
-    assert.equal(ids.at(-1), 'preview:x', `page ${page}`);
-    assert.equal(ids.at(-2), 'more:group:outside');
+    const l = onPage(m, page);
+    assert.ok(l.blocks.some((b) => b.id === 'preview:x'), `page ${page}`);
+    assert.ok(!(stack(l, 'after')?.holds || []).includes('preview:x'), `page ${page}`);
   }
   // It counts in no page.
   assert.equal(groupWords(onPage(m, 0)), 'Outside the gateway · 1–5 of 12');
-  assert.equal(moreWords(onPage(m, 0)), '7 more');
+  assert.equal(stack(onPage(m, 0), 'after').holds.length, 7);
 });
 
 test('a group that stops paging forgets its page, so it starts on its first page again', () => {
@@ -417,15 +416,14 @@ test('a block folds when it holds something, also before its tools are read', ()
   assert.ok(foldable(empty).has('held:kitden:files'));
 });
 
-test('a preview or a slot in a long group always shows, after N more', () => {
+test('a preview in a long group shows after the cards of the page, before the stack below', () => {
   const m = model(0, 9);
   m.blocks.push({ id: 'preview:x', column: 'servers', parent: 'group:outside', kind: 'preview', name: 'x', state: 'preview' });
   const l = layoutTree(m, { open: new Set(), ...WIDE });
-  const shown = l.blocks.filter((b) => b.id.startsWith('outside:') || b.id.startsWith('more:') || b.id === 'preview:x').map((b) => b.id);
-  assert.equal(shown.length, 7);
-  assert.deepEqual(shown.slice(5), ['more:group:outside', 'preview:x']);
-  // "N more" counts only what it hides.
-  assert.equal(l.blocks.find((b) => b.id === 'more:group:outside').name, '4 more');
+  const shown = l.blocks.filter((b) => b.id.startsWith('outside:') || b.kind === 'stack' || b.id === 'preview:x').map((b) => b.id);
+  assert.deepEqual(shown.slice(5), ['preview:x', 'stack:group:outside:after']);
+  // The stack holds only what the page does not show.
+  assert.equal(stack(l, 'after').holds.length, 4);
 });
 
 test('the middle of a path is the point at half its length', () => {
@@ -550,4 +548,264 @@ test('the find chip counts only the matches the shown page holds', () => {
   const folded = layoutTree(tree, { open: new Set(), narrow: false });
   assert.equal(findChip(shownFound(found, folded)), 'No matches');
   assert.equal(shownFound(null, all), null);
+});
+
+// Card stacks: a group that folds (`folds`) starts as one stack; open (`spread`), it shows its page
+// between a stack of the cards before and a stack of the cards after, and a Collapse under it.
+const FOLDS = { folds: true };
+const stack = (l, role, g = 'group:outside') => l.blocks.find((b) => b.id === `stack:${g}:${role}`);
+const spreadOut = (g = 'group:outside') => new Set([g]);
+const ofKind = (l, kind) => l.blocks.filter((b) => b.kind === kind);
+// One folding group of `n` cards in a column `h` high, each card linked from one client by `kinds[i]`.
+function shelf(n, h, kinds = []) {
+  const blocks = [{ id: 'client:a', column: 'clients', kind: 'client', name: 'a' }, { id: 'g', column: 'items', kind: 'group', name: 'Things', folds: true }];
+  const links = [];
+  for (let i = 0; i < n; i++) {
+    blocks.push({ id: `i${i}`, column: 'items', parent: 'g', kind: 'skill', name: `i${i}` });
+    if (kinds[i]) links.push({ from: 'client:a', to: `i${i}`, ...kinds[i] });
+  }
+  return { columns: [{ id: 'clients', w: 150, h: 54 }, { id: 'items', w: 170, h }], blocks, links };
+}
+
+test('a folding group starts as one stack; its caption counts it', () => {
+  const l = layoutTree(model(0, 12, FOLDS), WIDE);
+  assert.deepEqual(outsideShown(l), []);
+  const all = stack(l, 'all');
+  assert.deepEqual([all.kind, all.role, all.group, all.holds.length, all.more], ['stack', 'all', 'group:outside', 12, 9]);
+  assert.equal(groupWords(l), 'Outside the gateway · 12');
+  assert.ok(!l.blocks.some((b) => b.id === 'collapse:group:outside'));
+});
+
+test('an open group shows its page between a stack before and a stack after', () => {
+  const m = model(0, 12, FOLDS);
+  const at = (page) => layoutTree(m, { spread: spreadOut(), pages: new Map([['group:outside', page]]), ...WIDE });
+  const first = at(0);
+  assert.deepEqual(outsideShown(first), ['docs', 'analytics', 'n8n', 'direct-3', 'direct-4']);
+  assert.equal(stack(first, 'before'), undefined);
+  assert.equal(stack(first, 'after').holds.length, 7);
+  assert.equal(groupWords(first), 'Outside the gateway · 1–5 of 12');
+  const second = at(1);
+  assert.deepEqual([stack(second, 'before').holds.length, stack(second, 'after').holds.length], [5, 2]);
+  const last = at(2);
+  assert.deepEqual([stack(last, 'before').holds.length, stack(last, 'after')], [10, undefined]);
+  for (const l of [first, second, last]) assert.deepEqual(ofKind(l, 'more'), []);
+});
+
+test("a stack's height follows its first card", () => {
+  const spread = new Set(['g']);
+  assert.equal(stack(layoutTree(model(0, 12, FOLDS), WIDE), 'all').h, 2 * 20 + 60);
+  assert.equal(stack(layoutTree(shelf(3, 50), WIDE), 'all', 'g').h, 2 * 18 + 50);
+  assert.equal(stack(layoutTree(shelf(3, 34), WIDE), 'all', 'g').h, 2 * 15 + 34);
+  assert.equal(stack(layoutTree(shelf(2, 34), WIDE), 'all', 'g').h, 15 + 34);
+  const eleven = layoutTree(model(0, 11, FOLDS), { spread: spreadOut(), pages: new Map([['group:outside', 1]]), ...WIDE });
+  assert.deepEqual([stack(eleven, 'after').holds.length, stack(eleven, 'after').h], [1, 64]);
+  assert.equal(stack(layoutTree(model(0, 12, FOLDS), { width: 800 }), 'all').h, 2 * 18 + 54);
+  assert.ok(!layoutTree(shelf(3, 34), { spread, ...WIDE }).blocks.some((b) => b.kind === 'stack'));
+});
+
+test("Collapse sits 6 px under an open group at its column's right edge", () => {
+  const l = layoutTree(model(0, 12, FOLDS), { spread: spreadOut(), ...WIDE });
+  const c = l.blocks.find((b) => b.id === 'collapse:group:outside');
+  const servers = l.columns.find((col) => col.id === 'servers');
+  assert.deepEqual([c.kind, c.group, c.name, c.w, c.h, c.x], ['collapse', 'group:outside', 'Collapse', 74, 20, servers.x + servers.w - 74]);
+  const after = stack(l, 'after');
+  assert.equal(c.y, after.y + after.h + 6);
+  assert.equal(l.blocks.at(-1).id, 'collapse:group:outside');
+});
+
+test('a group of one never folds and two to six open whole', () => {
+  const one = layoutTree(model(2, 0, FOLDS), WIDE);
+  assert.ok(one.blocks.some((b) => b.id === 'held:kitden:github'));
+  assert.deepEqual([ofKind(one, 'stack'), ofKind(one, 'collapse')], [[], []]);
+  const six = layoutTree(model(0, 6, FOLDS), { spread: spreadOut(), ...WIDE });
+  assert.equal(outsideShown(six).length, 6);
+  assert.deepEqual(ofKind(six, 'stack'), []);
+  assert.ok(six.blocks.some((b) => b.id === 'collapse:group:outside'));
+});
+
+test('a card with a change waiting stays out of the stack', () => {
+  const m = model(0, 12, FOLDS);
+  m.blocks.find((b) => b.id === 'outside:local:analytics').wait = ' · in preview';
+  m.links.find((l) => l.to === 'outside:move:n8n').leaving = true;
+  m.blocks.push({ id: 'preview:x', column: 'servers', parent: 'group:outside', kind: 'preview', name: 'x', state: 'preview' });
+  const l = layoutTree(m, WIDE);
+  // Twelve cards, two of them waiting: ten stay in the stack. The preview is a block of its own.
+  assert.equal(stack(l, 'all').holds.length, 10);
+  const ids = l.blocks.map((b) => b.id);
+  for (const id of ['outside:local:analytics', 'outside:move:n8n', 'preview:x']) assert.ok(ids.indexOf(id) > ids.indexOf('stack:group:outside:all'), id);
+  assert.ok(l.links.some((link) => link.to === 'outside:move:n8n' && link.leaving));
+});
+
+test('a group whose cards all wait shows them and no stack', () => {
+  const m = model(0, 2, FOLDS);
+  for (const b of m.blocks.filter((b) => b.kind === 'outside')) b.wait = ' · in preview';
+  const l = layoutTree(m, WIDE);
+  assert.equal(outsideShown(l).length, 2);
+  assert.deepEqual([ofKind(l, 'stack'), ofKind(l, 'collapse')], [[], []]);
+});
+
+test('a group down to one card while open shows it and no Collapse', () => {
+  const l = layoutTree(model(0, 1, FOLDS), { spread: spreadOut(), ...WIDE });
+  assert.equal(outsideShown(l).length, 1);
+  assert.deepEqual([ofKind(l, 'stack'), ofKind(l, 'collapse')], [[], []]);
+});
+
+test('a stack takes one link from each client that links into it', () => {
+  const l = layoutTree(model(0, 12, FOLDS), WIDE);
+  const into = l.links.filter((link) => link.to === 'stack:group:outside:all');
+  assert.deepEqual(into.map((link) => link.from).sort(), ['client:codex', 'client:claude_code', 'client:cursor'].sort());
+  for (const link of into) assert.deepEqual([link.kind, link.shape, link.stack, link.stands.length, typeof link.chan], ['direct', 'step', true, 4, 'number']);
+  assert.ok(!l.links.some((link) => link.to.startsWith('outside:')));
+});
+
+test('a merged link is as strong as its strongest link', () => {
+  const merged = (kinds) => layoutTree(shelf(3, 34, kinds), WIDE).links.filter((link) => link.to === 'stack:g:all');
+  const strong = merged([{ kind: 'direct' }, { kind: 'faint' }, { kind: 'on' }]);
+  assert.deepEqual(strong.map((link) => [link.kind, link.shape, Boolean(link.unk)]), [['on', 'curve', false]]);
+  assert.deepEqual(strong[0].stands, ['client:a>i0', 'client:a>i1', 'client:a>i2']);
+  const unknown = merged([{ kind: 'direct', unk: true }, { kind: 'direct', unk: true }, { kind: 'direct', unk: true }]);
+  assert.deepEqual(unknown.map((link) => [link.kind, Boolean(link.unk)]), [['direct', true]]);
+  const known = merged([{ kind: 'direct', unk: true }, { kind: 'direct' }, { kind: 'direct', unk: true }]);
+  assert.deepEqual(known.map((link) => [link.kind, Boolean(link.unk)]), [['direct', false]]);
+});
+
+test('stack names say what is inside and what a press does', () => {
+  const m = model(0, 12, FOLDS);
+  const at = (page) => layoutTree(m, { spread: spreadOut(), pages: new Map([['group:outside', page]]), ...WIDE });
+  assert.equal(stack(layoutTree(m, WIDE), 'all').name, 'Open Outside the gateway, 12: docs, analytics, n8n');
+  assert.equal(stack(at(0), 'after').name, 'Show 5 more: direct-5, direct-6, direct-7');
+  assert.equal(stack(at(1), 'before').name, 'Show the 5 before: docs, analytics, n8n');
+  assert.equal(stack(at(1), 'after').name, 'Show 2 more: direct-10, direct-11');
+});
+
+test('opening a stack unfolds its cards; Collapse folds them back', () => {
+  const m = model(0, 12, FOLDS);
+  const folded = layoutTree(m, WIDE);
+  const open = layoutTree(m, { spread: spreadOut(), ...WIDE });
+  const five = open.blocks.filter((b) => b.id.startsWith('outside:')).map((b) => b.id);
+  assert.equal(five.length, 5);
+  assert.deepEqual(drawPlan(folded, open).unfold, five);
+  assert.deepEqual(drawPlan(open, folded).fold, five);
+});
+
+test('a press on a stack opens it, turns forward and back; Collapse folds it', () => {
+  const m = model(0, 12, FOLDS);
+  const start = { spread: new Set(), pages: new Map() };
+  let v = pressStack(m, start, 'stack:group:outside:all');
+  assert.deepEqual([[...v.spread], [...v.pages]], [['group:outside'], []]);
+  assert.deepEqual([[...start.spread], [...start.pages]], [[], []]);
+  v = pressStack(m, v, 'stack:group:outside:after');
+  assert.deepEqual([...v.pages], [['group:outside', 1]]);
+  v = pressStack(m, v, 'stack:group:outside:before');
+  assert.deepEqual([...v.pages], [['group:outside', 0]]);
+  v = pressStack(m, v, 'stack:group:outside:before');
+  assert.deepEqual([...v.pages], [['group:outside', 0]]);
+  v = collapseGroup({ ...v, pages: new Map([['group:outside', 2]]) }, 'collapse:group:outside');
+  assert.deepEqual([[...v.spread], [...v.pages]], [[], []]);
+});
+
+test('stack and Collapse ids give back group ids that hold colons', () => {
+  assert.equal(groupOfStack('stack:group:kitden:remote:after'), 'group:kitden:remote');
+  assert.equal(groupOfStack('collapse:group:marketplace:a-b'), 'group:marketplace:a-b');
+  assert.equal(groupOfStack('stack:group:files:all'), 'group:files');
+});
+
+test('turn words name the page a press shows', () => {
+  const m = model(0, 12, FOLDS);
+  assert.equal(turnWords(m, new Map([['group:outside', 1]]), 'stack:group:outside:after'), 'Outside the gateway · 6–10 of 12');
+  assert.equal(turnWords(model(0, 4, FOLDS), new Map(), 'stack:group:outside:all'), '');
+});
+
+test('a search or a selection opens the folded group that holds it', () => {
+  const m = model(0, 12, FOLDS);
+  const spread = new Set();
+  assert.deepEqual([...groupsWith(m, spread, ['outside:local:direct-9'])], ['group:outside']);
+  assert.equal(groupsWith(m, spread, ['client:codex']), spread);
+  const open = new Set(['group:outside']);
+  assert.equal(groupsWith(m, open, ['outside:local:direct-9']), open);
+});
+
+test("a lit card lights its stack and that stack's link", () => {
+  const m = model(0, 12, FOLDS);
+  const folded = layoutTree(m, WIDE);
+  const lit = withStacks(litFrom(m, 'client:codex'), folded);
+  assert.ok(lit.has('stack:group:outside:all'));
+  assert.ok(lit.has('client:codex>stack:group:outside:all'));
+  assert.ok(!lit.has('client:cursor>stack:group:outside:all'));
+  assert.equal(stackOf(folded, 'outside:local:direct-9').id, 'stack:group:outside:all');
+  assert.equal(stackOf(folded, 'client:codex'), null);
+  const none = new Set(['client:a']);
+  assert.equal(withStacks(none, folded), none);
+});
+
+test('a card whose change waits keeps its place in an open group', () => {
+  const m = model(0, 4, FOLDS);
+  m.blocks.find((b) => b.id === 'outside:local:analytics').wait = ' · in preview';
+  assert.deepEqual(outsideShown(layoutTree(m, { spread: spreadOut(), ...WIDE })), ['docs', 'analytics', 'n8n', 'direct-3']);
+  // On a page too: it shows where it stands among the cards, before the stack below.
+  const twelve = model(0, 12, FOLDS);
+  twelve.blocks.find((b) => b.id === 'outside:move:n8n').wait = ' · in preview';
+  const l = layoutTree(twelve, { spread: spreadOut(), ...WIDE });
+  assert.deepEqual(outsideShown(l), ['docs', 'analytics', 'n8n', 'direct-3', 'direct-4', 'direct-5']);
+  const ids = l.blocks.map((b) => b.id);
+  assert.ok(ids.indexOf('outside:local:direct-5') < ids.indexOf('stack:group:outside:after'));
+});
+
+// Final review fixes.
+test('the stack above names the page a press brings back, from page 3 on too', () => {
+  const m = model(0, 12, FOLDS);
+  const l = layoutTree(m, { spread: spreadOut(), pages: new Map([['group:outside', 2]]), ...WIDE });
+  const above = stack(l, 'before');
+  assert.equal(above.name, 'Show the 5 before: direct-5, direct-6, direct-7');
+  // Its strips are the cards of that page.
+  assert.deepEqual(above.holds.slice(0, 3), ['outside:local:direct-5', 'outside:move:direct-6', 'outside:local:direct-7']);
+  assert.equal(above.holds.length, 10);
+});
+
+test('a server whose tool change waits stays out of the stack', () => {
+  const m = model(6, 0, { folds: true, tools: true });
+  m.links.find((l) => l.from === 'held:kitden:github' && l.to === 'tool:github/read_repo').leaving = true;
+  const l = layoutTree(m, WIDE);
+  assert.ok(!stack(l, 'all', 'group:kitden:remote').holds.includes('held:kitden:github'));
+  assert.ok(l.blocks.some((b) => b.id === 'held:kitden:github'));
+});
+
+test('only a new card in a group that was there opens it', () => {
+  const was = model(0, 4, FOLDS);
+  const now = model(0, 5, FOLDS);
+  assert.deepEqual(newCards(was, now), ['outside:move:direct-4']);
+  // A new group that came with its cards (a gateway read later) opens nothing; nor does a new tool.
+  const bare = { ...was, blocks: was.blocks.filter((b) => b.id !== 'group:outside' && !b.id.startsWith('outside:')) };
+  assert.deepEqual(newCards(bare, was), []);
+  assert.deepEqual(newCards(model(6, 0, FOLDS), model(6, 0, { folds: true, tools: true })), []);
+});
+
+test('a group that does not fold gets Collapse past its first page, which takes it back there', () => {
+  const m = model(0, 12);
+  assert.ok(!layoutTree(m, { open: new Set(), ...WIDE }).blocks.some((b) => b.kind === 'collapse'));
+  const last = onPage(m, 2);
+  const c = last.blocks.find((b) => b.id === 'collapse:group:outside');
+  assert.ok(c && last.blocks.at(-1).id === c.id);
+  const back = collapseGroup({ spread: new Set(), pages: new Map([['group:outside', 2]]) }, c.id);
+  assert.deepEqual(outsideShown(layoutTree(m, { open: new Set(), pages: back.pages, ...WIDE })), ['docs', 'analytics', 'n8n', 'direct-3', 'direct-4']);
+});
+
+test('a fold step says the caption after a press on a stack, and nothing after Collapse', () => {
+  const m = model(0, 12, FOLDS);
+  const step = foldStep(m, { spread: spreadOut(), pages: new Map() }, 'stack:group:outside:after');
+  assert.deepEqual([[...step.pages], step.words], [[['group:outside', 1]], 'Outside the gateway · 6–10 of 12']);
+  const back = foldStep(m, step, 'collapse:group:outside');
+  assert.deepEqual([[...back.spread], [...back.pages], back.words], [[], [], '']);
+});
+
+test('focus after a press: the stack while it shows, else the first block shown, or the folded stack', () => {
+  const m = model(0, 12, FOLDS);
+  m.blocks.find((b) => b.id === 'outside:move:docs').wait = ' · in preview';
+  const open = layoutTree(m, { spread: spreadOut(), ...WIDE });
+  assert.equal(focusAfter(open, 'stack:group:outside:after'), null);
+  // The first block shown, a pinned one too.
+  assert.equal(focusAfter(open, 'stack:group:outside:all'), 'outside:move:docs');
+  assert.equal(focusAfter(layoutTree(m, WIDE), 'collapse:group:outside'), 'stack:group:outside:all');
+  // A group that does not fold goes back to its first card.
+  assert.equal(focusAfter(onPage(model(0, 12), 0), 'collapse:group:outside'), 'outside:move:docs');
 });

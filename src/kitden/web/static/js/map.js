@@ -13,7 +13,8 @@
 //   whatever its column says. A group block is a caption at the top of its stack (a button when it
 //   has `details`), CAPTION_H high unless `h` says otherwise; its words after a " · " are quiet;
 //   `pageName`, its words while it pages (layoutTree); its children sit under it, in its column,
-//   and always show. Wide, a group
+//   and always show, or with `folds` (a group of servers, plugins or skills) in a stack of cards
+//   until the group is open (`spread`, layoutTree). Wide, a group
 //   sits `before` more space under the block above it, its children are CAPTION_GAP under it and
 //   `rowGap` apart; `icon` (a lucide name) is drawn before its words. Any other block shows its
 //   children only while it is open. `state`: "on", "off", "unk" or "preview". `count`: what a
@@ -39,6 +40,12 @@ export const GAP = 46; // between two columns
 export const NARROW_GAP = 28; // between two columns in a narrow window
 const GROUP_H = 22; // narrow: a group caption's height
 const PAGE = 5; // the children a page of a group shows, unless the group has a `pageSize`
+export const COLLAPSE_W = 74; // Collapse, under an open group at its column's right edge
+export const COLLAPSE_H = 20;
+const COLLAPSE_GAP = 6; // between an open group's last block and its Collapse
+const COLLAPSE = "Collapse";
+const STACK_SHOWS = 3; // a stack shows the first three of its cards: two strips, one whole
+const ONE_EDGE = 4; // a stack of one card shows this much of an edge under it
 export const CAPTION_H = 18; // a column's caption, at the top of its column; a group's too
 const CAPTION_ROW = 24; // the blocks of a column start under its caption
 const CAPTION_GAP = 5; // between a group's caption and its first block
@@ -92,50 +99,104 @@ function childrenOf(model) {
   return children;
 }
 
-// What a group always shows whole: a preview, the slot of a drag and a block marked `pinned` (a
-// card the tray adds) are never behind "N more".
+// What a group always shows whole: a preview, the slot of a drag, a block marked `pinned` (a card
+// the tray adds), a block a change in the tray waits for (`leaving`, `wait`) and the end of a link a
+// change adds or takes out (`flagged`, flaggedOf) are never in a stack.
 const PINNED = ["preview", "slot"];
-const pinned = (child) => Boolean(child.pinned) || PINNED.includes(child.kind);
-// The words of "N more" on a group's last page: a press goes back to the first.
-const firstPage = (size) => `Show the first ${size}`;
+const NONE = new Set();
+const pinned = (child, flagged = NONE) => Boolean(child.pinned || child.leaving || child.wait) || PINNED.includes(child.kind) || flagged.has(child.id);
+// The blocks at either end of a link in preview: a link a change adds (`preview`) or takes out
+// (`leaving`), so a server whose tool a change turns off is pinned too.
+const flaggedOf = (model) => new Set(model.links.filter((link) => link.leaving || link.preview || link.kind === "preview").flatMap((link) => [link.from, link.to]));
+// How strong a link to a stack is: the strongest of those it stands for wins (on, then faint, then
+// a line that skips the gateway).
+const STRENGTH = ["on", "faint", "direct"];
+const strength = (kind) => (STRENGTH.includes(kind) ? STRENGTH.indexOf(kind) : STRENGTH.length);
 
 // How a group pages: past one more than a page (six for five a page), its `pageSize` (PAGE
-// unless set) at a time. It gives the children that page (not a preview or a slot), the page size,
-// how many pages, and the page it shows (`pages`, from 0; past the last, the last). Null for any
-// other block.
-function paging(block, children, pages = new Map()) {
+// unless set) at a time. It gives the children that page (none pinned), the page size, how many
+// pages, and the page it shows (`pages`, from 0; past the last, the last). Null for any other block.
+function paging(block, children, pages = new Map(), flagged = NONE) {
   if (block.kind !== "group") return null;
   const size = block.pageSize || PAGE;
-  const rest = children.filter((child) => !pinned(child));
+  const rest = children.filter((child) => !pinned(child, flagged));
   if (rest.length <= size + 1) return null;
   const count = Math.ceil(rest.length / size);
   return { rest, size, count, page: Math.min(Math.max(0, pages.get(block.id) || 0), count - 1) };
 }
 
-// The children a block shows: a group's always (past six the five of its page, each marked
-// as turning with it, and a block "N more", then a preview or a slot), any other block's only
-// while it is open.
-function shownChildren(block, children, open, pages) {
-  if (block.kind !== "group") return open.has(block.id) ? children : [];
-  const paged = paging(block, children, pages);
-  if (!paged) return children;
-  const { rest, size, page } = paged;
-  const after = rest.length - (page + 1) * size;
-  // "N more" is as high as the blocks it stands for (an outside server's block is higher than the column's).
-  const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: after > 0 ? `${after} more` : firstPage(size), ...(rest[0].h ? { h: rest[0].h } : {}) };
-  const shown = rest.slice(page * size, (page + 1) * size).map((child) => ({ ...child, turns: block.id }));
-  return [...shown, more, ...children.filter(pinned)];
+// The cards of a group that can go into a stack, when the group folds (`folds`) and has two or
+// more of them; null for any other block. A group of one card never folds.
+function stackable(block, children, flagged) {
+  if (block.kind !== "group" || !block.folds) return null;
+  const rest = children.filter((child) => !pinned(child, flagged));
+  return rest.length > 1 ? rest : null;
 }
 
-// What the layout says of a block beyond its place: the words of "N more"; a group that pages,
-// the page it shows and its caption with which ones ("Remote · 6–10 of 12", from its `pageName`
-// when it has one); a block on a page, the group it turns with.
-function pageParts(block, children, pages) {
-  if (block.kind === "more") return { name: block.name };
+// A stack of `cards` of `group` in the role "all" (the group folded), "before" or "after" (the
+// pages on either side of the one shown, `size` a page). Its name says what is inside and what a
+// press does ("Show 5 more: figma, vercel, stripe").
+function stackOfCards(group, role, cards, size) {
+  // The stack above shows first the page a press brings back.
+  if (role === "before") cards = [...cards.slice(-size), ...cards.slice(0, -size)];
+  const first = cards.slice(0, STACK_SHOWS).map((card) => card.name).join(", ");
+  const label = group.pageName || group.name;
+  const name = role === "all" ? `Open ${label}, ${cards.length}: ${first}` : role === "after" ? `Show ${Math.min(size, cards.length)} more: ${first}` : `Show the ${size} before: ${first}`;
+  return { id: `stack:${group.id}:${role}`, column: group.column, parent: group.id, kind: "stack", role, group: group.id, holds: cards.map((card) => card.id), more: Math.max(0, cards.length - STACK_SHOWS), firstH: cards[0].h, name };
+}
+
+// The children a block shows: a group's always, any other block's only while it is open. A group
+// that folds shows one stack while it is not in `spread`. A group past six shows the cards of its
+// page between a stack of the cards before and one of the cards after; a pinned block shows where
+// it stands among them. A group that folds ends with Collapse, and so does one past its first page.
+// A card on a page, or of a group that folds, is marked as turning with its group.
+function shownChildren(block, children, open, pages, spread = NONE, flagged = NONE) {
+  if (block.kind !== "group") return open.has(block.id) ? children : [];
+  const kept = children.filter((child) => pinned(child, flagged));
+  const cards = stackable(block, children, flagged);
+  if (cards && !spread.has(block.id)) return [stackOfCards(block, "all", cards), ...kept];
+  const paged = paging(block, children, pages, flagged);
+  // Collapse folds a group that folds; one that does not, it takes back to its first page.
+  const collapse = cards || (paged && paged.page > 0) ? [{ id: `collapse:${block.id}`, column: block.column, parent: block.id, kind: "collapse", group: block.id, name: COLLAPSE }] : [];
+  if (!paged) return [...(cards ? children.map((child) => (kept.includes(child) ? child : { ...child, turns: block.id })) : children), ...collapse];
+  const { rest, size, page } = paged;
+  const onPage = new Set(rest.slice(page * size, (page + 1) * size));
+  const shown = children.filter((child) => onPage.has(child) || kept.includes(child)).map((child) => (onPage.has(child) ? { ...child, turns: block.id } : child));
+  const before = rest.slice(0, page * size);
+  const after = rest.slice((page + 1) * size);
+  return [
+    ...(before.length ? [stackOfCards(block, "before", before, size)] : []),
+    ...shown,
+    ...(after.length ? [stackOfCards(block, "after", after, size)] : []),
+    ...collapse,
+  ];
+}
+
+// What the layout says of a block beyond its place: a stack's role, group,
+// cards and name; Collapse's group; a group that folds, whether it is open (`spread`), and folded,
+// its caption with its count ("Remote · 12"); a group that pages, the page it shows and its caption
+// with which ones ("Remote · 6–10 of 12", from its `pageName` when it has one); a block on a page or
+// in a group that folds, the group it turns with.
+function pageParts(block, children, pages, spread = NONE, flagged = NONE) {
+  if (block.kind === "stack") return { role: block.role, group: block.group, holds: block.holds, more: block.more, name: block.name };
+  if (block.kind === "collapse") return { group: block.group, name: block.name };
   const parts = block.turns ? { turns: block.turns } : {};
-  const paged = paging(block, children, pages);
+  const cards = stackable(block, children, flagged);
+  if (cards) {
+    parts.spread = spread.has(block.id);
+    if (!parts.spread) return { ...parts, name: `${block.pageName || block.name} · ${cards.length}` };
+  }
+  const paged = paging(block, children, pages, flagged);
   if (!paged) return parts;
   return { ...parts, page: paged.page, name: pageWords(block, paged) };
+}
+
+// How high a stack is when its first card is `h` high: one card shows a thin edge under it; more
+// show the tops of all but the last of the first three (a strip each), then the last one whole.
+function stackHeight(count, h) {
+  if (count === 1) return h + ONE_EDGE;
+  const peek = h >= 60 ? 20 : h >= 44 ? 18 : 15;
+  return (Math.min(count, STACK_SHOWS) - 1) * peek + h;
 }
 
 // A paged group's caption: its name and which ones show ("Remote · 6–10 of 12").
@@ -143,20 +204,12 @@ function pageWords(block, { rest, size, page }) {
   return `${block.pageName || block.name} · ${page * size + 1}–${Math.min(rest.length, (page + 1) * size)} of ${rest.length}`;
 }
 
-// The pages after a press on "N more" (`more:<group id>`): its group shows its next five, and its
-// last page the first five again.
-export function turnPage(model, pages, id) {
-  const group = model.blocks.find((block) => `more:${block.id}` === id);
-  const paged = group && paging(group, childrenOf(model).get(group.id) || [], pages);
-  if (!paged) return pages;
-  return new Map(pages).set(group.id, (paged.page + 1) % paged.count);
-}
-
-// What the caption of the group of "N more" (`more:<group id>`) says with `pages`, or "" when it
-// does not page: a turn says it to a screen reader.
+// What the caption of the group of a stack (`stack:<group id>:<role>`) says with `pages`, or ""
+// when it does not page: a turn says it to a screen reader.
 export function turnWords(model, pages, id) {
-  const group = model.blocks.find((block) => `more:${block.id}` === id);
-  const paged = group && paging(group, childrenOf(model).get(group.id) || [], pages);
+  const groupId = groupOfStack(id);
+  const group = model.blocks.find((block) => block.id === groupId);
+  const paged = group && paging(group, childrenOf(model).get(group.id) || [], pages, flaggedOf(model));
   return paged ? pageWords(group, paged) : "";
 }
 
@@ -165,7 +218,8 @@ export function turnWords(model, pages, id) {
 export function pagesNow(model, pages) {
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   const children = childrenOf(model);
-  const kept = [...pages].filter(([id]) => byId.has(id) && paging(byId.get(id), children.get(id) || []));
+  const flagged = flaggedOf(model);
+  const kept = [...pages].filter(([id]) => byId.has(id) && paging(byId.get(id), children.get(id) || [], new Map(), flagged));
   return kept.length === pages.size ? pages : new Map(kept);
 }
 
@@ -175,11 +229,12 @@ export function pagesNow(model, pages) {
 export function pagesWith(model, pages, ids) {
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   const children = childrenOf(model);
+  const flagged = flaggedOf(model);
   const wanted = new Map(); // group id -> the pages that hold one of `ids`
   for (const id of ids) {
     for (let at = byId.get(id); at; at = byId.get(at.parent)) {
       const group = byId.get(at.parent);
-      const paged = group && paging(group, children.get(group.id) || [], pages);
+      const paged = group && paging(group, children.get(group.id) || [], pages, flagged);
       const i = paged ? paged.rest.indexOf(at) : -1;
       if (i < 0) continue;
       if (!wanted.has(group.id)) wanted.set(group.id, { shown: paged.page, holds: [] });
@@ -192,6 +247,110 @@ export function pagesWith(model, pages, ids) {
     if (next === pages) next = new Map(pages);
     next.set(group, holds[0]);
   }
+  return next;
+}
+
+// The group of a stack ("stack:<group>:<role>") or of a Collapse ("collapse:<group>"). A group's id
+// may hold colons itself ("group:kitden:remote").
+export function groupOfStack(id) {
+  if (id.startsWith("collapse:")) return id.slice("collapse:".length);
+  return id.slice("stack:".length, id.lastIndexOf(":"));
+}
+
+// What shows after a press on a stack: "all" opens its group on its first page, "after" turns to
+// the next page and "before" to the one before, never past the first or the last. New sets; the
+// ones given stay as they are.
+export function pressStack(model, { spread, pages }, id) {
+  const group = groupOfStack(id);
+  const role = id.slice(id.lastIndexOf(":") + 1);
+  const next = { spread: new Set(spread), pages: new Map(pages) };
+  if (role === "all") {
+    next.spread.add(group);
+    next.pages.delete(group);
+    return next;
+  }
+  const block = model.blocks.find((b) => b.id === group);
+  const paged = block && paging(block, childrenOf(model).get(group) || [], pages, flaggedOf(model));
+  if (paged) next.pages.set(group, Math.min(Math.max(0, paged.page + (role === "after" ? 1 : -1)), paged.count - 1));
+  return next;
+}
+
+// What shows after a press on Collapse: its group folds, and opens again on its first page; a group
+// that does not fold goes back to its first page.
+export function collapseGroup({ spread, pages }, id) {
+  const group = groupOfStack(id);
+  const next = { spread: new Set(spread), pages: new Map(pages) };
+  next.spread.delete(group);
+  next.pages.delete(group);
+  return next;
+}
+
+// What a press on a stack or on Collapse (`id`) changes: the open groups, the pages, and the caption
+// a screen reader hears after a press on a stack ("" after Collapse, or where the group does not page).
+export function foldStep(model, view, id) {
+  const next = id.startsWith("collapse:") ? collapseGroup(view, id) : pressStack(model, view, id);
+  return { ...next, words: id.startsWith("stack:") ? turnWords(model, next.pages, id) : "" };
+}
+
+// Where focus goes after a press on a stack or Collapse (`id`), on the layout drawn next: nowhere new
+// while that block still shows; after Collapse to the group's folded stack; else to the first block
+// the group shows, a pinned one too.
+export function focusAfter(layout, id) {
+  if (layout.blocks.some((at) => at.id === id)) return null;
+  const group = groupOfStack(id);
+  const folded = `stack:${group}:all`;
+  if (id.startsWith("collapse:") && layout.blocks.some((at) => at.id === folded)) return folded;
+  const after = layout.blocks.slice(layout.blocks.findIndex((at) => at.id === group) + 1);
+  for (const at of after) {
+    if (at.kind === "group" || at.kind === "column") break;
+    if (at.kind !== "stack" && at.kind !== "collapse") return at.id;
+  }
+  return null;
+}
+
+// The groups open with `ids` shown (a search's matches, a selection): `spread` and every folded
+// group that holds one of them in its stack. `spread` itself when none is added.
+export function groupsWith(model, spread, ids) {
+  const byId = new Map(model.blocks.map((block) => [block.id, block]));
+  const children = childrenOf(model);
+  const flagged = flaggedOf(model);
+  let next = spread;
+  for (const id of ids) {
+    for (let card = byId.get(id), at = card && byId.get(card.parent); at; card = at, at = byId.get(at.parent)) {
+      const cards = next.has(at.id) ? null : stackable(at, children.get(at.id) || [], flagged);
+      if (!cards || !cards.includes(card)) continue;
+      if (next === spread) next = new Set(spread);
+      next.add(at.id);
+    }
+  }
+  return next;
+}
+
+// The cards a change or a rescan brought into a folding group that was there already: the ids of
+// the blocks `now` has and `was` did not, whose group `was` had. A group that came with its cards
+// (a gateway read later) and a block deeper down (a new tool) bring none.
+export function newCards(was, now) {
+  const had = new Set(was.blocks.map((block) => block.id));
+  const folding = new Set(now.blocks.filter((block) => block.kind === "group" && block.folds && had.has(block.id)).map((block) => block.id));
+  return now.blocks.filter((block) => !had.has(block.id) && folding.has(block.parent)).map((block) => block.id);
+}
+
+// The stack of a layout that holds `id`, or null.
+export function stackOf(layout, id) {
+  return layout.blocks.find((at) => at.kind === "stack" && at.holds.includes(id)) || null;
+}
+
+// What lights with `lit` on a layout with stacks: also each stack that holds a lit card, and each
+// link to a stack that stands for a lit link. `lit` itself when nothing is added.
+export function withStacks(lit, layout) {
+  let next = lit;
+  const add = (id) => {
+    if (next.has(id)) return;
+    if (next === lit) next = new Set(lit);
+    next.add(id);
+  };
+  for (const at of layout.blocks) if (at.kind === "stack" && at.holds.some((id) => lit.has(id))) add(at.id);
+  for (const link of layout.links) if (link.stack && link.stands.some((key) => lit.has(key))) add(linkKey(link));
   return next;
 }
 
@@ -210,10 +369,14 @@ export function pagesWith(model, pages, ids) {
 // direct line carries the `chan` it turns on, how far right of its client: wide, one of CHANNELS by
 // the place of its block among those with a direct line, so the lines to blocks one after the other
 // run side by side; narrow, NARROW_CHANNEL. A group of more than six shows five a page, the
-// page `pages` names (group id -> from 0), and "N more".
-export function layoutTree(model, { open = new Set(), pages = new Map(), width = 0, narrow = isNarrow(width) } = {}) {
+// page `pages` names (group id -> from 0), between stacks. A group that folds is one stack unless
+// `spread` holds it; a link to a card in a stack is drawn to the stack, one from each block
+// (`stack`, with the keys it `stands` for), as strong as the strongest of them.
+export function layoutTree(model, { open = new Set(), pages = new Map(), spread = new Set(), width = 0, narrow = isNarrow(width) } = {}) {
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   const children = childrenOf(model);
+  const flagged = flaggedOf(model);
+  const heldBy = new Map(); // a card in a stack -> the stack
   const own = new Set(model.blocks.filter((block) => !byId.has(block.parent)).map((block) => block.column));
   const sizes = new Map();
   const columns = [];
@@ -241,10 +404,15 @@ export function layoutTree(model, { open = new Set(), pages = new Map(), width =
   const stack = (block, left, w, y, opener) => {
     const size = sizes.get(block.column);
     const group = block.kind === "group";
-    const h = block.h ?? (group ? (narrow ? GROUP_H : CAPTION_H) : size.h);
+    let h = block.h ?? (group ? (narrow ? GROUP_H : CAPTION_H) : size.h);
+    if (block.kind === "stack") h = stackHeight(block.holds.length, block.firstH ?? size.h);
+    const cardH = block.kind === "stack" ? block.firstH ?? size.h : undefined;
+    if (block.kind === "collapse") [h, left, w] = [COLLAPSE_H, left + w - COLLAPSE_W, COLLAPSE_W];
     const at = { id: block.id, kind: block.kind, x: left, y, w, h };
     if (opener) at.opener = opener;
-    Object.assign(at, pageParts(block, children.get(block.id) || [], pages));
+    Object.assign(at, pageParts(block, children.get(block.id) || [], pages, spread, flagged));
+    if (cardH !== undefined) at.cardH = cardH;
+    for (const id of block.holds || []) heldBy.set(id, block.id);
     if (block.details) at.details = true;
     placed.set(block.id, at);
     blocks.push(at);
@@ -253,8 +421,8 @@ export function layoutTree(model, { open = new Set(), pages = new Map(), width =
     const between = wideGroup && block.rowGap !== undefined ? block.rowGap : size.row;
     let gap = wideGroup ? CAPTION_GAP : size.row;
     let bottom = y + h;
-    for (const child of shownChildren(block, children.get(block.id) || [], open, pages)) {
-      if (child.column === block.column) bottom = stack(child, left, w, bottom + gap, opener);
+    for (const child of shownChildren(block, children.get(block.id) || [], open, pages, spread, flagged)) {
+      if (child.column === block.column) bottom = stack(child, left, w, bottom + (child.kind === "collapse" ? COLLAPSE_GAP : gap), opener);
       else if (narrow) bottom = stack(child, left + RAIL, Math.min(w - RAIL, sizes.get(child.column).w), bottom + gap, block.id);
       else continue;
       gap = between;
@@ -295,20 +463,41 @@ export function layoutTree(model, { open = new Set(), pages = new Map(), width =
     blocks.splice(first, 0, caption);
   }
 
-  // The place of each block with a direct line, in layout order, picks its channel.
-  const lined = new Set(model.links.filter((link) => link.kind === "direct").map((link) => link.to));
+  // The place of each block with a direct line, in layout order, picks its channel; a stack takes
+  // the place of its cards.
+  const lined = new Set(model.links.filter((link) => link.kind === "direct").map((link) => heldBy.get(link.to) || link.to));
   const places = blocks.map((at) => at.id).filter((id) => lined.has(id));
   const links = [];
+  const merged = new Map(); // "from>stack" -> the one link drawn for all it stands for
   for (const link of model.links) {
     const from = placed.get(link.from);
-    const to = placed.get(link.to);
+    const into = placed.has(link.to) ? null : heldBy.get(link.to);
+    const to = placed.get(into || link.to);
     if (!from || !to) continue;
+    if (into) {
+      const was = merged.get(`${link.from}>${into}`);
+      if (!was) {
+        const drawn = { from: link.from, to: into, kind: link.kind, stack: true, stands: [linkKey(link)], ...(link.unk ? { unk: true } : {}) };
+        merged.set(`${link.from}>${into}`, drawn);
+        links.push(drawn);
+        continue;
+      }
+      was.stands.push(linkKey(link));
+      if (strength(link.kind) < strength(was.kind)) was.kind = link.kind;
+      if (!link.unk) delete was.unk;
+      continue;
+    }
     const child = byId.get(link.to);
     const rail = narrow && child.parent === link.from && child.column !== byId.get(link.from).column;
     const drawn = { from: link.from, to: link.to, kind: link.kind, shape: rail ? "rail" : link.kind === "direct" ? "step" : "curve", ...flagsOf(link) };
     if (link.kind === "direct") drawn.chan = narrow ? NARROW_CHANNEL : CHANNELS[places.indexOf(link.to) % CHANNELS.length];
     drawn.d = linkPath(drawn, from, to);
     links.push(drawn);
+  }
+  for (const drawn of merged.values()) {
+    drawn.shape = drawn.kind === "direct" ? "step" : "curve";
+    if (drawn.kind === "direct") drawn.chan = narrow ? NARROW_CHANNEL : CHANNELS[places.indexOf(drawn.to) % CHANNELS.length];
+    drawn.d = linkPath(drawn, placed.get(drawn.from), placed.get(drawn.to));
   }
   const height = blocks.reduce((most, block) => Math.max(most, block.y + block.h), 0);
   return { columns, blocks, links, height, narrow };
@@ -547,9 +736,12 @@ export function landStage(from, to, owners, waiting = new Set()) {
   return { ...to, blocks: shown, links: links.filter((l) => ids.has(l.from) && ids.has(l.to)) };
 }
 
-// Whether a group shows another page now (`now`) than before (`was`): both show, and both page.
+// Whether a group shows another page now (`now`) than before (`was`): both show, and both page, or
+// both fold and one is open (`spread`).
 function turnedPage(was, now) {
-  return Boolean(was && now) && was.page !== undefined && now.page !== undefined && was.page !== now.page;
+  if (!was || !now) return false;
+  const turned = was.page !== undefined && now.page !== undefined && was.page !== now.page;
+  return turned || (was.spread !== undefined && now.spread !== undefined && was.spread !== now.spread);
 }
 
 // The block a block of a fold goes back into: its opener, or the group whose page turned.

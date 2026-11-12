@@ -18,8 +18,6 @@ const MODES = ["map", "list"];
 // the Library's map, the rest on its List. The Library's tabs are Plugins and skills ("plugin", for
 // every kind but instructions) and Instructions (libraryKind).
 const OLD_KINDS = { mcp_server: { view: "gateway", mode: "list" }, hook: { mode: "map" }, marketplace: { mode: "map" } };
-// With no choice in the address, a page opens in List past this many blocks in its middle column.
-export const MAP_AT = 15;
 // The kinds of item the address can select: `sel=mcp_server:github`, `sel=tool:github/push_files`,
 // `sel=client:codex`, `sel=group:outside` (a map's group block, its id without `group:`), and
 // `sel=direct:pencil`: a server's entries outside the gateway, also when the gateway holds a
@@ -34,10 +32,10 @@ export const state = {
 // The Library's tab for a kind: Instructions, or Plugins and skills for any other.
 export const libraryKind = (kind) => (kind === "instructions" ? "instructions" : "plugin");
 
-// What a page shows: the choice in the address, else List past MAP_AT blocks, else Map.
-export function viewMode(s, count) {
-  if (s.mode) return s.mode;
-  return count > MAP_AT ? "list" : "map";
+// What a page shows: the choice in the address, else its map, at any size: big groups fold into
+// stacks there.
+export function viewMode(s) {
+  return s.mode || "map";
 }
 
 // Map or List, as the Gateway page drew it last ("" before it drew either): Details and the

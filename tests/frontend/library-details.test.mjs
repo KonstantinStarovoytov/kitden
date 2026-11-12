@@ -168,6 +168,10 @@ const facts = (card) => card.facts.map((f) => [f.label, typeof f.value === 'stri
 const labels = (card) => card.actions.map((a) => [a.label, Boolean(a.primary)]);
 const c = () => details.context(MEDIUM, '', '');
 
+// Most tests look at the cards: every group opens out of its stack first.
+function spreadAll(box) {
+  for (const n of walk(box).filter((one) => /^block:stack:.*:all$/.test(one.dataset.focus || ''))) n.listeners.click[0]({ target: n });
+}
 async function showMap(sample = MEDIUM, { project = '' } = {}) {
   Object.assign(data, { libraryMap: sample, projects: PROJECTS });
   data.scope.libraryMap = project;
@@ -175,6 +179,7 @@ async function showMap(sample = MEDIUM, { project = '' } = {}) {
   main.replaceChildren();
   setHint('');
   renderLibrary(main);
+  if (map()) spreadAll(map());
   await flush();
   return map();
 }

@@ -714,11 +714,13 @@ def test_the_map_marks_when_it_is_drawn():
 
 
 def test_the_map_words():
-    # A group over six pages five at a time: "N more", on its last page "Show the first 5", and
-    # its caption says which ones show; the outside group says why it is apart.
+    # A group over six pages five at a time between stacks, a stack says what a press does, and a
+    # caption says which ones show; the outside group says why it is apart.
     assert '"Outside the gateway · calls skip Kitden\'s rules"' in script("gateway.js")
-    assert " more`" in script("map.js")
-    assert "firstPage = (size) => `Show the first ${size}`" in script("map.js")
+    assert "`Show ${Math.min(size, cards.length)} more: ${first}`" in script("map.js")
+    assert "`Show the ${size} before: ${first}`" in script("map.js")
+    assert "`Open ${label}, ${cards.length}: ${first}`" in script("map.js")
+    assert 'const COLLAPSE = "Collapse";' in script("map.js")
     assert "`${block.pageName || block.name} · ${page * size + 1}–${" in script("map.js")
     # While the Outside group pages its caption drops "drag one in" for the range, and a caption
     # never runs into the next column: what does not fit ends in "…".
@@ -813,7 +815,7 @@ def test_the_map_says_the_link_is_the_state():
         '"No gateway yet"',
         '"One place for servers, rules and logins."',
         '"Set up…"',
-        "more`",
+        "more: ${first}`",
         "In ${",
     ):
         assert words in text, words
@@ -2771,7 +2773,7 @@ def test_a_plugin_or_skill_drags_onto_a_client():
         'const CLICK_OUT = "Click to take it out.";',
         "takeOut: `${meta}. ${CLICK_OUT}`",
         "pinned: true, parent: marketGroup(model, offer.marketplace)",
-        "details: true, group };",
+        "details: true, group, folds: true };",
         'const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };',
         'kind: "preview", row: add.key',
         "addsOf(item, tray.rows).some((add) => add.clients.includes(client))",
@@ -2826,11 +2828,13 @@ def test_the_library_add_panel_says_the_decided_words():
     # Why the panel offers a plugin to no client, beside it in views/skills.py.
     assert NO_CLIENT == "No client here can get {name}."
     assert NEEDS_PLUGIN == "This skill needs the rest of its plugin. Add the plugin instead."
-    # A card the tray adds is never behind "N more" (map.js), and an add of a plugin or skill is one
-    # row whatever order its clients come in (tray.js).
-    assert "const pinned = (child) => Boolean(child.pinned) || PINNED.includes(child.kind);" in (
-        script("map.js")
-    )
+    # A card the tray adds, or one a change waits for, is never in a stack
+    # (map.js), and an add of a plugin or skill is one row whatever order its clients come in
+    # (tray.js).
+    assert (
+        "const pinned = (child, flagged = NONE) => Boolean(child.pinned || child.leaving || "
+        "child.wait) || PINNED.includes(child.kind) || flagged.has(child.id);"
+    ) in script("map.js")
     assert 'const ADD_ORDER = ["plugin.install", "skill.install"];' in script("tray.js")
 
 
