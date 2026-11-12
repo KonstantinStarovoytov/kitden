@@ -178,7 +178,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       # The script that decides. kitden-sdlc's main is protected, like the workflows called
-      # from it.
+      # from it. A commit could hold .kitden-sdlc as a link; checkout would follow it.
+      - name: Clear the kitden-sdlc folder
+        run: rm -rf .kitden-sdlc
       - name: Check out kitden-sdlc
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -210,6 +212,9 @@ jobs:
           owner: KonstantinStarovoytov
           repositories: kitden
           permission-contents: write
+          # GitHub refuses an app's new ref when its commits change .github/workflows
+          # unless the token may write workflows.
+          permission-workflows: write
       # An annotated tag on the commit this run checked, through the API: no token in git.
       - name: Tag
         if: steps.tag.outputs.need == 'true'

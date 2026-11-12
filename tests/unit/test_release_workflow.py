@@ -132,3 +132,21 @@ def test_ubuntu_runs_one_real_keyring_round_trip():
     (step,) = [s for s in _build_steps() if "test_real_keyring.py" in s]
     assert "if: runner.os == 'Linux'" in step
     assert "KITDEN_REAL_KEYRING=1" in step and "gnome-keyring-daemon --unlock" in step
+
+
+def test_autotag_clears_the_kitden_sdlc_folder_and_may_write_workflows():
+    """As the build job does, the folder is removed before kitden-sdlc is checked out. The
+    release app's token may write workflows: GitHub refuses an app's new tag whose commits
+    change .github/workflows otherwise."""
+    steps = _jobs()["autotag"].split("\n      - ")[1:]
+    clear, checkout, sign_in = (
+        next(i for i, s in enumerate(steps) if marker in s)
+        for marker in (
+            "rm -rf .kitden-sdlc",
+            "repository: KonstantinStarovoytov/kitden-sdlc",
+            "actions/create-github-app-token@",
+        )
+    )
+    assert clear < checkout < sign_in
+    assert "permission-contents: write" in steps[sign_in]
+    assert "permission-workflows: write" in steps[sign_in]
