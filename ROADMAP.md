@@ -17,7 +17,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   page that can only fail.
 - **Context shows the large skills:** on the side whose descriptions are sent, each skill and its
   piece of the skill list turn from grey to orange with the length of its description, so the
-  few skills that take most of the list stand out.
+  few skills that take most of the list stand out (#72).
 
 ### 0.8.0
 
