@@ -418,6 +418,7 @@ class State:
         self.follow_ups: set[asyncio.Task] = set()
         self.reading_versions = False
         self.ready = asyncio.Event()
+        self.called: float | None = None  # when a tab last asked the API (monotonic)
         self.inventory = build() if scan_now else Inventory()
         self.data = inventory_dict(self.inventory)
         self.lock = asyncio.Lock()
@@ -517,6 +518,10 @@ class State:
         finally:
             self.progress.done(WARM_STEP)
 
+    def recently_called(self) -> bool:
+        """A tab asked the API within TAB_SEEN_S: it is open, maybe hidden."""
+        return self.called is not None and time.monotonic() - self.called < TAB_SEEN_S
+
     async def rescan(self) -> dict:
         async with self.lock:
             self.events.publish("rescan_started")
@@ -610,6 +615,11 @@ class UpdateRun:
     handed_over: bool = False  # the new version's page was started: this one stops
 
 
+# A hidden tab closes its event stream, so the browser keeps a connection free (it allows six per
+# address), and checks in every minute instead (app.js). It counts as open this long.
+TAB_SEEN_S = 150.0
+
+
 class WaitForFirstScan:
     """API calls wait for the first scan; the page itself and its event stream do not."""
 
@@ -620,6 +630,8 @@ class WaitForFirstScan:
     async def __call__(self, scope, receive, send) -> None:
         path = scope.get("path", "")
         waits = path.startswith("/api/") and path not in NO_WAIT
+        if scope["type"] == "http" and path.startswith("/api/") and path != "/api/events":
+            self.state.called = time.monotonic()  # a tab is open, also one with no event stream
         if scope["type"] == "http" and waits:
             await self.state.ready.wait()
         await self.app(scope, receive, send)
@@ -2164,7 +2176,7 @@ def create_app(
     # What a background page checks before it stops by itself (feature 002, research R6), and
     # whether any page stops because the new version's page takes over.
     app.state.activity = SimpleNamespace(
-        tabs=lambda: events.count,
+        tabs=lambda: max(events.count, int(state.recently_called())),
         busy=write_lock.locked,
         handed_over=lambda: update.handed_over,
     )

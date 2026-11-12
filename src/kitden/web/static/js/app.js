@@ -285,31 +285,62 @@ async function openPlace(view) {
   go(view);
 }
 
+// A hidden tab lets its event stream go after a minute: the browser allows only six connections
+// to one address, so streams of tabs left open would leave none for a new tab. It checks in
+// every minute instead, so the page knows it is open (TAB_SEEN_S in app.py), and on return it
+// opens the stream again and reads what changed meanwhile.
+const HIDDEN_CLOSE_MS = 60000;
+const CHECK_IN_MS = 60000;
+
 function listen() {
-  const events = new EventSource("/api/events");
-  // Read where the first scan is on every (re)connect: steps sent while not connected are lost.
-  events.addEventListener("open", readScan);
-  events.addEventListener("scan_progress", (event) => {
-    try { showScan(JSON.parse(event.data)); } catch { /* a broken message changes nothing */ }
-  });
-  // While the first scan's line runs, it already says that a scan runs: no sweep on top.
-  events.addEventListener("rescan_started", () => { if (!scanning) $("#topbar").classList.add("scanning"); });
-  // How many steps of a running change are done; the tray's Apply counts them.
-  events.addEventListener("change_progress", (event) => {
-    let detail = null;
-    try { detail = JSON.parse(event.data); } catch { return; }
-    document.dispatchEvent(new CustomEvent("kitden:progress", { detail }));
-  });
-  // A refresh of the Kitden gateway's tool lists ended, also after a failure: an open tool
-  // list reads them again, and the page draws again, so a server just applied shows its tools.
-  events.addEventListener("gateway_tools", () => { document.dispatchEvent(new CustomEvent("kitden:tools")); liveRefresh(); });
-  // The clients' versions were read in the background, also after a failure: the Clients card
-  // reads them again.
-  events.addEventListener("versions", () => document.dispatchEvent(new CustomEvent("kitden:versions")));
-  // The tray asks whether its files changed since the preview (checkTrayStale), also while
-  // someone types: only the page's redraw waits.
-  events.addEventListener("rescan_finished", () => {
-    $("#topbar").classList.remove("scanning");
+  let events = null;
+  let closing = 0;
+  let checkIn = 0;
+  const connect = () => {
+    events = new EventSource("/api/events");
+    // Read where the first scan is on every (re)connect: steps sent while not connected are lost.
+    events.addEventListener("open", readScan);
+    events.addEventListener("scan_progress", (event) => {
+      try { showScan(JSON.parse(event.data)); } catch { /* a broken message changes nothing */ }
+    });
+    // While the first scan's line runs, it already says that a scan runs: no sweep on top.
+    events.addEventListener("rescan_started", () => { if (!scanning) $("#topbar").classList.add("scanning"); });
+    // How many steps of a running change are done; the tray's Apply counts them.
+    events.addEventListener("change_progress", (event) => {
+      let detail = null;
+      try { detail = JSON.parse(event.data); } catch { return; }
+      document.dispatchEvent(new CustomEvent("kitden:progress", { detail }));
+    });
+    // A refresh of the Kitden gateway's tool lists ended, also after a failure: an open tool
+    // list reads them again, and the page draws again, so a server just applied shows its tools.
+    events.addEventListener("gateway_tools", () => { document.dispatchEvent(new CustomEvent("kitden:tools")); liveRefresh(); });
+    // The clients' versions were read in the background, also after a failure: the Clients card
+    // reads them again.
+    events.addEventListener("versions", () => document.dispatchEvent(new CustomEvent("kitden:versions")));
+    // The tray asks whether its files changed since the preview (checkTrayStale), also while
+    // someone types: only the page's redraw waits.
+    events.addEventListener("rescan_finished", () => {
+      $("#topbar").classList.remove("scanning");
+      checkTrayStale().catch(reportError);
+      liveRefresh();
+    });
+  };
+  connect();
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      clearTimeout(closing);
+      closing = setTimeout(() => {
+        if (!events) return;
+        events.close();
+        events = null;
+        checkIn = setInterval(readScan, CHECK_IN_MS);
+      }, HIDDEN_CLOSE_MS);
+      return;
+    }
+    clearTimeout(closing);
+    clearInterval(checkIn);
+    if (events) return;
+    connect();
     checkTrayStale().catch(reportError);
     liveRefresh();
   });
