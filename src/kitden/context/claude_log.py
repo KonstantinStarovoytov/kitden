@@ -27,6 +27,7 @@ class SentList:
     model: str | None
     folder: str | None
     skills: tuple[tuple[str, str | None], ...]  # name, sent text (None = name only)
+    added: frozenset[str] = frozenset()  # added during the chat: sent whole, outside the limit
 
 
 @dataclass(frozen=True)
@@ -144,7 +145,10 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                     )
                     answered = False
                 elif isinstance(result, SentList):
-                    result = replace(result, at=at, skills=_added(result.skills, skills))
+                    added = result.added | {name for name, _ in skills}
+                    result = replace(
+                        result, at=at, skills=_added(result.skills, skills), added=added
+                    )
             elif '"model"' in line and ASSISTANT.search(line):
                 found = MODEL.search(line)  # a regex: no need to parse a large assistant line
                 if found and not found[1].startswith("<"):

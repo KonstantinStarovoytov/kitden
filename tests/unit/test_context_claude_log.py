@@ -168,6 +168,19 @@ def test_added_skills_alone_fall_back_to_the_next_older(tmp_path):
     assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
 
 
+def test_skills_added_during_a_chat_are_marked_until_the_next_full_list(tmp_path):
+    # Claude Code sends an added skill with its description whatever the limit, so the rule
+    # must not count it (checked 2026-11-12, real log of Claude Code 2.1.309).
+    first = list_entry(["a"], "- a")
+    more = list_entry(["c"], "- c: Does C.", isInitial=False, at="2026-11-09T11:00:00Z")
+    write_chat(tmp_path, "p", "chat", [first, more], 100)
+    got = last_claude_list(tmp_path, None)
+    assert (got.skills, got.added) == ((("a", None), ("c", "Does C.")), frozenset({"c"}))
+    again = list_entry(["a", "c"], "- a\n- c", at="2026-11-09T12:00:00Z")
+    write_chat(tmp_path, "p", "chat", [first, more, again], 100)
+    assert last_claude_list(tmp_path, None).added == frozenset()
+
+
 def test_a_list_cut_short_is_not_a_full_list(tmp_path):
     write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
     short = list_entry(["a"], "- a: New.", skillCount=3)

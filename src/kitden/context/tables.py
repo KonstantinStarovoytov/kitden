@@ -16,15 +16,17 @@ CLAUDE_CANDIDATES: tuple[tuple[int, int], ...] = (
     (1_000_000, 4),
 )
 
-# The estimate for a chat whose model is not known: the other kind of window than the last one.
-# last window -> (window, characters per token, name shown)
-CLAUDE_OTHER_WINDOW: dict[int, tuple[int, int, str]] = {
-    1_000_000: (200_000, 4, "Older models"),
-    200_000: (1_000_000, 3, "Opus 5.5, Fable 5.1"),
+# The estimate for the other kind of window than the last chat's: last window -> (window,
+# characters per token).
+CLAUDE_OTHER_WINDOW: dict[int, tuple[int, int]] = {
+    1_000_000: (200_000, 4),
+    200_000: (1_000_000, 3),
 }
 
 # checked 2026-11-07 (Claude Code 2.1.311, two test chats): skills that always keep their
-# description, whatever the budget.
+# description, whatever the budget. Every chat checks them: with a wrong name the rule does not
+# rebuild the list, and Kitden shows no estimate. One chat cannot tell them apart from skills
+# that simply fit. checked 2026-11-12 (real log, Claude Code 2.1.309): the same 15.
 CLAUDE_ALWAYS_FULL = frozenset(
     {
         "dataviz",

@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from kitden.context.rules import CodexSkill, codex_rule
+from kitden.context.tables import CLAUDE_ALWAYS_FULL
+from kitden.system import claude_desktop_dir
 from kitden.views.context_view import _codex_estimate, context_view
 from kitden.views.inventory import build_inventory
 from kitden.views.overview import overview
@@ -101,7 +103,7 @@ def test_claude_everything_fits_is_a_fact_and_the_room_is_an_estimate(home):
     )
     assert (other["title"], other["models"], other["tag"], other["budget"]) == (
         "200K window",
-        "Older models",
+        "",  # no model names written into Kitden
         "Estimate",
         8_000,
     )
@@ -1021,6 +1023,35 @@ def test_a_skill_of_unknown_size_does_not_hide_the_window_when_no_size_changes_t
     cc = view(home)["claude_code"]
     assert cc["windows"][0]["title"] == "200K window"
     assert cc["checked"] is False
+
+
+def test_a_skill_the_claude_app_gives_is_read_from_the_apps_folder(home):
+    # The Claude app gives Claude Code its own skills (`anthropic-skills:docx`) from its folder;
+    # without their size no window gives the list. Here only 30,000 characters (1M window, 3
+    # per token) do: the built-ins and own skills take 28,564, helper's 1,538 do not fit.
+    own = home / ".claude/skills"
+    sent: dict[str, str | None] = dict.fromkeys(sorted(CLAUDE_ALWAYS_FULL), "x" * 1536)
+    for i in range(4):
+        skill(own, f"own{i}", "y" * 1300)
+        sent[f"own{i}"] = "y" * 1300
+    sent["app-skills:helper"] = None
+    app = claude_desktop_dir(home) / "local-agent-mode-sessions/skills-plugin/org/id/skills"
+    skill(app, "helper", "z" * 1536)
+    claude_chat(home, sent, model="claude-new-9")
+    cc = view(home)["claude_code"]
+    assert (cc["checked"], cc["windows"][0]["title"]) == (True, "1M window")
+
+
+def test_a_skill_added_during_the_chat_does_not_count_against_the_limit(home):
+    names = [f"s{i}" for i in range(1, 9)]
+    for name in [*names, "late"]:
+        skill(home / ".claude/skills", name, LONG[:1000])
+    content = "\n".join(f"- {n}: {LONG[:1000]}" if i < 7 else f"- {n}" for i, n in enumerate(names))
+    first = list_entry(names, content)
+    late = list_entry(["late"], f"- late: {LONG[:1000]}", isInitial=False)
+    write_chat(home, "p", "chat", [first, late, assistant("claude-new-9")], 100)
+    cc = view(home)["claude_code"]
+    assert (cc["checked"], cc["windows"][0]["title"]) == (True, "200K window")
 
 
 # Review of 2026-11-10
