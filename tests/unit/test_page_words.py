@@ -2826,11 +2826,13 @@ def test_the_library_add_panel_says_the_decided_words():
     # Why the panel offers a plugin to no client, beside it in views/skills.py.
     assert NO_CLIENT == "No client here can get {name}."
     assert NEEDS_PLUGIN == "This skill needs the rest of its plugin. Add the plugin instead."
-    # A card the tray adds is never behind "N more" (map.js), and an add of a plugin or skill is one
-    # row whatever order its clients come in (tray.js).
-    assert "const pinned = (child) => Boolean(child.pinned) || PINNED.includes(child.kind);" in (
-        script("map.js")
-    )
+    # A card the tray adds, or one a change waits for, is never behind "N more" or in a stack
+    # (map.js), and an add of a plugin or skill is one row whatever order its clients come in
+    # (tray.js).
+    assert (
+        "const pinned = (child, flagged = NONE) => Boolean(child.pinned || child.leaving || "
+        "child.wait) || PINNED.includes(child.kind) || flagged.has(child.id);"
+    ) in script("map.js")
     assert 'const ADD_ORDER = ["plugin.install", "skill.install"];' in script("tray.js")
 
 
