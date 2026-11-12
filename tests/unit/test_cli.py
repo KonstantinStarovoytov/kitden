@@ -48,6 +48,8 @@ def test_a_port_the_old_page_just_closed_is_free_again():
     # The old page closes its connections itself, which leaves the port in TIME_WAIT. The new
     # page takes that port over after an update; uvicorn's own bind allows it, so must the probe.
     listener = socket.socket()
+    # The old page listened as uvicorn does; Linux reuses a TIME_WAIT port only for such a socket.
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind(("127.0.0.1", 0))
     listener.listen()
     port = listener.getsockname()[1]
