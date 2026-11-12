@@ -156,17 +156,17 @@ function shownChildren(block, children, open, pages, spread = NONE, flagged = NO
   if (cards) {
     if (!spread.has(block.id)) return [stackOfCards(block, "all", cards), ...kept];
     const collapse = { id: `collapse:${block.id}`, column: block.column, parent: block.id, kind: "collapse", group: block.id, name: COLLAPSE };
-    const turning = (list) => list.map((child) => ({ ...child, turns: block.id }));
+    // The cards keep their order: a pinned one stays where it stands among those shown.
     const paged = paging(block, children, pages, flagged);
-    if (!paged) return [...turning(cards), ...kept, collapse];
-    const { size, page } = paged;
+    const { size, page } = paged || { size: cards.length, page: 0 };
+    const onPage = new Set(cards.slice(page * size, (page + 1) * size));
+    const shown = children.filter((child) => onPage.has(child) || kept.includes(child)).map((child) => (onPage.has(child) ? { ...child, turns: block.id } : child));
     const before = cards.slice(0, page * size);
     const after = cards.slice((page + 1) * size);
     return [
       ...(before.length ? [stackOfCards(block, "before", before, size)] : []),
-      ...turning(cards.slice(page * size, (page + 1) * size)),
+      ...shown,
       ...(after.length ? [stackOfCards(block, "after", after, size)] : []),
-      ...kept,
       collapse,
     ];
   }
@@ -318,6 +318,12 @@ export function groupsWith(model, spread, ids) {
     }
   }
   return next;
+}
+
+// The ids of the blocks `now` has and `was` did not: what a change or a rescan brought.
+export function newBlocks(was, now) {
+  const had = new Set(was.blocks.map((block) => block.id));
+  return now.blocks.filter((block) => !had.has(block.id)).map((block) => block.id);
 }
 
 // The stack of a layout that holds `id`, or null.

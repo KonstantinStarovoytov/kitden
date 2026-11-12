@@ -7,7 +7,7 @@ import { addForm, connectAction, connectBody, followProject, heldServer, liveHel
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { flipToolPick, onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
-import { collapseGroup, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, pressStack, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
+import { collapseGroup, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, newBlocks, pagesNow, pagesWith, pressCount, pressOpen, pressStack, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
 import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
@@ -851,7 +851,7 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   const was = onMap.model;
   Object.assign(onMap, { model, found: keepFolds(found) });
   // A card that comes with a change or a rescan opens its group: it never lands inside a stack.
-  if (was && !fresh && !projectChanged) onMap.spread = groupsWith(model, onMap.spread, newIn(was, model));
+  if (was && !fresh && !projectChanged) onMap.spread = groupsWith(model, onMap.spread, newBlocks(was, model));
   bringPages(model, { fresh, projectChanged });
   // An Undo the page has just read: the map plays its rows back (landRows).
   const undid = undone.id;
@@ -859,12 +859,6 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   if (fresh || projectChanged) landing.due = null;
   else if (landRows(was, model, undid)) return;
   drawOnMap(model, { fresh, projectChanged, switched });
-}
-
-// The blocks of `now` that `was` did not have.
-function newIn(was, now) {
-  const had = new Set(was.blocks.map((block) => block.id));
-  return now.blocks.filter((block) => !had.has(block.id)).map((block) => block.id);
 }
 
 // The pages a draw shows, before it: those of groups that still page, then the page of a block a
@@ -1385,12 +1379,11 @@ function foldOnMap(model, id) {
   if (words) say(words);
   if (onMap.selected && !shownOnMap(model, onMap.selected)) letGoOnMap();
   else drawAgain();
-  const box = onMap.view && onMap.view.box;
   const shown = onMap.layout ? onMap.layout.blocks : [];
-  if (!box || shown.some((at) => at.id === id)) return;
+  if (!onMap.view || shown.some((at) => at.id === id)) return;
   const group = groupOfStack(id);
   const next = id.startsWith("collapse:") ? `stack:${group}:all` : shown.find((at) => at.turns === group)?.id;
-  if (next) withFocusKey(box, `block:${next}`)?.focus({ preventScroll: true });
+  if (next) onMap.view.node(next)?.focus({ preventScroll: true });
 }
 
 // Whether the map shows a block, or both ends of a link (its key), as it lays out now.

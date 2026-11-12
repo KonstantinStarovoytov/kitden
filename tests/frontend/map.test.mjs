@@ -740,3 +740,16 @@ test("a lit card lights its stack and that stack's link", () => {
   const none = new Set(['client:a']);
   assert.equal(withStacks(none, folded), none);
 });
+
+test('a card whose change waits keeps its place in an open group', () => {
+  const m = model(0, 4, FOLDS);
+  m.blocks.find((b) => b.id === 'outside:local:analytics').wait = ' · in preview';
+  assert.deepEqual(outsideShown(layoutTree(m, { spread: spreadOut(), ...WIDE })), ['docs', 'analytics', 'n8n', 'direct-3']);
+  // On a page too: it shows where it stands among the cards, before the stack below.
+  const twelve = model(0, 12, FOLDS);
+  twelve.blocks.find((b) => b.id === 'outside:move:n8n').wait = ' · in preview';
+  const l = layoutTree(twelve, { spread: spreadOut(), ...WIDE });
+  assert.deepEqual(outsideShown(l), ['docs', 'analytics', 'n8n', 'direct-3', 'direct-4', 'direct-5']);
+  const ids = l.blocks.map((b) => b.id);
+  assert.ok(ids.indexOf('outside:local:direct-5') < ids.indexOf('stack:group:outside:after'));
+});

@@ -90,7 +90,11 @@ globalThis.fetch = () => new Promise(() => {});
 
 const { libraryMode, libraryTree, LIBRARY_COLUMNS } = await import('../../src/kitden/web/static/js/library-map.js');
 const { renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
-const { findChip, layoutTree } = await import('../../src/kitden/web/static/js/map.js');
+const { findChip, layoutTree: layoutAsIs } = await import('../../src/kitden/web/static/js/map.js');
+// The tests here look at the cards, so every group is open out of its stack unless a test says
+// otherwise with its own `spread`.
+const openAll = (tree) => new Set(tree.blocks.filter((b) => b.folds).map((b) => b.id));
+const layoutTree = (tree, options = {}) => layoutAsIs(tree, { spread: openAll(tree), ...options });
 const { data, hashFor, libraryShows, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const { setHint } = await import('../../src/kitden/web/static/js/parts.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
@@ -137,13 +141,20 @@ const node = (box, key) => walk(box).find((n) => n.dataset.focus === key) || nul
 const byId = (model) => new Map(model.blocks.map((b) => [b.id, b]));
 const texts = (root) => walk(root).map((n) => n.textContent).filter(Boolean);
 
-function showMap(sample = MEDIUM, { q = '' } = {}) {
+// Most tests look at the cards: every group opens out of its stack first. With `open` false every
+// group folds instead (the groups stay as a test left them while the page module lives).
+function spreadAll(box, open = true) {
+  const which = open ? /^block:stack:.*:all$/ : /^block:collapse:/;
+  for (const n of walk(box).filter((one) => which.test(one.dataset.focus || ''))) n.listeners.click[0]({ target: n });
+}
+function showMap(sample = MEDIUM, { q = '', open = true } = {}) {
   Object.assign(data, { libraryMap: sample, projects: [] });
   data.scope.libraryMap = '';
   Object.assign(state, { view: 'library', mode: 'map', kind: 'plugin', project: '', q, selected: null });
   main.replaceChildren();
   setHint(''); // as app.js does before each draw
   const found = renderLibrary(main);
+  if (map()) spreadAll(map(), open);
   return { box: map(), found };
 }
 
@@ -250,22 +261,25 @@ test('no block says N of M on', () => {
 test('a big group and a big plugin page in place and nothing overflows', () => {
   const open = new Set(['item:b0']);
   const model = libraryTree(LARGE);
-  const layout = layoutTree(model, { open, narrow: false });
+  const layout = layoutTree(model, { open, spread: new Set(['group:marketplace:bench-market', 'group:skills']), narrow: false });
   const shown = new Map(layout.blocks.map((b) => [b.id, b]));
-  // Plugins and skills page five at a time, the Inside column eight at a time, each with "N more".
+  // Plugins and skills page five at a time with a stack of the rest under them, the Inside column
+  // eight at a time with "N more".
   assert.equal(layout.blocks.filter((b) => b.kind === 'plugin').length, 5);
-  assert.equal(shown.get('more:group:marketplace:bench-market').name, '25 more');
+  assert.equal(shown.get('stack:group:marketplace:bench-market:after').holds.length, 25);
   assert.equal(shown.get('group:marketplace:bench-market').name, 'bench-market · 1–5 of 30');
   assert.equal(layout.blocks.filter((b) => b.kind === 'skill').length, 5);
-  assert.equal(shown.get('more:group:skills').name, '122 more');
+  assert.equal(shown.get('stack:group:skills:after').holds.length, 122);
   assert.equal(layout.blocks.filter((b) => b.kind === 'part').length, 8);
   assert.equal(shown.get('more:inside:item:b0').name, '12 more');
   assert.equal(shown.get('inside:item:b0').name, 'plugin-00 · 1–8 of 20');
-  // Every block sits in its column, none on another, and the Inside stack never starts above 26.
-  const of = (b) => model.blocks.find((m) => m.id === b.id)?.column || layout.columns.find((c) => c.x === b.x)?.id;
+  // Every block sits in its column, none on another (Collapse at its right edge), and the Inside
+  // stack never starts above 26.
+  const of = (b) => (b.kind === 'stack' || b.kind === 'collapse' ? 'plugins' : model.blocks.find((m) => m.id === b.id)?.column || layout.columns.find((c) => c.x === b.x)?.id);
   for (const b of layout.blocks.filter((at) => at.kind !== 'column')) {
     const column = layout.columns.find((c) => c.id === of(b));
-    assert.ok(column && b.x === column.x && b.w === column.w, b.id);
+    if (b.kind === 'collapse') assert.ok(column && b.x + b.w === column.x + column.w, b.id);
+    else assert.ok(column && b.x === column.x && b.w === column.w, b.id);
   }
   for (const column of layout.columns) {
     const mine = layout.blocks.filter((b) => b.kind !== 'column' && of(b) === column.id).sort((a, b) => a.y - b.y);
@@ -438,18 +452,18 @@ test('the chip counts what lights on the shown page, and says it again when a pa
   const one = showMap(LARGE, { q: 'plugin-29' });
   settle();
   assert.equal(findChip(one.found), '1 match');
-  // "plugin-0" lights plugin-00 to plugin-04 on the first page; "N more" turns to plugin-05 to
+  // "plugin-0" lights plugin-00 to plugin-04 on the first page; the stack below turns to plugin-05 to
   // plugin-09, and the chip says it again for that page.
   const first = showMap(LARGE, { q: 'plugin-0' });
   settle();
   assert.equal(pages['#find-chip'].textContent, '5 matches');
-  node(first.box, 'block:more:group:marketplace:bench-market').listeners.click[0]({ target: node(first.box, 'block:more:group:marketplace:bench-market') });
+  node(first.box, 'block:stack:group:marketplace:bench-market:after').listeners.click[0]({ target: node(first.box, 'block:stack:group:marketplace:bench-market:after') });
   settle();
   const shown = walk(first.box).filter((n) => n.dataset.focus && /\bfound\b/.test(n.className) && n.dataset.focus.startsWith('block:item:'));
   assert.deepEqual(shown.map((n) => n.dataset.focus).sort(), ['b5', 'b6', 'b7', 'b8', 'b9'].map((id) => `block:item:${id}`));
   assert.equal(pages['#find-chip'].textContent, '5 matches');
   // The last page holds no match: the chip says so.
-  for (let turn = 0; turn < 4; turn++) node(first.box, 'block:more:group:marketplace:bench-market').listeners.click[0]({ target: node(first.box, 'block:more:group:marketplace:bench-market') });
+  for (let turn = 0; turn < 4; turn++) node(first.box, 'block:stack:group:marketplace:bench-market:after').listeners.click[0]({ target: node(first.box, 'block:stack:group:marketplace:bench-market:after') });
   settle();
   assert.equal(pages['#find-chip'].textContent, 'No matches');
   state.q = '';
@@ -1081,6 +1095,7 @@ function showTab(kind, sample = MEDIUM) {
   main.replaceChildren();
   setHint('');
   renderLibrary(main);
+  if (map()) spreadAll(map());
   return map();
 }
 const pressTab = (id) => walk(main).find((n) => n.dataset.focus === `map-tab:${id}`).listeners.click[0]();
@@ -1257,7 +1272,7 @@ test('each tab keeps the pages its groups were turned to', async () => {
   try {
     const box = showTab('plugin', LARGE);
     settle();
-    const more = () => node(box, 'block:more:group:marketplace:bench-market');
+    const more = () => node(box, 'block:stack:group:marketplace:bench-market:after');
     more().listeners.click[0]({ target: more() });
     await flush();
     const caption = () => walk(box).find((n) => n.dataset.focus === 'block:group:marketplace:bench-market' || (n.title || '').startsWith('bench-market ·'));
@@ -1278,4 +1293,46 @@ test('an online drag keeps the discovery identity and chooses only the drop clie
     action: 'skill.install', targets: [{ client: 'codex' }],
     params: { skill: 'frontend-design', discovery: 'catalog-id' },
   });
+});
+
+test('the Library map starts with every source folded; Inside and Instructions do not fold', () => {
+  const { box } = showMap(MEDIUM, { open: false });
+  settle();
+  for (const g of ['group:marketplace:demo-market', 'group:skills']) assert.ok(node(box, `block:stack:${g}:all`), g);
+  assert.equal(node(box, 'block:item:p1'), null);
+  // A group of one card never folds.
+  assert.ok(node(box, 'block:item:p4') && node(box, 'block:item:h1'));
+  // A plugin's Inside opens as before, eight a page, and has no Collapse.
+  const inside = layoutTree(libraryTree(LARGE), { open: new Set(['item:b0']), spread: new Set(['group:marketplace:bench-market']), narrow: false });
+  assert.equal(inside.blocks.filter((b) => b.kind === 'part').length, 8);
+  assert.ok(!inside.blocks.some((b) => b.id === 'collapse:inside:item:b0'));
+  assert.ok(instructionsTree(INSTR).blocks.filter((b) => b.kind === 'group').every((b) => !b.folds));
+  spreadAll(box);
+  settle();
+});
+
+test('a marketplace caption opens its Details and leaves its group folded', () => {
+  const { box } = showMap(MEDIUM, { open: false });
+  settle();
+  const caption = node(box, 'block:group:marketplace:demo-market');
+  caption.listeners.click[0]({ target: caption });
+  settle();
+  assert.match(node(box, 'block:group:marketplace:demo-market').className, /\bselected\b/);
+  assert.ok(node(box, 'block:stack:group:marketplace:demo-market:all'));
+  spreadAll(box);
+  settle();
+});
+
+test('Collapse folds a source back, and focus goes to its stack', () => {
+  const { box } = showMap(MEDIUM);
+  settle();
+  assert.ok(node(box, 'block:item:p1'));
+  const collapse = node(box, 'block:collapse:group:marketplace:demo-market');
+  collapse.listeners.click[0]({ target: collapse });
+  settle();
+  assert.equal(node(box, 'block:item:p1'), null);
+  assert.equal(document.activeElement?.dataset?.focus, 'block:stack:group:marketplace:demo-market:all');
+  assert.equal(document.activeElement, node(box, 'block:stack:group:marketplace:demo-market:all'));
+  spreadAll(box);
+  settle();
 });

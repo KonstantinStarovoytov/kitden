@@ -2771,7 +2771,7 @@ def test_a_plugin_or_skill_drags_onto_a_client():
         'const CLICK_OUT = "Click to take it out.";',
         "takeOut: `${meta}. ${CLICK_OUT}`",
         "pinned: true, parent: marketGroup(model, offer.marketplace)",
-        "details: true, group };",
+        "details: true, group, folds: true };",
         'const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };',
         'kind: "preview", row: add.key',
         "addsOf(item, tray.rows).some((add) => add.clients.includes(client))",
