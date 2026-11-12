@@ -4,7 +4,7 @@ import { test } from 'node:test';
 
 // motion.js reads matchMedia when it loads.
 globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
-const { STEPS, failedWords, pollMs, twiceWords, updateView, watchStep } = await import('../../src/kitden/web/static/js/update.js');
+const { STEPS, failedWords, pollMs, splitVersions, twiceWords, updateView, watchStep } = await import('../../src/kitden/web/static/js/update.js');
 
 const NOTES = 'https://github.com/KonstantinStarovoytov/kitden/releases/tag/v0.7.3';
 const OUT = { version: '0.7.2', latest: '0.7.3', can_update: true, notes_url: NOTES, state: 'idle', step: null, tail: [] };
@@ -230,4 +230,11 @@ test('one copy or none: no word', () => {
   assert.equal(twiceWords({ ...OUT, installs: [{ method: 'uv', remove: 'uv tool uninstall kitden' }] }), null);
   assert.equal(twiceWords({ ...OUT, installs: [] }), null);
   assert.equal(twiceWords(OUT), null);
+});
+
+test('only the figures that change roll', () => {
+  assert.deepEqual(splitVersions('0.7.5', '0.7.6'), { same: '0.7.', from: '5', to: '6' });
+  assert.deepEqual(splitVersions('0.7.9', '0.8.0'), { same: '0.', from: '7.9', to: '8.0' });
+  assert.deepEqual(splitVersions('0.7.9', '0.7.10'), { same: '0.7.', from: '9', to: '10' });
+  assert.deepEqual(splitVersions('0.9.9', '1.0.0'), { same: '', from: '0.9.9', to: '1.0.0' });
 });

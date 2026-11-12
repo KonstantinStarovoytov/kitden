@@ -76,6 +76,15 @@ export function twiceWords(api) {
   };
 }
 
+// After an update only the figures that change roll: "0.7.5" to "0.7.6" rolls the 5. `same` stays,
+// `from` rolls away and `to` rolls in.
+export function splitVersions(from, to) {
+  let i = 0;
+  while (i < from.length && i < to.length && from[i] === to[i]) i += 1;
+  while (i > 0 && /\d/.test(to[i - 1]) && /\d/.test(to[i] ?? "")) i -= 1; // never split a number
+  return { same: to.slice(0, i), from: from.slice(i), to: to.slice(i) };
+}
+
 // How long until the watch reads again: no page came back in 30 s, so now and then.
 export const pollMs = (phase) => (phase === "gone" ? LOOK_MS : POLL_MS);
 
@@ -139,7 +148,11 @@ function tailNode(tail) {
 }
 
 export function startUpdate(spot) {
-  const version = el("span", "update-version roll");
+  // The version: "Kitden 0.7." stays, and the figures that change roll (splitVersions).
+  const version = el("span", "update-version");
+  const versionHead = el("span");
+  const versionTail = el("span", "roll");
+  version.append(versionHead, versionTail);
   const press = el("button", "update-btn");
   press.type = "button";
   press.hidden = true;
@@ -176,12 +189,21 @@ export function startUpdate(spot) {
   let popFor = null; // the control that opened the box, for focus back
   let asks = 0; // reads while the latest version is not known yet
   let heard = ""; // the last words said that do not show
+  let shownVersion = null; // the version number as drawn
 
   function draw() {
     const view = updateView(api, phase);
-    if (version.lastElementChild?.textContent !== view.version) {
-      if (version.lastElementChild) rollTo(version, view.version, { up: true });
-      else version.append(el("span", null, view.version));
+    const number = view.version.replace(/^Kitden /, "");
+    if (number !== shownVersion) {
+      if (shownVersion === null) {
+        versionHead.textContent = view.version;
+      } else {
+        const parts = splitVersions(shownVersion, number);
+        versionHead.textContent = `Kitden ${parts.same}`;
+        versionTail.replaceChildren(el("span", null, parts.from));
+        rollTo(versionTail, parts.to, { up: true });
+      }
+      shownVersion = number;
     }
     if (view.quiet) {
       if (view.tip && view.tip !== heard) say(view.tip);
