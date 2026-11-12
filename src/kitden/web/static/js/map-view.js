@@ -181,7 +181,9 @@ function stackParts(place, byId, { tile }) {
     strip.style.top = `${i * peek}px`;
     strip.style.height = `${place.cardH}px`;
     strip.dataset.lift = String(cards.length - 1 - i);
-    strip.append(card.icon ? icon(card.icon, STRIP_ICON) : el("span", lampClass("lamp", card.lamp || "on")), el("span", "stack-name", cutName(card.name)));
+    const lead = stripLead(card, tile);
+    if (lead) strip.append(lead);
+    strip.append(el("span", "stack-name", cutName(card.name)));
     parts.push(quiet(strip));
   });
   const last = cards.at(-1);
@@ -195,6 +197,16 @@ function stackParts(place, byId, { tile }) {
   const left = cards[0].ports && cards[0].ports.left;
   if (left) parts.push(quiet(el("span", ["port l", left !== true && left].filter(Boolean).join(" "))));
   return { parts, lamp: null, nums: new Map(), projects: null };
+}
+
+// What a strip shows before a card's name: the card's own tile (drawn small by style.css), else its
+// icon, else its kind word's icon, else its lamp; nothing for a card with none of them.
+function stripLead(card, tile) {
+  const mark = tile ? tile(card) : null;
+  if (mark) return mark;
+  const name = card.icon || (card.label && card.label.icon);
+  if (name) return icon(name, STRIP_ICON);
+  return card.lamp ? el("span", lampClass("lamp", card.lamp)) : null;
 }
 
 // Collapse's parts: a chevron and its word.

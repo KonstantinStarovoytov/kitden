@@ -797,6 +797,9 @@ div.map .stack-strip, div.map .stack-face, div.map .stack-edge { position: absol
 div.map .stack-strip + .stack-strip, div.map .stack-strip + .stack-face { box-shadow: 0 -2px 6px -4px rgb(0 0 0 / .35); }
 div.map .stack-strip { display: flex; align-items: flex-start; gap: 6px; padding: 3px 11px 0; color: var(--ink); font-size: 11px; font-weight: 600; line-height: 14px; }
 div.map .stack-strip .ic { flex: none; margin-top: 1px; color: var(--ink-3); }
+/* A card's tile, drawn small in its strip: only its icon. */
+div.map .stack-strip .block-icon, div.map .stack-strip .block-tile { display: contents; }
+div.map .stack-strip svg { flex: none; width: 12px; height: 12px; margin-top: 1px; color: var(--ink-3); }
 div.map .stack-strip .lamp { margin-top: 4px; }
 div.map .stack-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 div.map .stack-face { display: flex; align-items: center; gap: 10px; padding: 0 12px; }

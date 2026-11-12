@@ -2140,3 +2140,21 @@ test('pointing at a client lights the stacks it reaches and their links', async 
   v.glance(null);
   assert.ok(!v.node('stack:g:all').classList.contains('lit'));
 });
+
+test("a strip shows the card's own tile or kind icon, and a lamp only where the card has one", async () => {
+  const cards = (kind, extra) => Array.from({ length: 4 }, (_, i) => ({ id: `${kind}${i}`, column: 'b', parent: 'g', kind, name: `${kind}${i}`, ...extra }));
+  const tree = (list) => ({ columns: [{ id: 'a', w: 150, h: 54 }, { id: 'b', w: 170, h: 34 }], blocks: [{ id: 'g', column: 'b', kind: 'group', name: 'Things', folds: true }, ...list], links: [] });
+  const puzzle = () => { const n = element('SPAN'); n.className = 'block-icon'; n.dataset.icon = 'puzzle'; return n; };
+  const v = view({ tile: (b) => (b.kind === 'plugin' ? puzzle() : null) });
+  const plugins = tree(cards('plugin', { lamp: 'on' }));
+  await v.draw(plugins, layoutTree(plugins, { narrow: false }), { motion: 'none' });
+  const [strip] = inside(v.node('stack:g:all'), '.stack-strip');
+  assert.ok(walk(strip).some((n) => n.dataset?.icon === 'puzzle'));
+  assert.ok(!walk(strip).some((n) => n.classList?.contains('lamp')));
+  const w = view();
+  const parts = tree(cards('part', { label: { icon: 'sparkles', words: 'Skill' } }));
+  await w.draw(parts, layoutTree(parts, { narrow: false }), { motion: 'none' });
+  const [part] = inside(w.node('stack:g:all'), '.stack-strip');
+  assert.ok(walk(part).some((n) => n.dataset?.icon === 'sparkles'));
+  assert.ok(!walk(part).some((n) => n.classList?.contains('lamp')));
+});
