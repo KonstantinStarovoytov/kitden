@@ -24,7 +24,8 @@ const WAIT_MS = 30000; // no new page in this time: it did not start
 const RELOAD_MS = 500; // the last step shows this long before the page reloads
 const LAND_MS = 400; // the reloaded page shows the full ring this long, then the button fades
 const SLIDE_MS = 200; // the line under the version slides open and shut, so the rail does not jump
-const SWAP_MS = 120; // one step's words fade out, the next fade in, each this long
+const SWAP_MS = 260; // one step's words fade out, the next fade in, each this long
+const ROLL = { outMs: 320, inMs: 460 }; // the version's figures roll slowly: it happens once
 const FADE_MS = 500;
 const FROM_KEY = "kitden-updated-from"; // the old version, kept across the reload (sessionStorage)
 
@@ -227,11 +228,11 @@ export function startUpdate(spot) {
       words.textContent = tip;
       return;
     }
-    animateTo(words, [{ opacity: 1 }, { opacity: 0 }], { dur: SWAP_MS, ease: "ease-in", fill: "forwards" }).then(() => {
+    animateTo(words, [{ opacity: 1 }, { opacity: 0 }], { dur: SWAP_MS, ease: "ease-in-out", fill: "forwards" }).then(() => {
       if (wordsFor !== tip) return;
       words.textContent = tip;
       words.getAnimations().forEach((a) => a.cancel());
-      animateTo(words, [{ opacity: 0 }, { opacity: 1 }], { dur: SWAP_MS, ease: "ease-out" });
+      animateTo(words, [{ opacity: 0 }, { opacity: 1 }], { dur: SWAP_MS, ease: "ease-in-out" });
     });
   }
 
@@ -245,7 +246,7 @@ export function startUpdate(spot) {
         const parts = splitVersions(shownVersion, number);
         versionHead.textContent = `Kitden ${parts.same}`;
         versionTail.replaceChildren(el("span", null, parts.from));
-        rollTo(versionTail, parts.to, { up: true });
+        rollTo(versionTail, parts.to, { up: true, ...ROLL });
       }
       shownVersion = number;
     }
