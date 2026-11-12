@@ -19,6 +19,16 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **A strip when an agent needs a restart:** after an Apply, an amber strip under the top bar
   names each client that must be restarted to see it, with "Got it". Kitden never restarts an
   agent for you.
+- **Client entries use the stable launcher:** the `kitden` entry Kitden adds to a client runs
+  the install's own launcher (uv's tool folder or Homebrew's `opt` link), so an upgrade does not
+  break it.
+- **Update for an old `kitden` entry:** when a client's `kitden` entry runs a program that is
+  gone, or a versioned Homebrew folder, the page offers Update. It changes only the entry's
+  command.
+- **Installed twice:** when both uv and Homebrew installed Kitden, a quiet line under the version
+  says "Installed twice: uv and Homebrew", and Details shows how to remove one copy.
+- **Hidden tabs give their connection back:** a tab in the background closes its live
+  connection, so a new tab no longer hangs when many tabs are open.
 - After you update to this version, restart your agents once; later updates from the page need
   no restart. If a gateway cannot move to the new version by itself, it keeps working on the old
   one until the agent restarts.

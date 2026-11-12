@@ -12,6 +12,7 @@ The table shape is fixed, because a daily check reads it. `Source` is a full add
 | `claude mcp remove -s <scope> <name>` | command | `src/kitden/clients/claude_code.py` | removing a server | same | https://code.claude.com/docs/en/mcp |
 | User servers live in `~/.claude.json` under `mcpServers`; local servers under `projects.<path>.mcpServers`; Claude Code rewrites the file in normal use | key | `src/kitden/clients/claude_code.py` | scan, adding and removing a server (2026-10-22) | same | https://code.claude.com/docs/en/mcp |
 | Project servers in `<project>/.mcp.json`, approved by `enabledMcpjsonServers`, `disabledMcpjsonServers` and `enableAllProjectMcpServers` in `~/.claude.json` | key | `src/kitden/clients/claude_code.py` | scan | same | guess |
+| Update sets only `command` of the user `kitden` entry in `~/.claude.json`, by a direct file edit that checks only that entry, not `claude mcp add-json` (2026-11-12) | key | `src/kitden/clients/base.py`, `src/kitden/clients/claude_code.py` | updating Kitden's own entry | same | guess |
 | MCP server types `http`, `stdio`, `sse`, `ws` (the gateway speaks only http) (2026-10-21) | key | `src/kitden/clients/entries.py` | moving a server into the gateway | same | guess |
 | `headersHelper` makes a server read values from a helper command (2026-10-21) | key | `src/kitden/clients/entries.py` | moving a server into the gateway | same | guess |
 | `claude plugin install <id> -s <scope> --json`, run in the project for `-s project` | command | `src/kitden/clients/claude_code.py` | installing a plugin (2026-10-22) | same | https://code.claude.com/docs/en/plugins/install |
@@ -45,6 +46,7 @@ The table shape is fixed, because a daily check reads it. `Source` is a full add
 |---|---|---|---|---|---|
 | Settings folder is `CODEX_HOME`, default `~/.codex`; settings in `config.toml` | path | `src/kitden/clients/codex.py` | scan, every write | same | https://learn.chatgpt.com/docs/agent-configuration/agents-md |
 | MCP servers in `[mcp_servers.<name>]` of `config.toml` (`command`, `args`, `url`, `enabled`); Kitden edits the file as TOML and keeps comments, not `codex mcp add` | key | `src/kitden/clients/codex.py` | adding and removing a server | same | install |
+| Update sets only `command` in `[mcp_servers.kitden]` of `config.toml`; `enabled` and the timeouts stay (2026-11-12) | key | `src/kitden/clients/base.py`, `src/kitden/clients/codex.py` | updating Kitden's own entry | same | install |
 | Keys filled in from elsewhere: `env_vars`, `bearer_token_env_var`, `env_http_headers`, `http_headers_helper` (2026-10-21) | key | `src/kitden/clients/entries.py` | moving a server into the gateway | same | guess |
 | `codex mcp login <name>` for a server that signs in with OAuth | command | `src/kitden/clients/codex.py` | adding the gateway | same | help |
 | `codex plugin add <id> --json` and `codex plugin remove <id>`; that remove deletes the `[plugins."<id>"]` table is assumed (2026-10-22, version 0.163) | command | `src/kitden/clients/codex.py` | installing and removing a plugin | same | help |
@@ -72,6 +74,7 @@ The table shape is fixed, because a daily check reads it. `Source` is a full add
 | What | Kind | Files | Seen in | macOS and Linux | Source |
 |---|---|---|---|---|---|
 | User MCP servers in `~/.cursor/mcp.json` under `mcpServers`, project ones in `<project>/.cursor/mcp.json`; Kitden edits the JSON | key | `src/kitden/clients/cursor.py` | scan, adding and removing a server | same | install |
+| Update sets only `command` of the `kitden` entry in `~/.cursor/mcp.json` (2026-11-12) | key | `src/kitden/clients/base.py`, `src/kitden/clients/cursor.py` | updating Kitden's own entry | same | install |
 | Server entries list `command`, `args`, `env`, `envFile`, no `cwd` (2026-11-09) | key | `src/kitden/clients/entries.py` | moving a server into the gateway | same | guess |
 | A url ending in `/sse` with no type is read as SSE | key | `src/kitden/clients/entries.py` | moving a server into the gateway | same | guess |
 | Header placeholder `${env:NAME}` | key | `src/kitden/clients/cursor.py` | adding the gateway | same | guess |
