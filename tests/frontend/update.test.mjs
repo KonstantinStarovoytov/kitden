@@ -47,7 +47,7 @@ test('a page that handed over waits on the restart step', () => {
 
 test('the new page answered: the last step, then the page reloads', () => {
   const v = updateView({ ...OUT, state: 'done', step: 2 }, 'reloading');
-  assert.equal(v.tip, 'Reloading the page…');
+  assert.equal(v.tip, 'Reloading…');
   assert.equal(v.ring, 1);
 });
 

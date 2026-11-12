@@ -10,7 +10,7 @@ import { say } from "./toast.js";
 
 // The steps, as kitden.update.run.STEPS says them. The server reports 0 to 2; the page shows 3
 // itself while it waits for the new page.
-export const STEPS = ["Downloading…", "Installing…", "Restarting Kitden…", "Reloading the page…"];
+export const STEPS = ["Downloading…", "Installing…", "Restarting Kitden…", "Reloading…"];
 const RING = [0.25, 0.55, 0.8, 1];
 const FAILED = "Update failed";
 const NOT_STARTED = "Kitden did not start again";

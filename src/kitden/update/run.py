@@ -18,7 +18,7 @@ from anyio.streams.text import TextReceiveStream
 from kitden.gateways import private_data_dir
 from kitden.update.install import Install, installed_version
 
-STEPS = ("Downloading…", "Installing…", "Restarting Kitden…", "Reloading the page…")
+STEPS = ("Downloading…", "Installing…", "Restarting Kitden…", "Reloading…")
 MARKER = "updated.json"
 TAIL_LINES = 20
 

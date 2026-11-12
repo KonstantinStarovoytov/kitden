@@ -21,7 +21,7 @@ def anyio_backend():
 
 
 def test_steps_are_in_order():
-    assert STEPS == ("Downloading…", "Installing…", "Restarting Kitden…", "Reloading the page…")
+    assert STEPS == ("Downloading…", "Installing…", "Restarting Kitden…", "Reloading…")
 
 
 def test_uv_lines_move_the_ring():
