@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **The Context page shows your newest chat:** it takes the skill list sent last, not the chat
+  file changed last. Codex's cuts now follow Codex's own code, and its window follows
+  `model_context_window` in `config.toml`. For Claude Code, Kitden reads the skills the Claude
+  app adds, so it can check its estimate against your chat again (#73).
 - **Map groups fold into card stacks:** the Gateway and Library open on the map at any size, where
   a group of two or more starts as a stack of cards that opens five at a time and folds back with
   Collapse (#77).

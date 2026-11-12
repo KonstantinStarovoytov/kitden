@@ -338,9 +338,9 @@ HOW_CLAUDE_SURFACE = "The list in the terminal can differ from the Claude app."
 HOW_CLAUDE_REST = "The rest of the window (system prompt, tools, MCP, the chat) is not measured."
 HOW_CODEX_LIST = "Last chat: the list Codex{version} sent{when}, read from its chat log."
 HOW_CODEX_RULE = (
-    "Estimates start from Codex's source code: 2% of the window, at most 1,024 characters per "
-    "description, about 4 bytes per token. Each entry also pays for its name and file path. How "
-    "Codex cuts a list that does not fit is fitted to one real list, not read from the code."
+    "Estimates follow Codex's source code: 2% of the window, at most 1,024 characters per "
+    "description, about 4 bytes per token. Each entry also pays for its name and file path. When "
+    "the list does not fit, Codex shares the room one character at a time across the skills."
 )
 HOW_CODEX_CHECK = (
     "Before it shows an estimate, Kitden checks that the rule cuts the same skills as your last "

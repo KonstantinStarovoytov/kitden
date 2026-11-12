@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 from kitden.context.claude_log import SentList, Unreadable, last_claude_list
@@ -110,6 +111,28 @@ def test_a_chat_with_no_list_yet_falls_back_to_the_next_older(tmp_path):
     assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
 
 
+def stamp(at: str) -> float:
+    return datetime.fromisoformat(at).timestamp()
+
+
+def test_the_newest_list_wins_not_the_newest_file(tmp_path):
+    # An old chat's file can change later with no new list (the app touched it).
+    old = list_entry(["a"], "- a: Old.", at="2026-10-26T19:00:00Z")
+    new = list_entry(["a"], "- a: New.", at="2026-11-11T23:00:00Z")
+    write_chat(tmp_path, "p", "old", [old], stamp("2026-11-12T17:10:00Z"))
+    write_chat(tmp_path, "p", "new", [new], stamp("2026-11-11T23:05:00Z"))
+    got = last_claude_list(tmp_path, None)
+    assert (got.at, got.skills) == ("2026-11-11T23:00:00Z", (("a", "New."),))
+
+
+def test_a_newer_unreadable_list_wins_over_an_older_good_one(tmp_path):
+    good = list_entry(["a"], "- a: Old.", at="2026-11-10T09:00:00Z")
+    odd = list_entry("a", "- a: New.", at="2026-11-11T09:00:00Z")
+    write_chat(tmp_path, "p", "good", [good], stamp("2026-11-12T09:00:00Z"))
+    write_chat(tmp_path, "p", "odd", [odd], stamp("2026-11-11T09:05:00Z"))
+    assert isinstance(last_claude_list(tmp_path, None), Unreadable)
+
+
 def test_a_picked_folder_reads_only_its_own_chats(tmp_path):
     write_chat(tmp_path, "mine", "chat", [list_entry(["a"], "- a: Mine.", folder="/work/a")], 100)
     write_chat(tmp_path, "other", "chat", [list_entry(["a"], "- a: Other.", folder="/work/b")], 200)
@@ -143,6 +166,19 @@ def test_added_skills_alone_fall_back_to_the_next_older(tmp_path):
     odd = list_entry(["a"], "- a: New.", isInitial=False)
     write_chat(tmp_path, "p", "new", [odd], 200)
     assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
+
+
+def test_skills_added_during_a_chat_are_marked_until_the_next_full_list(tmp_path):
+    # Claude Code sends an added skill with its description whatever the limit, so the rule
+    # must not count it (checked 2026-11-12, real log of Claude Code 2.1.309).
+    first = list_entry(["a"], "- a")
+    more = list_entry(["c"], "- c: Does C.", isInitial=False, at="2026-11-09T11:00:00Z")
+    write_chat(tmp_path, "p", "chat", [first, more], 100)
+    got = last_claude_list(tmp_path, None)
+    assert (got.skills, got.added) == ((("a", None), ("c", "Does C.")), frozenset({"c"}))
+    again = list_entry(["a", "c"], "- a\n- c", at="2026-11-09T12:00:00Z")
+    write_chat(tmp_path, "p", "chat", [first, more, again], 100)
+    assert last_claude_list(tmp_path, None).added == frozenset()
 
 
 def test_a_list_cut_short_is_not_a_full_list(tmp_path):

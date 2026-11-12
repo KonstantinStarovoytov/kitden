@@ -33,10 +33,12 @@ The table shape is fixed, because a daily check reads it. `Source` is a full add
 | Claude Desktop folder on Linux is assumed to be `~/.config/Claude`; macOS uses `~/Library/Application Support/Claude` (2026-11-03) | path | `src/kitden/system.py` | scan | differs | guess |
 | Lowest version tested is 2.1.283, read from `claude --version` | command | `src/kitden/clients/versions.py` | client list | same | help |
 | Chat logs at `~/.claude/projects/*/*.jsonl`; entry fields `timestamp`, `version`, `entrypoint`, `cwd`, `isSidechain`, and attachment `type` `skill_listing` with `isInitial`, `skillCount`, `names`, `content` (2026-11-09) | path | `src/kitden/context/claude_log.py` | skill list | same | install |
-| A list with `isInitial` false holds only the skills added since the last list; the full list is sent again on resume (2026-11-10) | key | `src/kitden/context/claude_log.py` | skill list | same | install |
+| A list with `isInitial` false holds only the skills added since the last list, each sent whole outside the limit; the full list is sent again on resume (2026-11-10; checked 2026-11-12, version 2.1.309) | key | `src/kitden/context/claude_log.py` | skill list | same | install |
+| The newest list is the one with the latest time in the log, not the newest file (2026-11-12) | key | `src/kitden/context/claude_log.py` | skill list | same | install |
+| Skills the Claude app gives Claude Code (`anthropic-skills:docx`) are at `local-agent-mode-sessions/skills-plugin/<org>/<id>/skills/<skill>/SKILL.md` in the app's folder, some copied to `~/.claude/skills/synced/<org>_<id>/`; the newest copy is read (2026-11-12, version 2.1.309) | path | `src/kitden/views/context_view.py` | skill list | differs | install |
 | `entrypoint` is `claude-desktop` for the app; `cli` is not confirmed; `sdk*` entries are skipped (2026-11-09) | key | `src/kitden/context/claude_log.py` | skill list | same | install |
 | The skill list may use 1% of the window; one description is cut at 1536 characters (2026-11-07) | limit | `src/kitden/context/tables.py` | skill list | same | install |
-| Windows by model: 1,000,000 tokens at 3 characters per token for opus-5-5 and fable-5-1; 200,000 at 4 for sonnet-4-6 (2026-11-06) | limit | `src/kitden/context/tables.py` | skill list | same | install |
+| Windows by model: 1,000,000 tokens at 3 characters per token for opus-5-5 and fable-5-1; 200,000 at 4 for sonnet-4-6 (2026-11-06). Every chat checks it; a model not listed gets the one window whose limit rebuilds its list, and no model is named on the estimate card | limit | `src/kitden/context/tables.py` | skill list | same | install |
 | Skills that always keep their description: dataviz, artifact-design, artifact-diagramming, artifact-capabilities, update-config, keybindings-help, code-review, simplify, fewer-permission-prompts, loop, schedule, claude-api, workflow-authoring, run, plugin-authoring (2026-11-07) | limit | `src/kitden/context/tables.py` | skill list | same | install |
 | When the list does not fit: built-ins and name-only skills keep their entry, other skills show a name, descriptions go to the most used (2026-11-07) | limit | `src/kitden/context/rules.py` | skill list | same | install |
 
@@ -67,7 +69,9 @@ The table shape is fixed, because a daily check reads it. `Source` is a full add
 | `models_cache.json` holds `models[]` with `slug`, `display_name`, `context_window` (2026-11-09) | path | `src/kitden/context/codex_log.py` | skill list | same | install |
 | The skill list may use 2% of the window; one description is cut at 1024 characters (2026-11-06) | limit | `src/kitden/context/tables.py` | skill list | same | guess |
 | `skills.max_context_tokens` is at most 10,000 tokens (2026-11-06) | limit | `src/kitden/context/tables.py` | skill list | same | guess |
-| The list spends 166 tokens of its own text before the first skill; fitted to one real list, not read from Codex (2026-10-30) | limit | `src/kitden/context/tables.py` | skill list | same | install |
+| A list that does not fit: the roots table is paid first, then the room is shared one character at a time across the skills; read from `codex-rs/ext/skills/src/render.rs` and matched on a real list of 0.167.0 (2026-11-12) | limit | `src/kitden/context/rules.py`, `src/kitden/context/tables.py` | skill list | same | install |
+| The newest list is the one with the latest time in the log, not the newest file: the Codex app rewrites an old chat's file when it opens it (2026-11-12, version 0.167.0) | key | `src/kitden/context/codex_log.py` | skill list | same | install |
+| `model_context_window` in `config.toml` replaces the window, at most the model's `max_context_window` in `models_cache.json` (2026-11-12) | key | `src/kitden/context/codex_log.py` | skill list | same | https://developers.openai.com/codex/config-reference |
 
 ## Cursor
 

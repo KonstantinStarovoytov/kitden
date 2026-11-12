@@ -1,11 +1,13 @@
-"""Codex's last skill list, read from the newest chat log, and its window from the model cache."""
+"""Codex's last skill list, the newest one sent, and its window from the model cache."""
 
 import json
 import re
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TypeGuard
 
-from kitden.context.claude_log import SentList, Unreadable
+from kitden.context.claude_log import SentList, Unreadable, newest
 
 CLIENT = "codex"
 
@@ -23,25 +25,39 @@ ROOT = re.compile(r"^- `(?P<alias>[^`]+)` = `(?P<folder>[^`]+)`$")
 class CodexSent:
     list: SentList
     paths: dict[str, str]  # name -> the `file:` path of its line, its root alias resolved
+    shown: dict[str, str]  # name -> the `file:` path as the line shows it
+    roots: tuple[str, ...]  # the list's roots lines, as sent
+
+    @property
+    def at(self) -> str:
+        return self.list.at
 
 
-def _entries(entry: dict) -> list[tuple[str, str, str]] | None:
-    """(name, sent text, path) for each line of the list in a developer message; [] if it has
-    no list. None when the list has `- ` lines and Kitden knows none of them: a new shape."""
+@dataclass(frozen=True)
+class _Listed:
+    lines: list[tuple[str, str, str, str]]  # name, sent text, path resolved, path as shown
+    roots: tuple[str, ...]
+
+
+def _entries(entry: dict) -> _Listed | None:
+    """Each line of the list in a developer message, and its roots lines; no lines if it has no
+    list. None when the list has `- ` lines and Kitden knows none of them: a new shape."""
     payload = entry.get("payload")
     if not isinstance(payload, dict) or payload.get("role") != "developer":
-        return []
+        return _Listed([], ())
     content = payload.get("content")
     for part in content if isinstance(content, list) else []:
         text = part.get("text") if isinstance(part, dict) else None
         if isinstance(text, str) and "<skills_instructions>" in text:
             lines = text.splitlines()
-            roots = {m["alias"]: m["folder"] for m in map(ROOT.match, lines) if m}
+            rows = tuple(ln for ln in lines if ROOT.match(ln))
+            roots = {m["alias"]: m["folder"] for m in map(ROOT.match, rows) if m}
             matches = [m for m in map(ENTRY.match, lines) if m]
             if not matches and any(ln.startswith("- ") and not ROOT.match(ln) for ln in lines):
                 return None
-            return [(m["name"], m["desc"], _resolve(m["path"], roots)) for m in matches]
-    return []
+            found = [(m["name"], m["desc"], _resolve(m["path"], roots), m["path"]) for m in matches]
+            return _Listed(found, rows)
+    return _Listed([], ())
 
 
 def _resolve(path: str, roots: dict[str, str]) -> str:
@@ -64,8 +80,8 @@ def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
     """
     meta: dict | None = None
     model = None
-    found: tuple[str, list[tuple[str, str, str]]] | None = None  # list entry's date, its lines
-    odd = False  # the last list had a shape Kitden does not know
+    found: tuple[str, _Listed] | None = None  # list entry's date, its lines
+    odd: str | None = None  # when the last list was sent, if its shape is one Kitden does not know
     with path.open(encoding="utf-8", errors="replace") as lines:
         for line in lines:
             if meta is None:
@@ -96,16 +112,17 @@ def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
                     model = value if isinstance(value, str) else model
                 elif entry.get("type") == "response_item":
                     listed = _entries(entry)
+                    at = str(entry.get("timestamp", ""))
                     if listed is None:
-                        found, odd = None, True
-                    elif listed:
-                        found, odd = (str(entry.get("timestamp", "")), listed), False
+                        found, odd = None, at
+                    elif listed.lines:
+                        found, odd = (at, listed), None
     if meta is None:
         return None
     version = meta.get("cli_version")
     version = version if isinstance(version, str) else ""
     if found is None:
-        return Unreadable(CLIENT, version) if odd else None
+        return None if odd is None else Unreadable(CLIENT, version, odd)
     at, listed = found
     sent = SentList(
         CLIENT,
@@ -114,39 +131,48 @@ def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
         None,
         model,
         meta.get("cwd"),
-        tuple((name, desc) for name, desc, _ in listed),
+        tuple((name, desc) for name, desc, _, _ in listed.lines),
     )
-    return CodexSent(sent, {name: file for name, _, file in listed})
+    paths = {name: file for name, _, file, _ in listed.lines}
+    return CodexSent(sent, paths, {name: shown for name, _, _, shown in listed.lines}, listed.roots)
 
 
 def last_codex_list(codex_home: Path, folder: str | None) -> CodexSent | Unreadable | None:
-    """The list from the newest log that has one. With a folder, only that folder's logs.
+    """The newest list sent in a person's chat. With a folder, only that folder's logs.
     Compressed `.zst` logs are not opened.
 
     # checked 2026-11-09 (real Codex list, cli 0.163.0-alpha.11): logs are at
     # sessions/<year>/<month>/<day>/rollout-*.jsonl under the codex home.
+    # checked 2026-11-12 (real logs, Codex Desktop, cli 0.167.0): the app rewrites an old chat's
+    # file when it opens, with no new list, so that file is the newest one on disk.
     """
-    files = []
-    for path in (codex_home / "sessions").rglob("rollout-*.jsonl"):
-        try:
-            files.append((path.stat().st_mtime, path))
-        except OSError:  # gone since the folder was listed
-            continue
-    for _, path in sorted(files, reverse=True):
-        try:
-            found = _read_log(path, folder)
-        except OSError:  # removed or unreadable: this log only
-            continue
-        if found is not None:
-            return found
-    return None
+    logs = (codex_home / "sessions").rglob("rollout-*.jsonl")
+    return newest(logs, lambda path: _read_log(path, folder))
+
+
+def _whole(value: object) -> TypeGuard[int]:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _setting(codex_home: Path) -> int | None:
+    """`model_context_window` in config.toml, when it is a whole number."""
+    try:
+        config = tomllib.loads((codex_home / "config.toml").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    value = config.get("model_context_window")
+    return value if _whole(value) else None
 
 
 def _models(codex_home: Path) -> list[dict]:
-    """The model cache's entries that have a whole-number window.
+    """The model cache's entries that have a whole-number window, each with the window Codex
+    uses: `model_context_window` from config.toml when set, but not above the model's
+    `max_context_window`.
 
     # checked 2026-11-09 (real file): models_cache.json holds models[] with slug, display_name,
     # context_window. session_meta.context_window holds only an id.
+    # checked 2026-11-12 (real file, Codex 0.167.0, and codex-rs models-manager
+    # with_config_overrides): models also have max_context_window; the setting is cut to it.
     """
     try:
         data = json.loads((codex_home / "models_cache.json").read_text(encoding="utf-8"))
@@ -155,13 +181,16 @@ def _models(codex_home: Path) -> list[dict]:
     models = data.get("models") if isinstance(data, dict) else None
     if not isinstance(models, list):
         return []
-    return [
-        m
-        for m in models
-        if isinstance(m, dict)
-        and isinstance(m.get("context_window"), int)
-        and not isinstance(m["context_window"], bool)
-    ]
+    setting = _setting(codex_home)
+    found = []
+    for m in models:
+        if not isinstance(m, dict) or not _whole(m.get("context_window")):
+            continue
+        if setting is not None:
+            most = m.get("max_context_window")
+            m = m | {"context_window": min(setting, most) if _whole(most) else setting}
+        found.append(m)
+    return found
 
 
 def codex_window(codex_home: Path, model: str | None) -> int | None:

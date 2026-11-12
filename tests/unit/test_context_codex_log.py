@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 from kitden.context.claude_log import SentList, Unreadable
@@ -58,6 +59,8 @@ def test_reads_each_line_with_its_path(tmp_path):
             skills=(("a", "Does A."), ("b", "")),
         ),
         paths={"a": "/s/a/SKILL.md", "b": "/s/b/SKILL.md"},
+        shown={"a": "/s/a/SKILL.md", "b": "/s/b/SKILL.md"},
+        roots=(),
     )
     assert got.paths["b"] == "/s/b/SKILL.md"
 
@@ -129,6 +132,9 @@ def test_a_path_under_a_root_alias_becomes_absolute(tmp_path):
         "b": "/s/b/SKILL.md",  # an absolute path stays
         "c": "r9/c/SKILL.md",  # an unknown alias is left as it is
     }
+    got = last_codex_list(tmp_path, None)
+    assert got.shown["a"] == "r2/a/SKILL.md"  # as the line shows it, for Codex's own count
+    assert got.roots == ("- `r2` = `/Users/x/.codex/skills`",)
 
 
 def test_a_mixed_block_parses_every_skill_line(tmp_path):
@@ -165,6 +171,32 @@ def test_skips_threads_not_started_by_a_person_and_zst_files(tmp_path):
 def test_the_date_is_the_list_entry_not_the_file(tmp_path):
     write_log(tmp_path, "a", [meta(), skills(at="2026-11-01T09:00:00Z")], time.time())
     assert last_codex_list(tmp_path, None).list.at == "2026-11-01T09:00:00Z"
+
+
+def stamp(at: str) -> float:
+    return datetime.fromisoformat(at).timestamp()
+
+
+def test_the_newest_list_wins_not_the_newest_file(tmp_path):
+    # Codex rewrites an old chat's file when the app opens it, with no new list.
+    old = skills(LIST.replace("Does A.", "Old."), at="2026-10-26T19:00:00Z")
+    write_log(tmp_path, "old", [meta(), old], stamp("2026-11-12T17:10:00Z"))
+    write_log(
+        tmp_path, "new", [meta(), skills(at="2026-11-11T23:00:00Z")], stamp("2026-11-11T23:05:00Z")
+    )
+    got = last_codex_list(tmp_path, None).list
+    assert (got.at, got.skills[0]) == ("2026-11-11T23:00:00Z", ("a", "Does A."))
+
+
+def test_a_newer_unreadable_list_wins_over_an_older_good_one(tmp_path):
+    odd = skills(
+        "<skills_instructions>\n- a | Does A.\n</skills_instructions>", at="2026-11-11T09:00:00Z"
+    )
+    write_log(
+        tmp_path, "good", [meta(), skills(at="2026-11-10T09:00:00Z")], stamp("2026-11-12T09:00:00Z")
+    )
+    write_log(tmp_path, "odd", [meta(), odd], stamp("2026-11-11T09:05:00Z"))
+    assert isinstance(last_codex_list(tmp_path, None), Unreadable)
 
 
 def test_the_last_list_in_a_thread_wins(tmp_path):
@@ -310,3 +342,25 @@ def test_a_model_cache_with_no_model_list_is_no_window(tmp_path):
     assert codex_window(tmp_path, "m") is None
     (tmp_path / "models_cache.json").write_text("[]")
     assert codex_windows(tmp_path) == []
+
+
+ASTRA = {"slug": "gpt-6-astra", "display_name": "GPT-6-Astra", "context_window": 272000}
+
+
+def test_the_window_set_in_config_is_used_up_to_the_models_most(tmp_path):
+    # Codex's own rule: model_context_window replaces the window, but not above
+    # max_context_window (codex-rs models-manager, checked 2026-11-12).
+    cache(tmp_path, [ASTRA | {"max_context_window": 872000}, {"slug": "m", "context_window": 8}])
+    (tmp_path / "config.toml").write_text("model_context_window = 1000000\n")
+    assert codex_window(tmp_path, "gpt-6-astra") == 872000
+    assert codex_window(tmp_path, "m") == 1000000  # no most: the setting as it is
+    assert codex_windows(tmp_path) == [(872000, ["GPT-6-Astra"]), (1000000, [])]
+    (tmp_path / "config.toml").write_text("model_context_window = 128000\n")
+    assert codex_window(tmp_path, "gpt-6-astra") == 128000
+
+
+def test_a_window_setting_that_is_not_a_whole_number_is_ignored(tmp_path):
+    cache(tmp_path, [ASTRA | {"max_context_window": 872000}])
+    for text in ('model_context_window = "big"\n', "model_context_window = 0\n", "not toml ["):
+        (tmp_path / "config.toml").write_text(text)
+        assert codex_window(tmp_path, "gpt-6-astra") == 272000

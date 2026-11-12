@@ -7,7 +7,8 @@ from kitden.context.tables import (
     CLAUDE_DESCRIPTION_CAP,
     CLAUDE_SHARE,
     CODEX_DESCRIPTION_CAP,
-    CODEX_FIXED_TOKENS,
+    CODEX_INTRO,
+    CODEX_INTRO_ROOTS,
     CODEX_MAX_LIMIT,
     CODEX_SHARE,
 )
@@ -106,32 +107,73 @@ def codex_budget(window: int, limit: int | None) -> int:
     return int(window * CODEX_SHARE)
 
 
-def codex_rule(skills: list[CodexSkill], budget: int) -> CodexFit:
-    # Fitted to the real list of 2026-10-30 (not read from the Codex source): when the list
-    # does not fit, every long description is cut to the same length; when even the names do
-    # not fit, the names that do not fit are left out.
-    def total(m: int) -> int:
-        return sum(codex_tokens(codex_line(s, s.description[:m])) for s in skills)
+def codex_catalog(description: str) -> str:
+    """The description as Codex lists it: at most 1,024 characters, ending in `...` if cut."""
+    if len(description) <= CODEX_DESCRIPTION_CAP:
+        return description
+    return description[: CODEX_DESCRIPTION_CAP - 3] + "..."
 
-    size = CODEX_FIXED_TOKENS + total(CODEX_DESCRIPTION_CAP)
-    room = budget - CODEX_FIXED_TOKENS
-    if total(0) > room:
-        used = CODEX_FIXED_TOKENS
-        sent: dict[str, int | None] = {}
-        for s in skills:
-            line = codex_tokens(codex_line(s, ""))
-            fits = used + line <= budget  # a later, shorter name may still fit
-            if fits:
-                used += line
-            sent[s.name] = 0 if fits else None
-        return CodexFit(sent, used, size, None)
-    if total(CODEX_DESCRIPTION_CAP) <= room:
-        cap = CODEX_DESCRIPTION_CAP
+
+def codex_table(roots: tuple[str, ...]) -> int:
+    """Tokens a roots table costs: the list's text with it, less the plain list's; never below 0.
+
+    # checked 2026-11-12 (codex-rs/ext/skills/src/render.rs aliased_metadata_overhead_cost,
+    # catalog_prompt.rs render_available_skills_body)
+    """
+    if not roots:
+        return 0
+
+    def body(intro: str, rows: tuple[str, ...]) -> str:
+        table = ("### Skill roots", *rows) if rows else ()
+        return "\n" + "\n".join(("## Skills", intro, *table, "### Available skills")) + "\n"
+
+    plain = ceil(len(body(CODEX_INTRO, ()).encode()) / 4)
+    return max(0, ceil(len(body(CODEX_INTRO_ROOTS, roots).encode()) / 4) - plain)
+
+
+def codex_rule(skills: list[CodexSkill], budget: int, roots: tuple[str, ...] = ()) -> CodexFit:
+    """Codex's own rule, read from codex-rs/ext/skills/src/render.rs (checked 2026-11-12, and
+    against a real list of Codex 0.167.0: all 60 lengths the same). A roots table, when the list
+    has one, is paid first. If every line fits whole, all are sent whole. If the names fit, the
+    room left is shared one character at a time, skill by skill in list order, while the tokens
+    a character adds still fit. If even the names do not fit, names are kept in order while they
+    fit and the rest are left out. A skill's `path` is the path as the list shows it."""
+    table = codex_table(roots)
+    limit = budget - table
+    texts = {s.name: codex_catalog(s.description) for s in skills}
+
+    def cost(s: CodexSkill, chars: int) -> int:
+        return codex_tokens(codex_line(s, texts[s.name][:chars]))
+
+    size = table + sum(cost(s, len(texts[s.name])) for s in skills)
+    least = [cost(s, 0) for s in skills]
+    sent: dict[str, int | None] = {}
+    if size - table <= limit:
+        sent = {s.name: len(texts[s.name]) for s in skills}
+    elif sum(least) <= limit:
+        chars = [0] * len(skills)
+        spent = least[:]  # tokens of each line as it stands
+        room = limit - sum(least)
+        changed = True
+        while changed:
+            changed = False
+            for i, s in enumerate(skills):
+                if chars[i] >= len(texts[s.name]):
+                    continue
+                more = cost(s, chars[i] + 1) - spent[i]
+                if more <= room:
+                    chars[i] += 1
+                    spent[i] += more
+                    room -= more
+                    changed = True
+        sent = {s.name: n for s, n in zip(skills, chars, strict=True)}
     else:
-        low, high = 0, CODEX_DESCRIPTION_CAP  # total(low) fits, total(high) does not
-        while high - low > 1:
-            mid = (low + high) // 2
-            low, high = (mid, high) if total(mid) <= room else (low, mid)
-        cap = low
-    sent = {s.name: min(len(s.description), cap) for s in skills}
-    return CodexFit(sent, CODEX_FIXED_TOKENS + total(cap), size, cap)
+        used = 0
+        for s, line in zip(skills, least, strict=True):
+            fits = used + line <= limit  # a later, shorter name may still fit
+            used += line if fits else 0
+            sent[s.name] = 0 if fits else None
+        return CodexFit(sent, table + used, size, None)
+    used = table + sum(cost(s, n) for s in skills if (n := sent[s.name]) is not None)
+    cut = [n for s in skills if (n := sent[s.name]) is not None and n < len(texts[s.name])]
+    return CodexFit(sent, used, size, max(cut) if cut else CODEX_DESCRIPTION_CAP)

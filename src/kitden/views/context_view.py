@@ -6,9 +6,10 @@ while the client's rule, run on the last chat's skills and window, rebuilds that
 (`checked`, spec "The check that guards every estimate").
 """
 
+import glob
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import TypeGuard
@@ -26,8 +27,10 @@ from kitden.context.rules import (
     claude_rule,
     claude_weight,
     codex_budget,
+    codex_catalog,
     codex_line,
     codex_rule,
+    codex_table,
     codex_tokens,
 )
 from kitden.context.tables import (
@@ -37,10 +40,10 @@ from kitden.context.tables import (
     CLAUDE_OTHER_WINDOW,
     CLAUDE_WINDOWS,
     CODEX_DESCRIPTION_CAP,
-    CODEX_FIXED_TOKENS,
 )
 from kitden.local_gateway.settings import as_dict
 from kitden.model import CLIENT_WORDS, Item, ItemKind, Project, Scope
+from kitden.system import claude_desktop_dir
 from kitden.views import words
 from kitden.views.effective import effective_view
 from kitden.views.match import plugin_of
@@ -68,6 +71,8 @@ class _Row:
     item: Item | None
     full: str | None
     path: str = ""  # Codex: the `file:` path of its line
+    added: bool = False  # Claude Code: added during the chat, sent whole outside the limit
+    built_in: bool = False  # Claude Code: built in, keeps its description whatever the limit
 
 
 def context_view(
@@ -134,8 +139,36 @@ def _description(path: str | None) -> str | None:
     return read_skill(Path(path).parent)["description"]
 
 
+def _app_description(home: Path, name: str) -> str | None:
+    """The description of a skill the Claude app gives Claude Code (`anthropic-skills:docx`), from
+    the newest copy of its SKILL.md; None when there is none.
+
+    # checked 2026-11-12 (real files, Claude app with Claude Code 2.1.309): the app keeps them in
+    # local-agent-mode-sessions/skills-plugin/<org>/<id>/skills/<skill>/SKILL.md, one folder per
+    # account, and Claude Code keeps a copy of some in ~/.claude/skills/synced/<org>_<id>/<skill>.
+    """
+    skill = glob.escape(name.rpartition(":")[2])
+    app = claude_desktop_dir(home) / "local-agent-mode-sessions/skills-plugin"
+    found = []
+    for path in (
+        *app.glob(f"*/*/skills/{skill}/SKILL.md"),
+        *(home / ".claude/skills/synced").glob(f"*/{skill}/SKILL.md"),
+    ):
+        try:
+            found.append((path.stat().st_mtime, path))
+        except OSError:  # gone since the folder was listed
+            continue
+    return _description(str(max(found)[1])) if found else None
+
+
 def _skill(
-    client: str, name: str, item: Item | None, size: int, side: int | None, note: str | None
+    client: str,
+    name: str,
+    item: Item | None,
+    size: int,
+    side: int | None,
+    note: str | None,
+    built_in: bool = False,
 ) -> dict:
     # Claude Code's skillOverrides does not touch a plugin's skills (spec "Switches per client").
     plugin = client == "claude_code" and item is not None and from_plugin(item)
@@ -147,7 +180,7 @@ def _skill(
         "shown": name.split(":")[-1],
         "item": item.id if item else None,
         "project": Project(project, True).id if project else None,
-        "source": _source(client, name, item),
+        "source": _source(item, built_in),
         "size": size,
         "side": side,
         "state": _state(item),
@@ -156,9 +189,8 @@ def _skill(
     }
 
 
-def _source(client: str, name: str, item: Item | None) -> str | None:
+def _source(item: Item | None, built_in: bool) -> str | None:
     if item is None:
-        built_in = client == "claude_code" and name in CLAUDE_ALWAYS_FULL
         return words.SOURCE_BUILT_IN if built_in else None
     if from_plugin(item):
         plugin = plugin_of(item)
@@ -308,25 +340,30 @@ def _claude_weights(home: Path, at_ms: int) -> dict[str, float]:
 
 
 def _claude_run(
-    rows, states, weights, budget, unknown: str | None = None
+    rows, states, weights, budget, unknown: str | None = None, *, as_sent: bool = False
 ) -> tuple[list[ClaudeSkill], ClaudeFit] | None:
     """The rule on the list's skills in these states; None when a size is not known.
-    `unknown` stands in for a description Kitden cannot find."""
+    `unknown` stands in for a description Kitden cannot find. `as_sent`: as in the chat itself,
+    where the skills added during it were sent whole, outside the limit."""
     skills = [
         ClaudeSkill(
             r.name,
             r.sent if r.sent is not None else r.full if r.full is not None else unknown,
-            r.name in CLAUDE_ALWAYS_FULL,
+            r.built_in,
             states[r.name] == "name-only",
             weights.get(r.name, 0.0),
         )
         for r in rows
-        if states[r.name] != "off"
+        if states[r.name] != "off" and not (as_sent and r.added)
     ]
     try:
-        return skills, claude_rule(skills, budget)
+        fit = claude_rule(skills, budget)
     except ValueError:
         return None
+    if as_sent:
+        late = {r.name for r in rows if r.added and states[r.name] != "off"}
+        fit = replace(fit, full=fit.full | late)
+    return skills, fit
 
 
 def _claude_gives(rows, states, weights, budget, sent_full: frozenset[str]) -> bool:
@@ -336,7 +373,7 @@ def _claude_gives(rows, states, weights, budget, sent_full: frozenset[str]) -> b
     cap, so it gives it for any size between: a skill that fits at the cap fits when smaller,
     and one that does not fit when all are empty never fits."""
     for unknown in ("", "x" * CLAUDE_DESCRIPTION_CAP):
-        run = _claude_run(rows, states, weights, budget, unknown)
+        run = _claude_run(rows, states, weights, budget, unknown, as_sent=True)
         if run is None or run[1].full != sent_full:
             return False
     return True
@@ -370,7 +407,7 @@ def _chosen(rows, states, weights, budget, checked: bool, settled: bool) -> tupl
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
     needed = set()
     for name in named:
-        run = _claude_run(rows, states | {name: "on"}, weights, budget)
+        run = _claude_run(rows, states | {name: "on"}, weights, budget, as_sent=True)
         if run is not None and run[1].full != sent_full:
             needed.add(name)
     return needed, False
@@ -452,7 +489,7 @@ def _claude_note(
     """`explained`: the limit rebuilds the list, so it is why a description is missing.
     `can_free`: some skill with a description has a switch."""
     if row.item is None:
-        return words.NOTE_BUILT_IN if row.name in CLAUDE_ALWAYS_FULL else None
+        return words.NOTE_BUILT_IN if row.built_in else None
     if state in ASKED:
         return words.NOTE_ONLY_ASKED
     if side is None:
@@ -491,8 +528,11 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     rows = []
     for name, text in found.skills:
         item = by_name.get(name)
-        rows.append(_Row(name, text, item, _description(item.source.path) if item else None))
+        full = _description(item.source.path) if item else _app_description(home, name)
+        rows.append(_Row(name, text, item, full, added=name in found.added))
     states = {r.name: _state(r.item) for r in rows}
+    # Checked against each chat: a wrong name here and the rule no longer rebuilds the list.
+    rows = [replace(r, built_in=r.item is None and r.name in CLAUDE_ALWAYS_FULL) for r in rows]
     weights = _claude_weights(home, at_ms)
 
     files = _claude_files(home, found.folder)
@@ -502,7 +542,8 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
     budget = setting if setting is not None else (claude_budget(*model) if model else None)
     base = _claude_run(rows, states, weights, budget) if budget else None
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
-    checked = base is not None and base[1].full == sent_full
+    as_sent = _claude_run(rows, states, weights, budget, as_sent=True) if budget else None
+    checked = as_sent is not None and as_sent[1].full == sent_full
     # The log does not say the window: take the only one whose limit rebuilds the list.
     worked_out = two_limits = False
     rate = 0
@@ -538,10 +579,10 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         models = " · ".join(p for p in (_model_name(found.model), found.surface, source) if p)
     windows = [_window_card(title, models, _tag(date), budget, fact)]
     if base is not None and checked and setting is None and window in CLAUDE_OTHER_WINDOW:
-        other, per_token, shown = CLAUDE_OTHER_WINDOW[window]
+        other, per_token = CLAUDE_OTHER_WINDOW[window]
+        shown = ""  # which models have that window is not in any file Kitden can read
         if worked_out:
-            # The table's models did not run this chat: keep its own rate and name no model.
-            per_token, shown = rate, ""
+            per_token = rate  # the rate this chat's own list gives
         limit = claude_budget(other, per_token)
         skills = base[0]
         result = _claude_estimate(skills, claude_rule(skills, limit), _on(other), words.ESTIMATE)
@@ -575,7 +616,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         side = 0 if r.sent is not None else 1
         size = len(r.full) if r.full is not None else len(r.sent or "")
         note = _claude_note(r, states[r.name], side, size, explained, can_free)
-        skills.append(_skill(client, r.name, r.item, size, side, note))
+        skills.append(_skill(client, r.name, r.item, size, side, note, r.built_in))
     listed = {r.name for r in rows}
     for item in items:
         if _name(client, item) not in listed:
@@ -660,25 +701,28 @@ def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
         full = len(r.full or "")
         if _codex_kind(logged, full) != _codex_kind(fit.sent.get(r.name), full):
             return False
-    if names_only or fit.cap is None:
-        return names_only and fit.cap is None
+    if names_only:
+        return True
     cuts = _codex_cuts(rows)
-    return not cuts or min(cuts) <= fit.cap <= max(cuts)
+    return not cuts or (fit.cap is not None and min(cuts) <= fit.cap <= max(cuts))
 
 
-def _codex_fact(rows: list[_Row], names_only: bool, when: str) -> dict:
-    """What the last chat sent: tokens per line sent, and those of the parts not sent."""
+def _codex_fact(
+    rows: list[_Row], names_only: bool, when: str, shown: dict[str, str], table: int
+) -> dict:
+    """What the last chat sent: tokens per line sent, and those of the parts not sent. `shown`:
+    each skill's path as the list shows it; `table`: tokens of the list's roots table."""
     sent: dict[str, int] = {}
     over: dict[str, int] = {}
     for r in rows:
-        skill = CodexSkill(r.name, r.full or "", r.path)
+        skill = CodexSkill(r.name, r.full or "", shown.get(r.name, r.path))
         if r.sent is not None:
             sent[r.name] = codex_tokens(codex_line(skill, r.sent))
         if r.full is not None:
-            whole = codex_tokens(codex_line(skill, r.full[:CODEX_DESCRIPTION_CAP]))
+            whole = codex_tokens(codex_line(skill, codex_catalog(r.full)))
             if whole > sent.get(r.name, 0):
                 over[r.name] = whole - sent.get(r.name, 0)
-    used = CODEX_FIXED_TOKENS + sum(sent.values())
+    used = table + sum(sent.values())
     n = len(rows)
     out = sum(r.sent is None for r in rows)
     cuts = _codex_cuts(rows)
@@ -733,8 +777,8 @@ def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str
     for s in skills:
         kept = fit.sent.get(s.name)
         if kept is not None:
-            sent[s.name] = codex_tokens(codex_line(s, s.description[:kept]))
-        whole = codex_tokens(codex_line(s, s.description[:CODEX_DESCRIPTION_CAP]))
+            sent[s.name] = codex_tokens(codex_line(s, codex_catalog(s.description)[:kept]))
+        whole = codex_tokens(codex_line(s, codex_catalog(s.description)))
         if whole > sent.get(s.name, 0):
             over[s.name] = whole - sent.get(s.name, 0)
     n = len(skills)
@@ -774,6 +818,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     if found is None or isinstance(found, Unreadable):
         return _no_list(client, _skills(inventory, client, folder), found)
     sent_list = found.list
+    as_shown, roots = found.shown, found.roots
     if not sent_list.skills:
         return _disk_card(client, [], words.NOTHING_TO_FIT, [])
     date, at_ms = _when(sent_list.at)
@@ -807,13 +852,17 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     known = all(r.full is not None for r in rows)
 
     def run(states: dict[str, str], budget: int) -> tuple[list[CodexSkill], CodexFit]:
-        skills = [CodexSkill(r.name, r.full or "", r.path) for r in rows if states[r.name] != "off"]
-        return skills, codex_rule(skills, budget)
+        skills = [
+            CodexSkill(r.name, r.full or "", as_shown.get(r.name) or r.path)
+            for r in rows
+            if states[r.name] != "off"
+        ]
+        return skills, codex_rule(skills, budget, roots)
 
     base = run(states, budget) if budget and known else None
     checked = base is not None and _codex_same(rows, base[1], names_only)
 
-    fact = _codex_fact(rows, names_only, when)
+    fact = _codex_fact(rows, names_only, when, as_shown, codex_table(roots))
     bad = fact.pop("bad")
     unknown = fact.pop("unknown")
     if checked and not bad:
@@ -844,7 +893,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
             size, shown = other
             limit_there = codex_budget(size, None)
             skills = base[0]
-            fit = codex_rule(skills, limit_there)
+            fit = codex_rule(skills, limit_there, roots)
             result = _codex_estimate(skills, fit, _on(size), words.ESTIMATE)
             title = words.WINDOW_TITLE.format(size=_size(size))
             windows.append(_window_card(title, shown, words.ESTIMATE_TAG, limit_there, result))
