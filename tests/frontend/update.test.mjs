@@ -51,9 +51,14 @@ test('the new page answered: the last step, then the page reloads', () => {
   assert.equal(v.ring, 1);
 });
 
-test('after the reload it says what it was updated to', () => {
+test('after the reload the button goes and only the version changes; the words are only heard', () => {
   const v = updateView({ ...OUT, version: '0.7.3', latest: '0.7.3', notes_url: null }, 'updated');
-  assert.deepEqual(v, { version: 'Kitden 0.7.3', button: 'done', tip: 'Updated to 0.7.3', ring: 0 });
+  assert.deepEqual(v, { version: 'Kitden 0.7.3', button: null, tip: 'Updated to 0.7.3', ring: 0, quiet: true });
+});
+
+test('the reloaded page starts from the full ring with no words', () => {
+  const v = updateView({ ...OUT, version: '0.7.2' }, 'landing');
+  assert.deepEqual(v, { version: 'Kitden 0.7.2', button: 'running', tip: '', ring: 1, quiet: true });
 });
 
 test('no button when Kitden cannot update itself', () => {

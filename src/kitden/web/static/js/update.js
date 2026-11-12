@@ -22,7 +22,7 @@ const LOOK_MS = 3000; // while the button shows: another tab may start the updat
 const ASKS = 10; // looks while the server has not heard the latest version yet (the demo never does)
 const WAIT_MS = 30000; // no new page in this time: it did not start
 const RELOAD_MS = 500; // the last step shows this long before the page reloads
-const DONE_MS = 2400; // the green check shows this long, then the button fades
+const LAND_MS = 400; // the reloaded page shows the full ring this long, then the button fades
 const FADE_MS = 500;
 const FROM_KEY = "kitden-updated-from"; // the old version, kept across the reload (sessionStorage)
 
@@ -37,7 +37,10 @@ export function updateView(api, phase) {
   if (phase === "gone") return { ...view, button: "failed", tip: NOT_STARTED };
   if (phase === "reloading") return { ...view, ...running(3) };
   if (phase === "waiting" || api.state === "done") return { ...view, ...running(2) };
-  if (phase === "updated") return { ...view, button: "done", tip: `Updated to ${api.version}` };
+  // After the reload: the page starts from the full ring, then the button fades while the version
+  // rolls to the new one. No words show (the version says it); a screen reader hears them.
+  if (phase === "landing") return { ...view, button: "running", tip: "", ring: 1, quiet: true };
+  if (phase === "updated") return { ...view, tip: `Updated to ${api.version}`, quiet: true };
   if (api.state === "running") return { ...view, ...running(api.step ?? 0) };
   if (api.state === "failed") return { ...view, button: "failed", tip: api.step === 2 ? NEW_NOT_STARTED : FAILED };
   if (api.state === "same") return { ...view, tip: SAME };
@@ -172,6 +175,7 @@ export function startUpdate(spot) {
   let shown = null; // the button's look as drawn
   let popFor = null; // the control that opened the box, for focus back
   let asks = 0; // reads while the latest version is not known yet
+  let heard = ""; // the last words said that do not show
 
   function draw() {
     const view = updateView(api, phase);
@@ -179,7 +183,11 @@ export function startUpdate(spot) {
       if (version.lastElementChild) rollTo(version, view.version, { up: true });
       else version.append(el("span", null, view.version));
     }
-    const tip = view.button === "available" ? "" : view.tip;
+    if (view.quiet) {
+      if (view.tip && view.tip !== heard) say(view.tip);
+      heard = view.tip;
+    }
+    const tip = view.button === "available" || view.quiet ? "" : view.tip;
     if (tip && tip !== words.textContent) say(tip);
     words.textContent = tip;
     more.hidden = view.button !== null || !(api.state === "same" || (api.notes_url && !api.can_update));
@@ -197,7 +205,6 @@ export function startUpdate(spot) {
       if (view.button === "available") press.title = view.tip;
       return;
     }
-    const was = shown;
     shown = view.button;
     if (!view.button) {
       // The button fades, then goes by time.
@@ -209,7 +216,7 @@ export function startUpdate(spot) {
     press.hidden = false;
     press.className = `update-btn ${view.button}`;
     press.querySelector(".ic")?.remove();
-    const mark = { available: "download", done: "check", failed: "x" }[view.button];
+    const mark = { available: "download", failed: "x" }[view.button];
     if (mark) press.append(icon(mark, 14));
     press.removeAttribute("title");
     press.removeAttribute("aria-disabled");
@@ -221,12 +228,6 @@ export function startUpdate(spot) {
       press.setAttribute("aria-disabled", "true");
     } else if (view.button === "failed") {
       press.setAttribute("aria-label", `${view.tip}. Show why`);
-    } else {
-      press.setAttribute("aria-label", view.tip);
-      press.setAttribute("aria-disabled", "true");
-      // The check draws as the button turns green (it pops from the full ring).
-      const path = press.querySelector(".ic path");
-      if (path && was === "running") animateTo(path, [{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }], { dur: 320, delay: 120 });
     }
   }
 
@@ -401,14 +402,14 @@ export function startUpdate(spot) {
     closePop();
   });
 
-  // After a reload on the new version: the check, the version rolls from the old one, the button fades.
+  // After a reload on the new version: the full ring under the old version, then the button fades
+  // while the version rolls to the new one.
   function landed(from) {
-    phase = "reloading";
+    phase = "landing";
     api = { ...api, version: from };
     draw();
     api = { ...api, version: mine };
-    // A moment later, so the button turns green and pops from the full ring. A timer, not a
-    // frame: a hidden tab draws no frames.
+    // A moment later, so the full ring shows first. A timer, not a frame: a hidden tab draws none.
     setTimeout(() => {
       phase = "updated";
       draw();
@@ -416,8 +417,8 @@ export function startUpdate(spot) {
         phase = null;
         draw();
         schedule();
-      }, DONE_MS);
-    }, 60);
+      }, D(FADE_MS));
+    }, LAND_MS);
   }
 
   read().then((answer) => {
