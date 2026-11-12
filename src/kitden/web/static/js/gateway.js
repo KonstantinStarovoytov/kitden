@@ -7,7 +7,7 @@ import { addForm, connectAction, connectBody, followProject, heldServer, liveHel
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { flipToolPick, onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
-import { collapseGroup, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, newBlocks, pagesNow, pagesWith, pressCount, pressOpen, pressStack, shownFound, toggleOpen, turnWords, wideWidth } from "./map.js";
+import { collapseGroup, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, newCards, pagesNow, pagesWith, pressCount, pressOpen, pressStack, shownFound, toggleOpen, turnWords, wideWidth } from "./map.js";
 import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
@@ -625,6 +625,9 @@ function kitdenServer(block, word, picked, waiting) {
   // A rule for the whole server that waits for other projects: the block names them like a tool.
   const pending = waiting.others.get(server.name);
   if (pending) block.projects = pendingProjects(pending);
+  // A rule that waits for it or one of its tools keeps it out of a stack (map.js).
+  const mine = (key) => key === server.name || key.startsWith(`${server.name}/`);
+  if ([...waiting.ring.keys(), ...waiting.others.keys()].some(mine)) block.pinned = true;
   block.count = server.tools;
   block.lamp = (list.length ? server.on_count > 0 : block.state === "on") ? "on" : "off";
   // Its sign-in ended and could not be refreshed: it needs the person (amber), not a count.
@@ -844,7 +847,7 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   const was = onMap.model;
   Object.assign(onMap, { model, found: keepFolds(found) });
   // A card that comes with a change or a rescan opens its group: it never lands inside a stack.
-  if (was && !fresh && !projectChanged) onMap.spread = groupsWith(model, onMap.spread, newBlocks(was, model));
+  if (was && !fresh && !projectChanged) onMap.spread = groupsWith(model, onMap.spread, newCards(was, model));
   bringPages(model, { fresh, projectChanged });
   // An Undo the page has just read: the map plays its rows back (landRows).
   const undid = undone.id;

@@ -105,8 +105,9 @@ function childrenOf(model) {
 const PINNED = ["preview", "slot"];
 const NONE = new Set();
 const pinned = (child, flagged = NONE) => Boolean(child.pinned || child.leaving || child.wait) || PINNED.includes(child.kind) || flagged.has(child.id);
-// The blocks a link in preview leads to: a link a change adds (`preview`) or takes out (`leaving`).
-const flaggedOf = (model) => new Set(model.links.filter((link) => link.leaving || link.preview || link.kind === "preview").map((link) => link.to));
+// The blocks at either end of a link in preview: a link a change adds (`preview`) or takes out
+// (`leaving`), so a server whose tool a change turns off is pinned too.
+const flaggedOf = (model) => new Set(model.links.filter((link) => link.leaving || link.preview || link.kind === "preview").flatMap((link) => [link.from, link.to]));
 // How strong a link to a stack is: the strongest of those it stands for wins (on, then faint, then
 // a line that skips the gateway).
 const STRENGTH = ["on", "faint", "direct"];
@@ -136,6 +137,8 @@ function stackable(block, children, flagged) {
 // pages on either side of the one shown, `size` a page). Its name says what is inside and what a
 // press does ("Show 5 more: figma, vercel, stripe").
 function stackOfCards(group, role, cards, size) {
+  // The stack above shows first the page a press brings back.
+  if (role === "before") cards = [...cards.slice(-size), ...cards.slice(0, -size)];
   const first = cards.slice(0, STACK_SHOWS).map((card) => card.name).join(", ");
   const label = group.pageName || group.name;
   const name = role === "all" ? `Open ${label}, ${cards.length}: ${first}` : role === "after" ? `Show ${Math.min(size, cards.length)} more: ${first}` : `Show the ${size} before: ${first}`;
@@ -298,10 +301,13 @@ export function groupsWith(model, spread, ids) {
   return next;
 }
 
-// The ids of the blocks `now` has and `was` did not: what a change or a rescan brought.
-export function newBlocks(was, now) {
+// The cards a change or a rescan brought into a folding group that was there already: the ids of
+// the blocks `now` has and `was` did not, whose group `was` had. A group that came with its cards
+// (a gateway read later) and a block deeper down (a new tool) bring none.
+export function newCards(was, now) {
   const had = new Set(was.blocks.map((block) => block.id));
-  return now.blocks.filter((block) => !had.has(block.id)).map((block) => block.id);
+  const folding = new Set(now.blocks.filter((block) => block.kind === "group" && block.folds && had.has(block.id)).map((block) => block.id));
+  return now.blocks.filter((block) => !had.has(block.id) && folding.has(block.parent)).map((block) => block.id);
 }
 
 // The stack of a layout that holds `id`, or null.

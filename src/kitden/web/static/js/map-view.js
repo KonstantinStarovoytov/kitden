@@ -1440,7 +1440,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
   function glance(set) {
     if (selecting) return;
     glanced = set && set.size ? set : null;
-    const shown = glanced || drawnLit;
+    const shown = last ? withStacks(glanced || drawnLit, last) : glanced || drawnLit;
     box.classList.toggle("focus", shown.size > 0);
     for (const item of blocks.values()) {
       const on = shown.has(item.id);

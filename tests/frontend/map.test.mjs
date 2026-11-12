@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, collapseGroup, drawPlan, enterDelays, findChip, findIn, foldable, groupOfStack, groupsWith, isNarrow, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, pressStack, shownFound, stackOf, toggleOpen, turnWords, unfoldDelays, wideWidth, withStacks } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, collapseGroup, drawPlan, enterDelays, findChip, findIn, foldable, groupOfStack, groupsWith, isNarrow, newCards, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, pressStack, shownFound, stackOf, toggleOpen, turnWords, unfoldDelays, wideWidth, withStacks } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -749,4 +749,33 @@ test('a card whose change waits keeps its place in an open group', () => {
   assert.deepEqual(outsideShown(l), ['docs', 'analytics', 'n8n', 'direct-3', 'direct-4', 'direct-5']);
   const ids = l.blocks.map((b) => b.id);
   assert.ok(ids.indexOf('outside:local:direct-5') < ids.indexOf('stack:group:outside:after'));
+});
+
+// Final review fixes.
+test('the stack above names the page a press brings back, from page 3 on too', () => {
+  const m = model(0, 12, FOLDS);
+  const l = layoutTree(m, { spread: spreadOut(), pages: new Map([['group:outside', 2]]), ...WIDE });
+  const above = stack(l, 'before');
+  assert.equal(above.name, 'Show the 5 before: direct-5, direct-6, direct-7');
+  // Its strips are the cards of that page.
+  assert.deepEqual(above.holds.slice(0, 3), ['outside:local:direct-5', 'outside:move:direct-6', 'outside:local:direct-7']);
+  assert.equal(above.holds.length, 10);
+});
+
+test('a server whose tool change waits stays out of the stack', () => {
+  const m = model(6, 0, { folds: true, tools: true });
+  m.links.find((l) => l.from === 'held:kitden:github' && l.to === 'tool:github/read_repo').leaving = true;
+  const l = layoutTree(m, WIDE);
+  assert.ok(!stack(l, 'all', 'group:kitden:remote').holds.includes('held:kitden:github'));
+  assert.ok(l.blocks.some((b) => b.id === 'held:kitden:github'));
+});
+
+test('only a new card in a group that was there opens it', () => {
+  const was = model(0, 4, FOLDS);
+  const now = model(0, 5, FOLDS);
+  assert.deepEqual(newCards(was, now), ['outside:move:direct-4']);
+  // A new group that came with its cards (a gateway read later) opens nothing; nor does a new tool.
+  const bare = { ...was, blocks: was.blocks.filter((b) => b.id !== 'group:outside' && !b.id.startsWith('outside:')) };
+  assert.deepEqual(newCards(bare, was), []);
+  assert.deepEqual(newCards(model(6, 0, FOLDS), model(6, 0, { folds: true, tools: true })), []);
 });

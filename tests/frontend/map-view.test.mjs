@@ -2130,3 +2130,13 @@ test('under reduced motion stacks open and turn at once', async () => {
   assert.deepEqual([v.node('s0'), v.node('s5').style.opacity], [null, '']);
   assert.ok(walk(v.area).every((n) => !n.animations?.length));
 });
+
+test('pointing at a client lights the stacks it reaches and their links', async () => {
+  const v = view();
+  await v.draw(STACKED, shelfAt([]), { motion: 'none' });
+  v.glance(new Set(['c1', 's0', 'c1>s0']));
+  assert.ok(v.node('stack:g:all').classList.contains('lit'));
+  assert.ok(v.node('c1>stack:g:all').classList.contains('lit'));
+  v.glance(null);
+  assert.ok(!v.node('stack:g:all').classList.contains('lit'));
+});

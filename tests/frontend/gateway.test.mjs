@@ -3131,3 +3131,22 @@ test('a row that waits for access is not one the tray still asks, so its block l
   assert.equal(rowAsked(t([{ key: 'k', part: { id: 'p' }, waits: null }]), 'k'), false);
   assert.equal(rowAsked(t([{ key: 'k', part: null, waits: null }], 'ready'), 'k'), false);
 });
+
+test('a server with a rule waiting for it or its tools never goes into a stack', () => {
+  const files = MEDIUM_VIEW.gateways[0].servers[0];
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [{ ...files, tool_list: [tool('read_file', 'on', 'reads')] }] }] };
+  const server = (options) => gatewayTree(view, { ...OPTS, ...options }).blocks.find((b) => b.id === 'held:kitden:files');
+  const saved = data.projects;
+  data.projects = [{ id: 'a', path: '/w/atlas' }];
+  try {
+    assert.ok(!server({}).pinned);
+    // A whole-server rule for another project, a tool rule for another project, a tool rule here.
+    assert.equal(server({ rows: [trayRow(ruleBody('files', null, 'off', 'a'))] }).pinned, true);
+    assert.equal(server({ rows: [trayRow(ruleBody('files', 'read_file', 'off', 'a'))] }).pinned, true);
+    assert.equal(server({ rows: [trayRow(ruleBody('files', 'read_file', 'on', null))] }).pinned, true);
+    // A row with no answer yet changes nothing.
+    assert.ok(!server({ rows: [trayRow(ruleBody('files', null, 'off', 'a'), null)] }).pinned);
+  } finally {
+    data.projects = saved;
+  }
+});

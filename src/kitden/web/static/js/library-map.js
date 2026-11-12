@@ -6,7 +6,7 @@
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
-import { collapseGroup, findIn, groupOfStack, groupsWith, layoutTree, linkKey, litFor, litFrom, newBlocks, pagesNow, pagesWith, pressStack, shownFound, turnWords } from "./map.js";
+import { collapseGroup, findIn, groupOfStack, groupsWith, layoutTree, linkKey, litFor, litFrom, newCards, pagesNow, pagesWith, pressStack, shownFound, turnWords } from "./map.js";
 import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
 import { drawChip, glidePill } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
@@ -507,7 +507,7 @@ function keepWhatShows(answer, { opens = true } = {}) {
   onMap.model = treeOf(answer, rows);
   // A card that comes with a change or a rescan opens its group: it never lands inside a stack.
   // Not on a new map, another project or another tab (`opens` false), where every card is new.
-  if (was && opens) onMap.spread = groupsWith(onMap.model, onMap.spread, newBlocks(was, onMap.model));
+  if (was && opens) onMap.spread = groupsWith(onMap.model, onMap.spread, newCards(was, onMap.model));
   // An item whose add has just come into the tray shows: its group turns to its page.
   const fresh = [...waitingIds(onMap.model)].filter((id) => !waited.has(id));
   if (fresh.length) {
