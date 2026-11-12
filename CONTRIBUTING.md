@@ -36,7 +36,7 @@ Undo. Tests must use sandbox homes, never your real settings.
 In the same pull request:
 
 - If what Kitden does changes, add one line to [ROADMAP.md](ROADMAP.md) under
-  "Not released yet": a short bold title, one plain sentence, and the pull request number.
+  "Not yet released": a short bold title, one plain sentence, and the pull request number.
   For example:
 
   ```markdown

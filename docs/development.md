@@ -182,32 +182,60 @@ Not run yet for step 24: so far it was tested with sandbox files only.
 
 ## Release
 
-1. `uv version X.Y.Z`, and the same number in `src/kitden/__init__.py`,
-   `plugins/kitden/.claude-plugin/plugin.json`, `plugins/kitden/plugin.json`, both versions in
-   `server.json` and the version in `install.sh` and `install.ps1` (`KITDEN_VERSION`,
-   `$KitdenVersion`; a test checks they match).
-2. Write `docs/releases/vX.Y.Z.md`: plain notes for users about everything since the last tag
-   (`git log vA.B.C..HEAD`), grouped as New, Better and Fixed.
-3. Update `ROADMAP.md`: rename "### Not released yet" to the version, move anything else that
-   shipped under Done, and change the "Last updated" date.
-4. Commit, then `git tag vX.Y.Z` and `git push origin main vX.Y.Z`.
-5. The Homebrew tap, [KonstantinStarovoytov/homebrew-tap](https://github.com/KonstantinStarovoytov/homebrew-tap),
-   checks PyPI once a day and opens a pull request with the new version and its Python
-   resources (`brew bump` in its workflow). Merge it. To do it at once: `brew bump-formula-pr
-   --version X.Y.Z konstantinstarovoytov/tap/kitden`.
-6. Once PyPI has the version, publish `kitden mcp` to the
-   [MCP Registry](https://registry.modelcontextprotocol.io): in the repo root,
-   `mcp-publisher login github`, then `mcp-publisher publish`. `server.json` is the entry; the
-   registry checks that the README on PyPI holds the line `mcp-name:
-   io.github.KonstantinStarovoytov/kitden` (checked 2026-11-08). Glama, PulseMCP and the GitHub
-   MCP Registry read from it. `glama.json` names the maintainer for Glama.
+A release is one pull request. You review it and merge it; the rest happens on its own.
 
-On every push and pull request the workflow runs ruff, the type check (`pyright`), the Python tests with a 94%
-coverage floor, the page's tests (`node --test tests/frontend/*.test.mjs`), the start-time
-budget (`scripts/measure-start.py`), a dependency audit (`pip-audit`), a check of the workflow
-files (`zizmor`) and the package build. On a tag it also stops if the notes file is missing.
-Then it publishes to PyPI with trusted publishing and creates the GitHub release with the
-notes file as its text.
+1. In GitHub, open Actions → Release prep → Run workflow, on `main`. Leave the version empty
+   and the agent picks the next minor or patch, or type one. The run opens one pull request,
+   "Kitden X.Y.Z": the version in all eight places, `docs/releases/vX.Y.Z.md`, ROADMAP
+   ("### Not yet released" becomes the version), README and policy edits, and the checks from
+   [Check before a release](#check-before-a-release) that this release touches.
+2. Review the pull request, do those checks, and fix anything with commits on its branch.
+3. Merge it with a merge commit, not squash: the notes link the branch's commits.
+
+Then, with no step from you:
+
+- `release.yml` on `main` sees a version that has notes and no tag, and tags it with the
+  release app, Kitden Beacon.
+- The tag's run checks everything again, publishes to PyPI with trusted publishing and
+  creates the GitHub release with the notes file as its text.
+- kitden-sdlc's publish workflow then publishes `server.json` to the
+  [MCP Registry](https://registry.modelcontextprotocol.io), moves the `release` branch to the
+  tag, and opens the formula pull request in the
+  [Homebrew tap](https://github.com/KonstantinStarovoytov/homebrew-tap), where `brew pr-pull`
+  merges it and makes the bottles. When the dependencies changed, the tap's daily autobump
+  opens that pull request the next day instead. The run's summary shows each store's version.
+- Both of Kitden's plugin marketplaces read the plugin from the `release` branch. The
+  marketplace files are still read from `main`; their plugin entry is a `git-subdir` source
+  with `"ref": "release"`, which Claude Code and Codex both support (checked 2026-11-12:
+  Claude Code's "Create a marketplace" docs, Codex's "Build plugins" docs). The Claude plugin
+  directory reads it from `release` once you set its tracked branch to `release`.
+- Once a day, Release watch (`release-watch.yml`) opens an issue when a store is behind or
+  different, and "Time for a release?" when merged changes wait for a release. When a job
+  failed, its issue says which one to re-run.
+
+Two steps stay by hand, only when you are told:
+
+- **The Claude plugin directory:** when the release pull request or the run's summary says
+  so, change the Listing tab or the "collects user data" switch in the directory's settings.
+- **The GitHub description:** when Release watch says it differs, set the repository's
+  description (the gear next to About) to `short` in `listing.toml`.
+
+`listing.toml` holds each name and description once: PyPI, `server.json`, both `plugin.json`
+files, the marketplace and the Homebrew `desc`. kitden-sdlc's release check fails a pull
+request when a file differs from it or a text breaks a store's limit.
+
+The notes, `docs/releases/vX.Y.Z.md`, are plain notes for users about everything since the
+last tag, in this order: the title `# Kitden X.Y.Z — <theme>`, a short overview, the sections
+New, Better, Fixed and Documentation (leave out empty ones; each item links its pull request
+and author), "## Upgrade and limits", a `<details>` block with every other commit, and the
+`**Full changelog:**` link.
+
+On every push and pull request the workflow runs ruff, the type check (`pyright`), the
+Python tests with a 94% coverage floor, the page's tests (`node --test
+tests/frontend/*.test.mjs`), the start-time budget (`scripts/measure-start.py`), a dependency
+audit (`pip-audit`), a check of the workflow files (`zizmor`), the release check and the
+package build. On a tag it also stops if the version differs from the tag or the notes file is
+missing.
 Once a day the tests also run on the newest versions of the dependencies
 (`.github/workflows/latest-deps.yml`): people who install Kitden get those, not the ones in
 `uv.lock`. When that run fails, GitHub sends an email.

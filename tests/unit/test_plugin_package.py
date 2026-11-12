@@ -30,8 +30,19 @@ def test_both_marketplaces_list_the_one_plugin():
     assert claude["name"] == codex["name"] == "kitden"
     assert [p["name"] for p in claude["plugins"]] == ["kitden"]
     assert [p["name"] for p in codex["plugins"]] == ["kitden"]
-    assert claude["plugins"][0]["source"] == "./plugins/kitden"
-    assert codex["plugins"][0]["source"] == {"source": "local", "path": "./plugins/kitden"}
+    # Both read the plugin from the `release` branch, so people get only released plugins.
+    assert claude["plugins"][0]["source"] == {
+        "source": "git-subdir",
+        "url": "KonstantinStarovoytov/kitden",
+        "path": "plugins/kitden",
+        "ref": "release",
+    }
+    assert codex["plugins"][0]["source"] == {
+        "source": "git-subdir",
+        "url": "https://github.com/KonstantinStarovoytov/kitden.git",
+        "path": "./plugins/kitden",
+        "ref": "release",
+    }
 
 
 def test_both_manifests_carry_the_package_version():

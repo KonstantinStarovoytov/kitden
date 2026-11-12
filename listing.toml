@@ -1,0 +1,22 @@
+# Kitden's names and descriptions, each written once. kitden-sdlc's release_check.py checks
+# on every pull request and tag that the files below say the same, and that each text fits
+# its store's limits (kitden-sdlc docs/platform-rules.md, checked 2026-11-12).
+
+# pyproject.toml `description` (PyPI: one line), server.json `description` (MCP Registry: at
+# most 100 characters) and the GitHub repository description (set by hand).
+short = "See and safely change what Claude Code, Codex and Cursor load: MCP servers, plugins, skills, hooks"
+
+# Homebrew `desc`, set by the tap's bump PR: at most 80 characters, no period at the end, no
+# "A", "An" or "The" at the start, and not the name "Kitden".
+brew = "See and safely change what Claude Code, Codex and Cursor load"
+
+# The top `description` in .claude-plugin/marketplace.json.
+tagline = "See what your coding agents load. Change it with confidence."
+
+# `description` in both plugin.json files and in the marketplace's plugin entry.
+plugin = "Ask what your coding agents load and whether your skills fit. Uses the Kitden program and offers to install it."
+
+# `displayName` in the Claude plugin.json and the marketplace entry; `keywords` in both
+# plugin.json files and the marketplace entry.
+display_name = "Kitden"
+keywords = ["mcp", "setup", "claude-code", "codex", "cursor"]

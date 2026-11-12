@@ -1,0 +1,21 @@
+# Kitden's daily release watch: opens "Time for a release?" when merged changes wait for a
+# release, and "Release vX.Y.Z is not everywhere" when a store is behind. No model runs in it.
+# The Lantern app posts the issues (the same app and names as agents-review.yml).
+name: Release watch
+
+on:
+  schedule:
+    - cron: "23 6 * * *" # every day, at a quiet minute
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  watch:
+    if: vars.AGENTS_ENABLED == 'true'
+    uses: KonstantinStarovoytov/kitden-sdlc/.github/workflows/release-watch.yml@main
+    permissions: {}
+    with:
+      app_client_id: ${{ vars.AGENTS_APP_CLIENT_ID }}
+    secrets:
+      app_private_key: ${{ secrets.AGENTS_APP_PRIVATE_KEY }}
