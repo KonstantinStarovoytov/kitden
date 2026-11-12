@@ -119,6 +119,12 @@ def _show(url: str, args: argparse.Namespace) -> None:
 def _open(args: argparse.Namespace) -> int:
     """Open the running page for this home folder, or start one in the background (FR-008)."""
     root = _home(args) or Path.home()
+    running = page.read_record(root) if page.page_running(root) else None
+    # Kitden updated in a terminal while its page ran: that page cannot serve any more.
+    stale = running is not None and running.get("version") != __version__
+    if stale and not page.stop_page(root, running):
+        print("The page of the old Kitden version did not stop.", file=sys.stderr)
+        return EXIT_NOT_STARTED
     if not page.page_running(root):  # a page still starting holds the lock: none starts again
         page.remove_record(root)  # left by a page that ended without cleaning up
         page.start_background(root, args.home)
