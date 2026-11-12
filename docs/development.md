@@ -195,7 +195,7 @@ A release is one pull request. You review it and merge it; the rest happens on i
 Then, with no step from you:
 
 - `release.yml` on `main` sees a version that has notes and no tag, and tags it with the
-  release app.
+  release app, Kitden Beacon.
 - The tag's run checks everything again, publishes to PyPI with trusted publishing and
   creates the GitHub release with the notes file as its text.
 - kitden-sdlc's publish workflow then publishes `server.json` to the
