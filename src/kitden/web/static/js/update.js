@@ -23,6 +23,8 @@ const ASKS = 10; // looks while the server has not heard the latest version yet 
 const WAIT_MS = 30000; // no new page in this time: it did not start
 const RELOAD_MS = 500; // the last step shows this long before the page reloads
 const LAND_MS = 400; // the reloaded page shows the full ring this long, then the button fades
+const SLIDE_MS = 200; // the line under the version slides open and shut, so the rail does not jump
+const SWAP_MS = 120; // one step's words fade out, the next fade in, each this long
 const FADE_MS = 500;
 const FROM_KEY = "kitden-updated-from"; // the old version, kept across the reload (sessionStorage)
 
@@ -147,6 +149,28 @@ function tailNode(tail) {
   return el("pre", "update-tail", tail.join("\n"));
 }
 
+// The rail's foot sits at the bottom, so a line that shows or goes moves the version: it grows from
+// nothing (height, and the 4 px gap above it) and shrinks back instead of jumping.
+function slide(node, open) {
+  if (open === (!node.hidden && !node.dataset.closing)) return;
+  node.getAnimations().forEach((a) => a.cancel());
+  const shut = { height: "0px", marginTop: "-4px", opacity: 0 };
+  if (open) {
+    delete node.dataset.closing;
+    node.hidden = false;
+    animateTo(node, [shut, { height: `${node.scrollHeight}px`, marginTop: "0px", opacity: 1 }], { dur: SLIDE_MS, fill: "none" });
+    return;
+  }
+  node.dataset.closing = "1";
+  animateTo(node, [{ height: `${node.offsetHeight}px`, marginTop: "0px", opacity: 1 }, shut], { dur: SLIDE_MS, fill: "forwards" });
+  setTimeout(() => {
+    if (!node.dataset.closing) return;
+    delete node.dataset.closing;
+    node.hidden = true;
+    node.getAnimations().forEach((a) => a.cancel());
+  }, D(SLIDE_MS));
+}
+
 export function startUpdate(spot) {
   // The version: "Kitden 0.7." stays, and the figures that change roll (splitVersions).
   const version = el("span", "update-version");
@@ -190,6 +214,26 @@ export function startUpdate(spot) {
   let asks = 0; // reads while the latest version is not known yet
   let heard = ""; // the last words said that do not show
   let shownVersion = null; // the version number as drawn
+  let wordsFor = ""; // the words the line shows, or is fading to
+
+  // A step's words change: the old ones fade out and the new ones fade in. Words that come or go
+  // with the line itself just change, as the line slides.
+  function swapWords(tip) {
+    if (tip === wordsFor) return;
+    const was = wordsFor;
+    wordsFor = tip;
+    if (!was || !tip || line.hidden) {
+      words.getAnimations().forEach((a) => a.cancel());
+      words.textContent = tip;
+      return;
+    }
+    animateTo(words, [{ opacity: 1 }, { opacity: 0 }], { dur: SWAP_MS, ease: "ease-in", fill: "forwards" }).then(() => {
+      if (wordsFor !== tip) return;
+      words.textContent = tip;
+      words.getAnimations().forEach((a) => a.cancel());
+      animateTo(words, [{ opacity: 0 }, { opacity: 1 }], { dur: SWAP_MS, ease: "ease-out" });
+    });
+  }
 
   function draw() {
     const view = updateView(api, phase);
@@ -210,10 +254,10 @@ export function startUpdate(spot) {
       heard = view.tip;
     }
     const tip = view.button === "available" || view.quiet ? "" : view.tip;
-    if (tip && tip !== words.textContent) say(tip);
-    words.textContent = tip;
+    if (tip && tip !== wordsFor) say(tip);
+    swapWords(tip);
     more.hidden = view.button !== null || !(api.state === "same" || (api.notes_url && !api.can_update));
-    line.hidden = !tip && more.hidden;
+    slide(line, Boolean(tip) || !more.hidden);
     const two = twiceWords(api);
     twice.hidden = !two;
     twiceText.textContent = two ? two.line : "";
