@@ -9,6 +9,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Map groups fold into card stacks:** on the Gateway and Library maps each group starts
+  folded and opens five cards at a time; Collapse folds it back. Both pages open on the map.
 - **Releases come from one pull request:** each release is one pull request to review and
   merge; the tag, PyPI, the GitHub release, the MCP Registry, Homebrew and the plugin follow on
   their own. Both plugin marketplaces read the plugin from the `release` branch (#71).

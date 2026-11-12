@@ -10,6 +10,8 @@ they can run code with your permissions. Undo does not reverse actions a tool al
 
 Open **Library** and choose **All projects** or one project. **List → Differences** shows
 what differs between Claude Code, Codex and Cursor. Click an item for its **Details**.
+On the map, each group starts folded as a stack of cards: press a stack to open it, the stack
+below for the next five, and **Collapse** to fold it again. The Gateway's groups work the same way.
 
 | What | How to manage it |
 | --- | --- |
