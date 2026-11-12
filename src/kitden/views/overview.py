@@ -146,7 +146,8 @@ def _duplicates(inventory, findings) -> list[dict]:
 
 
 def _old_entries(inventory) -> list[dict]:
-    """One card for entries the working version (agentsetup) added (feature 002). "Update…"
+    """One card for entries the working version (agentsetup) added (feature 002), or `kitden`
+    entries whose program is gone. "Update…"
     adds the Agents page's update of all of them (agents.js `update`) to the tray."""
     old = [s for s in setup_server_state(inventory) if s["item"]]
     if not old:
@@ -156,10 +157,18 @@ def _old_entries(inventory) -> list[dict]:
     one = len(ids) == 1
     it = "it" if one else "them"
     title = f"Old Kitden {'entry' if one else 'entries'} in {where}"
-    text = (
-        f"The working version, agentsetup, made {it}; update {it} so {where} "
-        f"{'starts' if one else 'start'} kitden."
-    )
+    if all(s.get("moved") for s in old):
+        # Their program is gone: Kitden moved between uv and Homebrew, or was removed.
+        gone = "Its program is gone" if one else "Their program is gone"
+        text = (
+            f"{gone}: Kitden was moved or removed. Update {it} so {where} "
+            f"{'starts' if one else 'start'} this Kitden."
+        )
+    else:
+        text = (
+            f"The working version, agentsetup, made {it}; update {it} so {where} "
+            f"{'starts' if one else 'start'} kitden."
+        )
     targets = [{"item": s["item"]} for s in old]
     body = {"action": SETUP_SERVER_UPDATE, "targets": targets, "params": {}}
     action = {"label": "Update…", "body": body}
