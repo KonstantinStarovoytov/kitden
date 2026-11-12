@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **The Context page shows your newest chat:** it takes the skill list sent last, not the chat
+  file changed last. Codex's cuts now follow Codex's own code, and its window follows
+  `model_context_window` in `config.toml`. For Claude Code, Kitden reads the skills the Claude
+  app adds, so it can check its estimate against your chat again (#73).
 - **Releases come from one pull request:** each release is one pull request to review and
   merge; the tag, PyPI, the GitHub release, the MCP Registry, Homebrew and the plugin follow on
   their own. Both plugin marketplaces read the plugin from the `release` branch (#71).

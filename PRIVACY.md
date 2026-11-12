@@ -7,7 +7,8 @@ nothing from it.
 
 - The settings files of Claude Code, Codex and Cursor on this computer.
 - For the context check, what the client sent in your last chats, from the client's own chat
-  files. Kitden uses it to size the skill list and keeps none of it.
+  files, and the skills the Claude app gives Claude Code, from the app's own folder. Kitden uses
+  them to size the skill list and keeps none of it.
 - Versions and plugin lists, from the clients' own commands.
 
 ## What stays on your computer
