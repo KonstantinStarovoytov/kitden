@@ -1,7 +1,7 @@
 [project]
 name = "kitden"
 version = "0.8.0"
-description = "See and safely change what AI coding clients load on this computer."
+description = "See and safely change what Claude Code, Codex and Cursor load: MCP servers, plugins, skills, hooks"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"

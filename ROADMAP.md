@@ -7,6 +7,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **Releases come from one pull request:** each release is one pull request to review and
+  merge; the tag, PyPI, the GitHub release, the MCP Registry, Homebrew and the plugin follow on
+  their own. Both plugin marketplaces now give only released versions of the plugin.
+
 ### 0.8.0
 
 - **Update from the page:** when a newer version is out, the rail shows an Update button beside

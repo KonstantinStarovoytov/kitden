@@ -19,6 +19,9 @@
 - When you finish a task that changes what Kitden does or plans, update ROADMAP.md in the same
   change.
 - Every release has a notes file; see [docs/development.md](docs/development.md).
+- A change that adds a feature, or changes what Kitden sends, stores or reads, updates
+  `listing.toml` and the policy files (SECURITY.md, PRIVACY.md, AI_POLICY.md) in the same pull
+  request.
 - Commit messages: a short plain subject, one to three simple lines.
 - Pull request titles say what changes for the user, in plain English, with no `fix:` or
   `feat(...)` prefix and no issue number. Fill in the checklist in the pull request form;

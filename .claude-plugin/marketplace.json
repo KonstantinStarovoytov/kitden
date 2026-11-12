@@ -5,8 +5,15 @@
   "plugins": [
     {
       "name": "kitden",
-      "source": "./plugins/kitden",
-      "description": "Ask what your coding agents load and whether your skills fit. Uses the Kitden program and offers to install it."
+      "source": {
+        "source": "git-subdir",
+        "url": "KonstantinStarovoytov/kitden",
+        "path": "plugins/kitden",
+        "ref": "release"
+      },
+      "displayName": "Kitden",
+      "description": "Ask what your coding agents load and whether your skills fit. Uses the Kitden program and offers to install it.",
+      "keywords": ["mcp", "setup", "claude-code", "codex", "cursor"]
     }
   ]
 }

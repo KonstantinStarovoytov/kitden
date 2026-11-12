@@ -1,5 +1,6 @@
 """The checks-and-release workflow (feature 003: FR-001, contracts/release.md)."""
 
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -26,11 +27,48 @@ def test_release_only_on_a_tag_after_a_green_build():
     assert "GH_TOKEN: ${{ github.token }}" in release
 
 
-def test_no_stored_secret_and_least_privilege():
+def _jobs() -> dict[str, str]:
+    """Each job's name and text."""
+    body = WORKFLOW.read_text().split("\njobs:\n")[1]
+    parts = re.split(r"^  ([a-z-]+):\n", body, flags=re.MULTILINE)[1:]
+    return dict(zip(parts[::2], parts[1::2], strict=True))
+
+
+def test_one_secret_only_where_the_release_app_signs_in_and_least_privilege():
+    """PyPI needs no stored token. The release app's key is used only to tag and, in
+    kitden-sdlc's publish workflow, by the jobs of the `release` environment."""
     text = WORKFLOW.read_text()
-    assert "secrets." not in text
-    assert text.count("contents: write") == 1
-    assert text.count("id-token: write") == 1  # only the publish job may mint an OIDC token
+    assert set(re.findall(r"secrets\.\w+", text)) == {"secrets.RELEASE_APP_PRIVATE_KEY"}
+    jobs = _jobs()
+    assert {name for name, job in jobs.items() if "secrets." in job} == {"autotag", "stores"}
+    assert "environment: release" in jobs["autotag"]
+    # Only the GitHub release job writes with the job's own token.
+    writes = {name for name, job in jobs.items() if re.search(r"^ +contents: write", job, re.M)}
+    assert writes == {"release"}
+    # Only PyPI's publish job and the MCP Registry (in the stores job) mint an OIDC token.
+    assert {name for name, job in jobs.items() if "id-token: write" in job} == {
+        "publish",
+        "stores",
+    }
+
+
+def test_the_release_check_runs_on_every_pull_request_push_and_tag():
+    """kitden-sdlc's release check compares the files with listing.toml before the build."""
+    steps = _build_steps()
+    clear, checkout, check = (
+        next(i for i, s in enumerate(steps) if marker in s)
+        for marker in (
+            "rm -rf .kitden-sdlc",
+            "repository: KonstantinStarovoytov/kitden-sdlc",
+            "release_check.py",
+        )
+    )
+    assert clear < checkout < check < next(i for i, s in enumerate(steps) if "uv build" in s)
+    assert "persist-credentials: false" in steps[checkout]
+    assert '--tag "$GITHUB_REF_NAME"' in steps[check]
+    for i in (clear, checkout, check):
+        assert "if: runner.os == 'macOS'\n" in steps[i]
+    assert (ROOT / "listing.toml").is_file()
 
 
 def test_pypi_publish_is_its_own_job_between_build_and_release():
