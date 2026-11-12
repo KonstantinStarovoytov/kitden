@@ -11,7 +11,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **Releases come from one pull request:** each release is one pull request to review and
   merge; the tag, PyPI, the GitHub release, the MCP Registry, Homebrew and the plugin follow on
-  their own. Both plugin marketplaces read the plugin from the `release` branch.
+  their own. Both plugin marketplaces read the plugin from the `release` branch (#71).
 
 ### 0.8.0
 
