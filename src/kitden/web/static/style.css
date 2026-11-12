@@ -216,7 +216,7 @@ a { color: var(--route); }
    group, with a line under it. Only the version shows until a newer one is out. */
 .update-spot { position: relative; display: grid; gap: 4px; padding-bottom: 14px; border-bottom: 1px solid var(--wire); }
 .update-row { display: flex; align-items: center; gap: 8px; min-height: 20px; }
-.update-version { color: var(--ink-3); font-size: 12px; }
+.update-version { display: inline-flex; align-items: baseline; color: var(--ink-3); font-size: 12px; }
 .update-say { display: flex; flex-wrap: wrap; gap: 0 6px; margin: 0; line-height: 1.45; }
 .update-more { padding: 0; border: 0; background: none; color: var(--ink-3); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; transition: color var(--t-fast) ease; }
 .update-more:hover { color: var(--ink); }
