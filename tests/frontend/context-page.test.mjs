@@ -598,3 +598,15 @@ test('a Codex skill that is off shows Off and offers no On', async () => {
   switches = walk(drawer).filter((n) => n.dataset && n.dataset.state);
   assert.deepEqual(switches.map(text), ['On', 'Off']);
 });
+
+test('a cut pill says how much of its description was sent', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'codex' };
+  const result = { ...CODEX.windows[0].result, sent: { a: 100, b: 90 }, over: { b: 60 }, kept: { b: 342 } };
+  const cut = { ...CODEX, windows: [{ ...CODEX.windows[0], result }], skills: [skill('a', 200, 0), skill('b', 570, 1)] };
+  show(answer(CLAUDE, cut, CURSOR));
+  const [whole, short] = sides().map((n) => pills(n));
+  assert.equal(text(whole[0]), 'a200');
+  assert.equal(text(short[0]), 'b342 of 570');
+  assert.equal(short[0].children[1].getAttribute('title'), '342 of 570 characters sent');
+});

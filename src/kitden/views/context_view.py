@@ -16,6 +16,7 @@ from typing import TypeGuard
 
 from kitden.clients.base import Reader, found_columns, from_plugin
 from kitden.clients.claude_code import local_files
+from kitden.clients.versions import highest_version
 from kitden.context.claude_log import Unreadable, last_claude_list
 from kitden.context.codex_log import codex_window, codex_windows, last_codex_list
 from kitden.context.rules import (
@@ -73,6 +74,7 @@ class _Row:
     path: str = ""  # Codex: the `file:` path of its line
     added: bool = False  # Claude Code: added during the chat, sent whole outside the limit
     built_in: bool = False  # Claude Code: built in, keeps its description whatever the limit
+    moved: bool = False  # Codex: read from its plugin's newer version, the chat's one is gone
 
 
 def context_view(
@@ -159,6 +161,27 @@ def _app_description(home: Path, name: str) -> str | None:
         except OSError:  # gone since the folder was listed
             continue
     return _description(str(max(found)[1])) if found else None
+
+
+def _newer_copy(path: str) -> str | None:
+    """The same file in the newest version folder beside the one `path` names, when that one is
+    gone; None when there is no such file.
+
+    # checked 2026-11-13 (real files, Codex 0.167.0): plugins are kept at
+    # ~/.codex/plugins/cache/<market>/<plugin>/<version>/, and an update removes the old version.
+    """
+    parts = Path(path).parts
+    for i in range(len(parts) - 1, 0, -1):
+        if highest_version([parts[i]]) is None:  # not a version folder
+            continue
+        try:
+            names = [p.name for p in Path(*parts[:i]).iterdir() if p.is_dir()]
+        except OSError:
+            return None
+        newest = highest_version(names)
+        found = Path(*parts[:i], newest, *parts[i + 1 :]) if newest else None
+        return str(found) if found and found.is_file() else None
+    return None
 
 
 def _skill(
@@ -761,7 +784,14 @@ def _codex_fact(
     else:
         short = words.CODEX_SHORT_ALL.format(n=n)
         say = _many(n, words.CODEX_ONE_SENT, words.CODEX_ALL_SENT).format(when=when, n=n)
-    result = {"short": short, "say": say, "sent": sent, "over": over, "used": used}
+    kept = {
+        r.name: len(r.sent)
+        for r in rows
+        if r.sent is not None
+        and r.full is not None
+        and _codex_kind(len(r.sent), len(r.full)) == "cut"
+    }
+    result = {"short": short, "say": say, "sent": sent, "over": over, "used": used, "kept": kept}
     return result | {
         "size": used + sum(over.values()),
         "room": None,
@@ -807,7 +837,12 @@ def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str
     else:
         body = words.CODEX_WOULD_KEEP.format(on=on)
     short = words.CODEX_WOULD_SHORT.format(bad=bad, n=n) if bad else words.WOULD_FIT.format(n=n)
-    result = {"short": short, "say": frame.format(body), "sent": sent, "over": over}
+    kept = {
+        s.name: n
+        for s in skills
+        if (n := fit.sent.get(s.name)) is not None and _codex_kind(n, len(s.description)) == "cut"
+    }
+    result = {"short": short, "say": frame.format(body), "sent": sent, "over": over, "kept": kept}
     misfit = {"kind": "out", "n": out} if out else {"kind": "cut", "n": bad} if bad else None
     return result | {"used": fit.used, "size": fit.size, "room": None, "misfit": misfit}
 
@@ -830,7 +865,10 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     for name, text in sent_list.skills:
         path = found.paths.get(name, "")
         item = (by_path.get(os.path.realpath(path)) if path else None) or by_name.get(name)
-        rows.append(_Row(name, text, item, _description(path), path))
+        whole, newer = _description(path), None
+        if whole is None and path and (newer := _newer_copy(path)):
+            whole = _description(newer)
+        rows.append(_Row(name, text, item, whole, path, moved=newer is not None))
     matched = {r.item.id for r in rows if r.item}
     extras = [i for i in items if i.id not in matched]
     # Codex leaves skills out only once it has removed every description: then the user's
@@ -919,7 +957,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     for r in rows:
         logged = None if r.sent is None else len(r.sent)
         side = None if r.full is None else int(_codex_kind(logged, len(r.full)) != "full")
-        note = words.NOTE_NO_FILE if r.full is None else None
+        note = words.NOTE_NO_FILE if r.full is None else words.NOTE_NEWER if r.moved else None
         if r.item is not None and r.full is not None:
             note = words.NOTE_CODEX_OFF
             if len(r.full) > CODEX_DESCRIPTION_CAP:

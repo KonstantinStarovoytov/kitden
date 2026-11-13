@@ -304,6 +304,7 @@ NOTE_CODEX_OFF = "Off frees room, so long descriptions get cut less."
 NOTE_CODEX_LONG = "Codex sends only the first 1,024 characters of a description."
 NOTE_NOT_LISTED = "It was not in the list of your last chat."
 NOTE_NO_FILE = "Kitden cannot find its file, so it cannot tell if it was cut."
+NOTE_NEWER = "Its plugin was updated after the chat; Kitden reads the new version."
 # "How this is counted".
 # "{version}", "{when}" and "{surface}" each start with a space, or are "" when the log does not
 # say.
