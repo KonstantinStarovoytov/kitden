@@ -46,11 +46,12 @@ In Claude Code each skill is also a command, such as `/kitden:audit`.
 
 `kitden show` reads the settings files of Claude Code, Codex and Cursor on this computer. For
 the context check it also reads what the client sent in your last chats, from the client's own
-chat files, and the skills the Claude app gives Claude Code, from the app's own folder. It uses
-them to size the skill list and keeps none of it. To learn versions and plugins it may run the
-clients' own commands, such as `claude --version` and `codex plugin list`. It changes nothing
-and does not go online. Secret values, such as tokens in a server's settings, are replaced with
-`[secret]`. There is no account and no telemetry.
+chat files, the skills the Claude app gives Claude Code, from the app's own folder, and Codex's
+model list (`models_cache.json`), for the size of its context window. It uses them to size the
+skill list and keeps none of it. To learn versions and plugins it may run the clients' own
+commands, such as `claude --version` and `codex plugin list`. It changes nothing and does not
+go online. Secret values, such as tokens in a server's settings, are replaced with `[secret]`.
+There is no account and no telemetry.
 
 What `kitden show` prints goes into the chat, so your agent and the company behind it see it,
 under their own privacy terms.
