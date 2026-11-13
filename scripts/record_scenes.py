@@ -224,14 +224,23 @@ def open_gateway(page: Page, link: str) -> None:
     time.sleep(1.2)  # the map has landed
 
 
+OUTSIDE = '[data-focus="block:stack:group:outside:all"]'  # the servers outside, folded
+
+
 def scene_pick(page: Page, film: Film, pointer: Pointer) -> None:
-    """Three servers are picked with a band and dragged onto the gateway together."""
-    first = page.locator('[data-focus="block:outside:move:context7"]').bounding_box()
-    last = page.locator('[data-focus="block:outside:local:playwright"]').bounding_box()
-    # From just above context7, the first outside, so the band takes all three.
-    pointer.jump(first["x"] + first["width"] + 26, first["y"] - 3)
+    """The servers outside the gateway start as a stack. A press opens it, and three servers
+    are picked with a band and dragged onto the gateway together."""
+    stack = page.locator(OUTSIDE).bounding_box()
+    pointer.jump(stack["x"] + stack["width"] + 36, stack["y"] + stack["height"] + 40)
     film.start()
     film.hold(0.5)
+    pointer.click(OUTSIDE, 0.6)
+    # While the cards slide out, on to just above context7, the first card (where the stack's
+    # top was), so the band takes all three. Resting on a card would light its path.
+    pointer.glide(stack["x"] + stack["width"] + 26, stack["y"] - 3, 0.45)
+    film.hold(0.3)
+    first = page.locator('[data-focus="block:outside:move:context7"]').bounding_box()
+    last = page.locator('[data-focus="block:outside:local:playwright"]').bounding_box()
     page.mouse.down()
     pointer.glide(first["x"] - 18, last["y"] + last["height"] + 12, 0.9)
     page.mouse.up()
@@ -258,14 +267,21 @@ def link_point(page: Page, tool: str, share: float = 0.75) -> tuple[float, float
 def scene_tools(page: Page, film: Film, pointer: Pointer) -> None:
     """memory is in the gateway with its tools. The three that delete are turned off on the map
     and applied for every agent."""
-    memory = page.locator('[data-focus="block:outside:local:memory"]').bounding_box()
-    page.mouse.move(memory["x"] + 40, memory["y"] + memory["height"] / 2)
+    page.locator(OUTSIDE).click()  # open the stack, to drag memory out of it
+    memory = page.locator('[data-focus="block:outside:local:memory"]')
+    memory.wait_for()
+    time.sleep(0.5)  # the cards have slid out
+    box = memory.bounding_box()
+    page.mouse.move(box["x"] + 40, box["y"] + box["height"] / 2)
     page.mouse.down()
     page.mouse.move(*center(page, '[data-focus="block:gateway:kitden"]'), steps=12)
     page.mouse.up()
     page.locator("#dock button:has-text('Apply')").first.click()
     held = page.locator('[data-focus="block:held:kitden:memory"]')
     held.wait_for()
+    # The two servers left outside fold back into their stack, as the page opens.
+    page.locator('[data-focus="block:collapse:group:outside"]').click()
+    page.locator(OUTSIDE).wait_for()
     held.click()
     page.locator("#drawer button:has-text('Close')").first.click()
     time.sleep(0.5)
@@ -352,8 +368,15 @@ def scene_context(page: Page, film: Film, pointer: Pointer) -> None:
     film.still()
 
 
-# A scene that needs a taller window than VIEW, so its part of the page shows whole.
-VIEWS = {"find": {"width": 1280, "height": 1000}, "context": {"width": 1280, "height": 900}}
+# A scene that needs another window than VIEW. find and context: taller, so their part of the
+# page shows whole. tools: shorter, so the page can scroll from the start. Else it starts to when
+# the tray opens, the browser then draws the whole map a pixel higher, and the loop's fade from
+# the last frame to the first changes every pixel.
+VIEWS = {
+    "find": {"width": 1280, "height": 1000},
+    "context": {"width": 1280, "height": 900},
+    "tools": {"width": 1280, "height": 780},
+}
 OPEN = {"library": open_library, "find": open_find, "context": open_context}
 
 # The part of the page each animation shows, in CSS pixels: x, y, width, height.
@@ -362,7 +385,7 @@ SCENES = (
     ("find", scene_find, (661, 110, 580, 850)),  # two add panels after a search, a still
     ("context", scene_context, (175, 190, 960, 645)),  # the last chat's skill list, a still
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
-    ("tools", scene_tools, (180, 235, 860, 500)),  # memory, its tools and the changes waiting
+    ("tools", scene_tools, (180, 265, 860, 460)),  # memory, its tools and the changes waiting
 )
 
 

@@ -38,6 +38,9 @@ SUPERPOWERS_SKILLS = (
     "writing-plans",
     "writing-skills",
 )
+# Checked 2026-11-13 against anthropics/skills skills/<name>/SKILL.md. Four, so "Your skills"
+# starts folded as a stack on the Library map.
+YOUR_SKILLS = ("frontend-design", "pdf", "skill-creator", "webapp-testing")
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -100,8 +103,8 @@ def build_sample(root: Path) -> Path:
             "extraKnownMarketplaces": {"superpowers-dev": {"source": source}},
         },
     )
-    # Checked 2026-10-29: anthropics/skills/skills/frontend-design/SKILL.md.
-    sample_skill(home / ".agents/skills", "frontend-design")
+    for name in YOUR_SKILLS:
+        sample_skill(home / ".agents/skills", name)
     connection = {"command": demo_command(home), "args": ["mcp"]}
     claude_path = home / ".claude.json"
     claude = json.loads(claude_path.read_text())
