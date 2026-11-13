@@ -810,6 +810,21 @@ def test_a_plugin_skill_whose_version_folder_is_gone_is_read_from_the_newer_one(
     assert cx["checked"] is True
 
 
+def test_the_newer_version_note_stays_beside_the_skills_own_note(home):
+    # A skill that matches an installed one gets its own note too; the newer-version one stays.
+    codex_home(home, window=272_000)
+    skill(home / ".agents/skills", "helper", "Helps with things.")
+    plugin = home / ".codex/plugins/cache/market/tools"
+    skill(plugin / "2.2.2/skills", "helper", "Helps with things.")
+    gone = plugin / "2.2.1/skills/helper/SKILL.md"
+    codex_chat(home, [f"- helper: Helps with things. (file: {gone})"])
+    row = next(s for s in view(home)["codex"]["skills"] if s["name"] == "helper")
+    assert row["note"] == (
+        "Its plugin was updated after the chat; Kitden reads the new version. "
+        "Off frees room, so long descriptions get cut less."
+    )
+
+
 def test_codex_estimate_left_out(home):
     paths = codex_home(home)
     wanted = {"alpha": 0, "beta": 0, "gamma": None}

@@ -957,13 +957,15 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
     for r in rows:
         logged = None if r.sent is None else len(r.sent)
         side = None if r.full is None else int(_codex_kind(logged, len(r.full)) != "full")
-        note = words.NOTE_NO_FILE if r.full is None else words.NOTE_NEWER if r.moved else None
+        note = words.NOTE_NO_FILE if r.full is None else None
         if r.item is not None and r.full is not None:
             note = words.NOTE_CODEX_OFF
             if len(r.full) > CODEX_DESCRIPTION_CAP:
                 note = f"{words.NOTE_CODEX_LONG} {note}"
         if r.item is not None and from_plugin(r.item):
             note = words.NOTE_PLUGIN
+        if r.moved:  # first, whatever the other note: the size read may not be the chat's
+            note = f"{words.NOTE_NEWER} {note}" if note else words.NOTE_NEWER
         size = len(r.full) if r.full is not None else len(r.sent or "")
         skills.append(_skill(client, r.name, r.item, size, side, note))
     for item in extras:
