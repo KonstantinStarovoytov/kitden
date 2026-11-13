@@ -1,13 +1,13 @@
 # Kitden roadmap
 
-Last updated: 2026-11-12
+Last updated: 2026-11-13
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not yet released
+### 0.9.0
 
 - **Context knows the newest Claude models:** a chat on Sonnet 5.5, Fable 5.2 or Haiku 5.5
   is sized as a 1M window at 3 characters per token, as Claude Code does, instead of Kitden
