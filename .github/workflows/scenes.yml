@@ -2,8 +2,9 @@
 # or the recorder runs scripts/record_readme.py once for every scene; the run fails when a
 # scene fails. The pictures are uploaded as the artifact `scenes` to look at; nothing is
 # committed. The recorder runs on macOS: it was tried there, and Ubuntu was not tried. The
-# recorder needs ffmpeg and img2webp (libwebp) on the PATH (docs/readme-media.md). The runner
-# must have them; nothing is installed here, and a missing tool shows as a failed scene.
+# recorder needs ffmpeg and img2webp (libwebp) on the PATH (docs/readme-media.md); the runner
+# has neither, so the job installs them with brew first. A tool that is still missing shows
+# as a failed scene.
 name: Scenes
 
 on:
@@ -30,6 +31,9 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.10.10"
+      # brew is not pinned; this job holds no secret, so an unpinned tool cannot reach one.
+      - name: Install the recorder's tools
+        run: brew install ffmpeg webp
       - name: Which recorder tools the runner has
         run: |
           for tool in ffmpeg img2webp; do

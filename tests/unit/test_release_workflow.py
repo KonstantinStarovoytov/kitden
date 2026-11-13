@@ -175,6 +175,10 @@ def test_scenes_record_on_pull_requests_that_touch_the_page_or_the_recorder():
     assert "persist-credentials: false" in job
     assert "python scripts/record_readme.py\n" in job and "--only" not in job
     assert "if: always()" in job and "name: scenes" in job and "docs/images/readme/" in job
+    install = job.index("name: Install the recorder's tools")
+    assert "run: brew install ffmpeg webp\n" in job[install:]
+    assert install < job.index("name: Which recorder tools the runner has")
+    assert install < job.index("python scripts/record_readme.py")
 
 
 def test_scenes_use_no_secrets_and_pin_every_action_by_sha():
