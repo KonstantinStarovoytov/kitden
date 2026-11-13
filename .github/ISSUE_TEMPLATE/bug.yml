@@ -1,0 +1,42 @@
+name: Bug
+description: Something in Kitden does not work as it should.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Kitden version
+      description: Run `kitden --version`.
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      description: Your operating system and its version, like macOS 15.
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Client and its version
+      description: Optional. The AI client involved, like Claude Code 2.1.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: What you did, one step per line.
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected to see.
+    validations:
+      required: true
+  - type: input
+    id: caused-by
+    attributes:
+      label: Caused by
+      description: Optional. The pull request that brought this bug, like #123

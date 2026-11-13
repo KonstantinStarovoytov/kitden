@@ -1,0 +1,23 @@
+name: Idea
+description: Suggest something new for Kitden.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        PRINCIPLES.md asks for an issue and a yes from the maintainer before anything new is
+        built. Please wait for that yes before you open a pull request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is hard today
+      description: The problem you have, in a few plain lines.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you suggest
+      description: What Kitden could do to help.
+    validations:
+      required: true
