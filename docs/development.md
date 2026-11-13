@@ -184,8 +184,9 @@ Not run yet for step 24: so far it was tested with sandbox files only.
 
 A release is one pull request. You review it and merge it; the rest happens on its own.
 
-1. In GitHub, open Actions → Release prep → Run workflow, on `main`. Leave the version empty
-   and the agent picks the next minor or patch, or type one. The run opens one pull request,
+1. In GitHub, open Actions → Release prep → Run workflow, on `main`. Keep the version on
+   **Auto** and the agent picks the next minor or patch, or pick **Features (0.X.0)** for the
+   next minor or **Fixes (0.0.X)** for the next patch. The run opens one pull request,
    "Kitden X.Y.Z": the version in all eight places, `docs/releases/vX.Y.Z.md`, ROADMAP
    ("### Not yet released" becomes the version), README and policy edits, the guide and the
    plugin README when they change, and the checks from
