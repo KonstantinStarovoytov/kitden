@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Context knows the newest Claude models:** a chat on Sonnet 5.5, Fable 5.2 or Haiku 5.5
+  is sized as a 1M window at 3 characters per token, as Claude Code does, instead of Kitden
+  working the window out from the list.
 - **Context says how much was cut:** a description Codex cut short shows how much of it was sent,
   such as "342 of 570". When a plugin was updated after the chat, Kitden reads the skill from the
   plugin's new version instead of setting it aside.

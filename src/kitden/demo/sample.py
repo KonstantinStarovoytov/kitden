@@ -160,7 +160,8 @@ def build_demo_home(root: Path, size: str) -> Path:
     if size == "large":
         _bulk(home)
     # Last: a chat lists the skills that are there. The large sample is too much for a 200K
-    # window even with names alone, so its chat ran a model with a 1M window.
+    # window even with names alone, so its chat ran a model with a 1M window. The others run
+    # Sonnet 4.6: checked 2026-11-13 (Claude Code 2.1.321), every newer model has 1M by default.
     write_claude_chat(home, "claude-opus-5-5" if size == "large" else "claude-sonnet-4-6")
     if medium:
         write_codex_chat(home)

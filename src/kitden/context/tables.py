@@ -1,8 +1,14 @@
 """Numbers behind the skill list rules. Each one is a fact about a client and can change."""
 
-# checked 2026-11-06 (Claude Code 2.1.311 binary, `EH`): model id -> (window, characters per token).
+# model id -> (window, characters per token). checked 2026-11-13 (Claude Code 2.1.321 binary:
+# `context.window` in its model list, and `bytesPerTokenForModel`, which gives 4 only to older
+# ids such as sonnet-4-6; code.claude.com/docs/en/model-config: Fable, Sonnet 5 and later,
+# Haiku 5.5 and Opus 4.7 and later run with 1M by default). Older ids stay while chats name them.
 CLAUDE_WINDOWS: dict[str, tuple[int, int]] = {
     "claude-opus-5-5": (1_000_000, 3),
+    "claude-sonnet-5-5": (1_000_000, 3),
+    "claude-fable-5-2": (1_000_000, 3),
+    "claude-haiku-5-5": (1_000_000, 3),
     "claude-fable-5-1": (1_000_000, 3),
     "claude-sonnet-4-6": (200_000, 4),
 }
