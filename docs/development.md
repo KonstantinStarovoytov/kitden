@@ -187,8 +187,12 @@ A release is one pull request. You review it and merge it; the rest happens on i
 1. In GitHub, open Actions → Release prep → Run workflow, on `main`. Leave the version empty
    and the agent picks the next minor or patch, or type one. The run opens one pull request,
    "Kitden X.Y.Z": the version in all eight places, `docs/releases/vX.Y.Z.md`, ROADMAP
-   ("### Not yet released" becomes the version), README and policy edits, and the checks from
-   [Check before a release](#check-before-a-release) that this release touches.
+   ("### Not yet released" becomes the version), README and policy edits, the guide and the
+   plugin README when they change, and the checks from
+   [Check before a release](#check-before-a-release) that this release touches. Every README
+   picture is recorded again and only the changed ones go in. When the agent's files still
+   fail their checks after one fix, the pull request is a draft, and "Fix before merge" lists
+   what is left.
 2. Review the pull request, do those checks, and fix anything with commits on its branch.
 3. Merge it with a merge commit, not squash: the notes link the branch's commits.
 
@@ -234,7 +238,9 @@ On every push and pull request the workflow runs ruff, the type check (`pyright`
 Python tests with a 94% coverage floor, the page's tests (`node --test
 tests/frontend/*.test.mjs`), the start-time budget (`scripts/measure-start.py`), a dependency
 audit (`pip-audit`), a check of the workflow files (`zizmor`), the release check and the
-package build. On a tag it also stops if the version differs from the tag or the notes file is
+package build. A pull request that changes the page or the recorder also runs the scenes check
+(`.github/workflows/scenes.yml`), which records every README picture and uploads them as the
+artifact `scenes`. On a tag it also stops if the version differs from the tag or the notes file is
 missing.
 Once a day the tests also run on the newest versions of the dependencies
 (`.github/workflows/latest-deps.yml`): people who install Kitden get those, not the ones in
