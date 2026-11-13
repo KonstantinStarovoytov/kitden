@@ -1026,6 +1026,27 @@ def test_a_model_that_ran_with_the_other_window_than_the_table_says(home):
     assert cc["windows"][0]["models"].endswith("worked out from the list")
 
 
+@pytest.mark.parametrize(
+    ("model", "name"),
+    [
+        ("claude-sonnet-5-5", "Sonnet 5.5"),
+        ("claude-fable-5-2", "Fable 5.2"),
+        ("claude-haiku-5-5", "Haiku 5.5"),
+    ],
+)
+def test_the_current_models_are_in_the_table_with_a_1m_window(home, model, name):
+    eight_skills(home, model=model, sent=8)
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is True
+    fact, other = cc["windows"]
+    assert (fact["title"], fact["models"], fact["budget"]) == (
+        "1M window",
+        f"{name} · in the Claude app",
+        30_000,
+    )
+    assert (other["title"], other["budget"]) == ("200K window", 8_000)
+
+
 def test_a_window_with_two_limits_that_give_the_list_shows_no_estimate(home):
     skill(home / ".claude/skills", "alpha", LONG[:1000])
     built_in = ("dataviz", "simplify", "loop", "schedule", "run", "code-review")
