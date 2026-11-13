@@ -39,4 +39,4 @@ body:
     id: caused-by
     attributes:
       label: Caused by
-      description: Optional. The pull request that brought this bug, like #123
+      description: "Optional. The pull request that brought this bug, like #123"
