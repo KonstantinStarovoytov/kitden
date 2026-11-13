@@ -150,3 +150,37 @@ def test_autotag_clears_the_kitden_sdlc_folder_and_may_write_workflows():
     assert clear < checkout < sign_in
     assert "permission-contents: write" in steps[sign_in]
     assert "permission-workflows: write" in steps[sign_in]
+
+
+SCENES = ROOT / ".github/workflows/scenes.yml"
+
+
+def test_scenes_record_on_pull_requests_that_touch_the_page_or_the_recorder():
+    """The README pictures are made again on every such pull request; nothing is committed."""
+    text = SCENES.read_text()
+    assert "\non:\n  pull_request:\n    paths:\n" in text
+    paths = text.split("    paths:\n")[1].split("\n\n")[0].splitlines()
+    assert [p.strip().removeprefix("- ").strip('"') for p in paths] == [
+        "src/kitden/**",
+        "scripts/record_readme.py",
+        "scripts/record_scenes.py",
+        "scripts/readme_demo.py",
+        "tests/conftest.py",
+    ]
+    assert "\npermissions: {}\n" in text
+    job = text.split("\njobs:\n")[1]
+    assert job.startswith("  scenes:\n")
+    assert "contents: read" in job and "contents: write" not in text
+    assert "timeout-minutes: 15" in job
+    assert "persist-credentials: false" in job
+    assert "python scripts/record_readme.py\n" in job and "--only" not in job
+    assert "if: always()" in job and "name: scenes" in job and "docs/images/readme/" in job
+
+
+def test_scenes_use_no_secrets_and_pin_every_action_by_sha():
+    text = SCENES.read_text()
+    assert "secrets." not in text
+    uses = re.findall(r"^\s+(?:- )?uses: (\S+)", text, flags=re.MULTILINE)
+    assert uses
+    for use in uses:
+        assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", use), use
