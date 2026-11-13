@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Context says how much was cut:** a description Codex cut short shows how much of it was sent,
+  such as "342 of 570". When a plugin was updated after the chat, Kitden reads the skill from the
+  plugin's new version instead of setting it aside.
 - **The Context page shows your newest chat:** it takes the skill list sent last, not the chat
   file changed last. Codex's cuts now follow Codex's own code, and its window follows
   `model_context_window` in `config.toml`. For Claude Code, Kitden reads the skills the Claude

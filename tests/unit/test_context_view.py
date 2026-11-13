@@ -587,6 +587,7 @@ def test_codex_cut_short(home):
     assert fact["result"]["short"] == "2 of 3 cut short"
     assert fact["result"]["misfit"] == {"kind": "cut", "n": 2}
     assert set(fact["result"]["over"]) == {"alpha", "beta"}
+    assert fact["result"]["kept"] == {"alpha": cap, "beta": cap - 1}  # characters the chat sent
     other = cx["windows"][1]
     assert (other["title"], other["tag"], other["budget"]) == ("500K window", "Estimate", 10_000)
     assert other["result"]["say"] == (
@@ -788,6 +789,40 @@ def test_codex_estimate_cut(home):
     )
     assert other["short"] == "2 of 3 would be cut short"
     assert other["misfit"] == {"kind": "cut", "n": 2}
+    whole = {s.name: len(s.description) for s in rule_skills(paths)}
+    cut = {n: kept for n, kept in fit.sent.items() if kept is not None and kept < whole[n]}
+    assert other["kept"] == cut and len(cut) == 2
+
+
+def test_a_plugin_skill_whose_version_folder_is_gone_is_read_from_the_newer_one(home):
+    # Codex removes a plugin's old version folder when it updates it (checked 2026-11-13: an
+    # app plugin went from 2.2.1 to 2.2.2 after the chat).
+    codex_home(home, window=272_000)
+    plugin = home / ".codex/plugins/cache/market/tools"
+    skill(plugin / "2.2.2/skills", "helper", "Helps with things.")
+    skill(plugin / "2.10.0-old/skills", "helper", "Not a version folder.")
+    gone = plugin / "2.2.1/skills/helper/SKILL.md"
+    codex_chat(home, [f"- tools:helper: Helps with things. (file: {gone})"])
+    cx = view(home)["codex"]
+    row = next(s for s in cx["skills"] if s["name"] == "tools:helper")
+    assert (row["side"], row["size"]) == (0, len("Helps with things."))
+    assert row["note"] == "Its plugin was updated after the chat; Kitden reads the new version."
+    assert cx["checked"] is True
+
+
+def test_the_newer_version_note_stays_beside_the_skills_own_note(home):
+    # A skill that matches an installed one gets its own note too; the newer-version one stays.
+    codex_home(home, window=272_000)
+    skill(home / ".agents/skills", "helper", "Helps with things.")
+    plugin = home / ".codex/plugins/cache/market/tools"
+    skill(plugin / "2.2.2/skills", "helper", "Helps with things.")
+    gone = plugin / "2.2.1/skills/helper/SKILL.md"
+    codex_chat(home, [f"- helper: Helps with things. (file: {gone})"])
+    row = next(s for s in view(home)["codex"]["skills"] if s["name"] == "helper")
+    assert row["note"] == (
+        "Its plugin was updated after the chat; Kitden reads the new version. "
+        "Off frees room, so long descriptions get cut less."
+    )
 
 
 def test_codex_estimate_left_out(home):

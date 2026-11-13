@@ -293,7 +293,7 @@ function sidesFor(card, result, after, estimate, heat) {
     // A skill the tray turns off leaves the list.
     if (states[skill.name] === "off") continue;
     const side = sideOf(card, skill, result, estimate);
-    (clouds[side] || apart).append(pillFor(card, skill, states, after, heat));
+    (clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
   }
   const wrap = el("div");
   wrap.append(box);
@@ -301,16 +301,22 @@ function sidesFor(card, result, after, estimate, heat) {
   return wrap;
 }
 
-// A skill's pill: its name and size, warmed by its heat on the first side. A dashed line while the
-// tray changes it; after Apply, a skill that gets its description is filled, one that loses it is
-// lit amber.
-function pillFor(card, skill, states, after, heat) {
+// A skill's pill: its name and size, warmed by its heat on the first side; a cut one says how much
+// of its description was sent. A dashed line while the tray changes it; after Apply, a skill that
+// gets its description is filled, one that loses it is lit amber.
+function pillFor(card, skill, states, after, heat, result) {
   const node = button("", () => openSkill(card.client, skill.name), "ctx-pill");
   node.dataset.skill = skill.name;
   if (heat.has(skill.name)) node.style.setProperty("--heat", heat.get(skill.name));
   node.dataset.focus = `skill:${card.client}:${skill.name}`;
   node.append(el("span", null, skill.shown));
-  if (skill.size) node.append(el("u", null, fmt(skill.size)));
+  const kept = result && result.kept ? result.kept[skill.name] : undefined;
+  if (skill.size && kept !== undefined) {
+    const part = `${fmt(kept)} of ${fmt(skill.size)}`;
+    const size = el("u", null, part);
+    size.setAttribute("title", `${part} characters sent`);
+    node.append(size);
+  } else if (skill.size) node.append(el("u", null, fmt(skill.size)));
   const changed = skill.name in states && states[skill.name] !== skill.state;
   node.classList.toggle("chg", changed);
   node.classList.toggle("back", Boolean(after && after.gets.includes(skill.name)));
