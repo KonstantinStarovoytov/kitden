@@ -1,13 +1,13 @@
 # Kitden roadmap
 
-Last updated: 2026-11-12
+Last updated: 2026-11-13
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not yet released
+### 0.9.0
 
 - **Context says how much was cut:** a description Codex cut short shows how much of it was sent,
   such as "342 of 570". When a plugin was updated after the chat, Kitden reads the skill from the

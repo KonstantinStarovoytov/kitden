@@ -22,7 +22,8 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
 
 Claude Code, Codex and Cursor each keep their own settings. Kitden puts their plugins, skills,
 MCP servers and instruction files on one map, so what one agent has and another lacks shows
-at a glance. Add what an agent is missing, turn an item off or remove it, on the same page.
+at a glance. Big groups fold into stacks. Add what an agent is missing, turn an item off or
+remove it.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/library-dark.png">
@@ -35,9 +36,9 @@ at a glance. Add what an agent is missing, turn an item off or remove it, on the
 Every chat starts with the list of your skills, and that list has a small budget: 1% of the
 context window in Claude Code, 2% in Codex. Past it, Claude Code sends some skills by name
 only and Codex shortens or drops them, so the agent may never reach for them. Kitden reads the
-last chat's log and shows which skills went in whole, so you can turn off the ones you do not
-use. A guess for another window is marked Estimate. Cursor gets no verdict: Kitden cannot see
-what it sends.
+last chat's log and shows which skills went in whole, and how much of a cut description was
+sent. The largest skills show in orange, so you can turn off the ones you do not use. Cursor
+gets no verdict: Kitden cannot see what it sends.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/context-dark.png">

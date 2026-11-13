@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "kitden",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Ask what your coding agents load and whether your skills fit. Uses the Kitden program and offers to install it.",
   "author": { "name": "Konstantin Starovoytov" },
   "homepage": "https://github.com/KonstantinStarovoytov/kitden",
