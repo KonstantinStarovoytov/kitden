@@ -22,8 +22,7 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
 
 Claude Code, Codex and Cursor each keep their own settings. Kitden puts their plugins, skills,
 MCP servers and instruction files on one map, so what one agent has and another lacks shows
-at a glance. Big groups fold into stacks. Add what an agent is missing, turn an item off or
-remove it.
+at a glance. Add what an agent is missing, turn an item off or remove it, on the same page.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/library-dark.png">
