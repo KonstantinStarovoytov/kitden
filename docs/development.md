@@ -188,8 +188,13 @@ A release is one pull request. You review it and merge it; the rest happens on i
    **Auto** and the agent picks the next minor or patch, or pick **Features (0.X.0)** for the
    next minor or **Fixes (0.0.X)** for the next patch. The run opens one pull request,
    "Kitden X.Y.Z": the version in all eight places, `docs/releases/vX.Y.Z.md`, ROADMAP
-   ("### Not yet released" becomes the version), README and policy edits, and the checks from
-   [Check before a release](#check-before-a-release) that this release touches.
+   ("### Not yet released" becomes the version), README and policy edits, the guide and the
+   plugin README when they change, and the checks from
+   [Check before a release](#check-before-a-release) that this release touches. Every README
+   picture is recorded again. A still (PNG) goes in when it differs; an animation (WebP) goes
+   in only when a file of the page changed after it was last made. The pull request is a
+   draft when a check still fails after the one fix, or a picture could not be made; "Fix
+   before merge" lists what is left.
 2. Review the pull request, do those checks, and fix anything with commits on its branch.
 3. Merge it with a merge commit, not squash: the notes link the branch's commits.
 
@@ -236,7 +241,9 @@ Python tests with a 94% coverage floor, the page's tests (`node --test
 tests/frontend/*.test.mjs`), the start-time budget (`scripts/measure-start.py`), a dependency
 audit (`pip-audit`), a check of the workflow files (`zizmor`), the release check and the
 package build. On a tag it also stops if the version differs from the tag or the notes file is
-missing.
+missing. A pull request that changes the page or the recorder also runs the scenes check
+(`.github/workflows/scenes.yml`): it records every README picture and uploads them as the
+artifact `scenes`.
 Once a day the tests also run on the newest versions of the dependencies
 (`.github/workflows/latest-deps.yml`): people who install Kitden get those, not the ones in
 `uv.lock`. When that run fails, GitHub sends an email.

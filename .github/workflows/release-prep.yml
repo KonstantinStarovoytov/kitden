@@ -30,6 +30,8 @@ jobs:
       model: claude-sonnet-5-5
       # kitden-sdlc takes auto, minor or patch.
       version: ${{ inputs.version == 'Features (0.X.0)' && 'minor' || inputs.version == 'Fixes (0.0.X)' && 'patch' || 'auto' }}
+      # Kitden's tests that the release texts must keep. Kitden owns this list.
+      docs_tests: "tests/unit/test_docs_words.py tests/unit/test_hero.py tests/unit/test_plugin_package.py tests/unit/test_release_files.py"
       release_app_client_id: ${{ vars.RELEASE_APP_CLIENT_ID }}
     secrets:
       claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

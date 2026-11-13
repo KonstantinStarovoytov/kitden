@@ -1,0 +1,49 @@
+# Checks that the README pictures can still be recorded. A pull request that changes the page
+# or the recorder runs scripts/record_readme.py once for every scene; the run fails when a
+# scene fails. The pictures are uploaded as the artifact `scenes` to look at; nothing is
+# committed. The recorder runs on macOS: it was tried there, and Ubuntu was not tried. The
+# recorder needs ffmpeg and img2webp (libwebp) on the PATH (docs/readme-media.md); the runner
+# has neither, so the job installs them with brew first. A tool that is still missing shows
+# as a failed scene.
+name: Scenes
+
+on:
+  pull_request:
+    paths:
+      - src/kitden/**
+      - scripts/record_readme.py
+      - scripts/record_scenes.py
+      - scripts/readme_demo.py
+      - tests/conftest.py
+
+permissions: {}
+
+jobs:
+  scenes:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.10"
+      # brew is not pinned; this job holds no secret, so an unpinned tool cannot reach one.
+      - name: Install the recorder's tools
+        run: brew install ffmpeg webp
+      - name: Which recorder tools the runner has
+        run: |
+          for tool in ffmpeg img2webp; do
+            if command -v "$tool"; then echo "$tool: found"; else echo "$tool: missing"; fi
+          done
+      - run: uv run --locked --with playwright==1.64.1 python -m playwright install chromium
+      - name: Record every scene
+        run: uv run --locked --with playwright==1.64.1 python scripts/record_readme.py
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scenes
+          path: docs/images/readme/

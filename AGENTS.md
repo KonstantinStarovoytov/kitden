@@ -19,9 +19,12 @@
 - When you finish a task that changes what Kitden does or plans, update ROADMAP.md in the same
   change.
 - Every release has a notes file; see [docs/development.md](docs/development.md).
+- A change to what the user sees updates `docs/guide.md` in the same pull request.
 - A change that adds a feature, or changes what Kitden sends, stores or reads, updates
-  `listing.toml` and the policy files (SECURITY.md, PRIVACY.md, AI_POLICY.md) in the same pull
-  request.
+  `listing.toml`, `plugins/kitden/README.md` ("What it reads") and the policy files
+  (SECURITY.md, PRIVACY.md, AI_POLICY.md) in the same pull request.
+- A change to a page keeps the README scenes recording (`scripts/record_scenes.py`). A pull
+  request that adds a scene adds its first pictures and its README part.
 - Commit messages: a short plain subject, one to three simple lines.
 - Pull request titles say what changes for the user, in plain English, with no `fix:` or
   `feat(...)` prefix and no issue number. Fill in the checklist in the pull request form;
