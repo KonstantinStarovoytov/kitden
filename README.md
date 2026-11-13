@@ -27,7 +27,7 @@ at a glance. Add what an agent is missing, turn an item off or remove it, on the
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/library-dark.png">
   <source srcset="docs/images/readme/library-light.png">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/library-light.png" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin, Codex and Cursor load the frontend-design skill.">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/library-light.png" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
 </picture>
 
 ### See whether your skills fit

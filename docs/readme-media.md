@@ -11,7 +11,8 @@ Each scene is in `docs/images/readme/`, in light and dark, cropped to the part o
 is about, taken at 1.5 pixels per CSS pixel and shown at its CSS size or smaller (470 to
 860 px wide). They differ in look as in subject: three stills, then one animation.
 
-- `library` (a PNG): the Library map, which agent loads which plugin and skill. No pointer.
+- `library` (a PNG): the Library map, which agent loads which plugin and skill. The four
+  skills under "Your skills" start folded as a stack, as on the page. No pointer.
 - `context` (a PNG): Context for Claude Code, from the client tabs down to the two boxes. The
   last chat's skill list is over its limit, so four skills show only a name; the 1M window is
   an estimate. Taken on the sample `kitden demo` opens (its medium size), so a reader who
@@ -21,10 +22,14 @@ is about, taken at 1.5 pixels per CSS pixel and shown at its CSS size or smaller
   two agents are ticked under Add to. Right, a search for "linear" in the MCP Registry:
   Linear's own server is open with Sign in. Taken in a taller window (1280 by 1000), so the
   panels show whole.
-- `tools` (a looping WebP): memory is in the gateway with its nine tools. The three that delete
-  are turned off on the map (each link's ×) and applied for every agent.
-- `pick` (a looping WebP), for posts, not in the README: Context7 (Cursor), memory (Claude
-  Code) and playwright (Codex) are picked with a band and dragged onto the lit gateway together.
+- `tools` (a looping WebP): memory is in the gateway with its nine tools, and the two servers
+  left outside are folded back into their stack. The three tools that delete are turned off on
+  the map (each link's ×) and applied for every agent. Taken in a shorter window (1280 by
+  780): the page can scroll from the start, so the map does not move a pixel when the tray
+  opens.
+- `pick` (a looping WebP), for posts, not in the README: the servers outside the gateway start
+  as a stack. A press opens it, and Context7 (Cursor), memory (Claude Code) and playwright
+  (Codex) are picked with a band and dragged onto the lit gateway together.
 
 Each animation ends on its key moment, holds it, and fades back to its start.
 
@@ -63,8 +68,9 @@ Checked against their official sources on **2026-11-02**:
   server; its nine tools and their read-only and destructive hints come from its
   `src/memory/index.ts`.
 - [Playwright MCP](https://github.com/microsoft/playwright-mcp): `npx @playwright/mcp@latest`.
-- [Superpowers](https://github.com/obra/superpowers) and the
-  [frontend-design](https://github.com/anthropics/skills) skill, as the demo sample has them.
+- [Superpowers](https://github.com/obra/superpowers), as the demo sample has it, and four
+  skills from [anthropics/skills](https://github.com/anthropics/skills): frontend-design, pdf,
+  skill-creator and webapp-testing. The skills checked **2026-11-13**.
 - [skills.sh](https://skills.sh): its answer to "mcp", the first six rows as the page sorts
   them, and [mcp-builder](https://github.com/anthropics/skills/tree/main/skills/mcp-builder)'s
   name and description (Apache-2.0). Checked **2026-11-05**.
