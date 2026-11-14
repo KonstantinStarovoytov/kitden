@@ -8,7 +8,12 @@ agree to it. The [roadmap](ROADMAP.md) shows current plans.
 
 ## Set up
 
-Use macOS, [uv](https://docs.astral.sh/uv/) and Node.js for the frontend tests.
+Use macOS or Linux, [uv](https://docs.astral.sh/uv/) and Node.js for the frontend tests.
+On Linux, the keyring tests need `secret-tool` (`libsecret-tools` on Debian and Ubuntu,
+`libsecret` on Fedora and Arch). Windows is not supported yet
+([#17](https://github.com/KonstantinStarovoytov/kitden/issues/17)); WSL should work as Linux
+but has not been checked.
+
 Fork the repository and clone your fork. From the checkout:
 
 ```bash
@@ -36,8 +41,8 @@ Undo. Tests must use sandbox homes, never your real settings.
 In the same pull request:
 
 - If what Kitden does changes, add one line to [ROADMAP.md](ROADMAP.md) under
-  "Not yet released": a short bold title, one plain sentence, and the pull request number.
-  For example:
+  `### Not yet released`, the first heading under "Done" (add the heading if it is not
+  there): a short bold title, one plain sentence, and the pull request number. For example:
 
   ```markdown
   - **The toast names the client that refused a change:** when a client's own command
