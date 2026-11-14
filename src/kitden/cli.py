@@ -288,7 +288,7 @@ def _delete(folder: Path) -> None:
         print(f"The sample folder was not deleted: {folder}", file=sys.stderr)
 
 
-def _print_summary(inventory: Inventory) -> None:
+def _print_summary(inventory: Inventory, cards: dict[str, dict]) -> None:
     counts = Counter((i.client, str(i.kind)) for i in inventory.items)
     for client in inventory.clients:
         version = client.version or "unknown version"
@@ -296,8 +296,22 @@ def _print_summary(inventory: Inventory) -> None:
         for (owner, kind), count in sorted(counts.items()):
             if owner == client.id:
                 print(f"  {kind}: {count}")
+        fit = _skill_list(cards.get(client.id))
+        if fit:
+            print(f"  Skill list: {fit}")
     for problem in inventory.problems:
         print(f"Could not read {problem.path or problem.owner_client}: {problem.unknown_reason}")
+    print("Nothing was changed: scan only reads your agents' settings.")
+
+
+def _skill_list(card: dict | None) -> str | None:
+    """Whether the client's skill list fit, as its Context card says it: the last chat's
+    result, or else why Kitden cannot tell."""
+    if card is None:
+        return None
+    if card["windows"]:
+        return card["windows"][0]["result"]["say"]
+    return card["message"]
 
 
 def _scan(args: argparse.Namespace) -> int:
@@ -308,7 +322,11 @@ def _scan(args: argparse.Namespace) -> int:
         json.dump(inventory_dict(inventory), sys.stdout, indent=2)
         print()
     else:
-        _print_summary(inventory)
+        from kitden.views import answers
+
+        # The Context page's cards for the current folder, as `kitden show context` gives them.
+        context = answers.context_answer(inventory, home or Path.home(), str(Path.cwd()))
+        _print_summary(inventory, {card["client"]: card for card in context["clients"]})
     return EXIT_UNREADABLE if inventory.problems else 0
 
 

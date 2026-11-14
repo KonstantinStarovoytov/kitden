@@ -1,11 +1,17 @@
 # Kitden roadmap
 
-Last updated: 2026-11-13
+Last updated: 2026-11-14
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
+
+### Not yet released
+
+- **`kitden scan` says whether your skills fit:** under each agent it prints one line about its
+  skill list, such as "In your last chat on Oct 1, 4 of 20 skills showed only a name", and it
+  ends by saying that nothing was changed.
 
 ### 0.9.0
 
