@@ -1,0 +1,2 @@
+# One test per line, as pytest names it, then two spaces, #, the date and the reason.
+# Blank lines and lines that start with # are comments. See docs/development.md.

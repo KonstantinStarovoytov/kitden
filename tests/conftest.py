@@ -14,6 +14,45 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
+SET_ASIDE = Path(__file__).parent / "set-aside.txt"
+
+
+def set_aside_ids(path: Path = SET_ASIDE) -> list[str]:
+    """The tests listed in the file, without comments, blank lines, dates and reasons."""
+    ids = []
+    for line in path.read_text().splitlines():
+        if line.strip() and not line.startswith("#"):
+            ids.append(line.split("  #")[0].strip())
+    return ids
+
+
+def split(ids: list[str], listed: list[str], mode: str) -> tuple[list[str], list[str]]:
+    """The tests this mode keeps, and the ones it leaves out. `skip` leaves out the listed
+    tests, `only` keeps just them, `run` keeps all."""
+    if mode == "run":
+        return ids, []
+    inside = [i for i in ids if i in listed]
+    outside = [i for i in ids if i not in listed]
+    return (outside, inside) if mode == "skip" else (inside, outside)
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--set-aside",
+        choices=["skip", "only", "run"],
+        default="skip",
+        help="Tests listed in tests/set-aside.txt: skip them (default), run only them, or all.",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    kept, left_out = split(
+        [item.nodeid for item in items], set_aside_ids(), config.getoption("--set-aside")
+    )
+    if left_out:
+        keep = set(kept)
+        config.hook.pytest_deselected(items=[item for item in items if item.nodeid not in keep])
+        items[:] = [item for item in items if item.nodeid in keep]
 
 
 @pytest.fixture(autouse=True)
