@@ -1,10 +1,10 @@
 import asyncio
 import hashlib
-import time
 
 import pytest
 
 from kitden.watch import Watcher, is_relevant
+from tests.conftest import aged
 
 
 @pytest.mark.parametrize(
@@ -42,7 +42,7 @@ def _run(coro):
 def test_a_change_triggers_one_debounced_callback(tmp_path):
     config = tmp_path / "config.toml"
     config.write_text("a = 1\n")
-    time.sleep(1)  # macOS can report a write made just before watching started
+    aged(config)  # written before watching: never reported
     calls = []
 
     async def scenario():
@@ -66,7 +66,7 @@ def test_a_change_triggers_one_debounced_callback(tmp_path):
 def test_the_tools_own_write_is_ignored(tmp_path):
     config = tmp_path / "config.toml"
     config.write_text("a = 1\n")
-    time.sleep(1)
+    aged(config)
     calls = []
     new = b"a = 2\n"
 

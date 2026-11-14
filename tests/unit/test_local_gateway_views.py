@@ -38,7 +38,7 @@ from kitden.local_gateway.views import (
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
-from tests.conftest import make_home, write_cursor_fixture_state
+from tests.conftest import aged, make_home, write_cursor_fixture_state
 from tests.unit.test_local_gateway_project import worktree
 
 AT_ONCE = (
@@ -659,8 +659,7 @@ def test_watcher_rescans_never_start_servers(home, monkeypatch):
         builds.append(1)
         return build_inventory(home)
 
-    config = home / ".cursor/mcp.json"
-    time.sleep(1)
+    config = aged(home / ".cursor/mcp.json")
     with page_for(home, build, watch_folders=[home / ".cursor"], debounce_ms=100) as page:
         time.sleep(0.5)
         config.write_text(config.read_text())
