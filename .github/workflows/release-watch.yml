@@ -1,5 +1,8 @@
-# Kitden's daily release watch: opens "Time for a release?" when merged changes wait for a
-# release, and "Release vX.Y.Z is not everywhere" when a store is behind. No model runs in it.
+# What: every day, with no model, opens "Time for a release?" when merged changes wait for a
+# release, and "Release vX.Y.Z is not everywhere" when a store is behind.
+# Why: so that merged work does not sit unreleased, and a release that reached only some stores
+# is noticed.
+#
 # The Lantern app posts the issues (the same app and names as agents-review.yml).
 name: Release watch
 

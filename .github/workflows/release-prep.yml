@@ -1,8 +1,11 @@
-# Kitden's release prep: the owner runs it by hand ("Run workflow" on main, usually from the
-# "Time for a release?" issue) and gets one pull request, `Kitden X.Y.Z`, to review and merge.
-# Claude writes the notes, the README and the policy edits with read-only tools; jobs without a
-# model set the version, record the README pictures, commit and open the PR with the release
-# app. Merging it tags the release (release.yml).
+# What: the owner runs it by hand and gets one pull request, `Kitden X.Y.Z`, with the release
+# notes, the README, the policy edits and the version already in it.
+# Why: a release takes one review and one merge, and no step is done by hand or forgotten.
+#
+# Run it with "Run workflow" on main, usually from the "Time for a release?" issue. Claude
+# writes the notes, the README and the policy edits with read-only tools; jobs without a model
+# set the version, record the README pictures, commit and open the PR with the release app.
+# Merging it tags the release (release.yml).
 name: Release prep
 
 on:

@@ -1,11 +1,14 @@
-# Checks that the README pictures can still be recorded. A pull request that changes the page
-# or the recorder runs scripts/record_readme.py once for every scene; the run fails when a
-# scene fails. The pictures are uploaded as the artifact `scenes` to look at; nothing is
-# committed. The recorder runs on macOS: it was tried there, and Ubuntu was not tried. The
-# recorder needs ffmpeg and img2webp (libwebp) on the PATH (docs/readme-media.md); the runner
-# has neither, so the job installs them with brew first. A tool that is still missing shows
-# as a failed scene.
-name: Scenes
+# What: when a pull request changes the page or the recorder, records every README scene once
+# and fails when a scene fails.
+# Why: the README pictures are recorded again at each release. This shows a broken scene in the
+# pull request that broke it, not on release day.
+#
+# The run uses scripts/record_readme.py. The pictures are uploaded as the artifact `scenes` to
+# look at; nothing is committed. The recorder runs on macOS: it was tried there, and Ubuntu was
+# not tried. The recorder needs ffmpeg and img2webp (libwebp) on the PATH
+# (docs/readme-media.md); the runner has neither, so the job installs them with brew first. A
+# tool that is still missing shows as a failed scene.
+name: README scenes
 
 on:
   pull_request:
