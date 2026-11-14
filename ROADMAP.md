@@ -9,9 +9,17 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **`kitden scan` says exactly what it left alone:** its last line is now "Your agents'
+  settings were not changed: scan only reads them." Scan keeps one file of its own, the
+  versions it found, so "Nothing was changed" said too much.
+- **The line in PyPI and the MCP Registry names MCP servers and plugins again:** "See the MCP
+  servers, plugins and skills Claude Code, Codex and Cursor load, and which skills got cut".
+
+### 0.9.1
+
 - **`kitden scan` says whether your skills fit:** under each agent it prints one line about its
   skill list, such as "In your last chat on Oct 1, 4 of 20 skills showed only a name", and it
-  ends by saying that your agents' settings were not changed.
+  ends by saying that nothing was changed.
 
 ### 0.9.0
 

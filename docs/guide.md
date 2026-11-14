@@ -177,5 +177,6 @@ The plain link is `cursor://anysphere.cursor-deeplink/mcp/install?name=kitden&co
 
 ## Report a bug
 
-Include your Kitden and client versions, steps to reproduce it, and what you expected. Remove
-secrets and private paths from screenshots and logs. See [Contributing](../CONTRIBUTING.md).
+On GitHub, choose **New issue**, then the **Bug** form. It asks for your Kitden and client
+versions, the steps to reproduce it, and what you expected. Remove secrets and private paths
+from screenshots and logs. See [Contributing](../CONTRIBUTING.md).

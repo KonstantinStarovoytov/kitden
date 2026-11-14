@@ -1,7 +1,7 @@
 {
   "name": "kitden",
   "displayName": "Kitden",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Ask what your coding agents load and whether your skills fit. Uses the Kitden program and offers to install it.",
   "author": { "name": "Konstantin Starovoytov" },
   "homepage": "https://github.com/KonstantinStarovoytov/kitden",

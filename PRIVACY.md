@@ -10,7 +10,9 @@ nothing from it.
   files, and the skills the Claude app gives Claude Code, from the app's own folder. For Codex, also
   its model list (`models_cache.json`), for the size of its context window, and the skill files of a
   plugin's newest version when the chat's version was removed by an update. Kitden uses them to size
-  the skill list and keeps none of it.
+  the skill list and keeps none of it. The page, `kitden show context` and `kitden scan` all do
+  this check; `kitden scan` prints one line about each skill list in your terminal and nothing else
+  from the chats.
 - Versions and plugin lists, from the clients' own commands.
 
 ## What stays on your computer
