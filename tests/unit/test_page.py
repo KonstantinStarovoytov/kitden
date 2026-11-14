@@ -9,6 +9,7 @@ import time
 
 from kitden import page
 from kitden.gateways import data_dir
+from tests.conftest import aged
 
 
 def test_only_one_page_holds_the_lock(tmp_path):
@@ -664,6 +665,7 @@ def test_a_changed_file_also_reads_the_versions(tmp_path):
 
     config = tmp_path / "config.toml"
     config.write_text("a = 1\n")
+    aged(config)  # written before watching: never reported
     app = create_app(
         lambda: Inventory(),
         token="tok",
