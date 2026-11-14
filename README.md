@@ -102,7 +102,8 @@ Needs **macOS or Linux**, [uv](https://docs.astral.sh/uv/getting-started/install
 least one of **Claude Code, Codex or Cursor**. On Linux, install `libsecret-tools` (Debian,
 Ubuntu) or `libsecret` (Fedora, Arch) so Kitden can keep server secrets in your keyring.
 
-See what your agents load and whether your skills fit, without installing. It only reads:
+See what your agents load and whether your skills fit, without installing. It changes none of
+their settings:
 
 ```bash
 uvx --python 3.13 kitden scan
