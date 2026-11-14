@@ -1,5 +1,6 @@
-# Once a day the Python tests run on the newest versions of the dependencies. People who
-# install Kitden get those versions, not the ones in uv.lock, so a break shows here first.
+# What: once a day, runs the Python tests on the newest versions of the dependencies.
+# Why: people who install Kitden get those versions, not the ones in uv.lock, so a break shows
+# here first.
 name: Newest dependencies
 
 on:

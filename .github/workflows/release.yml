@@ -1,8 +1,13 @@
-# Checks on every push to main and every pull request, including kitden-sdlc's release check
-# of the names and descriptions in listing.toml. A push to main whose version has release notes
-# and no tag yet is tagged. A tag v<version> also builds the package, publishes it to PyPI,
-# creates a GitHub release with the built files and docs/releases/v<version>.md as its notes,
-# then updates the other stores through kitden-sdlc's publish workflow.
+# What: runs the checks on every push to main and every pull request. A tag v<version> also
+# builds Kitden and publishes it to PyPI, GitHub and the other stores.
+# Why: nothing unchecked reaches main, and every release is published the same way, with no
+# manual steps.
+#
+# The checks include kitden-sdlc's release check of the names and descriptions in listing.toml.
+# A push to main whose version has release notes and no tag yet is tagged. A tag v<version>
+# builds the package, publishes it to PyPI, creates a GitHub release with the built files and
+# docs/releases/v<version>.md as its notes, then updates the other stores through kitden-sdlc's
+# publish workflow.
 name: Checks and release
 
 on:
