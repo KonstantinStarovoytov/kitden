@@ -7,6 +7,7 @@ import shlex
 import shutil
 import sqlite3
 import sys
+import time
 from contextlib import closing
 from pathlib import Path
 
@@ -22,6 +23,22 @@ def _never_the_real_home(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("real-home")))
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _watch_by_polling(monkeypatch):
+    """The file watcher checks the folders itself in tests instead of asking macOS. On a busy
+    Mac, macOS can report a change 10 to 40 seconds late, and a write made before watching
+    as a new change, so the tests timed out or saw a change twice."""
+    monkeypatch.setenv("WATCHFILES_FORCE_POLLING", "1")
+
+
+def aged(path: Path) -> Path:
+    """Date a file 10 seconds back. The polling watcher only sees a change when a file's time
+    moves to a new second, so a file written just before watching must look older."""
+    then = time.time() - 10
+    os.utime(path, (then, then))
+    return path
 
 
 @pytest.fixture

@@ -5,6 +5,7 @@ from starlette.testclient import TestClient
 
 from kitden.views.inventory import Inventory
 from kitden.web.app import Broadcaster, State, create_app, event_lines
+from tests.conftest import aged
 
 ORIGIN = "http://127.0.0.1:47800"
 
@@ -63,7 +64,7 @@ def test_event_stream_sends_heartbeats_when_idle():
 def test_a_changed_file_triggers_a_rescan(tmp_path):
     config = tmp_path / "config.toml"
     config.write_text("a = 1\n")
-    time.sleep(1)
+    aged(config)
     builds = []
 
     def build():
