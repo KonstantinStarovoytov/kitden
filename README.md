@@ -6,10 +6,10 @@
   </picture>
 </h1>
 
-<p align="center"><strong>Your AI coding tools, under one roof.</strong></p>
+<p align="center"><strong>See what Claude Code, Codex and Cursor actually load, and which skills got cut.</strong></p>
 
-<p align="center">See and share the MCP servers, plugins and skills<br>
-that <b>Claude Code, Codex and Cursor</b> load.</p>
+<p align="center">One local page for their MCP servers, plugins, skills and instruction files.<br>
+It changes nothing until you press Apply, and every change can be undone.</p>
 
 <p align="center">
   <a href="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml"><img src="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml/badge.svg?branch=main" alt="Checks on main"></a>
@@ -17,18 +17,6 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <a href="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden"><img src="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden/badges/score.svg" alt="Kitden on Glama"></a>
 </p>
-
-### Everything your agents load, on one map
-
-Claude Code, Codex and Cursor each keep their own settings. Kitden puts their plugins, skills,
-MCP servers and instruction files on one map, so what one agent has and another lacks shows
-at a glance. Add what an agent is missing, turn an item off or remove it, on the same page.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/library-dark.png">
-  <source srcset="docs/images/readme/library-light.png">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/library-light.png" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
-</picture>
 
 ### See whether your skills fit
 
@@ -45,7 +33,19 @@ what it sends.
   <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/context-light.png" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Two boxes list the sixteen skills whose description was sent and the four sent by name only.">
 </picture>
 
-### Find and add from one place
+### Everything your agents load, on one map
+
+Claude Code, Codex and Cursor each keep their own settings. Kitden puts their plugins, skills,
+MCP servers and instruction files on one map, so what one agent has and another lacks shows
+at a glance. Add what an agent is missing, turn an item off or remove it, on the same page.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/library-dark.png">
+  <source srcset="docs/images/readme/library-light.png">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/library-light.png" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
+</picture>
+
+### Add what is missing
 
 Search the official MCP Registry, skills.sh, the Claude plugins marketplace and any public
 GitHub repository without leaving the page. Tick the agents a plugin or skill goes to. An MCP
@@ -81,6 +81,8 @@ refused, not just hidden. A token or sign-in is given once and checked before Ap
 - **Secrets live in the macOS Keychain or your Linux keyring only.** The page shows no more
   than their first and last characters.
 - **Kitden's agent tools only read.** Asking an agent to show your setup changes nothing.
+- **Leaving is easy.** Plugins and skills you add live in each agent's own settings, and a server
+  in the gateway moves back out. [How to stop using Kitden](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md#stop-using-kitden).
 
 Add only servers and plugins you trust: they run with your permissions.
 
@@ -100,7 +102,13 @@ Needs **macOS or Linux**, [uv](https://docs.astral.sh/uv/getting-started/install
 least one of **Claude Code, Codex or Cursor**. On Linux, install `libsecret-tools` (Debian,
 Ubuntu) or `libsecret` (Fedora, Arch) so Kitden can keep server secrets in your keyring.
 
-Try it on a sample first. Your own settings are not read or changed:
+See what your agents load and whether your skills fit, without installing. It only reads:
+
+```bash
+uvx --python 3.13 kitden scan
+```
+
+Or try the page on a sample. Your own settings are not read or changed:
 
 <!-- Release checklist: docs/readme-media.md -->
 ```bash

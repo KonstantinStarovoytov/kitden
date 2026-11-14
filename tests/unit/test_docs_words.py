@@ -29,9 +29,9 @@ def test_docs_promise_no_undo_they_cannot_keep():
 
 def test_readme_is_short_and_the_guide_names_the_page_words():
     text = (ROOT / "README.md").read_text()
-    # The README has five parts, the other features and two commands; the details live in the
-    # guide (2026-11-10).
-    assert len(text.splitlines()) <= 125
+    # The README has five parts, the other features and three commands; the details live in the
+    # guide (2026-11-14: `kitden scan` came first, so the limit went from 125 to 135).
+    assert len(text.splitlines()) <= 135
     assert "docs/images/readme/context-light.png" in text
     assert "docs/guide.md" in text
     guide = " ".join((ROOT / "docs/guide.md").read_text().split())
@@ -104,12 +104,14 @@ def test_the_readme_names_no_old_review():
     assert "review.jpg" not in readme
 
 
-def test_the_readme_has_four_parts_and_three_pictures_in_both_themes():
+def test_the_readme_has_five_parts_and_three_pictures_in_both_themes():
     readme = (ROOT / "README.md").read_text()
-    # See it all, find and add, the gateway, and why it is safe, in this order (2026-11-05).
+    # Whether skills fit, see it all, add what is missing, the gateway, and why it is safe, in
+    # this order: what Kitden shows comes before what it changes (2026-11-14).
     parts = (
+        "See whether your skills fit",
         "Everything your agents load, on one map",
-        "Find and add from one place",
+        "Add what is missing",
         "One gateway for your MCP servers",
         "Every change can be undone",
     )

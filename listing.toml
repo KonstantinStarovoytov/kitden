@@ -4,14 +4,14 @@
 
 # pyproject.toml `description` (PyPI: one line), server.json `description` (MCP Registry: at
 # most 100 characters) and the GitHub repository description (set by hand).
-short = "See and safely change what Claude Code, Codex and Cursor load: MCP servers, plugins, skills, hooks"
+short = "See what Claude Code, Codex and Cursor actually load, and which skills got cut"
 
 # Homebrew `desc`, set by the tap's bump PR: at most 80 characters, no period at the end, no
 # "A", "An" or "The" at the start, and not the name "Kitden".
-brew = "See and safely change what Claude Code, Codex and Cursor load"
+brew = "See what Claude Code, Codex and Cursor load, and which skills got cut"
 
 # The top `description` in .claude-plugin/marketplace.json.
-tagline = "See what your coding agents load. Change it with confidence."
+tagline = "See what your coding agents actually load, and which skills got cut."
 
 # `description` in both plugin.json files and in the marketplace's plugin entry.
 plugin = "Ask what your coding agents load and whether your skills fit. Uses the Kitden program and offers to install it."

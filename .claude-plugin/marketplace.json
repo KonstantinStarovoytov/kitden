@@ -1,6 +1,6 @@
 {
   "name": "kitden",
-  "description": "See what your coding agents load. Change it with confidence.",
+  "description": "See what your coding agents actually load, and which skills got cut.",
   "owner": { "name": "Konstantin Starovoytov" },
   "plugins": [
     {
