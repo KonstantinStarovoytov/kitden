@@ -260,6 +260,9 @@ artifact `scenes`.
 Once a day the tests also run on the newest versions of the dependencies
 (`.github/workflows/latest-deps.yml`): people who install Kitden get those, not the ones in
 `uv.lock`. When that run fails, GitHub sends an email.
+Every night the tests also run on four systems and two Pythons
+(`.github/workflows/nightly.yml`): macOS on ARM and on Intel, Ubuntu on x64 and on ARM, each
+with Python 3.13 and 3.14.
 `README.md` is also the PyPI page. [README media](readme-media.md) says how its pictures are
 made, how their addresses work on GitHub and PyPI, and what to check before promoting a release.
 

@@ -1,0 +1,96 @@
+# What: every night, runs the tests where a pull request does not: on four systems and two
+# Pythons.
+# Why: the maintainer has one Mac. A break on Linux on ARM, an Intel Mac or Python 3.13 must
+# show here first, not at a user.
+#
+# No job here is a check on pull requests, and none holds a secret. A red job shows as one
+# `ci-failure` issue, opened by the desk in kitden-sdlc and closed when the job is green again.
+name: Nightly tests
+
+on:
+  schedule:
+    - cron: "37 2 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  systems:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel, ubuntu-latest, ubuntu-24.04-arm]
+        python: ["3.13", "3.14"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.10"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "25"
+          package-manager-cache: false
+      - run: uv sync --locked
+      # UV_PYTHON wins over .python-version; stop if it did not.
+      - name: The tests use the Python of this run
+        env:
+          WANTED: ${{ matrix.python }}
+        run: |
+          got="$(uv run python -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+          echo "Python $got"
+          test "$got" = "$WANTED"
+      # Linux keeps server secrets in the desktop keyring through secret-tool.
+      - name: A keyring on the session bus (Ubuntu)
+        if: runner.os == 'Linux'
+        # When the Ubuntu mirrors are down, fail in minutes, not in half an hour.
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update -q -o Acquire::Retries=3
+          sudo apt-get install -yq -o Acquire::Retries=3 libsecret-tools gnome-keyring dbus
+      # No coverage floor here: that is the pull requests' job.
+      - run: uv run pytest -q
+      # One real round trip through secret-tool, with the bus where a desktop session has it
+      # ($XDG_RUNTIME_DIR/bus). The keyring is unlocked with a throwaway password; secret-tool
+      # runs once by itself first, so a broken keyring shows its own error, not Kitden's.
+      - name: The real keyring (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_RUNTIME_DIR
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          dbus-daemon --session --address="$DBUS_SESSION_BUS_ADDRESS" --fork
+          printf 'kitden-ci' | gnome-keyring-daemon --unlock --components=secrets
+          sleep 1
+          dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus.ListNames | grep -q org.freedesktop.secrets
+          printf 'ci' | secret-tool store --label=ci service kitden-ci account smoke
+          test "$(secret-tool lookup service kitden-ci account smoke)" = ci
+          secret-tool clear service kitden-ci account smoke
+          KITDEN_REAL_KEYRING=1 uv run pytest -q tests/unit/test_real_keyring.py -rs
+      # The page's own tests, in Node with a stand-in DOM.
+      - run: node --test tests/frontend/*.test.mjs
+      # The page opens within its time budgets (docs/development.md, Speed).
+      - run: uv run python scripts/measure-start.py
+      # The tests in tests/set-aside.txt fail by chance; run them to see if they still do.
+      # This step never turns the job red.
+      - name: Tests set aside
+        continue-on-error: true
+        run: |
+          if ! grep -qv -e '^[[:space:]]*$' -e '^#' tests/set-aside.txt; then
+            echo "No test is set aside."
+            exit 0
+          fi
+          uv run pytest -q --set-aside=only | tee set-aside.log || true
+          tail -n 1 set-aside.log >> "$GITHUB_STEP_SUMMARY"
