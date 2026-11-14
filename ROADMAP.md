@@ -7,7 +7,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
-### Not yet released
+### 0.9.2
 
 - **`kitden scan` says exactly what it left alone:** its last line is now "Your agents'
   settings were not changed: scan only reads them." Scan keeps one file of its own, the

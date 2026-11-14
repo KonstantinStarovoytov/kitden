@@ -21,6 +21,9 @@ nothing from it.
 - Secrets you type or sign in with are kept in the macOS Keychain or the Linux keyring only.
   The page shows no more than their first and last characters.
 - Backups of changed files stay in Kitden's own data folder.
+- The versions Kitden finds for each client are kept in one small file, `versions.json`, in
+  Kitden's own data folder. The page and `kitden scan` write it. `kitden scan` changes no
+  client settings.
 
 ## When Kitden goes online
 
