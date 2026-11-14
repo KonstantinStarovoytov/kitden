@@ -7,18 +7,16 @@ recorded, and removes everything again. The real home folder is never touched.
 
 import json
 import os
-import shutil
 import subprocess
 import tomllib
 from pathlib import Path
 
 import pytest
 
-from kitden.changes.client_cli import find_command
 from kitden.views.inventory import build_inventory
 from kitden.views.setup_server import setup_server_state
 from tests.conftest import make_home
-from tests.contract.test_mcp_handshake import CODEX_APP
+from tests.contract.conftest import need_command
 
 pytestmark = pytest.mark.contract
 ROOT = Path(__file__).resolve().parents[2]
@@ -51,9 +49,7 @@ def _state(home: Path, client: str) -> str:
 
 
 def test_claude_code_installs_the_plugin_from_the_repository(home):
-    claude = find_command("claude", home)
-    if claude is None:
-        pytest.skip("needs the claude command")
+    claude = need_command("claude", home)
     settings = home / ".claude/settings.json"
     before = json.loads(settings.read_text())
     _run(claude, ["plugin", "validate", "--strict", "./plugins/kitden"], home)
@@ -81,9 +77,7 @@ def test_claude_code_installs_the_plugin_from_the_repository(home):
 
 
 def test_codex_installs_the_plugin_from_the_repository(home):
-    codex = shutil.which("codex") or (CODEX_APP if os.path.exists(CODEX_APP) else None)
-    if codex is None:
-        pytest.skip("needs the codex command")
+    codex = need_command("codex", home)
     env = {"CODEX_HOME": str(home / ".codex")}
     config = home / ".codex/config.toml"
     before = tomllib.loads(config.read_text())

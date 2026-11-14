@@ -114,28 +114,50 @@ def _words(args) -> list[str]:
     return [w for word in words for w in _words(word)]
 
 
+def refused(words: list[str], home: str | None, sandbox: Path, contract: bool) -> str | None:
+    """Why a test must not run this command, or None. A program inside the sandbox may run.
+    The Keychain never may. A real client may run only in a contract test, and only with a
+    HOME inside the sandbox."""
+    sandbox = sandbox.resolve()
+    for word in words:
+        path = Path(word).resolve() if Path(word).is_absolute() else Path(word)
+        if path.is_relative_to(sandbox):
+            continue
+        if path.name.lower() in KEYCHAIN_BINARIES:
+            return f"a test tried to run the real Keychain: {word}"
+        if path.name.lower() in CLIENT_BINARIES:
+            if not contract:
+                return f"a test tried to run a real client: {word}"
+            if home is None or not Path(home).resolve().is_relative_to(sandbox):
+                return f"a contract test tried to run {word} outside the sandbox, with HOME={home}"
+    return None
+
+
 @pytest.fixture(autouse=True)
-def _no_client_commands(tmp_path_factory, monkeypatch):
-    """No test finds or runs a real client; a test that needs one uses a fake in its tmp folder."""
+def _no_client_commands(request, tmp_path_factory, monkeypatch):
+    """No test runs a real client: a test that needs one uses a fake in its tmp folder. Only a
+    contract test may find and run a real client, with HOME in the sandbox."""
     import subprocess
 
     from kitden.clients import codex, version_cache
 
-    monkeypatch.setattr(version_cache, "version_command", lambda client: None)
-    monkeypatch.setattr(codex, "version_command", lambda client: None)
-    monkeypatch.setattr(codex, "_LIST_CACHE", {})
+    contract = request.node.get_closest_marker("contract") is not None
+    if not contract:
+        monkeypatch.setattr(version_cache, "version_command", lambda client: None)
+        monkeypatch.setattr(codex, "version_command", lambda client: None)
+        monkeypatch.setattr(codex, "_LIST_CACHE", {})
     sandbox = tmp_path_factory.getbasetemp().resolve()
 
     class Guarded(subprocess.Popen):
         def __init__(self, args, *rest, **options):
-            for word in _words(args):
-                path = Path(word).resolve() if Path(word).is_absolute() else Path(word)
-                if path.is_relative_to(sandbox):
-                    continue
-                if path.name.lower() in CLIENT_BINARIES:
-                    raise AssertionError(f"a test tried to run a real client: {word}")
-                if path.name.lower() in KEYCHAIN_BINARIES and not REAL_KEYRING:
-                    raise AssertionError(f"a test tried to run the real Keychain: {word}")
+            words = _words(args)
+            if REAL_KEYRING:
+                words = [w for w in words if Path(w).name.lower() not in KEYCHAIN_BINARIES]
+            env = options.get("env")
+            home = (os.environ if env is None else env).get("HOME")
+            message = refused(words, home, sandbox, contract)
+            if message:
+                raise AssertionError(message)
             super().__init__(args, *rest, **options)
 
     monkeypatch.setattr(subprocess, "Popen", Guarded)
