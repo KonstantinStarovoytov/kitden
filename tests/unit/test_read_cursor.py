@@ -1,4 +1,9 @@
-from kitden.clients.cursor import INSTALLED_PREFIX, REACTIVE_KEY, CursorAdapter
+import os
+from pathlib import Path
+
+from kitden.clients.claude_code import ClaudeCodeAdapter
+from kitden.clients.codex import CodexAdapter
+from kitden.clients.cursor import INSTALLED_PREFIX, MAX_SKILL_DEPTH, REACTIVE_KEY, CursorAdapter
 from kitden.model import ItemKind, Scope, SourceKind, UnknownReason
 from tests.conftest import (
     all_text,
@@ -249,3 +254,134 @@ def test_cursor_state_is_read_from_the_linux_config_folder(system, tmp_path, no_
     assert cursor_db(home).exists()
     assert not (home / "Library").exists()
     assert rows(scan.items, home) >= OWN
+
+
+def _write_skill(folder: Path, body: str = "# Skill\n") -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    skill_md = folder / "SKILL.md"
+    skill_md.write_text(body)
+    return skill_md
+
+
+def _skill_names(scan) -> set[str]:
+    return {i.name for i in scan.items if i.kind is ItemKind.SKILL}
+
+
+def test_skills_in_category_subfolders_are_listed_with_their_own_names(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    _write_skill(home / ".cursor/skills/shipping/land-it")
+    _write_skill(home / ".cursor/skills/tdd")
+    _write_skill(
+        home / ".cursor/skills/release/cut-tag",
+        "---\nname: release-tag\ndisable-model-invocation: true\n---\n",
+    )
+    _write_skill(home / ".agents/skills/ops/deploy")
+    _write_skill(home / ".claude/skills/team/review")
+    _write_skill(home / ".codex/skills/team/triage")
+    _write_skill(home / "work/site/.cursor/skills/frontend/polish")
+    write_cursor_fixture_state(home)
+
+    adapter = CursorAdapter(home, read_version=no_version)
+    scan = adapter.scan()
+    names = _skill_names(scan)
+    assert {"land-it", "tdd", "release-tag", "deploy", "review", "triage", "polish"} <= names
+    assert not ({"shipping", "release", "ops", "team", "frontend"} & names)
+
+    by_name = {i.name: i for i in scan.items if i.kind is ItemKind.SKILL}
+    assert by_name["release-tag"].skill_state == "only-asked"
+    assert (by_name["land-it"].source.owner_client, by_name["land-it"].source.kind) == (
+        "cursor",
+        SourceKind.FOLDER,
+    )
+    assert adapter.item_actions(by_name["land-it"]) == ("skill.remove",)
+    assert (by_name["deploy"].source.owner_client, by_name["deploy"].source.kind) == (
+        "shared",
+        SourceKind.FOLDER,
+    )
+    assert (by_name["review"].source.owner_client, by_name["review"].source.kind) == (
+        "claude_code",
+        SourceKind.OTHER_CLIENT_FOLDER,
+    )
+    assert (by_name["triage"].source.owner_client, by_name["triage"].source.kind) == (
+        "codex",
+        SourceKind.OTHER_CLIENT_FOLDER,
+    )
+    assert (by_name["polish"].scope, by_name["polish"].project) == (
+        Scope.PROJECT,
+        str(home / "work/site"),
+    )
+
+    cursor_db(home).unlink()
+    write_cursor_state(
+        home, {**cursor_state_rows(home), REACTIVE_KEY: {"thirdPartyExtensibilityEnabled": False}}
+    )
+    without_third = _skill_names(CursorAdapter(home, read_version=no_version).scan())
+    assert {"land-it", "tdd", "release-tag", "deploy", "polish"} <= without_third
+    assert not ({"review", "triage"} & without_third)
+
+
+def test_a_skill_folder_is_not_searched_for_more_skills_inside_it(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    _write_skill(home / ".cursor/skills/a")
+    _write_skill(home / ".cursor/skills/a/b")
+    write_cursor_fixture_state(home)
+
+    names = _skill_names(CursorAdapter(home, read_version=no_version).scan())
+    assert "a" in names and "b" not in names
+
+
+def test_hidden_folders_and_skills_past_four_levels_are_skipped(tmp_path, no_version):
+    assert MAX_SKILL_DEPTH == 4
+    home = make_home(tmp_path, FIXTURE)
+    _write_skill(home / ".cursor/skills/.trash/old")
+    _write_skill(home / ".cursor/skills/shipping/.hidden/old-two")
+    _write_skill(home / ".cursor/skills/l1/l2/l3/four-deep")
+    _write_skill(home / ".cursor/skills/d1/d2/d3/d4/five-deep")
+    write_cursor_fixture_state(home)
+
+    names = _skill_names(CursorAdapter(home, read_version=no_version).scan())
+    assert "four-deep" in names
+    assert not ({"old", "old-two", "five-deep", "l1", "d1"} & names)
+
+
+def test_symlinked_category_is_not_entered_and_symlinked_skill_keeps_its_link(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    elsewhere = tmp_path / "elsewhere"
+    _write_skill(elsewhere / "cat/inside")
+    top_md = _write_skill(elsewhere / "top-skill")
+    real_md = _write_skill(elsewhere / "direct-skill")
+    (home / ".cursor/skills").mkdir(parents=True, exist_ok=True)
+    (home / ".cursor/skills/linked-cat").symlink_to(elsewhere / "cat")
+    (home / ".cursor/skills/top-linked").symlink_to(elsewhere / "top-skill")
+    (home / ".cursor/skills/shipping").mkdir()
+    (home / ".cursor/skills/shipping/linked-skill").symlink_to(elsewhere / "direct-skill")
+    (home / ".cursor/skills/shipping/loop").symlink_to(home / ".cursor/skills")
+    write_cursor_fixture_state(home)
+
+    adapter = CursorAdapter(home, read_version=no_version)
+    scan = adapter.scan()
+    names = _skill_names(scan)
+    assert "inside" not in names
+    top = next(i for i in scan.items if i.kind is ItemKind.SKILL and i.name == "top-linked")
+    assert top.source.path == os.path.realpath(top_md)
+    assert top.source.link_path == str(home / ".cursor/skills/top-linked")
+    assert adapter.item_actions(top) == ()
+    linked = next(i for i in scan.items if i.kind is ItemKind.SKILL and i.name == "linked-skill")
+    assert linked.source.path == os.path.realpath(real_md)
+    assert linked.source.link_path == str(home / ".cursor/skills/shipping/linked-skill")
+    assert adapter.item_actions(linked) == ()
+
+
+def test_nested_skill_folders_do_not_change_claude_code_or_codex_skill_lists(tmp_path, no_version):
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
+    claude_before = _skill_names(ClaudeCodeAdapter(home, read_version=no_version).scan())
+    codex_before = _skill_names(CodexAdapter(home, read_version=no_version).scan())
+
+    _write_skill(home / ".claude/skills/shipping/land-it")
+    _write_skill(home / "work/website/.claude/skills/shipping/web-land")
+    _write_skill(home / ".agents/skills/shipping/ship-agent")
+    _write_skill(home / ".codex/skills/shipping/ship-codex")
+    _write_skill(home / "work/api/.agents/skills/shipping/api-ship")
+
+    assert _skill_names(ClaudeCodeAdapter(home, read_version=no_version).scan()) == claude_before
+    assert _skill_names(CodexAdapter(home, read_version=no_version).scan()) == codex_before

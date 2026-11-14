@@ -7,6 +7,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **Cursor skills in sub-folders:** skills inside category sub-folders of `.cursor/skills` and
+  the other skill folders Cursor reads now show in Kitden, and removing one deletes only that
+  skill's folder (#104).
+
 ### 0.9.2
 
 - **`kitden scan` says exactly what it left alone:** its last line is now "Your agents'

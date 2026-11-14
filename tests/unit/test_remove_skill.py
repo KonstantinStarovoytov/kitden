@@ -174,3 +174,24 @@ def test_a_project_skill_removal_names_the_project(client):
     assert (
         client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()["state"] == "undone"
     )
+
+
+def test_removing_a_nested_cursor_skill_keeps_its_category_folder(client):
+    category = client.home / ".cursor/skills/shipping"
+    skill_dir = category / "land-it"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: land-it\n---\n")
+    before = digest(skill_dir)
+    client.post("/api/rescan", headers=POST)
+
+    land_it = _skill_item(client, "cursor", "land-it", where=str(skill_dir))
+    assert "skill.remove" in land_it["actions"]
+    change = _remove(client, land_it["id"]).json()
+    assert change["steps"][0]["path"] == str(skill_dir)
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "verified", applied.get("error")
+    assert not skill_dir.exists() and category.is_dir()
+
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone", undone.get("error")
+    assert digest(skill_dir) == before
