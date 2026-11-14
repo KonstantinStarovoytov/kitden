@@ -78,9 +78,11 @@ says it is back.
 uvx --python 3.13 kitden scan
 ```
 
-Kitden is not installed and no page opens. `scan` only reads your agents' settings. It prints
-what each agent loads and, for Claude Code and Codex, whether the skill list fit in your last
-chat. `kitden scan --json` prints everything the page shows.
+Kitden is not installed and no page opens. `scan` changes nothing. It reads your agents'
+settings and, for the folder you run it in, what they sent in your last chat. It prints what each
+agent loads and, for Claude Code and Codex, whether the skill list fit in that chat. When Kitden
+cannot tell (Cursor, or no chat yet), the line says why. `kitden scan --json` prints everything
+the page shows.
 
 ## Try the sample
 
@@ -173,5 +175,6 @@ The plain link is `cursor://anysphere.cursor-deeplink/mcp/install?name=kitden&co
 
 ## Report a bug
 
-Include your Kitden and client versions, steps to reproduce it, and what you expected. Remove
-secrets and private paths from screenshots and logs. See [Contributing](../CONTRIBUTING.md).
+On GitHub, choose **New issue**, then the **Bug** form. It asks for your Kitden and client
+versions, the steps to reproduce it, and what you expected. Remove secrets and private paths
+from screenshots and logs. See [Contributing](../CONTRIBUTING.md).
