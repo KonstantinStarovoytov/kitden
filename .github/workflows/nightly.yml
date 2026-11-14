@@ -19,6 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # No `name:` on purpose: kitden-sdlc reads the runs as `systems (<os>, <python>)`.
   systems:
     strategy:
       fail-fast: false
