@@ -72,6 +72,16 @@ If Undo would overwrite newer edits, Kitden stops. Changes also offers **Redo…
 If an app such as Pen writes a removed server back, the review warns you first and Changes
 says it is back.
 
+## Look first, from the terminal
+
+```bash
+uvx --python 3.13 kitden scan
+```
+
+Kitden is not installed and no page opens. `scan` only reads your agents' settings. It prints
+what each agent loads and, for Claude Code and Codex, whether the skill list fit in your last
+chat. `kitden scan --json` prints everything the page shows.
+
 ## Try the sample
 
 ```bash
@@ -120,6 +130,20 @@ brew install konstantinstarovoytov/tap/kitden
 
 To update, use the Update button on the page, or run `brew upgrade kitden`. Homebrew builds
 Kitden and its dependencies from source, which takes a few minutes the first time.
+
+## Stop using Kitden
+
+What you add with Kitden lives in each agent's own settings, in that agent's own format.
+Plugins, skills and servers outside the gateway keep working without Kitden.
+
+1. Open **Gateway** and drag each server out of the Kitden gateway onto the agents that
+   should have it. Review and **Apply**. **Changes → Undo** of the move does the same.
+2. Remove the `kitden` server from each agent's MCP settings, as you would any MCP server.
+3. Uninstall: `uv tool uninstall kitden` or `brew uninstall kitden`. The plugin has its own
+   [uninstall commands](../plugins/kitden/README.md).
+
+Kitden's own data folder, with its backups, stays until you delete it:
+`~/Library/Application Support/kitden` on macOS, `~/.local/share/kitden` on Linux.
 
 ## Privacy and limits
 
