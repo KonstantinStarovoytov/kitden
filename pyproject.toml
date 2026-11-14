@@ -1,6 +1,6 @@
 [project]
 name = "kitden"
-version = "0.9.0"
+version = "0.10.0"
 description = "See what Claude Code, Codex and Cursor actually load, and which skills got cut"
 readme = "README.md"
 requires-python = ">=3.13"
