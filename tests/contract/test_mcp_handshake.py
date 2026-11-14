@@ -19,7 +19,7 @@ from kitden.command import installed_command
 from kitden.model import ChangeState
 from kitden.views.inventory import default_adapters
 from tests.conftest import make_home
-from tests.contract.conftest import need_command
+from tests.contract.conftest import need_command, need_kitden
 
 pytestmark = [pytest.mark.contract, pytest.mark.anyio]
 
@@ -33,8 +33,7 @@ def anyio_backend():
 def home(tmp_path, monkeypatch):
     need_command("codex", tmp_path)
     need_command("claude", tmp_path)
-    if installed_command() is None:
-        pytest.skip("needs the kitden command")
+    need_kitden()
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
     return make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")

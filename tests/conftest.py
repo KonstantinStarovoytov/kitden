@@ -8,6 +8,7 @@ import shutil
 import sqlite3
 import sys
 import time
+from collections.abc import Mapping
 from contextlib import closing
 from pathlib import Path
 
@@ -133,6 +134,13 @@ def refused(words: list[str], home: str | None, sandbox: Path, contract: bool) -
     return None
 
 
+def client_homes(env: Mapping[str, str]) -> list[str | None]:
+    """Every folder a client could take as its home: HOME, then Claude Code's and Codex's own."""
+    homes: list[str | None] = [env.get("HOME")]
+    homes += [env[name] for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME") if name in env]
+    return homes
+
+
 @pytest.fixture(autouse=True)
 def _no_client_commands(request, tmp_path_factory, monkeypatch):
     """No test runs a real client: a test that needs one uses a fake in its tmp folder. Only a
@@ -154,10 +162,10 @@ def _no_client_commands(request, tmp_path_factory, monkeypatch):
             if REAL_KEYRING:
                 words = [w for w in words if Path(w).name.lower() not in KEYCHAIN_BINARIES]
             env = options.get("env")
-            home = (os.environ if env is None else env).get("HOME")
-            message = refused(words, home, sandbox, contract)
-            if message:
-                raise AssertionError(message)
+            for home in client_homes(os.environ if env is None else env):
+                message = refused(words, home, sandbox, contract)
+                if message:
+                    raise AssertionError(message)
             super().__init__(args, *rest, **options)
 
     monkeypatch.setattr(subprocess, "Popen", Guarded)
@@ -305,8 +313,10 @@ def all_text(value) -> str:
 
 @pytest.fixture(autouse=True)
 def _no_real_client_homes(monkeypatch):
-    """Tests must never read the real ~/.codex through CODEX_HOME."""
+    """Tests must never reach the real ~/.codex or Claude Code folder through CODEX_HOME or
+    CLAUDE_CONFIG_DIR."""
     monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
 
 
 @pytest.fixture(autouse=True)

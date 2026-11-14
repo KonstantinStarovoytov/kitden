@@ -1,12 +1,13 @@
 """Tests never run a real client: a client binary outside the test folders is refused."""
 
+import os
 import subprocess
 
 import pytest
 
 from kitden.clients import codex, version_cache
-from tests.conftest import fake_client_command, refused
-from tests.contract.conftest import need_command
+from tests.conftest import client_homes, fake_client_command, refused
+from tests.contract.conftest import need_command, need_kitden
 
 
 def test_a_real_client_binary_is_refused_in_tests():
@@ -73,9 +74,33 @@ def test_any_other_test_is_refused_a_real_client_and_the_keychain(tmp_path):
     assert "real Keychain" in refused(["secret-tool"], str(tmp_path), tmp_path, contract=True)
 
 
+def test_a_client_can_take_three_folders_as_its_home():
+    assert client_homes({"HOME": "/a"}) == ["/a"]
+    assert client_homes({"HOME": "/a", "CODEX_HOME": "/b", "CLAUDE_CONFIG_DIR": "/c"}) == [
+        "/a",
+        "/c",
+        "/b",
+    ]
+    assert client_homes({}) == [None]
+
+
+def test_no_test_inherits_a_real_client_folder(monkeypatch):
+    # The autouse fixtures ran before this body: both variables are gone whatever the shell had.
+    assert "CLAUDE_CONFIG_DIR" not in os.environ and "CODEX_HOME" not in os.environ
+
+
 def test_a_missing_client_skips_the_test_and_fails_it_on_the_nightly(tmp_path, monkeypatch):
     with pytest.raises(pytest.skip.Exception):
         need_command("no-such-client", tmp_path)
     monkeypatch.setenv("KITDEN_NEED_CLIENTS", "1")
     with pytest.raises(pytest.fail.Exception, match="the nightly must have no-such-client"):
         need_command("no-such-client", tmp_path)
+
+
+def test_a_missing_kitden_command_skips_the_test_and_fails_it_on_the_nightly(monkeypatch):
+    monkeypatch.setattr("tests.contract.conftest.installed_command", lambda: None)
+    with pytest.raises(pytest.skip.Exception):
+        need_kitden()
+    monkeypatch.setenv("KITDEN_NEED_CLIENTS", "1")
+    with pytest.raises(pytest.fail.Exception, match="the nightly must have kitden"):
+        need_kitden()
