@@ -13,10 +13,11 @@ concurrency:
 
 jobs:
   review:
-    # Only with the switch on, only for branches in this repository, never for bots,
+    # Only with both switches on, only for branches in this repository, never for bots,
     # drafts, or pull requests labelled no-agent-review.
     if: >-
       vars.AGENTS_ENABLED == 'true'
+      && vars.REVIEW_LIVE == 'true'
       && github.event.pull_request.head.repo.full_name == github.repository
       && !endsWith(github.actor, '[bot]')
       && !github.event.pull_request.draft
