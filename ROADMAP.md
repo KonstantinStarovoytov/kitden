@@ -11,7 +11,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **`kitden scan` says whether your skills fit:** under each agent it prints one line about its
   skill list, such as "In your last chat on Oct 1, 4 of 20 skills showed only a name", and it
-  ends by saying that nothing was changed.
+  ends by saying that your agents' settings were not changed.
 
 ### 0.9.0
 

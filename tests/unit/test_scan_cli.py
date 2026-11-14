@@ -110,9 +110,9 @@ def test_scan_says_so_when_it_cannot_tell(bare, capsys):
     assert "  Skill list: There is nothing to fit." in lines  # Codex has no skills
 
 
-def test_scan_ends_by_saying_it_changed_nothing(bare, capsys):
+def test_scan_ends_by_saying_the_settings_were_not_changed(bare, capsys):
     before = _snapshot(bare)
     assert _summary(bare, capsys)[-1] == (
-        "Nothing was changed: scan only reads your agents' settings."
+        "Your agents' settings were not changed: scan only reads them."
     )
     assert _snapshot(bare) == before

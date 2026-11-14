@@ -78,9 +78,12 @@ says it is back.
 uvx --python 3.13 kitden scan
 ```
 
-Kitden is not installed and no page opens. `scan` only reads your agents' settings. It prints
-what each agent loads and, for Claude Code and Codex, whether the skill list fit in your last
-chat. `kitden scan --json` prints everything the page shows.
+Kitden is not installed and no page opens. `scan` reads your agents' settings and, for the
+folder you run it in, what they sent in your last chat. It changes none of them. It asks each
+agent for its version, and Codex for its plugin list, and keeps the versions in one file in
+Kitden's own data folder. It prints what each agent loads and, for Claude Code and Codex,
+whether the skill list fit in that chat. When Kitden cannot tell (Cursor, or no chat yet), the
+line says why. `kitden scan --json` prints everything the page shows.
 
 ## Try the sample
 
@@ -138,7 +141,8 @@ Plugins, skills and servers outside the gateway keep working without Kitden.
 
 1. Open **Gateway** and drag each server out of the Kitden gateway onto the agents that
    should have it. Review and **Apply**. **Changes → Undo** of the move does the same.
-2. Remove the `kitden` server from each agent's MCP settings, as you would any MCP server.
+2. Still in **Gateway**, open each agent's **Details** and press **Disconnect from the
+   gateway…**. Review and **Apply**. This takes the `kitden` entry out of that agent.
 3. Uninstall: `uv tool uninstall kitden` or `brew uninstall kitden`. The plugin has its own
    [uninstall commands](../plugins/kitden/README.md).
 

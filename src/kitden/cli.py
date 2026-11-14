@@ -301,7 +301,7 @@ def _print_summary(inventory: Inventory, cards: dict[str, dict]) -> None:
             print(f"  Skill list: {fit}")
     for problem in inventory.problems:
         print(f"Could not read {problem.path or problem.owner_client}: {problem.unknown_reason}")
-    print("Nothing was changed: scan only reads your agents' settings.")
+    print("Your agents' settings were not changed: scan only reads them.")
 
 
 def _skill_list(card: dict | None) -> str | None:
