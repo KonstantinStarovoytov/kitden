@@ -6,6 +6,7 @@ writes are minimal JSON edits of `mcp.json`.
 """
 
 import json
+import os
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -31,8 +32,9 @@ from kitden.clients.base import (
     is_own_skill,
     mcp_items,
     project,
-    skill_items,
+    skill_name,
     visible_folders,
+    waits_to_be_asked,
 )
 from kitden.local_gateway.settings import as_dict
 from kitden.model import (
@@ -74,6 +76,43 @@ REACTIVE_KEY = (
 )
 INSTALLED_PREFIX = "cursor.plugins.installedIds."
 SWITCHES = ("thirdPartyExtensibilityEnabled", "importPluginsFromClaudeOnBoot")
+MAX_SKILL_DEPTH = 4
+
+
+def _skills_in(folder: Path, depth: int = MAX_SKILL_DEPTH) -> list[tuple[str, Path, Path | None]]:
+    """Skills in `folder`, sub-folders too, up to `depth` levels down.
+
+    checked 2026-11-14 (https://cursor.com/docs/context/skills, "Nested skill directories"):
+    Cursor reads skills in `.cursor/skills`, `.agents/skills` and, with third-party on,
+    `.claude/skills` and `.codex/skills`, sub-folders too. A folder with a `SKILL.md` is a skill
+    (not searched further); one without is a category. Hidden folders and symlinked category
+    folders are skipped; a symlinked skill folder still counts, with its link.
+    """
+    if depth < 1:
+        return []
+    try:
+        entries = sorted(folder.iterdir()) if folder.is_dir() else []
+    except OSError:
+        return []
+    found: list[tuple[str, Path, Path | None]] = []
+    for entry in entries:
+        if entry.name.startswith("."):
+            continue
+        try:
+            if not entry.is_dir():
+                continue
+            skill_md = entry / "SKILL.md"
+            is_skill = skill_md.is_file()
+            is_link = entry.is_symlink()
+            md_is_link = is_skill and skill_md.is_symlink()
+        except OSError:
+            continue
+        if is_skill:
+            link = entry if is_link or md_is_link else None
+            found.append((skill_name(skill_md), Path(os.path.realpath(skill_md)), link))
+        elif depth > 1 and not is_link:
+            found += _skills_in(entry, depth - 1)
+    return found
 
 
 def _switches(flags: dict) -> tuple[bool, bool]:
@@ -106,7 +145,7 @@ class CursorAdapter(ClientAdapter):
 
     def reads_other_clients(self) -> bool:
         """Include Third-Party Plugins is on (the default): Cursor also reads ~/.claude/skills
-        and ~/.codex/skills, so a skill there reaches Cursor too."""
+        and ~/.codex/skills, sub-folders too, so a skill there reaches Cursor too."""
         _, flags = self._state(Reader(CLIENT))
         return _switches(flags)[0]
 
@@ -373,7 +412,25 @@ class CursorAdapter(ClientAdapter):
             ]
         items = []
         for folder, owner, kind in folders:
-            items += skill_items(CLIENT, folder, scope, owner, kind=kind, project=project_path)
+            for name, real, link in _skills_in(folder):
+                source = Source(
+                    kind=kind,
+                    path=str(real),
+                    owner_client=owner,
+                    link_path=str(link) if link else None,
+                )
+                items.append(
+                    Item(
+                        client=CLIENT,
+                        kind=ItemKind.SKILL,
+                        name=name,
+                        source=source,
+                        scope=scope,
+                        project=project_path,
+                        enabled=Enabled.ON,
+                        skill_state=waits_to_be_asked(CLIENT, real),
+                    )
+                )
         return items
 
     def _instructions(self, workspaces: list[str]) -> list[Item]:
