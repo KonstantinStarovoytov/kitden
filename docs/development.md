@@ -27,6 +27,19 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
 | `src/kitden/web/` | The local page |
 | `plugins/kitden/` | The plugin for Claude Code and Codex |
 
+## Tests that fail by chance
+
+When a test fails by chance, set it aside: add its line to `tests/set-aside.txt`, as pytest
+names it, then two spaces, `#`, the date and the reason:
+
+```text
+tests/unit/test_watch.py::test_x  # 2026-11-20 gave up waiting on macos-15-intel
+```
+
+The normal run leaves it out. It runs only in the nightly run's last step
+(`uv run pytest -q --set-aside=only`), which never fails the job. Delete the line to take the
+test back. The desk shows how many tests are set aside.
+
 ## Commands
 
 | Command | What it does |
