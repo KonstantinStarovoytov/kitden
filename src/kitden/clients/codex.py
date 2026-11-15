@@ -413,7 +413,9 @@ class CodexAdapter(ClientAdapter):
                 )
             )
             scan.items += self._plugin_servers(read, self._plugin_folder(plugin_id), enabled)
-        scan.items += self._cached_plugins(set(configured))
+        cached = self._cached_plugins(set(configured))
+        scan.items += cached
+        installed = set(configured) | {i.name for i in cached}
 
         for name, entry in as_dict(config.get("marketplaces")).items():
             where = marketplace_source(as_dict(entry))
@@ -450,7 +452,7 @@ class CodexAdapter(ClientAdapter):
         for path, settings in as_dict(config.get("projects")).items():
             scan.projects.append(project(path, CLIENT))
             trusted = as_dict(settings).get("trust_level") == "trusted"
-            scan.items += self._project(read, Path(path), trusted, disabled_skills)
+            scan.items += self._project(read, Path(path), trusted, disabled_skills, installed)
             # The user's file lives in codex_home, so a home-folder project's files are its own.
             files = _agents_md(Path(path))
             scan.items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
@@ -458,7 +460,9 @@ class CodexAdapter(ClientAdapter):
         scan.problems = read.problems
         return scan
 
-    def _project(self, read: Reader, root: Path, trusted: bool, off: set[str]) -> list[Item]:
+    def _project(
+        self, read: Reader, root: Path, trusted: bool, off: set[str], installed: set[str]
+    ) -> list[Item]:
         items = []
         layer_path = root / ".codex/config.toml"
         layer = as_dict(read.toml(layer_path))
@@ -479,11 +483,12 @@ class CodexAdapter(ClientAdapter):
         # sandbox home with `codex plugin list --json`): `[plugins."<id>"] enabled` in a trusted
         # project's `.codex/config.toml` turns an installed plugin on or off in that project
         # only. A table without `enabled` leaves the user's choice; an untrusted file does
-        # nothing.
+        # nothing. A table for a plugin the user has not installed (no user table and no cache
+        # folder) loaded nothing, so it gets no row: on/off there would change nothing.
         if trusted:
             for plugin_id, entry in as_dict(layer.get("plugins")).items():
                 value = as_dict(entry).get("enabled")
-                if isinstance(value, bool):
+                if isinstance(value, bool) and plugin_id in installed:
                     items.append(
                         Item(
                             client=CLIENT,

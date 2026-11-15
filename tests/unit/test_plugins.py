@@ -290,3 +290,23 @@ def test_a_codex_project_plugin_row_toggles_its_own_file_and_undo_restores(
     assert (home / ".codex/config.toml").read_bytes() == user_config
     engine.undo(change.id)
     assert config.read_bytes() == original
+
+
+def test_a_codex_project_table_for_a_plugin_not_installed_gives_no_row(home):
+    # Codex 0.167.0, in a sandbox home on 2026-11-15: with no install for the user, a trusted
+    # project's `enabled = true` loaded nothing (`codex plugin list --json` listed no plugin).
+    api = str(home / "work/api")
+    _codex_project_plugins(
+        home,
+        "api",
+        '[plugins."ghost@market"]\nenabled = true\n\n'
+        '[plugins."gmail@openai-curated-remote"]\nenabled = false\n',
+    )
+    inventory = build_inventory(home)
+    rows = {
+        i.name
+        for i in inventory.items
+        if i.client == "codex" and str(i.kind) == "plugin" and i.project == api
+    }
+    assert rows == {"gmail@openai-curated-remote"}
+    assert "ghost@market" not in _codex_view_plugins(home, api)
