@@ -61,6 +61,13 @@ def test_clients_installs_the_newest_and_runs_the_contract_tests_with_no_account
     assert 'KITDEN_NEED_CLIENTS: "1"' in job and 'DISABLE_AUTOUPDATER: "1"' in job
     assert 'uv run pytest -m "contract and not signed_in" -q -rs' in job
     assert "secrets." not in job and "contents: read" in job
+    # A red night keeps the files the clients wrote, to add as a new fixture folder.
+    assert "KITDEN_WRITTEN: ${{ runner.temp }}/written" in _step(job, "The contract tests")
+    upload = _step(job, "Keep the files the clients wrote")
+    assert "actions/upload-artifact@" in upload and "if: failure()" in upload
+    assert "name: written-files-${{ matrix.os }}" in upload
+    assert "path: ${{ runner.temp }}/written" in upload
+    assert "if-no-files-found: ignore" in upload and "retention-days: 7" in upload
     # A client that is missing, or a runner with an account, stops the job with one clear line.
     assert "could not be installed" in job and "must run without one" in job
     # The script in kitden-sdlc reads the runs as `clients (<os>)`.

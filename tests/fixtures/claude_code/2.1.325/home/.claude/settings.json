@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "kitden": {
+      "source": {
+        "source": "directory",
+        "path": "{HOME}/work/kitden"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "kitden@kitden": true
+  }
+}

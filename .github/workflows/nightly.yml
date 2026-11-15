@@ -148,8 +148,20 @@ jobs:
             fi
             echo "$client $version" >> "$GITHUB_STEP_SUMMARY"
           done
-      # A missing client fails these tests here instead of skipping them.
+      # A missing client fails these tests here instead of skipping them. The files the clients
+      # write go to KITDEN_WRITTEN (tests/contract/test_written_files.py).
       - name: The contract tests
         env:
           KITDEN_NEED_CLIENTS: "1"
+          KITDEN_WRITTEN: ${{ runner.temp }}/written
         run: uv run pytest -m "contract and not signed_in" -q -rs
+      # On a red night, keep those files: a new fixture folder is made from them
+      # (tests/fixtures/README.md). They hold no secret: the runner has no account.
+      - name: Keep the files the clients wrote
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: written-files-${{ matrix.os }}
+          path: ${{ runner.temp }}/written
+          if-no-files-found: ignore
+          retention-days: 7

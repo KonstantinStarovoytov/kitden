@@ -24,3 +24,9 @@ Each version folder mirrors the client's real paths under a fake home, for examp
 - No real tokens, keys, passwords, emails or private URLs.
 - Keep each fixture small: only what a test needs.
 - When a client changes its format, add a new version folder; keep the old one.
+
+## A red night
+
+- A red `clients` job in Nightly tests means a client writes a shape no fixture knows.
+- Download the run's `written-files-<os>` artifact: the files the newest clients wrote.
+- Add them as a new version folder (`<client>/<version>/home/`), with every secret a sentinel.
