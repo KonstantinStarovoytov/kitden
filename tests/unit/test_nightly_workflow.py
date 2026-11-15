@@ -52,6 +52,8 @@ def test_systems_runs_four_systems_and_two_pythons():
     assert "if: runner.os == 'macOS'" in keychain
     assert 'chain="$RUNNER_TEMP/kitden-ci.keychain-db"' in keychain
     assert 'security default-keychain -d user -s "$chain"' in keychain
+    # The tests make the same keychain the default of their sandbox HOME, by this name.
+    assert 'KITDEN_CI_KEYCHAIN="$chain"' in keychain
     assert job.index("\n      - run: uv run pytest -q\n") < job.index("The real Keychain (macOS)")
     linux = _step(job, "The real keyring, release checks (Ubuntu)")
     assert "if: runner.os == 'Linux'" in linux

@@ -12,6 +12,8 @@ starts `kitden-ci-`, and a `finally` removes it, also when the test fails halfwa
 import json
 import os
 import subprocess
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -46,6 +48,58 @@ def _the_real_tool(monkeypatch):
     monkeypatch.delenv("KITDEN_SECRET_TOOL", raising=False)
 
 
+def run_tool(args: list[str], what: str) -> subprocess.CompletedProcess:
+    """Run the real tool directly, with Kitden's environment for it. A tool that waits (for a
+    prompt, a keychain it cannot find) fails the test with that said, not a bare timeout."""
+    try:
+        return subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=keychain.TIMEOUT,
+            check=False,
+            env=keychain.tool_env(),
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail(f"{args[0]} did not answer within {keychain.TIMEOUT} s ({what})")
+
+
+def ci_keychain() -> Path:
+    """The keychain the nightly made for this run, from KITDEN_CI_KEYCHAIN. Only a
+    `.keychain-db` file under a temp folder, so never a login keychain."""
+    named = os.environ.get("KITDEN_CI_KEYCHAIN")
+    if not named:
+        pytest.fail("KITDEN_CI_KEYCHAIN is not set: the workflow step names the run's keychain")
+    path = Path(named).resolve()
+    temps = [Path(tempfile.gettempdir()).resolve()]
+    if os.environ.get("RUNNER_TEMP"):
+        temps.append(Path(os.environ["RUNNER_TEMP"]).resolve())
+    if path.suffix != ".keychain-db" or not any(path.is_relative_to(t) for t in temps):
+        pytest.fail(f"KITDEN_CI_KEYCHAIN must be a .keychain-db file under a temp folder: {path}")
+    if not path.is_file():
+        pytest.fail(f"KITDEN_CI_KEYCHAIN names no file: {path}")
+    return path
+
+
+@pytest.fixture(autouse=True)
+def _the_ci_keychain_in_the_sandbox_home(_never_the_real_home, _the_real_tool):
+    """macOS: `security` keeps the user's keychain list and default keychain under HOME, and the
+    tests run with HOME in the sandbox, where there is none: a write then waits for a keychain.
+    So the run's keychain becomes the list and the default of this test's HOME too."""
+    if not MAC:
+        return
+    chain = str(ci_keychain())
+    for args in (
+        ["list-keychains", "-d", "user", "-s", chain],
+        ["default-keychain", "-d", "user", "-s", chain],
+        ["unlock-keychain", "-p", "kitden-ci", chain],
+    ):
+        done = run_tool([keychain.SECURITY, *args], f"security {args[0]}")
+        assert done.returncode == 0, f"security {args[0]}: {done.stderr}"
+    default = run_tool([keychain.SECURITY, "default-keychain", "-d", "user"], "the default")
+    assert Path(chain).name in default.stdout, f"the default keychain is {default.stdout!r}"
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
@@ -70,14 +124,7 @@ def tool_lookup(account: str) -> subprocess.CompletedProcess:
         args = [keychain.SECURITY, "find-generic-password", "-s", "kitden", "-a", account, "-w"]
     else:
         args = [keychain.SECRET_TOOL, "lookup", "service", "kitden", "account", account]
-    return subprocess.run(
-        args,
-        capture_output=True,
-        text=True,
-        timeout=keychain.TIMEOUT,
-        check=False,
-        env=keychain.tool_env(),
-    )
+    return run_tool(args, f"looking up {account}")
 
 
 def found(account: str) -> str | None:
@@ -134,6 +181,20 @@ def test_a_value_with_quotes_and_spaces_comes_back_unchanged():
     _round_trip("QUOTES", 'a "b" \\ c\'d')
 
 
+@mac_only
+def test_an_account_with_a_space_is_quoted_on_the_security_line():
+    """`-a "<account>"` on the `security -i` line keeps a space inside the account."""
+    item = ref("kitden-ci-with space", "TOKEN")
+    remove(item)
+    try:
+        assert keychain.store("kitden-ci-with space", "TOKEN", "SENTINEL_CI_SPACE") == item
+        assert found("kitden-ci-with space/TOKEN") == "SENTINEL_CI_SPACE"
+        assert found("kitden-ci-with") is None
+    finally:
+        remove(item)
+    assert found(item["keychain"]) is None
+
+
 def test_a_value_in_other_alphabets_comes_back_unchanged():
     _round_trip("ALPHABETS", "ключ-héllo-日本")
 
@@ -153,9 +214,14 @@ def _entry() -> dict:
     return {"command": "npx", "args": ["files-mcp"], "env": {"FILES_TOKEN": TOKEN}}
 
 
+def _add(home, server: str) -> None:
+    """Give Claude Code the server. Before the page opens: the page reads the setup once when
+    it opens, and a review names only servers it knows ("Choose a known server.")."""
+    add_claude(home, server, {"type": "stdio", **_entry()})
+
+
 def _move(page, home, server: str) -> str:
     """Review and apply moving `server` from Claude Code into the gateway; the change's id."""
-    add_claude(home, server, {"type": "stdio", **_entry()})
     answer = preview(page, home, ("claude_code", server))
     assert answer.status_code == 200, answer.json()
     change_id = answer.json()["id"]
@@ -176,6 +242,7 @@ def test_a_move_stores_the_token_and_leaves_a_reference(tmp_path):
     item = ref(server, "FILES_TOKEN")
     remove(item)
     home = new_home(tmp_path)
+    _add(home, server)
     try:
         with page_for(home) as page:
             _move(page, home, server)
@@ -191,6 +258,7 @@ def test_undo_of_the_move_removes_the_item(tmp_path):
     item = ref(server, "FILES_TOKEN")
     remove(item)
     home = new_home(tmp_path)
+    _add(home, server)
     try:
         with page_for(home) as page:
             change_id = _move(page, home, server)

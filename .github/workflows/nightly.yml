@@ -98,7 +98,8 @@ jobs:
           KITDEN_REAL_KEYRING=1 uv run pytest -q tests/unit/test_real_secrets.py -rs
       # Release checks 17 to 21 against the real Keychain, never the runner's login one: a
       # keychain for this run in $RUNNER_TEMP, made the default, with a throwaway password and
-      # no lock timeout, so `security` never asks.
+      # no lock timeout, so `security` never asks. The tests run with HOME in a sandbox; they
+      # make this keychain the list and the default there too, from KITDEN_CI_KEYCHAIN.
       - name: The real Keychain (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -108,7 +109,20 @@ jobs:
           security unlock-keychain -p kitden-ci "$chain"
           security list-keychains -d user -s "$chain"
           security default-keychain -d user -s "$chain"
-          KITDEN_REAL_KEYCHAIN=1 uv run pytest -q tests/unit/test_real_secrets.py -rs
+          if ! security default-keychain -d user | grep -q kitden-ci.keychain-db; then
+            echo "::error::the keychain made for this run is not the default one"
+            exit 1
+          fi
+          # TEMPORARY, remove before the pull request: does HOME change what security sees?
+          echo "With the runner's HOME:"
+          security default-keychain -d user || true
+          security list-keychains -d user || true
+          empty="$(mktemp -d)"
+          echo "With HOME=$empty:"
+          HOME="$empty" security default-keychain -d user || true
+          HOME="$empty" security list-keychains -d user || true
+          KITDEN_REAL_KEYCHAIN=1 KITDEN_CI_KEYCHAIN="$chain" \
+            uv run pytest -q tests/unit/test_real_secrets.py -rs
       # The page's own tests, in Node with a stand-in DOM.
       - run: node --test tests/frontend/*.test.mjs
       # The page opens within its time budgets (docs/development.md, Speed).

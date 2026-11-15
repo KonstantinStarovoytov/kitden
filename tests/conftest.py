@@ -94,11 +94,16 @@ def system(monkeypatch):
 
 
 CLIENT_BINARIES = {"claude", "codex", "cursor"}  # compared in lower case, so "Cursor" too
-# Only the nightly sets these: KITDEN_REAL_KEYRING on Ubuntu for tests/unit/test_real_keyring.py
-# and test_real_secrets.py, KITDEN_REAL_KEYCHAIN on macOS, with a keychain made for the run, for
-# test_real_secrets.py. Then tests may run the real `security` or `secret-tool`.
-REAL_KEYRING = (
-    os.environ.get("KITDEN_REAL_KEYRING") == "1" or os.environ.get("KITDEN_REAL_KEYCHAIN") == "1"
+# Only the nightly sets these, each for its own system: KITDEN_REAL_KEYRING on Linux lets tests
+# run the real `secret-tool` (tests/unit/test_real_keyring.py, test_real_secrets.py), and
+# KITDEN_REAL_KEYCHAIN on macOS, with a keychain made for the run, the real `security`
+# (test_real_secrets.py). Judged by the real platform, not KITDEN_SYSTEM.
+REAL_SECRET_TOOLS = (
+    {"secret-tool"}
+    if sys.platform == "linux" and os.environ.get("KITDEN_REAL_KEYRING") == "1"
+    else {"security"}
+    if sys.platform == "darwin" and os.environ.get("KITDEN_REAL_KEYCHAIN") == "1"
+    else set()
 )
 KEYCHAIN_BINARIES = {"security", "secret-tool"}  # the Keychain on macOS, the keyring on Linux
 WRAPPERS = {"env", "sh", "bash", "zsh", "dash"}
@@ -170,8 +175,8 @@ def _no_client_commands(request, tmp_path_factory, monkeypatch):
     class Guarded(subprocess.Popen):
         def __init__(self, args, *rest, **options):
             words = _words(args)
-            if REAL_KEYRING:
-                words = [w for w in words if Path(w).name.lower() not in KEYCHAIN_BINARIES]
+            if REAL_SECRET_TOOLS:
+                words = [w for w in words if Path(w).name.lower() not in REAL_SECRET_TOOLS]
             env = options.get("env")
             for home in client_homes(os.environ if env is None else env):
                 message = refused(words, home, sandbox, contract)
