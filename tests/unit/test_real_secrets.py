@@ -172,7 +172,8 @@ def printed(value: str) -> str:
     return value
 
 
-# Check 21: four facts about `security`, and the same round trips through `secret-tool`.
+# Check 21: facts about `security` (any value comes back whole, a long one is refused), and the
+# same round trips through `secret-tool`.
 
 
 @mac_only
@@ -210,6 +211,16 @@ def _round_trip(key: str, value: str) -> None:
 @mac_only
 def test_a_value_with_quotes_and_spaces_comes_back_unchanged():
     _round_trip("QUOTES", 'a "b" \\ c\'d')
+
+
+def test_a_value_with_a_quote_comes_back_unchanged():
+    """`-g` prints it in quotes, with the hex or without it: Kitden reads either."""
+    _round_trip("QUOTE", 'a"b')
+
+
+def test_a_value_with_a_backslash_comes_back_unchanged():
+    """`-g` prints it as hex, then in quotes with the backslash as `\\134`."""
+    _round_trip("BACKSLASH", "a\\b")
 
 
 @mac_only
@@ -266,7 +277,8 @@ def test_a_4_kb_value_comes_back_unchanged():
             keychain.store("kitden-ci-values", "LONG", value)
         assert str(error.value) == (
             "The secret kitden-ci-values/LONG is too long for the Keychain: 4,096 bytes, and "
-            f"Kitden can store at most {most:,}."
+            f"Kitden can store at most {most:,}. Keep the server in the client's own settings, "
+            "or use a shorter token."
         )
         assert found(item["keychain"]) == "SENTINEL_CI_EARLIER"
     finally:
@@ -291,7 +303,8 @@ def test_one_byte_more_is_refused_and_nothing_is_stored():
             keychain.store("kitden-ci-values", "EDGE", "e" * (most + 1))
         assert str(error.value) == (
             f"The secret kitden-ci-values/EDGE is too long for the Keychain: {most + 1:,} "
-            f"bytes, and Kitden can store at most {most:,}."
+            f"bytes, and Kitden can store at most {most:,}. Keep the server in the client's "
+            "own settings, or use a shorter token."
         )
         assert found(item["keychain"]) is None
     finally:

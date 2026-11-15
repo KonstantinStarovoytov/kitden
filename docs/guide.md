@@ -55,6 +55,8 @@ See [online sources](discovery.md) for formats and limits.
   nothing.
 - **Browser sign-in:** **Sign in** opens the server's page; Kitden catches the answer itself
   and refreshes it later. A server that allows no sign-in for Kitden asks for an API key instead.
+  A sign-in too long for the macOS Keychain is not saved; give the server a token in a header
+  instead, if it takes one.
 - **Not ready yet:** it waits in the preview; Apply writes the rest. **Details** show each secret
   by name, only its first and last characters, with **Replace** and **Remove**.
 

@@ -269,8 +269,14 @@ class KeychainStorage:
             server, _, key = self.ref["keychain"].rpartition("/")
             await anyio.to_thread.run_sync(keychain.store, server, key, secret, self.run)
             self.raw = secret
-        except keychain.KeychainError as error:
+        except keychain.TooLong:
             # `store` writes nothing it refuses, so the sign-in stored before stays.
+            print(
+                f"Kitden could not save the new sign-in of {self.name}: it is too long for the "
+                f"Keychain. Give {self.name} a token in a header instead, if it takes one.",
+                file=sys.stderr,
+            )
+        except keychain.KeychainError as error:
             print(f"Kitden could not save the new sign-in of {self.name}. {error}", file=sys.stderr)
 
     async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:

@@ -172,10 +172,9 @@ def answering(said: str):
         ('password: "0xCAFE"', "0xCAFE"),
         # Quotes and a backslash: the hex, then the value in quotes, the backslash in octal.
         ('password: 0x6120226222205C20632764  "a "b" \\134 c\'d"', 'a "b" \\ c\'d'),
-        # Not seen, read the same: quotes and backslash without the hex, octal or C-style.
-        ('password: "a "b" \\134 c\'d"', 'a "b" \\ c\'d'),
-        ('password: "a \\"b\\" \\\\ c\'d"', 'a "b" \\ c\'d'),
-        ('password: "\\134134"', "\\134"),
+        # A quote alone: printed with the hex or without it (not seen alone), read either way.
+        ('password: "a"b"', 'a"b'),
+        ('password: 0x612262  "a"b"', 'a"b'),
         # Bytes outside printable ASCII: their hex, then the printable ones in quotes.
         ('password: 0x6109620A63  "a\\011b\\012c"', "a\tb\nc"),
         ('password: 0xD0BAD0BB2D68C3A9  "\\320\\272\\320\\273-h\\303\\251"', "кл-hé"),
@@ -185,6 +184,8 @@ def answering(said: str):
         ("password: 0xE697A5E69CAC   ", "日本"),
         ('password: 0xe697a5e69cac  "\\346\\227\\245\\346\\234\\254"', "日本"),
         ('password: 0x41 "A"', "A"),
+        # The hex is the value; the quoted part is never read.
+        ('password: 0x41  "B"', "A"),
     ],
 )
 def test_the_password_line_of_find_g_is_read(said, value):
@@ -201,7 +202,13 @@ def test_the_password_line_of_find_g_is_read(said, value):
         "password:\n",
         "password: SENTINEL\n",  # not quoted
         'password: "a" more\n',
-        'password: "a\\qb"\n',  # an escape it does not know
+        # A backslash with no hex was never seen: whatever it means, it is not trusted.
+        'password: "a "b" \\134 c\'d"\n',
+        'password: "a \\"b\\" \\\\ c\'d"\n',
+        'password: "\\134134"\n',
+        'password: "\\101"\n',
+        'password: "\\\\"\n',
+        'password: "a\\qb"\n',
         'password: "a\\"\n',
         'password: "é"\n',  # a letter that would be in hex
         "password: 0xABC\n",  # half a byte
@@ -220,7 +227,16 @@ def test_a_password_line_it_does_not_know_is_never_a_value(said):
 
 @pytest.mark.parametrize(
     "value",
-    ["ключ-héllo-日本", "日本", "cafe1234", 'a "b" \\ c\'d', "line 1\nline\t2", "\\134"],
+    [
+        "ключ-héllo-日本",
+        "日本",
+        "cafe1234",
+        'a "b" \\ c\'d',
+        'a"b',
+        "a\\b",
+        "line 1\nline\t2",
+        "\\134",
+    ],
 )
 def test_any_value_comes_back_unchanged(fake_keychain, value):
     ref = store("srv", "KEY", value)
@@ -256,7 +272,8 @@ def test_one_byte_more_is_refused_before_security_runs(value, size):
         store("srv", "LONG", value, run=never)
     assert str(error.value) == (
         f"The secret srv/LONG is too long for the Keychain: {size} bytes, and Kitden can "
-        "store at most 1,974."
+        "store at most 1,974. Keep the server in the client's own settings, or use a shorter "
+        "token."
     )
 
 
@@ -276,11 +293,9 @@ def test_a_sign_in_too_long_for_the_keychain_keeps_the_one_there(fake_keychain, 
     tokens = OAuthToken(access_token="SENTINEL_" + "t" * 3000, token_type="Bearer")
     asyncio.run(storage.set_tokens(tokens))
     assert read(ref) == "SENTINEL_EARLIER_SIGN_IN"
-    size = len(oauth.secret_of(tokens, None).encode())
-    most = keychain.longest("signer", "sign-in")
     assert capsys.readouterr().err == (
-        "Kitden could not save the new sign-in of signer. The secret signer/sign-in is too "
-        f"long for the Keychain: {size:,} bytes, and Kitden can store at most {most:,}.\n"
+        "Kitden could not save the new sign-in of signer: it is too long for the Keychain. "
+        "Give signer a token in a header instead, if it takes one.\n"
     )
 
 
@@ -297,6 +312,18 @@ def test_a_sign_in_that_cannot_reach_the_keychain_says_so(capsys):
     assert capsys.readouterr().err == (
         "Kitden could not save the new sign-in of signer. Kitden could not reach the Keychain.\n"
     )
+
+
+def test_bytes_that_are_not_utf_8_on_stdout_do_not_break_a_read(tmp_path, monkeypatch):
+    """`-g` writes the keychain's path on stdout; Kitden reads only stderr there."""
+    tool = tmp_path / "security"
+    tool.write_text(
+        "#!/bin/sh\nprintf 'keychain: \"/x\\377.keychain-db\"\\n'\n"
+        "printf 'password: \"SENTINEL_V\"\\n' >&2\n"
+    )
+    tool.chmod(0o755)
+    monkeypatch.setenv("KITDEN_SECURITY", str(tool))
+    assert read({"keychain": "s/k"}) == "SENTINEL_V"
 
 
 def test_the_runner_returns_stderr_too(fake_keychain):

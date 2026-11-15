@@ -11,10 +11,10 @@ value (`-X` at the end of a line) is a usage error: it exits with 2, also under 
 It prints a value the way the real one did on a GitHub macOS runner (2026-11-15): `-w` prints
 it as it is when every byte is printable ASCII, else as hex. `-g` writes the item's attributes
 on stdout and the password on stderr: `password: "<value>"` for printable ASCII;
-`password: 0x<HEX>  "<bytes>"` when a byte is outside printable ASCII, a quote or a backslash
-(the runner's value had both, so either is taken to do it), with a backslash and the bytes
-outside printable ASCII in octal (`\\134`, `\\320`); `password: 0x<HEX> ` when no byte is
-printable.
+`password: 0x<HEX>  "<bytes>"` when a byte is a backslash or a character that is not printable
+ASCII (the runner's backslash was seen together with a quote; this stand-in takes the backslash
+to bring the hex), with a backslash and the bytes outside printable ASCII in octal (`\\134`,
+`\\320`); `password: 0x<HEX> ` when no byte is printable.
 """
 
 import json
@@ -36,7 +36,7 @@ def password_line(value: str) -> str:
     quoted = "".join(
         chr(byte) if 0x20 <= byte <= 0x7E and byte != 0x5C else f"\\{byte:03o}" for byte in data
     )
-    if printable(data) and not {0x22, 0x5C} & set(data):
+    if printable(data) and 0x5C not in data:
         return f'password: "{quoted}"'
     if not any(0x20 <= byte <= 0x7E for byte in data):
         return f"password: 0x{data.hex().upper()} "

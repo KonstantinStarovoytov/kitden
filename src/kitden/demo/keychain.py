@@ -37,14 +37,15 @@ def _printable(data: bytes) -> bool:
 
 def _password_line(value: str) -> str:
     """The line `find-generic-password -g` writes on stderr: the value in quotes, after its hex
-    when a byte is outside printable ASCII, a quote or a backslash, with a backslash and such
-    bytes in octal; only the hex when no byte is printable."""
+    when a byte is a backslash or a character that is not printable ASCII (a backslash was seen
+    together with a quote), with a backslash and such bytes in octal; only the hex when no byte
+    is printable."""
     data = value.encode()
     quoted = "".join(
         chr(byte) if _printable(bytes([byte])) and byte != 0x5C else f"\\{byte:03o}"
         for byte in data
     )
-    if _printable(data) and not {0x22, 0x5C} & set(data):
+    if _printable(data) and 0x5C not in data:
         return f'password: "{quoted}"\n'
     if not any(_printable(bytes([byte])) for byte in data):
         return f"password: 0x{data.hex().upper()} \n"

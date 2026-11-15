@@ -1151,6 +1151,8 @@ class Engine:
         try:
             for item in created:
                 keychain.read(item.ref, run=self._security())
+        except keychain.Unreadable as error:
+            return self._blocked(change, f"{str(error).removesuffix('.')}; nothing was changed.")
         except KeychainError:
             return self._blocked(
                 change, f"Kitden could not reach the {secret_store_name()}; nothing was changed."
