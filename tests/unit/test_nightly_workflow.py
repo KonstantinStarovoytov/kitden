@@ -81,6 +81,11 @@ def test_browser_runs_the_page_in_chromium():
     assert "runs-on: ubuntu-latest" in job and "contents: read" in job
     assert "playwright==1.64.1" in job and "playwright install --with-deps chromium" in job
     assert "pytest -m browser -q" in job
+    # Without Playwright the browser tests skip and the night looks green: stop first.
+    assert 'uv run --with playwright==1.64.1 python -c "import playwright"' in job
+    assert "timeout-minutes: 5" in _step(job, "Install Chromium")
+    # The header's Why speaks for this job too.
+    assert "nobody presses every button of the page before a release" in " ".join(TEXT.split())
 
 
 def test_pull_requests_keep_the_fast_set():

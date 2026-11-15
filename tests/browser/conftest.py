@@ -21,6 +21,9 @@ from kitden.web.app import create_app  # noqa: E402
 
 START = 47950  # the first port tried; the page takes the first free one from here
 
+# A shared runner can be slow: every expect() waits up to 15 seconds, not Playwright's 5.
+sync_api.expect.set_options(timeout=15_000)
+
 # The sample's Claude Code plugin that is on for every project.
 PLUGIN = "superpowers@demo-market"
 
@@ -34,10 +37,12 @@ class Demo:
 @pytest.fixture(scope="session")
 def browser(tmp_path_factory):
     """One Chromium for all the tests. It starts before any test moves HOME to the sandbox, so
-    Playwright finds the browser it installed; the browser itself gets a sandbox HOME."""
+    Playwright finds the browser it installed; the browser itself gets a sandbox HOME and no
+    XDG_* folders, so it writes nothing of this computer's."""
     browser_home = tmp_path_factory.mktemp("browser-home")
+    env = {key: value for key, value in os.environ.items() if not key.startswith("XDG_")}
     with sync_api.sync_playwright() as playwright:
-        chromium = playwright.chromium.launch(env={**os.environ, "HOME": str(browser_home)})
+        chromium = playwright.chromium.launch(env={**env, "HOME": str(browser_home)})
         yield chromium
         chromium.close()
 
@@ -56,11 +61,18 @@ def demo(tmp_path):
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
+    # A failed bind ends the thread: fail the test then, not when the job's time runs out.
+    deadline = time.monotonic() + 10
     while not server.started:
+        assert thread.is_alive(), f"the page's server stopped before it started (port {port})"
+        assert time.monotonic() < deadline, (
+            f"the page's server did not start in 10 seconds (port {port})"
+        )
         time.sleep(0.05)
     yield Demo(home=home, url=url)
     server.should_exit = True
     thread.join(timeout=10)
+    assert not thread.is_alive(), "the page's server did not stop in 10 seconds"
 
 
 @pytest.fixture
@@ -75,9 +87,9 @@ def page(browser, demo):
     tab.on("pageerror", lambda error: errors.append(str(error)))
     tab.goto(demo.url)
     progress = demo.url.split("?")[0] + "api/progress"
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while not tab.request.get(progress).json()["ready"]:
-        assert time.monotonic() < deadline, "the first scan was not ready in 10 seconds"
+        assert time.monotonic() < deadline, "the first scan was not ready in 30 seconds"
         time.sleep(0.1)
     yield tab
     context.close()

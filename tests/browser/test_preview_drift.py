@@ -2,6 +2,7 @@
 preview stop its Apply; Preview again shows the plugin as it is now, and Cancel writes nothing."""
 
 import json
+import os
 import re
 
 import pytest
@@ -22,10 +23,13 @@ def remove(page, plugin: str) -> None:
 
 
 def as_the_client_would(settings, plugin: str, on: bool) -> None:
-    """Turn the plugin on or off in the settings file, as Claude Code writes it."""
+    """Turn the plugin on or off in the settings file, as Claude Code writes it: a new file
+    beside it, then a rename, so a scan never reads half a file."""
     data = json.loads(settings.read_text())
     data["enabledPlugins"][plugin] = on
-    settings.write_text(json.dumps(data, indent=2) + "\n")
+    new = settings.with_name(settings.name + ".tmp")
+    new.write_text(json.dumps(data, indent=2) + "\n")
+    os.replace(new, settings)
 
 
 def test_settings_changed_under_a_preview_ask_for_a_new_one_and_cancel_writes_nothing(page, demo):

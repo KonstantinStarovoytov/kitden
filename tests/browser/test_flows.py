@@ -39,5 +39,7 @@ def test_undo_puts_the_file_back(page, demo):
     turn_off(page, PLUGIN)
     page.locator("#dock").get_by_role("button", name="Apply").click()
     page.get_by_role("button", name="Undo").click()
-    expect(page.locator("#dock").get_by_role("button", name="Apply")).to_be_hidden()
-    wait_until(lambda: SETTINGS(demo).read_bytes() == before)
+    # Kitden records the change as undone, and the file is as it was.
+    changes = f"{origin(demo)}/api/changes"
+    wait_until(lambda: [c["state"] for c in page.request.get(changes).json()] == ["undone"], 15)
+    wait_until(lambda: SETTINGS(demo).read_bytes() == before, 15)

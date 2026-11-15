@@ -20,14 +20,14 @@ SERVER = "docs"
 
 
 def still_box(locator) -> dict:
-    """The element's box once it stands still: the map's blocks slide into place when a stack
-    opens, and a press during the slide lands on whatever passes under the pointer."""
-    last = None
+    """The element's box once it stands still (three equal reads, 0.1 s apart): the map's blocks
+    slide into place when a stack opens, and a press during the slide lands on whatever passes
+    under the pointer."""
+    reads: list = []
     for _ in range(50):
-        box = locator.bounding_box()
-        if box and box == last:
-            return box
-        last = box
+        reads = [*reads[-2:], locator.bounding_box()]
+        if len(reads) == 3 and reads[0] and reads[0] == reads[1] == reads[2]:
+            return reads[0]
         time.sleep(0.1)
     raise AssertionError("the block did not stand still in 5 seconds")
 

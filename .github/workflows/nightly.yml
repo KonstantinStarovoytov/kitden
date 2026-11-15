@@ -1,7 +1,8 @@
 # What: every night, runs the tests where a pull request does not: on four systems and two
 # Pythons, and against the newest Claude Code and Codex, and in a real browser.
-# Why: the maintainer has one Mac. A break on Linux on ARM, an Intel Mac, Python 3.13 or a new
-# client version must show here first, not at a user.
+# Why: the maintainer has one Mac, and nobody presses every button of the page before a release.
+# A break on Linux on ARM, an Intel Mac, Python 3.13, a new client version or in the page must
+# show here first, not at a user.
 #
 # No job here is a check on pull requests, and none holds a secret. A red job shows as one
 # `ci-failure` issue, opened by the desk in kitden-sdlc and closed when the job is green again.
@@ -185,6 +186,11 @@ jobs:
       # Playwright is not a project dependency: these steps add it for this run only, at the
       # version the tests were written for, and fetch its Chromium with the system libraries.
       - name: Install Chromium
+        # When the Ubuntu mirrors or the download are down, fail in minutes.
+        timeout-minutes: 5
         run: uv run --with playwright==1.64.1 playwright install --with-deps chromium
+      # Without Playwright the tests skip and the night looks green: stop here instead.
+      - name: Playwright imports
+        run: uv run --with playwright==1.64.1 python -c "import playwright"
       - name: The browser tests
         run: uv run --with playwright==1.64.1 pytest -m browser -q

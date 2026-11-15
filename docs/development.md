@@ -19,9 +19,10 @@ vendors' own installers. Tests marked `signed_in` need a signed-in client. Tests
 sample home with `kitden.demo.build_demo_home(root, size)`.
 
 Browser tests (`tests/browser/`) open the page on the demo sample in a real Chromium and press
-its buttons: preview, Apply and Undo. An error in the browser console fails them, so they catch
-a break of the page's Content-Security-Policy. Playwright is not a project dependency, so these
-tests are not in the default run. Run them with:
+its buttons: preview, Apply and Undo, the bar that asks for a new preview when the settings
+changed under one, and a drag onto the gateway on the Gateway map. An error in the browser
+console fails them, so they catch a break of the page's Content-Security-Policy. Playwright is
+not a project dependency, so these tests are not in the default run. Run them with:
 
 ```bash
 uv run --with playwright==1.64.1 python -m playwright install chromium
@@ -283,7 +284,8 @@ Once a day the tests also run on the newest versions of the dependencies
 `uv.lock`. When that run fails, GitHub sends an email.
 Every night the tests also run on four systems and two Pythons
 (`.github/workflows/nightly.yml`): macOS on ARM and on Intel, Ubuntu on x64 and on ARM, each
-with Python 3.13 and 3.14.
+with Python 3.13 and 3.14. The `browser` job of the same workflow runs the browser tests in
+Chromium on Ubuntu.
 `README.md` is also the PyPI page. [README media](readme-media.md) says how its pictures are
 made, how their addresses work on GitHub and PyPI, and what to check before promoting a release.
 
