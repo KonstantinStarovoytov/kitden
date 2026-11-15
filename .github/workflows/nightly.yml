@@ -115,7 +115,7 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.10.10"
-          # This job runs code from outside the repository: it writes no cache other jobs read.
+          # This job runs code from outside the repository, so its own steps write no cache.
           enable-cache: false
       # Also gives the contract tests the `kitden` command, which `uv run` finds.
       - run: uv sync --locked
@@ -146,7 +146,7 @@ jobs:
               echo "::error::$client could not be installed"
               exit 1
             fi
-            echo "$client $version" >> "$GITHUB_STEP_SUMMARY"
+            echo "- $client $version" >> "$GITHUB_STEP_SUMMARY"
           done
       # A missing client fails these tests here instead of skipping them. The files the clients
       # write go to KITDEN_WRITTEN (tests/contract/test_written_files.py).
@@ -164,4 +164,6 @@ jobs:
           name: written-files-${{ matrix.os }}
           path: ${{ runner.temp }}/written
           if-no-files-found: ignore
+          # Every file saved is a dotfile or sits in a dot-folder, left out unless asked for.
+          include-hidden-files: true
           retention-days: 7

@@ -117,20 +117,26 @@ def _words(args) -> list[str]:
 
 def refused(words: list[str], home: str | None, sandbox: Path, contract: bool) -> str | None:
     """Why a test must not run this command, or None. A program inside the sandbox may run.
-    The Keychain never may. A real client may run only in a contract test, and only with a
-    HOME inside the sandbox."""
+    This process never runs the Keychain command, but a real client may read the Keychain
+    itself. A real client may run only in a contract test, and only with its home folder
+    inside the sandbox. A full path is judged by both its names, as written and as resolved:
+    Claude Code's launcher `claude` is a link to a file named after its version."""
     sandbox = sandbox.resolve()
     for word in words:
         path = Path(word).resolve() if Path(word).is_absolute() else Path(word)
         if path.is_relative_to(sandbox):
             continue
-        if path.name.lower() in KEYCHAIN_BINARIES:
+        names = {Path(word).name.lower(), path.name.lower()}
+        if names & KEYCHAIN_BINARIES:
             return f"a test tried to run the real Keychain: {word}"
-        if path.name.lower() in CLIENT_BINARIES:
+        if names & CLIENT_BINARIES:
             if not contract:
                 return f"a test tried to run a real client: {word}"
             if home is None or not Path(home).resolve().is_relative_to(sandbox):
-                return f"a contract test tried to run {word} outside the sandbox, with HOME={home}"
+                return (
+                    f"a contract test tried to run {word} with its home or settings folder "
+                    f"outside the sandbox: {home}"
+                )
     return None
 
 
@@ -144,7 +150,8 @@ def client_homes(env: Mapping[str, str]) -> list[str | None]:
 @pytest.fixture(autouse=True)
 def _no_client_commands(request, tmp_path_factory, monkeypatch):
     """No test runs a real client: a test that needs one uses a fake in its tmp folder. Only a
-    contract test may find and run a real client, with HOME in the sandbox."""
+    contract test may find and run a real client, with HOME, CLAUDE_CONFIG_DIR and CODEX_HOME in
+    the sandbox."""
     import subprocess
 
     from kitden.clients import codex, version_cache

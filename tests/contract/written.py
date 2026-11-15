@@ -126,7 +126,8 @@ def unknown(real: dict[str, list], stored: dict[str, list]) -> list[str]:
     """One sentence for each shape in `real` that `stored` lacks for that part, and one for
     each part `stored` has and `real` does not."""
     lines = [
-        f"{part}: the client no longer writes this part (it is missing, or is no longer a map)."
+        f"{part}: the client no longer writes this part (it is missing, or is no longer a map). "
+        "Look how Kitden reads this part (src/kitden/clients/) before you change a fixture."
         for part in stored
         if part not in real
     ]

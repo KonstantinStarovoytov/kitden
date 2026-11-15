@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from kitden.views.inventory import build_inventory
+from tests.conftest import make_home, rows
 from tests.contract.written import WATCHED, newest_fixture, parts, save, shape, unknown
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,6 +39,7 @@ def test_a_part_the_client_no_longer_writes_is_named():
     stored = {"p": [{"command": "str"}], "q": [{"a": "str"}]}
     (line,) = unknown({"p": [{"command": "str"}]}, stored)
     assert "q" in line and "no longer writes this part" in line
+    assert "how Kitden reads this part" in line
 
 
 @pytest.mark.parametrize(
@@ -78,7 +81,11 @@ def test_keys_outside_the_watched_parts_do_not_count(tmp_path):
 def test_every_watched_part_is_in_the_newest_fixture_of_its_client():
     for client in WATCHED:
         stored = parts(newest_fixture(client) / "home", client)
-        assert len(stored) == len(WATCHED[client]), (client, sorted(stored))
+        assert len(stored) == len(WATCHED[client]), (
+            f"The newest fixture folder of {client} must hold every watched file, because the "
+            "shape test compares with it. Put a fixture for one test in an older version's "
+            f"folder, or give it every watched file. Found: {sorted(stored)}"
+        )
 
 
 def test_save_keeps_only_the_parts_kitden_reads(tmp_path):
@@ -120,3 +127,15 @@ def test_save_writes_the_checkout_as_a_folder_in_the_home(tmp_path):
     saved = (tmp_path / "out/claude_code/.claude/plugins/known_marketplaces.json").read_text()
     assert "{HOME}/work/kitden" in saved
     assert str(ROOT) not in saved and str(ROOT.resolve()) not in saved
+
+
+def test_kitden_reads_the_newest_fixtures(tmp_path):
+    # The shape test trusts these folders, so Kitden must read what they hold.
+    home = make_home(tmp_path, "claude_code/2.1.325", "codex/0.169.0")
+    items = build_inventory(home).items
+    found = {(client, kind, name) for client, kind, name, *_ in rows(items, home)}
+    for client in ("claude_code", "codex"):
+        for server in ("notes", "remote"):
+            assert (client, "mcp_server", server) in found, (client, server, sorted(found))
+        assert (client, "plugin", "kitden@kitden") in found, (client, sorted(found))
+    assert ("claude_code", "marketplace", "kitden") in found, sorted(found)

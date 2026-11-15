@@ -106,3 +106,17 @@ def test_a_missing_kitden_command_skips_the_test_and_fails_it_on_the_nightly(mon
     monkeypatch.setenv("KITDEN_NEED_CLIENTS", "1")
     with pytest.raises(pytest.fail.Exception, match="the nightly must have kitden"):
         need_kitden()
+
+
+def test_a_client_that_is_a_link_to_a_file_with_another_name_is_still_a_client(tmp_path):
+    # Claude Code's launcher is a link: ~/.local/bin/claude -> …/versions/2.1.311
+    outside, sandbox = tmp_path / "outside", tmp_path / "sandbox"
+    (outside / "versions").mkdir(parents=True)
+    sandbox.mkdir()
+    (outside / "versions/2.1.311").write_text("")
+    launcher = outside / "claude"
+    launcher.symlink_to(outside / "versions/2.1.311")
+    words = [str(launcher), "--version"]
+    assert "real client" in refused(words, str(sandbox), sandbox, contract=False)
+    assert "outside the sandbox" in refused(words, "/Users/someone", sandbox, contract=True)
+    assert refused(words, str(sandbox / "home"), sandbox, contract=True) is None

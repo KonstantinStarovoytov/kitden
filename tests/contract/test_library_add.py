@@ -1,8 +1,8 @@
 """The Library with the real clients in a sandbox home: add a marketplace, install a plugin in
 Claude Code and Codex in one review, then Undo both. Run with: pytest -m contract
 
-The marketplace is this repository's folder, so nothing is downloaded. The real home folder is
-never touched.
+The marketplace is this repository's folder, but the plugin itself is fetched from the `release`
+branch on GitHub. The real home folder is never touched.
 """
 
 import json

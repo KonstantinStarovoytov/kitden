@@ -80,5 +80,5 @@ testpaths = ["tests"]
 addopts = "-m 'not contract'"
 markers = [
     "contract: tests against real installed clients in sandbox homes (locally and every night)",
-    "signed_in: needs a client that is signed in; stage 2 runs these",
+    "signed_in: needs a client that is signed in; the nightly leaves these tests out",
 ]
