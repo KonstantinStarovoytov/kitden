@@ -33,7 +33,9 @@ def test_both_marketplaces_list_the_one_plugin():
     # Both read the plugin from the `release` branch, so people get only released plugins.
     assert claude["plugins"][0]["source"] == {
         "source": "git-subdir",
-        "url": "KonstantinStarovoytov/kitden",
+        # The full https address: Claude Code fetches the short owner/repo form over SSH,
+        # which fails for people with no GitHub SSH key (seen 2026-11-15, version 2.1.325).
+        "url": "https://github.com/KonstantinStarovoytov/kitden.git",
         "path": "plugins/kitden",
         "ref": "release",
     }

@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **The Claude Code plugin installs without a GitHub SSH key:** the marketplace named the
+  plugin's repository in a short form that Claude Code fetches over SSH, so the install failed
+  for people with no GitHub SSH key; it now names the https address (#106).
 - **Cursor skills in sub-folders:** skills inside category sub-folders of `.cursor/skills` and
   the other skill folders Cursor reads now show in Kitden, and removing one deletes only that
   skill's folder (#104).
