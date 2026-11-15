@@ -12,7 +12,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Secrets come back from the macOS Keychain as they went in:** a secret with letters outside
   ASCII is no longer read back as hex, and one longer than about 1,970 bytes, which used to be
   stored cut, is now refused with a reason before anything is written, so a refreshed sign-in
-  that does not fit no longer replaces the one saved before (#000).
+  that does not fit no longer replaces the one saved before (#114).
 - **The Claude Code plugin installs without a GitHub SSH key:** the marketplace named the
   plugin's repository in a short form that Claude Code fetches over SSH, so the install failed
   for people with no GitHub SSH key; it now names the https address (#106).
