@@ -46,6 +46,21 @@ def test_systems_runs_four_systems_and_two_pythons():
         assert step in job, step
 
 
+def test_clients_installs_the_newest_and_runs_the_contract_tests_with_no_account():
+    job = _jobs()["clients"]
+    assert "os: [macos-latest, ubuntu-latest]" in job and "fail-fast: false" in job
+    assert "curl -fsSL https://claude.ai/install.sh | bash" in job
+    assert "curl -fsSL https://chatgpt.com/codex/install.sh | sh" in job
+    assert "enable-cache: false" in job and "npm install" not in job
+    assert 'KITDEN_NEED_CLIENTS: "1"' in job and 'DISABLE_AUTOUPDATER: "1"' in job
+    assert 'uv run pytest -m "contract and not signed_in" -q -rs' in job
+    assert "secrets." not in job and "contents: read" in job
+    # A client that is missing, or a runner with an account, stops the job with one clear line.
+    assert "could not be installed" in job and "must run without one" in job
+    # The script in kitden-sdlc reads the runs as `clients (<os>)`.
+    assert not any(line.startswith("    name:") for line in job.splitlines())
+
+
 def test_pull_requests_keep_the_fast_set():
     build = RELEASE.split("  build:")[1].split("  publish:")[0]
     assert "os: [macos-latest, ubuntu-latest]" in build
@@ -77,3 +92,5 @@ def test_every_action_is_pinned_by_a_full_commit_with_its_tag():
 def test_the_development_page_names_the_nightly_run():
     text = " ".join((ROOT / "docs/development.md").read_text().split())
     assert "Every night the tests also run on four systems and two Pythons" in text
+    assert "the contract tests also run against the newest Claude Code and Codex" in text
+    assert '`-m "contract and not signed_in"`' in text

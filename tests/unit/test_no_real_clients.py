@@ -90,6 +90,7 @@ def test_no_test_inherits_a_real_client_folder(monkeypatch):
 
 
 def test_a_missing_client_skips_the_test_and_fails_it_on_the_nightly(tmp_path, monkeypatch):
+    monkeypatch.delenv("KITDEN_NEED_CLIENTS", raising=False)
     with pytest.raises(pytest.skip.Exception):
         need_command("no-such-client", tmp_path)
     monkeypatch.setenv("KITDEN_NEED_CLIENTS", "1")
@@ -98,6 +99,7 @@ def test_a_missing_client_skips_the_test_and_fails_it_on_the_nightly(tmp_path, m
 
 
 def test_a_missing_kitden_command_skips_the_test_and_fails_it_on_the_nightly(monkeypatch):
+    monkeypatch.delenv("KITDEN_NEED_CLIENTS", raising=False)
     monkeypatch.setattr("tests.contract.conftest.installed_command", lambda: None)
     with pytest.raises(pytest.skip.Exception):
         need_kitden()

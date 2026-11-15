@@ -1,7 +1,7 @@
 # What: every night, runs the tests where a pull request does not: on four systems and two
-# Pythons.
-# Why: the maintainer has one Mac. A break on Linux on ARM, an Intel Mac or Python 3.13 must
-# show here first, not at a user.
+# Pythons, and against the newest Claude Code and Codex.
+# Why: the maintainer has one Mac. A break on Linux on ARM, an Intel Mac, Python 3.13 or a new
+# client version must show here first, not at a user.
 #
 # No job here is a check on pull requests, and none holds a secret. A red job shows as one
 # `ci-failure` issue, opened by the desk in kitden-sdlc and closed when the job is green again.
@@ -95,3 +95,57 @@ jobs:
           fi
           uv run pytest -q --set-aside=only | tee set-aside.log || true
           tail -n 1 set-aside.log >> "$GITHUB_STEP_SUMMARY"
+
+  # No `name:` on purpose: kitden-sdlc reads the runs as `clients (<os>)`.
+  clients:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      DISABLE_AUTOUPDATER: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.10"
+          # This job runs code from outside the repository: it writes no cache other jobs read.
+          enable-cache: false
+      # Also gives the contract tests the `kitden` command, which `uv run` finds.
+      - run: uv sync --locked
+      # The tests need no account; stop if this runner has one, so a pass means that. Before
+      # the install, because the Claude Code installer writes ~/.claude.json with no account.
+      - name: No account
+        run: |
+          if [ -e "$HOME/.claude.json" ] || [ -e "$HOME/.codex/auth.json" ]; then
+            echo "::error::this runner has a client account; the tests must run without one"
+            exit 1
+          fi
+      # The vendors' own installers, as their docs tell users. Not pinned on purpose: this job is
+      # here to meet each new client version before users do. It holds no secret and can only
+      # read. Both put their command in ~/.local/bin.
+      - name: Install the newest clients
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          curl -fsSL https://chatgpt.com/codex/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Which versions
+        run: |
+          for client in claude codex; do
+            if ! version="$("$client" --version)"; then
+              echo "::error::$client could not be installed"
+              exit 1
+            fi
+            echo "$client $version" >> "$GITHUB_STEP_SUMMARY"
+          done
+      # A missing client fails these tests here instead of skipping them.
+      - name: The contract tests
+        env:
+          KITDEN_NEED_CLIENTS: "1"
+        run: uv run pytest -m "contract and not signed_in" -q -rs
