@@ -100,6 +100,46 @@ def _on(value: bool | None) -> Enabled:
     return Enabled.UNKNOWN if value is None else (Enabled.ON if value else Enabled.OFF)
 
 
+# checked 2026-11-15 (code.claude.com/docs/en/mcp; /en/settings-reference gives the three keys
+# the scope "Any file"; and Claude Code 2.1.311 run in a sandbox home): `enabledMcpjsonServers`,
+# `enableAllProjectMcpServers` and `disabledMcpjsonServers` are settings keys. A name in
+# `disabledMcpjsonServers` of any file rejects the server. In a trusted folder the user, project
+# and local files approve it; in a folder not trusted only the user file does. Earlier versions
+# kept the keys in `~/.claude.json` under `projects.<path>`; Claude Code moves them to the local
+# file when it next starts there, so Kitden reads them there too. Not read: managed settings,
+# `--settings`, and whether git tracks the local file (a tracked file also waits for trust).
+def _approval(
+    name: str, user: dict, project_files: list[dict], trusted: bool, unread: bool
+) -> Enabled:
+    """A project `.mcp.json` server's approval: on, off (rejected), or unknown (pending)."""
+    files = [user, *project_files]
+    if any(name in _names(f.get("disabledMcpjsonServers")) for f in files):
+        return Enabled.OFF
+    if unread:
+        return Enabled.UNKNOWN
+    approving = files if trusted else [user]
+    if any(
+        f.get("enableAllProjectMcpServers") is True
+        or name in _names(f.get("enabledMcpjsonServers"))
+        for f in approving
+    ):
+        return Enabled.ON
+    return Enabled.UNKNOWN
+
+
+def is_trusted(projects: dict, folder: Path, home: Path) -> bool:
+    """Claude Code trusts the folder: its entry in `~/.claude.json` has
+    `hasTrustDialogAccepted`, or, in a git repository, a folder above it up to the root has.
+
+    checked 2026-11-15 (Claude Code 2.1.311 in a sandbox home): outside a repository a parent
+    folder's trust did not count."""
+    root = git_root(folder, home)
+    places = [folder]
+    if root is not None:
+        places += [p for p in folder.parents if p == root or root in p.parents]
+    return any(as_dict(projects.get(str(p))).get("hasTrustDialogAccepted") is True for p in places)
+
+
 # checked 2026-10-26 (code.claude.com/docs/en/skills, "Override skill visibility from settings"):
 # `skillOverrides` maps a skill name to "on", "name-only", "user-invocable-only" or "off"; a
 # skill that is not listed is "on". Only "off" turns a skill off. Plugin skills are not affected.
@@ -534,7 +574,8 @@ class ClaudeCodeAdapter(ClientAdapter):
         # MCP servers: user scope, then per-project local scope and project .mcp.json files.
         scan.items += mcp_items(CLIENT, state.get("mcpServers"), state_path, Scope.USER)
         project_skill_rules: dict[str, dict[str, tuple[str, Scope]]] = {}
-        for path, data in as_dict(state.get("projects")).items():
+        projects = as_dict(state.get("projects"))
+        for path, data in projects.items():
             data = as_dict(data)
             scan.projects.append(project(path, CLIENT))
             scan.items += mcp_items(
@@ -545,7 +586,14 @@ class ClaudeCodeAdapter(ClientAdapter):
                 project=path,
                 table=f"projects.{path}.mcpServers",
             )
-            found, rules = self._project_files(read, Path(path), data, settings, settings_known)
+            found, rules = self._project_files(
+                read,
+                Path(path),
+                data,
+                settings,
+                settings_known,
+                is_trusted(projects, Path(path), self.home),
+            )
             scan.items += found
             if rules is not None:
                 project_skill_rules[path] = rules
@@ -642,24 +690,29 @@ class ClaudeCodeAdapter(ClientAdapter):
         return scan
 
     def _project_files(
-        self, read: Reader, root: Path, data: dict, user_settings: dict, user_known: bool
+        self,
+        read: Reader,
+        root: Path,
+        data: dict,
+        user_settings: dict,
+        user_known: bool,
+        trusted: bool,
     ) -> tuple[list[Item], dict[str, tuple[str, Scope]] | None]:
         """The project's items, and its skill rules (None when a settings file was unreadable)."""
         path = str(root)
         items: list[Item] = []
-        approved = _names(data.get("enabledMcpjsonServers"))
-        rejected = _names(data.get("disabledMcpjsonServers"))
+        # When the project is the home folder, its `.claude/settings.json` and skills are the
+        # user's own, already read as user items; reading them again made a project copy.
+        at_home = is_home(root, self.home)
+        settings_path = root / ".claude/settings.json"
+        settings = {} if at_home else as_dict(read.json(settings_path))
+        # The local files, the winning one last; each plugin key comes from the last that has it.
+        locals_ = [(path, as_dict(read.json(path))) for path in local_files(root, self.home)]
         mcp_path = root / ".mcp.json"
-        for name, entry in as_dict(as_dict(read.json(mcp_path)).get("mcpServers")).items():
-            state = (
-                Enabled.OFF
-                if name in rejected
-                else (
-                    Enabled.ON
-                    if name in approved or data.get("enableAllProjectMcpServers")
-                    else Enabled.UNKNOWN
-                )
-            )
+        servers = as_dict(as_dict(read.json(mcp_path)).get("mcpServers"))
+        unread = not user_known or any(read.failed(p) for p in [settings_path, *dict(locals_)])
+        project_files = [settings, *(d for _, d in locals_), data]
+        for name, entry in servers.items():
             items.append(
                 mcp_item(
                     CLIENT,
@@ -668,16 +721,9 @@ class ClaudeCodeAdapter(ClientAdapter):
                     file_source(mcp_path, CLIENT, f"mcpServers.{name}"),
                     Scope.PROJECT,
                     project=path,
-                    enabled=state,
+                    enabled=_approval(name, user_settings, project_files, trusted, unread),
                 )
             )
-        # When the project is the home folder, its `.claude/settings.json` and skills are the
-        # user's own, already read as user items; reading them again made a project copy.
-        at_home = is_home(root, self.home)
-        settings_path = root / ".claude/settings.json"
-        settings = {} if at_home else as_dict(read.json(settings_path))
-        # The local files, the winning one last; each plugin key comes from the last that has it.
-        locals_ = [(path, as_dict(read.json(path))) for path in local_files(root, self.home)]
         # checked 2026-10-26 (code.claude.com/docs/en/plugins/loading, "Find where a plugin is
         # enabled"): `enabledPlugins` is read from user, project (`.claude/settings.json`) and
         # local (`.claude/settings.local.json`) files; the highest source that names a plugin

@@ -286,3 +286,75 @@ def test_a_file_too_deep_for_the_parser_is_a_problem_of_its_own(tmp_path, no_ver
 
     monkeypatch.setattr(json, "loads", loads)
     _scan_with_bad_project_file(tmp_path, no_version, lambda p: p.write_text("[[[]]]"))
+
+
+# Project `.mcp.json` approvals. Claude Code 2.1.311, run in a sandbox home on 2026-11-15, moved
+# `enabledMcpjsonServers` and `disabledMcpjsonServers` from `~/.claude.json` to the project's
+# `.claude/settings.local.json` and left only `hasTrustDialogAccepted` in the project's entry.
+
+
+def _approvals(tmp_path, no_version, trust: bool = True, local: dict | None = None):
+    """A home whose website project keeps its approvals in its local file, as 2.1.311 left it."""
+    home = make_home(tmp_path, FIXTURE)
+    site = home / "work/website"
+    state = json.loads((home / ".claude.json").read_text())
+    state["projects"][str(site)] = {"hasTrustDialogAccepted": trust}
+    (home / ".claude.json").write_text(json.dumps(state))
+    if local is None:
+        local = {"enabledMcpjsonServers": ["docs"], "disabledMcpjsonServers": ["old-search"]}
+    (site / ".claude/settings.local.json").write_text(json.dumps(local))
+
+    def states() -> dict[str, Enabled]:
+        scan = ClaudeCodeAdapter(home, read_version=no_version).scan()
+        return {
+            i.name: i.enabled
+            for i in scan.items
+            if i.kind is ItemKind.MCP_SERVER and i.scope is Scope.PROJECT
+        }
+
+    return home, site, states
+
+
+def test_project_server_approvals_are_read_from_the_local_file(tmp_path, no_version):
+    _, _, states = _approvals(tmp_path, no_version)
+    assert states() == {"docs": Enabled.ON, "old-search": Enabled.OFF}
+
+
+def test_the_project_settings_file_approves_too(tmp_path, no_version):
+    _, site, states = _approvals(tmp_path, no_version, local={})
+    (site / ".claude/settings.json").write_text(json.dumps({"enableAllProjectMcpServers": True}))
+    assert states() == {"docs": Enabled.ON, "old-search": Enabled.ON}
+
+
+def test_a_folder_not_trusted_takes_approval_only_from_user_settings(tmp_path, no_version):
+    home, site, states = _approvals(tmp_path, no_version, trust=False)
+    (site / ".claude/settings.json").write_text(json.dumps({"enableAllProjectMcpServers": True}))
+    assert states() == {"docs": Enabled.UNKNOWN, "old-search": Enabled.OFF}
+    user = json.loads((home / ".claude/settings.json").read_text())
+    user["enabledMcpjsonServers"] = ["docs"]
+    (home / ".claude/settings.json").write_text(json.dumps(user))
+    assert states() == {"docs": Enabled.ON, "old-search": Enabled.OFF}
+
+
+def test_a_rejection_in_any_file_wins(tmp_path, no_version):
+    _, site, states = _approvals(tmp_path, no_version, trust=False, local={})
+    (site / ".claude/settings.json").write_text(json.dumps({"disabledMcpjsonServers": ["docs"]}))
+    assert states() == {"docs": Enabled.OFF, "old-search": Enabled.UNKNOWN}
+
+
+def test_trust_from_a_folder_above_counts_only_in_a_git_repository(tmp_path, no_version):
+    home, _, states = _approvals(tmp_path, no_version, trust=False)
+    state = json.loads((home / ".claude.json").read_text())
+    state["projects"][str(home / "work")] = {"hasTrustDialogAccepted": True}
+    (home / ".claude.json").write_text(json.dumps(state))
+    assert states()["docs"] is Enabled.UNKNOWN
+    (home / "work/.git").mkdir()
+    assert states()["docs"] is Enabled.ON
+
+
+def test_an_unreadable_local_file_leaves_approval_unknown(tmp_path, no_version):
+    _, site, states = _approvals(tmp_path, no_version, local={})
+    (site / ".claude/settings.json").write_text(json.dumps({"disabledMcpjsonServers": ["docs"]}))
+    local = site / ".claude/settings.local.json"
+    local.write_text("{ not json")
+    assert states() == {"docs": Enabled.OFF, "old-search": Enabled.UNKNOWN}

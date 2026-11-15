@@ -11,7 +11,8 @@ from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.engine import Engine
 from kitden.clients.codex import CodexAdapter
-from kitden.model import ChangeState
+from kitden.model import ChangeState, Enabled, ItemKind
+from kitden.views.effective import effective_view
 from kitden.views.inventory import build_inventory, default_adapters
 from tests.conftest import make_home, write_cursor_fixture_state
 
@@ -205,3 +206,107 @@ def test_codex_plugin_list_is_not_used_when_codex_is_missing(home):
     adapter = CodexAdapter(home, read_version=lambda: None, list_plugins=boom)
     gmail = next(i for i in adapter.scan().items if i.name == "gmail@openai-curated-remote")
     assert str(gmail.enabled) == "unknown"
+
+
+# Codex 0.167.0, in a sandbox home on 2026-11-15: `[plugins."<id>"] enabled` in a trusted
+# project's `.codex/config.toml` turned an installed plugin off there only, and on there when the
+# user's file had it off; a table without `enabled`, or an untrusted project's file, did nothing.
+
+
+def _codex_project_plugins(home, folder: str, text: str) -> None:
+    (home / "work" / folder / ".codex/config.toml").write_text(text)
+
+
+def _codex_view_plugins(home, project) -> dict[str, Enabled]:
+    view = effective_view(build_inventory(home), "codex", project)
+    return {i.name: i.enabled for i in view.items if i.kind is ItemKind.PLUGIN}
+
+
+def _codex_view_servers(home, project) -> set[str]:
+    view = effective_view(build_inventory(home), "codex", project)
+    return {i.name for i in view.items if i.kind is ItemKind.MCP_SERVER}
+
+
+def test_a_trusted_codex_project_turns_a_plugin_off_there_only(home):
+    api = str(home / "work/api")
+    bundled = home / ".codex/plugins/cache/openai-bundled/browser/1.0.0/mcp.json"
+    bundled.write_text(json.dumps({"mcpServers": {"browser-tools": {"command": "browser-mcp"}}}))
+    pdf = home / ".codex/plugins/cache/openai-primary-runtime/pdf/1.0.0/mcp.json"
+    pdf.parent.mkdir(parents=True)
+    pdf.write_text(json.dumps({"mcpServers": {"pdf-tools": {"command": "pdf-mcp"}}}))
+    _codex_project_plugins(
+        home,
+        "api",
+        '[plugins."browser@openai-bundled"]\nenabled = false\n\n'
+        '[plugins."pdf@openai-primary-runtime"]\nenabled = true\n\n'
+        '[plugins."gmail@openai-curated-remote"]\n',
+    )
+    inventory = build_inventory(home)
+    rows = {
+        (i.name, str(i.enabled))
+        for i in inventory.items
+        if i.client == "codex" and str(i.kind) == "plugin" and i.project == api
+    }
+    assert rows == {("browser@openai-bundled", "off"), ("pdf@openai-primary-runtime", "on")}
+    inside = _codex_view_plugins(home, api)
+    assert "browser@openai-bundled" not in inside
+    assert inside["pdf@openai-primary-runtime"] is Enabled.ON
+    assert "browser@openai-bundled" in _codex_view_plugins(home, None)
+    assert _codex_view_servers(home, api) >= {"pdf-tools"}
+    assert "browser-tools" not in _codex_view_servers(home, api)
+    assert _codex_view_servers(home, None) >= {"browser-tools"}
+    assert "pdf-tools" not in _codex_view_servers(home, None)
+
+
+def test_an_untrusted_codex_project_cannot_change_a_plugin(home):
+    _codex_project_plugins(
+        home, "untrusted", '[plugins."browser@openai-bundled"]\nenabled = false\n'
+    )
+    untrusted = str(home / "work/untrusted")
+    inventory = build_inventory(home)
+    assert not [i for i in inventory.items if i.project == untrusted and str(i.kind) == "plugin"]
+    assert "browser@openai-bundled" in _codex_view_plugins(home, untrusted)
+
+
+def test_a_codex_project_plugin_row_toggles_its_own_file_and_undo_restores(
+    home, adapters, tmp_path
+):
+    _codex_project_plugins(
+        home, "api", '# team file\n[plugins."browser@openai-bundled"]\nenabled = false\n'
+    )
+    config = home / "work/api/.codex/config.toml"
+    original = config.read_bytes()
+    user_config = (home / ".codex/config.toml").read_bytes()
+    row = plugin(build_inventory(home), "codex", "browser@openai-bundled", "project")
+    assert adapters["codex"].item_actions(row) == ("plugin.enable",)
+    engine = Engine(ChangeStore(tmp_path / "data"), run=None)
+    (step,) = plugin_steps(adapters, row, True)
+    assert step.shared_file
+    change = engine.preview("plugin.enable", [step])
+    engine.apply(change.id)
+    text = config.read_text()
+    assert toml_edit.get_value(text, ("plugins", "browser@openai-bundled", "enabled")) is True
+    assert "# team file" in text
+    assert (home / ".codex/config.toml").read_bytes() == user_config
+    engine.undo(change.id)
+    assert config.read_bytes() == original
+
+
+def test_a_codex_project_table_for_a_plugin_not_installed_gives_no_row(home):
+    # Codex 0.167.0, in a sandbox home on 2026-11-15: with no install for the user, a trusted
+    # project's `enabled = true` loaded nothing (`codex plugin list --json` listed no plugin).
+    api = str(home / "work/api")
+    _codex_project_plugins(
+        home,
+        "api",
+        '[plugins."ghost@market"]\nenabled = true\n\n'
+        '[plugins."gmail@openai-curated-remote"]\nenabled = false\n',
+    )
+    inventory = build_inventory(home)
+    rows = {
+        i.name
+        for i in inventory.items
+        if i.client == "codex" and str(i.kind) == "plugin" and i.project == api
+    }
+    assert rows == {"gmail@openai-curated-remote"}
+    assert "ghost@market" not in _codex_view_plugins(home, api)
