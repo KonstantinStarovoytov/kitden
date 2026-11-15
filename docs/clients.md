@@ -1,7 +1,7 @@
 # What Kitden relies on in each client
 
 This file lists the facts about Claude Code, Codex and Cursor that Kitden reads or writes. A change to how Kitden reads or writes a client's files updates it in the same pull request.
-It was drafted from the code on 2026-11-11. A date in brackets is when the code last checked that fact; no date means the code gives none.
+It was drafted from the code on 2026-11-11. A date in brackets is when that fact was last checked, in the code or against its `Source`; no date means none is known.
 The table shape is fixed, because a daily check reads it. `Source` is a full address, or `help` (the client's own `--help`), `install` (seen on a real install) or `guess`.
 
 ## Claude Code
