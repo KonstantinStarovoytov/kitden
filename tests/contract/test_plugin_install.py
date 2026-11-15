@@ -1,8 +1,12 @@
 """Installing the kitden plugin with the real clients in sandbox homes (feature 003, quickstart
 §4 and §5). Run with: pytest -m contract
 
-Each test adds the repository as a marketplace, installs the plugin, checks what the client
-recorded, and removes everything again. The real home folder is never touched.
+Each test adds a copy of the repository's marketplace whose plugin source is this checkout's
+plugins/kitden (`checkout_marketplace`), installs the plugin, compares what the client installed
+with that source, and removes everything again. Nothing is cloned. The repository's own
+marketplace names the `release` branch on GitHub as the source, so installing from it would
+compare the checkout with the last release; tests/contract/test_library_add.py installs that
+way. The real home folder is never touched.
 """
 
 import json
@@ -16,7 +20,7 @@ import pytest
 from kitden.views.inventory import build_inventory
 from kitden.views.setup_server import setup_server_state
 from tests.conftest import make_home
-from tests.contract.conftest import need_command
+from tests.contract.conftest import checkout_marketplace, need_command
 
 pytestmark = pytest.mark.contract
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +32,11 @@ def home(tmp_path, monkeypatch):
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
     return make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
+
+
+@pytest.fixture
+def market(tmp_path) -> Path:
+    return checkout_marketplace(tmp_path / "market")
 
 
 def _run(binary: str, args: list[str], home: Path, env: dict | None = None) -> str:
@@ -48,14 +57,14 @@ def _state(home: Path, client: str) -> str:
     return next(s["state"] for s in states if s["client"] == client)
 
 
-def test_claude_code_installs_the_plugin_from_the_repository(home):
+def test_claude_code_installs_the_plugin_from_the_repository(home, market):
     claude = need_command("claude", home)
     settings = home / ".claude/settings.json"
     before = json.loads(settings.read_text())
     _run(claude, ["plugin", "validate", "--strict", "./plugins/kitden"], home)
     _run(claude, ["plugin", "validate", "--strict", "."], home)
 
-    _run(claude, ["plugin", "marketplace", "add", str(ROOT)], home)
+    _run(claude, ["plugin", "marketplace", "add", str(market)], home)
     _run(claude, ["plugin", "install", "kitden@kitden", "--scope", "user"], home)
     listed = {p["id"]: p for p in json.loads(_run(claude, ["plugin", "list", "--json"], home))}
     assert listed["kitden@kitden"]["enabled"] is True
@@ -76,13 +85,13 @@ def test_claude_code_installs_the_plugin_from_the_repository(home):
     assert _state(home, "claude_code") == "missing"
 
 
-def test_codex_installs_the_plugin_from_the_repository(home):
+def test_codex_installs_the_plugin_from_the_repository(home, market):
     codex = need_command("codex", home)
     env = {"CODEX_HOME": str(home / ".codex")}
     config = home / ".codex/config.toml"
     before = tomllib.loads(config.read_text())
 
-    add = ["plugin", "marketplace", "add", str(ROOT), "--json"]
+    add = ["plugin", "marketplace", "add", str(market), "--json"]
     added = json.loads(_run(codex, add, home, env))
     assert added["marketplaceName"] == "kitden"
     installed = json.loads(_run(codex, ["plugin", "add", "kitden@kitden", "--json"], home, env))
