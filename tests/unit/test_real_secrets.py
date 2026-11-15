@@ -218,19 +218,27 @@ def test_an_account_with_a_space_is_quoted_on_the_security_line():
     sys.platform == "darwin",
     strict=True,
     raises=KeychainError,
-    reason="Kitden bug: a secret with letters outside ASCII cannot be stored in the macOS "
-    "Keychain; Kitden says it could not reach the Keychain. Seen 2026-11-15 on a GitHub macOS "
-    "runner. Strict: remove this mark when Kitden is fixed.",
+    reason="Kitden bug: a secret with letters outside ASCII is stored in the macOS Keychain, but "
+    "`security find-generic-password -w` prints it back as hex, so Kitden's read-back differs "
+    "and it says it could not reach the Keychain. Seen 2026-11-15 on a GitHub macOS runner. "
+    "Strict: remove this mark when Kitden is fixed.",
 )
 def test_a_value_in_other_alphabets_comes_back_unchanged():
     _round_trip("ALPHABETS", "ключ-héllo-日本")
+
+
+@mac_only
+def test_a_1024_character_value_comes_back_unchanged():
+    """The side of the `security -i` line limit that works (seen on a macOS runner)."""
+    _round_trip("MEDIUM", ("kitden-ci-1kb-" * 80)[:1024])
 
 
 @pytest.mark.xfail(
     sys.platform == "darwin",
     strict=True,
     raises=KeychainError,
-    reason="Kitden bug: a 4096-character secret cannot be stored in the macOS Keychain; Kitden "
+    reason="Kitden bug: a secret longer than about 2,000 characters is cut by the length of a "
+    "`security -i` line (1,024 works, 2,048 does not), so Kitden's read-back differs and it "
     "says it could not reach the Keychain. Seen 2026-11-15 on a GitHub macOS runner. Strict: "
     "remove this mark when Kitden is fixed.",
 )

@@ -113,40 +113,6 @@ jobs:
             echo "::error::the keychain made for this run is not the default one"
             exit 1
           fi
-          # TEMPORARY, remove before the pull request: facts for fixing Kitden's Keychain writes
-          # (a value outside ASCII and a 4096-character value fail on macOS). All in the run's
-          # keychain, under the service kitden-probe, deleted at the end; never fails the step.
-          hex() { printf '%s' "$1" | xxd -p | tr -d '\n'; }
-          add_i() {
-            printf 'add-generic-password -U -s kitden-probe -a "%s" -X %s\n' "$1" "$(hex "$2")" |
-              security -i
-            echo "security -i: exit ${PIPESTATUS[1]}"
-          }
-          show() {
-            security find-generic-password -s kitden-probe -a "$1" -w > "$RUNNER_TEMP/probe.out"
-            echo "find -w: exit $?; first 120 bytes, then the byte count:"
-            head -c 120 "$RUNNER_TEMP/probe.out"; echo
-            wc -c < "$RUNNER_TEMP/probe.out"
-            echo "find -g, its password line:"
-            security find-generic-password -s kitden-probe -a "$1" -g 2>&1 >/dev/null |
-              grep '^password:' | cut -c1-200
-          }
-          long() { head -c "$1" < /dev/zero | tr '\0' k; }
-          echo "Probe: a value outside ASCII through security -i"
-          { add_i non-ascii 'ключ-héllo-日本'; show non-ascii; } || true
-          for n in 1024 2048 4096; do
-            echo "Probe: a $n-character value through security -i"
-            { add_i "i-$n" "$(long "$n")"; show "i-$n"; } || true
-          done
-          echo "Probe: a 4096-character value through the arguments"
-          {
-            security add-generic-password -U -s kitden-probe -a argv-4096 -X "$(hex "$(long 4096)")"
-            echo "add-generic-password in argv: exit $?"
-            show argv-4096
-          } || true
-          for account in non-ascii i-1024 i-2048 i-4096 argv-4096; do
-            security delete-generic-password -s kitden-probe -a "$account" > /dev/null 2>&1 || true
-          done
           KITDEN_REAL_KEYCHAIN=1 KITDEN_CI_KEYCHAIN="$chain" \
             uv run pytest -q tests/unit/test_real_secrets.py -rs
       # The page's own tests, in Node with a stand-in DOM.
