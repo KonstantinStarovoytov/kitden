@@ -33,16 +33,18 @@ def still_box(locator) -> dict:
 
 
 def drag_onto_the_gateway(page, server: str) -> None:
-    """Open the servers outside the gateway, then drag Claude Code's server by its grip onto the
-    Kitden gateway's box, with the mouse as a person moves it: down, in steps, up."""
+    """Open the servers outside the gateway, then drag Claude Code's server onto the Kitden
+    gateway's box, with the mouse as a person moves it: down, in steps, up. The press is on the
+    block itself, by its name: a press anywhere on a block that can move starts the drag (the
+    map's pointerdown, pressGrip in gateway-drag.js); its grip is only a picture."""
     page.get_by_role("button", name=re.compile(r"^Open Outside the gateway")).click()
     block = page.get_by_role("button", name=re.compile(rf"^{re.escape(server)}, In Claude Code"))
-    grip = block.locator(".block-grip")
     gateway = page.get_by_role("button", name=re.compile(r"^Kitden gateway, "))
-    expect(grip).to_be_visible()
+    expect(block).to_be_visible()
     expect(gateway).to_be_visible()
-    start, end = still_box(grip), still_box(gateway)
-    page.mouse.move(start["x"] + start["width"] / 2, start["y"] + start["height"] / 2)
+    start, end = still_box(block), still_box(gateway)
+    # A third of the way in: on the name, clear of the count at the block's right end.
+    page.mouse.move(start["x"] + start["width"] / 3, start["y"] + start["height"] / 2)
     page.mouse.down()
     page.mouse.move(end["x"] + end["width"] / 2, end["y"] + end["height"] / 2, steps=20)
     page.mouse.up()
