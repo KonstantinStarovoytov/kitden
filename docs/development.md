@@ -129,6 +129,8 @@ real clients are contract tests (`uv run pytest -m contract`) and browser tests
 (`pytest -m browser`), run as [Develop](#develop) says. The nightly run
 (`.github/workflows/nightly.yml`) runs them every night: the contract tests in its job
 `clients`, the browser tests in `browser`, and the real Keychain and keyring tests in `systems`.
+"The tester" below is a planned nightly run with a signed-in client; until it exists, the checks
+that need one are done by hand.
 
 ### What became of the 24 checks
 
@@ -139,37 +141,37 @@ in, which no runner has, so it is still done by hand (see below). A stand-in ses
 `kitden mcp` started as the client starts it, with the client's signal, but not the client's
 own session.
 
-| # | Check | After stage 1 | Run by |
+| # | Check | Done by | Run by |
 |---|---|---|---|
 | 1 | Move a server into the gateway; set up the `kitden` entry | test | `tests/contract/test_gateway_session.py::test_a_moved_server_is_what_each_client_lists_and_its_tools_come_through`, with the real `claude` and `codex` |
 | 2 | Turn one tool off for the test project | test | `tests/contract/test_gateway_session.py::test_a_tool_off_for_the_project_is_gone_there_and_stays_elsewhere` |
-| 3 | A new session there: the tool is gone, the others stay | signed-in client | By hand until stage 2. Kitden's side: `tests/contract/test_gateway_session.py::test_a_tool_off_for_the_project_is_gone_there_and_stays_elsewhere`, with a stand-in session for each client |
+| 3 | A new session there: the tool is gone, the others stay | signed-in client | By hand until the tester runs it. Kitden's side: `tests/contract/test_gateway_session.py::test_a_tool_off_for_the_project_is_gone_there_and_stays_elsewhere`, with a stand-in session for each client |
 | 4 | Undo the switch and the move; the server is direct again | test | `tests/contract/test_gateway_session.py::test_undo_puts_every_file_back_and_the_clients_list_the_server_again` undoes the move; `tests/unit/test_local_gateway_views.py::test_a_rule_change_previews_applies_and_undoes` undoes a tool turned off for one project and checks `gateway.json` is as before |
-| 5 | Strict mode ("Turn strict mode on…"): a new session offers only the tools that are on | signed-in client | By hand until stage 2. Kitden's side: `tests/contract/test_gateway_session.py::test_strict_mode_offers_only_the_tools_set_on`, with a stand-in session for each client |
-| 6 | An open session is refused a tool turned off, and gets it back | signed-in client | By hand until stage 2. Kitden's side: `tests/contract/test_gateway_session.py::test_an_open_session_is_refused_a_tool_turned_off_and_gets_it_back`, with a stand-in session for Claude Code |
+| 5 | Strict mode ("Turn strict mode on…"): a new session offers only the tools that are on | signed-in client | By hand until the tester runs it. Kitden's side: `tests/contract/test_gateway_session.py::test_strict_mode_offers_only_the_tools_set_on`, with a stand-in session for each client |
+| 6 | An open session is refused a tool turned off, and gets it back | signed-in client | By hand until the tester runs it. Kitden's side: `tests/contract/test_gateway_session.py::test_an_open_session_is_refused_a_tool_turned_off_and_gets_it_back`, with a stand-in session for Claude Code |
 | 7 | Undo the switches and the move | test | `tests/contract/test_gateway_session.py::test_undo_puts_every_file_back_and_the_clients_list_the_server_again` (the move); `tests/contract/test_gateway_session.py::test_an_open_session_is_refused_a_tool_turned_off_and_gets_it_back` (a tool turned off for all projects); `tests/unit/test_api_changes.py::test_gateway_strict_previews_applies_and_undoes` (strict mode) |
 | 8 | Remove a plugin in Claude Code, then in Codex; Undo | test | `tests/contract/test_manage_items.py::test_a_removed_plugin_leaves_the_clients_list_and_undo_brings_it_back`, in both; it reads the client's plugin list, not a new session |
 | 9 | Remove a skill; Undo: its folder is back | test | `tests/unit/test_remove_skill.py::test_removing_a_skill_backs_it_up_and_undo_copies_it_back`; a client loads a skill only from its folder |
 | 10 | "Put back in <client>…" a held server, remove it from the gateway | test | `tests/contract/test_gateway_session.py::test_a_server_put_back_and_removed_from_the_gateway`; it reads `claude mcp get` and an open session's refused call, not a new session reaching the server directly |
-| 11 | "+ Add" a server with a `${VAR}` header into Cursor and Codex; a new session reaches it | signed-in client | By hand until stage 2. Tested: Codex lists the added entry with the variable, not its value: `tests/contract/test_manage_items.py::test_a_server_with_a_variable_header_is_listed_by_codex_with_the_variable`. Not tested: Cursor, and a session reaching the server |
-| 12 | "Add to this project…" a skill and a plugin; only that folder has them | test | `tests/contract/test_manage_items.py::test_add_to_this_project_shows_in_that_folder_only` (a Claude Code plugin); `tests/unit/test_project_add.py::test_a_skill_goes_into_the_project_folder` (the skill goes into that project's folder, shows for that project only, and Undo removes it; a client loads a skill only from its folder) |
+| 11 | "+ Add" a server with a `${VAR}` header into Cursor and Codex; a new session reaches it | signed-in client | By hand until the tester runs it. Tested: Codex lists the added entry with the variable, not its value: `tests/contract/test_manage_items.py::test_a_server_with_a_variable_header_is_listed_by_codex_with_the_variable`. Not tested: Cursor, and a session reaching the server |
+| 12 | "Add to this project…" a skill and a plugin; only that folder has them | test | `tests/contract/test_manage_items.py::test_add_to_this_project_shows_in_that_folder_only` (a Claude Code plugin; it reads the client's plugin list, not a new session); `tests/unit/test_project_add.py::test_a_skill_goes_into_the_project_folder` (the skill goes into that project's folder, shows for that project only, and Undo removes it; a client loads a skill only from its folder) |
 | 13 | "Add missing plugins and skills…", Apply, Undo | test | `tests/contract/test_manage_items.py::test_add_missing_adds_a_plugin_and_a_server_together_and_undo_removes_both` (a plugin and a server into Codex); `tests/unit/test_align.py::test_add_missing_is_one_change_and_undo_takes_it_all_back` (a skill into Codex's project folder and a server into Claude Code, and Undo puts every file back). Not tested: a plugin or a skill added into Claude Code |
 | 14 | Remove a plugin that is off; Undo: back and still off | test | `tests/contract/test_manage_items.py::test_a_removed_off_plugin_comes_back_off`, in Claude Code and Codex; it reads the client's plugin list, not a new session |
-| 15 | Remove a plugin that is on for one project only | test | `tests/contract/test_manage_items.py::test_a_project_only_plugin_is_uninstalled_in_its_project` |
+| 15 | Remove a plugin that is on for one project only | test | `tests/contract/test_manage_items.py::test_a_project_only_plugin_is_uninstalled_in_its_project`; it reads the client's plugin list, not a new session |
 | 16 | Codex: remove a plugin, Undo; add a plugin and a server together, Undo | test | `tests/contract/test_manage_items.py::test_codex_remove_deletes_the_plugins_table_and_add_writes_it_back`; `tests/contract/test_manage_items.py::test_add_missing_adds_a_plugin_and_a_server_together_and_undo_removes_both` |
 | 17 | A token moved in becomes a Keychain item; `gateway.json` holds a reference | test | `tests/unit/test_real_secrets.py::test_a_move_stores_the_token_and_leaves_a_reference`, real Keychain and real keyring |
 | 18 | A new session: the server's tools work | test | `tests/unit/test_real_secrets.py::test_a_session_gets_the_secret_from_the_real_store`, a stand-in session with the real Keychain and keyring |
 | 19 | Undo the move: the Keychain item is gone | test | `tests/unit/test_real_secrets.py::test_undo_of_the_move_removes_the_item` |
 | 20 | "Move secrets to the Keychain…" moves a plain token | test | `tests/unit/test_real_secrets.py::test_a_plain_token_in_gateway_json_moves_to_the_keychain` |
-| 21 | Four `security` facts | test | On macOS runners: `tests/unit/test_real_secrets.py::test_a_missing_item_ends_with_44`, `tests/unit/test_real_secrets.py::test_a_value_with_quotes_and_spaces_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_an_account_with_a_space_is_quoted_on_the_security_line`, `tests/unit/test_real_secrets.py::test_a_value_in_other_alphabets_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_a_4_kb_value_comes_back_unchanged`. The last two fail on macOS today and are marked expected to fail: a secret with letters outside ASCII, or one longer than about 2,000 characters (1,024 works, 2,048 does not), cannot be moved into the macOS Keychain; Kitden says it could not reach the Keychain and puts the settings back (seen 2026-11-15 on a GitHub macOS runner). Both work on Linux |
-| 22 | With Claude Code open, put back a server with a token; the entry stays | signed-in client | By hand until stage 2. Part of it: `tests/contract/test_manage_items.py::test_an_entry_kitden_wrote_itself_survives_the_clients_own_write`: "+ Add" (`mcp.add`) of a server with a token into Claude Code writes `~/.claude.json` with no command, the entry outlives `claude mcp add-json` rewriting the file, and Undo keeps the rest. Not tested: "Put back" with Claude Code open |
-| 23 | Settings change under an open preview: "Preview again", Cancel | test | `tests/browser/test_preview_drift.py::test_settings_changed_under_a_preview_ask_for_a_new_one_and_cancel_writes_nothing` |
+| 21 | Four `security` facts | test | On macOS runners: `tests/unit/test_real_secrets.py::test_a_missing_item_ends_with_44`, `tests/unit/test_real_secrets.py::test_a_value_with_quotes_and_spaces_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_an_account_with_a_space_is_quoted_on_the_security_line`, `tests/unit/test_real_secrets.py::test_a_value_in_other_alphabets_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_a_4_kb_value_comes_back_unchanged`. The last two fail on macOS today and are marked expected to fail: a secret with letters outside ASCII, or one longer than about 2,000 characters (1,024 works, 2,048 does not), cannot be stored in the macOS Keychain (seen 2026-11-15 on a GitHub macOS runner; `tests/unit/test_real_secrets.py::test_a_1024_character_value_comes_back_unchanged` shows 1,024 works). Kitden then says it could not reach the Keychain, and its change engine puts the settings back, as `tests/unit/test_local_gateway_move.py::test_a_failing_keychain_at_apply_restores_every_file` shows with a stand-in `security`. Both work on Linux |
+| 22 | With Claude Code open, put back a server with a token; the entry stays | signed-in client | By hand until the tester runs it. Part of it: `tests/contract/test_manage_items.py::test_an_entry_kitden_wrote_itself_survives_the_clients_own_write`: "+ Add" (`mcp.add`) of a server with a token into Claude Code writes `~/.claude.json` with no command, the entry outlives `claude mcp add-json` rewriting the file, and Undo keeps the rest. Not tested: "Put back" with Claude Code open |
+| 23 | Settings change under an open preview: "Preview again", Cancel | test | `tests/browser/test_preview_drift.py::test_settings_changed_under_a_preview_ask_for_a_new_one_and_cancel_writes_nothing`; it writes the settings file as Claude Code would, and does not run Claude Code |
 | 24 | Drag a server onto the gateway on the map, Apply, Undo from the toast | test | `tests/browser/test_map_drag.py::test_a_server_dragged_onto_the_gateway_is_moved_and_undo_from_the_toast_moves_it_back`: drag, Apply and Undo. Not tested here: a new session reaching the server through the gateway, which is part of check 3 |
 | — | Linux: 17 to 19 on an Ubuntu desktop | test | The tests of 17 to 19 on Ubuntu x64 and ARM, nightly job `systems`; a keyring that is down: `tests/unit/test_local_gateway_move.py::test_on_linux_a_keyring_that_is_down_refuses_the_review`, a unit test with a stand-in `secret-tool`, not run against Ubuntu's keyring: the move is refused at preview with "Kitden could not reach the keyring." and the files are unchanged |
 
 Two checks stay by hand for good: they are in the Cursor IDE, and Cursor needs its window and
 an account, which no runner has (checked 2026-11-14). Five more, the checks for a signed-in
-client, are by hand until the tester of stage 2 runs them. Do them all on a test project (a
+client, are by hand until the tester runs them. Do them all on a test project (a
 throwaway folder; never your own project). Kitden must know the project: open it once in the
 client, so that it shows in the page's project list. For Cursor, check the IDE, which names the
 project to the gateway; Cursor's command line does not (checked 2026-10-21).
@@ -192,11 +194,11 @@ Before a release that adds, removes or puts back items, also check these once by
 2. Check 11, in Codex: "+ Add" a server whose header reads a `${VAR}` from Claude Code into
    Codex. A new session reaches it (until the tester runs it)
 
-No test or hand check covers yet: a new session after a plugin is removed and brought back
-(checks 8 and 14; the tests read the client's plugin list), a new session after a server is put
-back (check 10; the test reads `claude mcp get`), and a plugin or a skill that "Add missing
-plugins and skills…" adds into Claude Code (check 13; the tests add into Codex, and a server
-into Claude Code).
+No test or hand check covers yet: a new session after a plugin is removed, brought back or
+added to a project (checks 8, 12, 14 and 15; the tests read the client's plugin list), a new
+session after a server is put back (check 10; the test reads `claude mcp get`), and a plugin
+or a skill that "Add missing plugins and skills…" adds into Claude Code (check 13; the tests
+add into Codex, and a server into Claude Code).
 
 Before a release that touches secrets, also check this once by hand:
 1. Check 22: with Claude Code open, "Put back in Claude Code…" a held server that has a token.
@@ -207,10 +209,13 @@ Before a release that touches secrets, also check this once by hand:
 The Keychain is not fully proven. Its tests (checks 17 to 21) run every night against the real
 Keychain on macOS and the real keyring on Linux, but two of them fail on macOS today and are
 marked expected to fail, on macOS only: a secret with letters outside ASCII, or one longer than
-about 2,000 characters (1,024 works, 2,048 does not), cannot be moved into the macOS Keychain.
-Kitden says it could not reach the Keychain and puts the settings back (seen 2026-11-15 on a
-GitHub macOS runner). Both work on Linux. Until Kitden is fixed, such a secret stays where it
-was.
+about 2,000 characters (1,024 works, 2,048 does not), cannot be stored in the macOS Keychain
+(seen 2026-11-15 on a GitHub macOS runner). Kitden then says it could not reach the Keychain,
+and its change engine puts the settings back (tested with a stand-in `security`). Both work on
+Linux. Until Kitden is fixed, such a secret stays where it was. Check 18 runs with a stand-in
+session and a keychain made for the run, which never asks for a password; a gateway started by
+a real client and reading the login Keychain is not tested. A Linux keyring that is down is
+tested only in a unit test with a stand-in `secret-tool`.
 
 ## Release
 

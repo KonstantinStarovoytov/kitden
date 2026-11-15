@@ -66,8 +66,8 @@ def run_tool(args: list[str], what: str) -> subprocess.CompletedProcess:
 
 
 def ci_keychain() -> Path:
-    """The keychain the nightly made for this run, from KITDEN_CI_KEYCHAIN. Only a
-    `.keychain-db` file under a temp folder, so never a login keychain."""
+    """The keychain the nightly made for this run, from KITDEN_CI_KEYCHAIN. Only a file named
+    `kitden-ci.keychain-db` under a temp folder, so never a login keychain."""
     named = os.environ.get("KITDEN_CI_KEYCHAIN")
     if not named:
         pytest.fail("KITDEN_CI_KEYCHAIN is not set: the workflow step names the run's keychain")
@@ -75,8 +75,11 @@ def ci_keychain() -> Path:
     temps = [Path(tempfile.gettempdir()).resolve()]
     if os.environ.get("RUNNER_TEMP"):
         temps.append(Path(os.environ["RUNNER_TEMP"]).resolve())
-    if path.suffix != ".keychain-db" or not any(path.is_relative_to(t) for t in temps):
-        pytest.fail(f"KITDEN_CI_KEYCHAIN must be a .keychain-db file under a temp folder: {path}")
+    if path.name != "kitden-ci.keychain-db" or not any(path.is_relative_to(t) for t in temps):
+        pytest.fail(
+            f"KITDEN_CI_KEYCHAIN must be a file named kitden-ci.keychain-db under a temp folder: "
+            f"{path}"
+        )
     if not path.is_file():
         pytest.fail(f"KITDEN_CI_KEYCHAIN names no file: {path}")
     return path
