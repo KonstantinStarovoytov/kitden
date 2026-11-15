@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import NamedTuple, TypeGuard
 
 from kitden.changes.actions import (
-    KITDEN_GATEWAY,
     MCP_ADD,
     PLUGIN_INSTALL,
     PLUGIN_SKILLS,
@@ -294,15 +293,6 @@ def _server_why(
             if i in by_id
         )
 
-    def held(row: Row) -> bool:
-        """The Kitden gateway holds it: a client reaches it through its `kitden` entry."""
-        return any(
-            by_id[i].via_gateway == KITDEN_GATEWAY
-            for c in found
-            for i in row.cells[c].items
-            if i in by_id
-        )
-
     def only_here(row: Row) -> bool:
         """Every item of the row is set in a project: no all-projects entry to add from."""
         loaded = [by_id[i] for c in found for i in row.cells[c].items if i in by_id]
@@ -315,9 +305,8 @@ def _server_why(
             if movable(row):
                 return SHARE_IN_GATEWAY
         elif any(row.cells[c].state == "gw" for c in found):
-            if held(row):
-                return f"Set up the Kitden gateway in {CLIENT_WORDS[client]} on the Gateway page."
-            return f"Connect {CLIENT_WORDS[client]} to the gateway on the Gateway page."
+            # Only the Kitden gateway holds servers, so this client lacks its `kitden` entry.
+            return f"Set up the Kitden gateway in {CLIENT_WORDS[client]} on the Gateway page."
         return NO_PROJECT_SERVER if only_here(row) else None
 
     return why
@@ -814,9 +803,7 @@ class _Tables(NamedTuple):
     by_key: dict[str, Row]
 
 
-def _tables(
-    inventory, adapters, project: str | None, *, gateway_registered: bool, hidden: frozenset[str]
-) -> _Tables:
+def _tables(inventory, adapters, project: str | None, *, hidden: frozenset[str]) -> _Tables:
     """The rows of every kind tab, before any finish: `hidden` columns leave out a row only they
     have, and hiding every found client hides none."""
     status = {c.id: c.status for c in inventory.clients}
@@ -828,7 +815,7 @@ def _tables(
     homes = list({a.home for a in adapters.values()})
     imports = cursor_imports(adapters, found)
 
-    map_rows = load_map(inventory, project, gateway_registered=gateway_registered)
+    map_rows = load_map(inventory, project)
     offers = catalog(inventory, adapters)
     skills = skill_catalog(inventory, adapters)
     # A client that cannot take a direct server gets its reason in place of an add.
@@ -919,7 +906,6 @@ def library(
     adapters,
     project: str | None,
     *,
-    gateway_registered: bool,
     kind: str,
     show: str = "mine",
     q: str = "",
@@ -935,7 +921,7 @@ def library(
     `columns`, marked, and a row that only they have is left out; hiding every found client
     hides none. Counts follow show, search and hidden, not the category.
     """
-    t = _tables(inventory, adapters, project, gateway_registered=gateway_registered, hidden=hidden)
+    t = _tables(inventory, adapters, project, hidden=hidden)
     rows = t.rows
     _finish(t, kind, inventory, adapters, project)
 
@@ -1207,7 +1193,6 @@ def library_list(
     adapters,
     project: str | None,
     *,
-    gateway_registered: bool,
     tab: str,
     show: str = "mine",
     q: str = "",
@@ -1223,7 +1208,7 @@ def library_list(
     with a warning, and `attention` in the answer counts them; `q` keeps an item whose name, or
     a part's, holds the text. A group with no item left is left out.
     """
-    t = _tables(inventory, adapters, project, gateway_registered=gateway_registered, hidden=hidden)
+    t = _tables(inventory, adapters, project, hidden=hidden)
     if tab == "instructions":
         groups = _file_groups(instructions_map(inventory, adapters, project), t)
         show = "mine"

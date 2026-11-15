@@ -16,7 +16,6 @@ import hashlib
 import json
 import os
 from collections.abc import Callable
-from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -35,7 +34,6 @@ from kitden.changes.copy_folder import (
     remove_folder,
 )
 from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
-from kitden.gateway_api import GatewayError
 from kitden.gateways import data_dir
 from kitden.local_gateway import keychain
 from kitden.local_gateway.keychain import KeychainError
@@ -46,7 +44,6 @@ from kitden.model import (
     FileEdit,
     FolderCopy,
     FolderRemoval,
-    GatewayEdit,
     KeychainItem,
     Scope,
     Step,
@@ -63,8 +60,6 @@ CLIENT_CLI = "client_cli"
 # folder has model.REMOVE_FOLDER.
 
 Runner = Callable[[list[str], str | None], CommandResult]
-# Opens a signed-in client for the gateway a step names; used as a context manager.
-GatewayClients = Callable[[GatewayEdit], AbstractContextManager]
 # The home folder and the folders a change may write in (see `writable_roots`).
 Roots = Callable[[], tuple[Path, list[Path]]]
 
@@ -165,8 +160,8 @@ def writable(path: str | Path, home: Path, roots: list[Path]) -> bool:
 
 
 def _places(step: Step) -> list[str]:
-    """The files and folders a step writes. A gateway address and a Keychain item are not
-    paths; the folder a command runs in is checked on its own."""
+    """The files and folders a step writes. A Keychain item is not a path; the folder a
+    command runs in is checked on its own."""
     places = [
         step.edit.path if step.edit is not None else None,
         step.copy.target if step.copy is not None else None,
@@ -176,11 +171,9 @@ def _places(step: Step) -> list[str]:
 
 
 def step_path(step: Step) -> str | None:
-    """Where a step writes: the file, the gateway address, the copied or the removed folder."""
+    """Where a step writes: the file, the copied or the removed folder."""
     if step.edit is not None:
         return step.edit.path
-    if step.gateway is not None:
-        return step.gateway.url
     if step.removal is not None:
         return step.removal.path
     return step.copy.target if step.copy is not None else None
@@ -332,8 +325,8 @@ def _edit_record(edit: FileEdit | None) -> dict | None:
     }
 
 
-def _fields(part: GatewayEdit | FolderCopy | FolderRemoval | None) -> dict | None:
-    """A gateway edit, folder copy or folder removal as a record; read back with `X(**r)`."""
+def _fields(part: FolderCopy | FolderRemoval | None) -> dict | None:
+    """A folder copy or folder removal as a record; read back with `X(**r)`."""
     return None if part is None else dict(part.__dict__)
 
 
@@ -356,10 +349,8 @@ def _record(change: Change) -> dict:
                 "undo_command": step.undo_command,
                 "cwd": step.cwd,
                 "restart_note": step.restart_note,
-                "login_note": step.login_note,
                 "shared_file": step.shared_file,
                 "edit": _edit_record(step.edit),
-                "gateway": _fields(step.gateway),
                 "copy": _fields(step.copy),
                 "removal": _fields(step.removal),
                 "keychain": _keychain_record(step.keychain),
@@ -398,8 +389,6 @@ def _from_record(record: dict) -> Change:
                 backup_path=e["backup_path"],
                 masked_diff=e["masked_diff"],
             )
-        g = raw.get("gateway")
-        gateway = GatewayEdit(**g) if g is not None else None
         c = raw.get("copy")
         copy = FolderCopy(**c) if c is not None else None
         r = raw.get("removal")
@@ -410,7 +399,6 @@ def _from_record(record: dict) -> Change:
                 scope=Scope(raw["scope"]),
                 name=raw["name"],
                 edit=edit,
-                gateway=gateway,
                 copy=copy,
                 removal=removal,
                 mechanism=raw["mechanism"],
@@ -418,7 +406,6 @@ def _from_record(record: dict) -> Change:
                 undo_command=raw.get("undo_command"),
                 cwd=raw["cwd"],
                 restart_note=raw["restart_note"],
-                login_note=raw["login_note"],
                 shared_file=raw["shared_file"],
                 keychain=[KeychainItem(**k) for k in raw.get("keychain") or []],
                 reaches=raw.get("reaches"),
@@ -444,7 +431,6 @@ class Engine:
         store: ChangeStore,
         run: Runner,
         on_write: Callable[[str, str | None], None] | None = None,
-        gateway_clients: GatewayClients | None = None,
         *,
         roots: Roots | None = None,
         keychain_run: keychain.Runner | None = None,
@@ -452,7 +438,6 @@ class Engine:
         self.store = store
         self.run = run
         self.on_write = on_write or (lambda path, sha: None)
-        self.gateway_clients = gateway_clients
         # The home folder and the folders a change may write in; None checks nothing.
         self.roots = roots
         # Runs the Keychain's `security`; None is the real one (the demo has a stand-in).
@@ -497,7 +482,6 @@ class Engine:
                 step.cwd = os.path.realpath(step.cwd)
         if self.roots is not None:
             self._check_places(steps, *self.roots())
-        self._preview_gateway([s for s in steps if s.gateway is not None])
         self._preview_copies([s for s in steps if s.copy is not None])
         self._preview_removals([s for s in steps if s.removal is not None])
         self._preview_keychain(steps)
@@ -547,39 +531,6 @@ class Engine:
             ran = not step.cwd or _allowed(Path(step.cwd), roots, stops, folder=True)
             if not all(written) or not ran:
                 raise ChangeRefusedError(OUTSIDE)
-
-    def _client(self, gateway: GatewayEdit) -> AbstractContextManager:
-        if self.gateway_clients is None:
-            raise ChangeRefusedError("The gateway cannot be managed from here")
-        return self.gateway_clients(gateway)
-
-    def _preview_gateway(self, steps: list[Step]) -> None:
-        """Read what the gateway holds; a name already there refuses the change."""
-        if not steps:
-            return
-        gateway = steps[0].gateway
-        assert gateway is not None
-        try:
-            with self._client(gateway) as client:
-                held = {s["name"] for s in client.held()}
-        except GatewayError as error:
-            raise ChangeRefusedError(str(error)) from None
-        seen: set[str] = set()
-        for step in steps:
-            g = step.gateway
-            assert g is not None
-            if g.gateway_id != gateway.gateway_id:
-                raise ChangeRefusedError("One change can move servers into one gateway only")
-            if g.name in held:
-                raise ChangeRefusedError(
-                    f"The gateway already has {g.name}. Remove the direct entry instead."
-                )
-            if g.name in seen:
-                raise ChangeRefusedError(f"{g.name} would be added twice in one change")
-            seen.add(g.name)
-            shown = redact(g.server)[0]
-            lines = json.dumps({g.name: shown}, indent=2, ensure_ascii=False).splitlines()
-            g.masked_diff = f"{g.url}\n" + "\n".join(f"+{line}" for line in lines)
 
     def _security(self) -> keychain.Runner:
         """The stand-in when one was given, else the real `security`."""
@@ -658,9 +609,6 @@ class Engine:
             if step.edit is not None:
                 shown, hid = redact(step.edit.after)
                 step.edit.after = shown if hid else step.edit.after
-            if step.gateway is not None:
-                shown, hid = redact(step.gateway.server)
-                step.gateway.server = shown if hid else step.gateway.server
 
     # Apply -------------------------------------------------------------------------------
 
@@ -756,7 +704,6 @@ class Engine:
         if change.state is not ChangeState.PREVIEWED:
             change.move_to(ChangeState.APPLYING)  # raises: only a previewed change applies
         file_steps = [s for s in change.steps if s.edit is not None]
-        gateway_steps = [s for s in change.steps if s.gateway is not None]
         copy_steps = [s for s in change.steps if s.copy is not None]
         removal_steps = [s for s in change.steps if s.removal is not None]
         current = {step.file_edit.path: _read(step.file_edit.path) for step in file_steps}
@@ -788,8 +735,6 @@ class Engine:
         try:
             # The Keychain first: the settings file then names items that are there.
             self._store_secrets(change, stored)
-            # The gateway side next: a server that cannot be added leaves the files alone.
-            self._apply_gateway(gateway_steps, tick)
             for step in copy_steps:
                 self._apply_copy(step, copied)
                 tick(step)
@@ -822,7 +767,7 @@ class Engine:
             for step in file_steps:
                 self._verify(step, step.file_edit.after, expected[step.file_edit.path])
         except Exception as error:  # noqa: BLE001 - any error must be taken back
-            lost = self._roll_back(current, ran, copied, removed, stored, gateway_steps)
+            lost = self._roll_back(current, ran, copied, removed, stored)
             try:
                 self._mark_secret(change, file_steps)
             except Exception:  # noqa: BLE001 - when unsure, the backups count as secret
@@ -859,7 +804,6 @@ class Engine:
         copied: list[Step],
         removed: list[Step],
         stored: list[KeychainItem],
-        gateway_steps: list[Step],
     ) -> list[str]:
         """Take back what a failed Apply did. Returns a sentence for each thing that could not
         be put back; a failure of one action never stops the others."""
@@ -893,13 +837,6 @@ class Engine:
                 remove_folder(step.folder_copy.target)
             except Exception:  # noqa: BLE001
                 lost.append(f"{step.folder_copy.target} could not be removed.")
-        try:
-            self._remove_from_gateway(gateway_steps, best_effort=True)
-        except Exception:  # noqa: BLE001
-            names = ", ".join(
-                s.gateway_edit.name for s in gateway_steps if s.gateway_edit.server_uuid
-            )
-            lost.append(f"{names} may still be in the gateway.")
         store = secret_store_name()
         for item in reversed(stored):
             try:
@@ -1044,48 +981,11 @@ class Engine:
 
         return tick
 
-    def _apply_gateway(self, steps: list[Step], tick: Callable[[Step], None]) -> None:
-        """Add each server, then read the list back: every name must be there."""
-        if not steps:
-            return
-        with self._client(steps[0].gateway_edit) as client:
-            for step in steps:
-                g = step.gateway_edit
-                g.server_uuid = client.add(g.name, g.server)
-                tick(step)
-            held = {s["name"] for s in client.held()}
-        missing = [s.gateway_edit.name for s in steps if s.gateway_edit.name not in held]
-        if missing:
-            raise _ApplyError(f"the gateway did not list {', '.join(missing)} after adding it")
-
-    def _remove_from_gateway(
-        self,
-        steps: list[Step],
-        best_effort: bool = False,
-        tick: Callable[[Step], None] = lambda step: None,
-    ) -> list[str]:
-        """Remove the added servers, last first. Returns the names that were already gone."""
-        added = [s for s in reversed(steps) if s.gateway and s.gateway.server_uuid]
-        if not added:
-            return []
-        gone = []
-        try:
-            with self._client(added[0].gateway_edit) as client:
-                for step in added:
-                    if not client.remove(step.gateway_edit.server_uuid):
-                        gone.append(step.gateway_edit.name)
-                    tick(step)
-        except GatewayError:
-            if not best_effort:
-                raise
-        return gone
-
     # Undo --------------------------------------------------------------------------------
 
     def undo(self, change_id: str) -> Change:
         """Put back what the change wrote. A blocked Undo can be tried again: what is back
-        already is skipped. The servers it added to a gateway are taken out last, once the
-        client files read back as before, so a server is never in neither place."""
+        already is skipped."""
         change = self.changes[change_id]
         if change.state not in (ChangeState.VERIFIED, ChangeState.UNDO_BLOCKED):
             change.move_to(ChangeState.UNDONE)  # raises: only an applied change can be undone
@@ -1162,14 +1062,6 @@ class Engine:
             f"{i.server}/{i.key} in your {store} keeps the new value." for i in items if i.existed
         ]
 
-        # The gateway must answer before anything changes; its servers go last, below.
-        added = [s for s in change.steps if s.gateway is not None]
-        try:
-            if added and any(s.gateway_edit.server_uuid for s in added):
-                with self._client(added[0].gateway_edit) as client:
-                    client.held()
-        except GatewayError as error:
-            return self._blocked(change, f"{error}; the client files were not changed")
         tick = self._counter(change)
         for step in reversed(copies):
             remove_folder(step.folder_copy.target)
@@ -1209,12 +1101,6 @@ class Engine:
                 raise RuntimeError(f"{step.copy.target}: undo did not remove the copy")
             if step.removal and digest(step.removal.path) != step.removal.content_hash:
                 raise RuntimeError(f"{step.removal.path}: undo did not copy the folder back")
-        try:
-            gone = self._remove_from_gateway(added, tick=tick)
-        except GatewayError as error:
-            return self._blocked(
-                change, f"The client files are back, but {error}. Undo again to finish."
-            )
         for item in reversed(created):
             try:
                 keychain.delete(item.ref, run=self._security())
@@ -1222,10 +1108,8 @@ class Engine:
                 kept.append(f"{item.server}/{item.key} stays in your {store}.")
         self.on_progress(change.id, len(change.steps), len(change.steps), None)
         change.move_to(ChangeState.UNDONE)
-        notes = [f"{', '.join(gone)} had already been removed from the gateway."] if gone else []
-        notes += kept
-        if notes:
-            change.error = " ".join(notes)
+        if kept:
+            change.error = " ".join(kept)
         self._finish(change)
         return change
 
@@ -1235,8 +1119,6 @@ class Engine:
         places = [s.edit.path for s in change.steps if s.edit is not None]
         places += [s.copy.target for s in change.steps if s.copy is not None]
         places += [s.removal.path for s in change.steps if s.removal is not None]
-        if any(s.gateway is not None for s in change.steps):
-            places.append("the gateway")
         items = [f"{i.server}/{i.key}" for s in change.steps for i in s.keychain]
         if items:
             places.append(f"the {secret_store_name()} items {', '.join(items)}")
@@ -1280,7 +1162,6 @@ class Engine:
                         "reaches": step_readers(s),
                         "keeps": s.removal.keeps if s.removal else None,
                         "restart_note": s.restart_note,
-                        "login_note": s.login_note,
                         "before_hash": s.edit.before_hash if s.edit else None,
                         "after_hash": s.edit.after_hash if s.edit else None,
                         "keychain": _keychain_record(s.keychain),

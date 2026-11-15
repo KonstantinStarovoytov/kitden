@@ -7,14 +7,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-from kitden.gateways import load_gateways
 from kitden.local_gateway.settings import load_settings
 from kitden.local_gateway.views import gateway_items
 from kitden.model import Project
 from kitden.views.context_view import context_view
 from kitden.views.effective import found_clients, project_views
 from kitden.views.explain import brief, explain
-from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
+from kitden.views.findings import find_bypasses, find_findings, finding_dict
 from kitden.views.inventory import Inventory, build_inventory
 
 NO_EDITS = (
@@ -27,7 +26,6 @@ NO_CHANGES = "Read-only: this tool cannot change settings. " + NO_EDITS
 def read_setup(home: Path) -> Inventory:
     """A fresh read, built as the page builds it, so the answers agree with the page."""
     inventory = build_inventory(home)
-    mark_gateways(inventory, load_gateways(home))
     inventory.items += gateway_items(inventory, load_settings(home), home)
     return inventory
 

@@ -3,7 +3,7 @@
 import { $, button, byKeys, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, pageWaits, plural, reportError, treeRow, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
-import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool } from "./gateway-details.js";
+import { connectAction, connectBody, followProject, heldServer, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { flipToolPick, onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
@@ -11,8 +11,8 @@ import { findIn, focusAfter, foldable, foldStep, groupsWith, isNarrow, keepFolde
 import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
-import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote, WRITABLE } from "./parts.js";
+import { closePanel, isPanelOpen, moveInto, panelState, projectLabel, review } from "./panel.js";
+import { banner, CLIENT_NAMES, folderName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote, WRITABLE } from "./parts.js";
 import { arrival, busy, current, currentError, data, gatewayShows, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { openAccess } from "./access-form.js";
@@ -159,7 +159,7 @@ function switchInPlace(again, scope) {
 // finds only that.
 function treeFor(view, mode = "map") {
   const onMapOnly = mode === "map" ? { rows: rowsOnMap(tray).map(withKind), ...movingOn(), addCard: true } : {};
-  return growBack(gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, ...onMapOnly }));
+  return growBack(gatewayTree(view, { setup: data.setupServer, clients: data.clients, picked: state.project, ...onMapOnly }));
 }
 
 // A row that adds a marketplace server, with its kind ("remote" or "local"), which the Add panel
@@ -172,7 +172,7 @@ function withKind(row) {
 // when an Undo takes it out, as its preview did (ADD_GROW_MS).
 function growBack(model) {
   for (const block of model.blocks) {
-    if (block.kind === "held" && block.gateway.kind === "kitden" && wasAdded(block.name)) Object.assign(block, { growsFrom: `gateway:${block.gateway.id}`, growMs: ADD_GROW_MS });
+    if (block.kind === "held" && wasAdded(block.name)) Object.assign(block, { growsFrom: `gateway:${block.gateway.id}`, growMs: ADD_GROW_MS });
   }
   return model;
 }
@@ -201,7 +201,6 @@ function noGateway() {
   const card = el("section", "card");
   card.append(el("h2", null, "No gateway yet"));
   card.append(el("p", "muted", "A gateway keeps your MCP servers in one place: each client needs one entry, and you turn tools on or off once."));
-  card.append(addForm());
   return card;
 }
 
@@ -227,19 +226,6 @@ export const GATEWAY_COLUMNS = [
   { id: "tools", caption: "Tools", w: 200, h: 34, colGap: 70, narrowW: 190, narrowH: 30 },
 ];
 
-// The registered gateways, the one the clients use first.
-function usedFirst(model, gateways) {
-  return [...gateways].sort((a, b) => Number(model.used.includes(b.id)) - Number(model.used.includes(a.id)));
-}
-
-// What a server the Gateway lists is, in one word. MetaMCP says SSE or STREAMABLE_HTTP; Obot says
-// how it runs the server: a remote address, or a program Obot hosts (uvx, npx, containerized).
-function heldKind(server) {
-  if (server.type === "SSE") return "SSE";
-  if (!server.type || server.type === "STREAMABLE_HTTP" || server.type === "remote") return "Remote";
-  return "Hosted";
-}
-
 // A held server's tag in a project view: "Only this project" when this project's own rule turns
 // it on and no other known project has it on (`on_elsewhere`), "This project" for any other rule
 // of its own.
@@ -251,10 +237,8 @@ function heldTag(server, on) {
 // The Gateway as one tree for the map (map.js) and the List, from `view` (the /api/gateway-view
 // answer) and `setup` (/api/setup-server):
 // - the three clients, each joined to the Kitden gateway while its kitden entry is on;
-// - the Kitden gateway, then each registered gateway (the used one first), joined to each client
-//   it connects, with its servers in Remote and Local groups, joined to it unless off. A
-//   registered gateway's servers come from the live read (`held`, gateway id -> its answer),
-//   without tools;
+// - the Kitden gateway, joined to each client it connects, with its servers in Remote and Local
+//   groups, joined to it unless off;
 // - the tools of every server the Kitden gateway holds, from its tool list, joined to it while
 //   on (layoutTree shows them only for an open server);
 // - the servers outside every gateway, each joined to each client that has it by a direct line,
@@ -276,7 +260,7 @@ function heldTag(server, on) {
 // line drawn leaving. Each block and link a row draws names it (`row`, its key); rows are drawn
 // once they have their part. While a server is dragged (`drop`, `{ name, kind }`, kind "remote"
 // or "local") the slot opens in that group too.
-export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "", rows = [], drop = null, addCard = false } = {}) {
+export function gatewayTree(view, { setup, clients = [], picked = "", rows = [], drop = null, addCard = false } = {}) {
   const { linked, off, known, setup: offers } = kitdenClients(setup);
   const kitden = view.gateways.find((g) => g.kind === "kitden");
   const first = known && !linked.length && !off.length && Boolean(kitden) && !kitden.problem && !(kitden.servers || []).length;
@@ -288,19 +272,19 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   const out = movesOut(rows);
   for (const id of WRITABLE) blocks.push(clientBlock(id, { setup, linked, known, first, clients, wait: waits.get(id) }));
   // A gateway block joined to the clients it `reaches` (null when not read), then its `servers` in
-  // their groups (`kindOf` says which), but those that show elsewhere (`away`, by name); it counts
+  // their groups (by their kind), but those that show elsewhere (`away`, by name); it counts
   // only those not in preview (gateway-notes 4.1), so a server moving out is not counted.
   // `server(block, word)` adds what each server's block says. `unread` says why Kitden does not
   // know what it holds, so no count shows: a problem is not an empty gateway. `ends` are blocks
   // for the end of a group (each `{ kind, block }`), which open that group if need be.
   // A gateway block speaks no state word: it says where it runs and its clients and servers, or
   // what Kitden could not read, and then its state is not known.
-  const addGateway = (gateway, { reaches, servers, kindOf, server, unread = null, ends = [], away = new Map() }) => {
+  const addGateway = (gateway, { reaches, servers, server, unread = null, ends = [], away = new Map() }) => {
     const id = `gateway:${gateway.id}`;
-    blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), ...gatewayFace(gateway, reaches, servers.filter((s) => !away.has(s.name)), unread), state: unread ? "unk" : "on", stateInMeta: true, gateway, unread, ports: { left: true, right: true } });
+    blocks.push({ id, column: "gateway", kind: "gateway", name: gateway.name, ...gatewayFace(gateway, reaches, servers.filter((s) => !away.has(s.name)), unread), state: unread ? "unk" : "on", stateInMeta: true, gateway, unread, ports: { left: true, right: true } });
     for (const client of reaches || []) links.push({ from: `client:${client}`, to: id, kind: "on" });
     for (const [kind, word, mark] of KINDS) {
-      const mine = servers.filter((s) => kindOf(s) === kind && !away.has(s.name));
+      const mine = servers.filter((s) => s.kind === kind && !away.has(s.name));
       const last = ends.filter((end) => end.kind === kind).map((end) => end.block);
       if (!mine.length && !last.length) continue;
       const group = `group:${gateway.id}:${kind}`;
@@ -334,25 +318,13 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
       }
     };
     const unread = kitden.problem ? "Could not read its settings." : null;
-    addGateway(kitden, { reaches: known ? linked : null, servers: kitden.servers || [], kindOf: (s) => s.kind, server, unread, ends: adds, away: out });
+    addGateway(kitden, { reaches: known ? linked : null, servers: kitden.servers || [], server, unread, ends: adds, away: out });
     leaveParts(blocks, links, kitden, rows, picked);
-    // The map ends the Kitden gateway's groups with a card that opens the add panel, before any
-    // other gateway: once there is a gateway to add to.
+    // The map ends the Kitden gateway's groups with a card that opens the add panel, once there
+    // is a gateway to add to.
     if (addCard && !kitden.problem) blocks.push({ ...ADD_CARD });
   }
   if (kitden) connectParts(links, kitden, waits);
-  for (const other of usedFirst(view, view.gateways.filter((g) => g.kind !== "kitden"))) {
-    const per = view.connections[other.id] || {};
-    const answer = held.get(other.id);
-    // A server the gateway runs itself (uvx, npx, a container) is local to it.
-    const kindOf = (s) => (heldKind(s) === "Hosted" ? "local" : "remote");
-    // Not read yet, or not readable here: no count; a failed read says NOT_REACHED.
-    const unread = answer && answer.servers ? null : answer && answer.error ? NOT_REACHED : "";
-    const server = (block) => {
-      block.meta = heldKind(block.server);
-    };
-    addGateway(other, { reaches: WRITABLE.filter((c) => (per[c] || []).length), servers: (answer && answer.servers) || [], kindOf, server, unread });
-  }
   blocks.push(...tools);
   const outside = outsideParts(view, kitden, { picked, first, moved, out, gone: directRemovals(rows) });
   return { columns: GATEWAY_COLUMNS, blocks: [...blocks, ...outside.blocks], links: [...links, ...outside.links] };
@@ -389,9 +361,9 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
       const meta = `In ${joinWords(columns.map((c) => CLIENT_NAMES[c]))}`;
       const targets = movesTo(view, group, row);
       const tag = picked && row.override ? ORIGIN_WORDS.override : null;
-      // A drop moves into the Kitden gateway only, so a grip needs it; a move already in the tray
+      // A drop moves into the Kitden gateway, so a grip needs it; a move already in the tray
       // needs no second one, and a server on its way out has none.
-      const grip = targets.some((g) => g.kind === "kitden") && !first && !moved.has(id) && !leaving;
+      const grip = targets.length > 0 && !first && !moved.has(id) && !leaving;
       const state = row.unknown ? "unk" : "on";
       blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, lamp: "out", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, row, groupKey: group, columns, move: targets.length > 0, grip, from: `preview:${row.name}`, ...(leaving ? { leaving } : {}) });
       for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line, ...(leaves.has(client) ? leavesWith(leaves.get(client)) : {}) });
@@ -599,13 +571,12 @@ function pendingProjects(ids) {
 
 // What a gateway's block says under its name: the Kitden gateway's lamp and where it runs, then
 // how many clients it reaches (when the setup was read, `reaches`) and how many servers it holds,
-// each with its icon. A gateway Kitden could not read says why instead (`unread`), and one it is
-// still reading says nothing.
+// each with its icon. A gateway Kitden could not read says why instead (`unread`).
 function gatewayFace(gateway, reaches, servers, unread) {
-  if (unread !== null) return { meta: unread || null, stats: null };
+  if (unread !== null) return { meta: unread, stats: null };
   const stats = [{ icon: "server", words: plural(servers.length, "server", "servers") }];
   if (reaches) stats.unshift({ icon: "monitor", words: plural(reaches.length, "client", "clients") });
-  return gateway.kind === "kitden" ? { meta: gateway.where, lamp: "on", stats } : { meta: null, stats };
+  return { meta: gateway.where, lamp: "on", stats };
 }
 
 // A server of the Kitden gateway (`block`, with `word`, Remote or Local, for one whose tools Kitden
@@ -702,9 +673,8 @@ export function listRows(model, open = new Set(), folded = new Set()) {
     const linked = reaches(gateway.id);
     const count = groups.reduce((n, g) => n + (children.get(g.id) || []).length, 0);
     const expanded = groups.length ? !folded.has(gateway.id) : undefined;
-    // What it holds, or why Kitden does not know ("" while a live read runs: nothing to say). A
-    // first run's slot says what a gateway is for.
-    let meta = gateway.unread === null ? plural(count, "server", "servers") : gateway.unread || null;
+    // What it holds, or why Kitden does not know. A first run's slot says what a gateway is for.
+    let meta = gateway.unread === null ? plural(count, "server", "servers") : gateway.unread;
     if (gateway.kind === "slot") meta = gateway.meta;
     row(gateway, null, 0, { usedBy: linked, meta, expanded });
     if (!expanded) continue;
@@ -712,8 +682,7 @@ export function listRows(model, open = new Set(), folded = new Set()) {
       group(g.id, g.name, gateway.id, 1, children.get(g.id) || [], (server) => {
         const tools = children.get(server.id) || [];
         const opened = tools.length ? open.has(server.id) : undefined;
-        const own = server.gateway.kind === "kitden";
-        row(server, g.id, 2, { usedBy: server.state === "on" ? linked : [], tools: own ? server.onCount : null, meta: own ? server.onIn : server.meta, expanded: opened });
+        row(server, g.id, 2, { usedBy: server.state === "on" ? linked : [], tools: server.onCount, meta: server.onIn, expanded: opened });
         if (opened) for (const t of tools) row(t, server.id, 3, { tag: HINT_TAGS[t.tool.hint] || null, scope: ownTag(t.tool) });
       }, g.icon);
     }
@@ -906,8 +875,7 @@ function blocksById(model) {
 // the map does not act on the link: a client disconnects from the Kitden gateway, a client's own
 // entries of a server it sets up on its own go (the row's `client_items` for that client: none
 // for a plugin's server), a server in the Kitden gateway comes out of it, and a tool of such a
-// server turns off, for the picked project (`picked`, "" for all). A registered gateway's links
-// have none.
+// server turns off, for the picked project (`picked`, "" for all).
 export function linkRemoval(model, link, picked) {
   const byId = blocksById(model);
   const from = byId.get(link.from);
@@ -919,10 +887,9 @@ export function linkRemoval(model, link, picked) {
     return items.length ? { tip: `Remove ${to.name} from ${from.name}`, body } : null;
   }
   if (from.kind === "client") {
-    const kitden = to.kind === "gateway" && to.gateway.kind === "kitden";
-    return kitden && from.disconnect ? { tip: `Disconnect ${from.name}`, body: from.disconnect } : null;
+    return to.kind === "gateway" && from.disconnect ? { tip: `Disconnect ${from.name}`, body: from.disconnect } : null;
   }
-  if (!from.gateway || from.gateway.kind !== "kitden") return null;
+  if (!from.gateway) return null;
   if (from.kind === "gateway" && to.kind === "held") {
     return { tip: `Remove ${to.name} from the gateway`, body: { action: "gateway.remove", targets: [], params: { server: to.name } } };
   }
@@ -1536,14 +1503,12 @@ function focusGateway({ fromDock }) {
 }
 
 // What a block shows before its name: a client's tile, the Kitden house (it keeps its own color),
-// a registered gateway's mark, or the icon of what kind of server it is (15 px, on a tile of its
+// or the icon of what kind of server it is (15 px, on a tile of its
 // own except outside the gateway, a move out's preview too: `.bare` in style.css). The slot of a
 // drag shows nothing.
 function tile(block) {
   if (block.kind === "client") return mark(block.client);
-  if (GATEWAY_KINDS.includes(block.kind) && block.gateway) {
-    return block.gateway.kind === "kitden" ? kitdenHouse("block-house") : mark("gateway");
-  }
+  if (GATEWAY_KINDS.includes(block.kind) && block.gateway) return kitdenHouse("block-house");
   if (!block.icon) return null;
   const holder = el("span", block.parent === "group:outside" ? "block-icon bare" : "block-icon");
   holder.append(icon(block.icon, 15));
@@ -1592,7 +1557,7 @@ function selectedRow(rows, byId) {
   if (!selected) return null;
   const matches = rows.filter((row) => {
     const block = byId.get(row.id);
-    if (selected.kind === "mcp_server") return (row.kind === "outside" || (row.kind === "held" && block.gateway.kind === "kitden")) && row.name === selected.name;
+    if (selected.kind === "mcp_server") return (row.kind === "outside" || row.kind === "held") && row.name === selected.name;
     if (selected.kind === "direct") return row.kind === "outside" && row.name === selected.name;
     if (selected.kind === "tool") return row.id === `tool:${selected.name}`;
     return selected.kind === "client" && row.id === `client:${selected.name}`;
@@ -1611,7 +1576,7 @@ function listRow(row, block, { current, selected, view, press }) {
   const { node, name } = treeRow(row.group ? "tg-row group" : `tg-row ${row.kind}`, row, { current, selected });
   if (row.found) node.classList.add("found");
   if (row.kind === "client") name.append(mark(block.client));
-  else if (GATEWAY_KINDS.includes(row.kind)) name.append(mark(block.gateway.kind === "kitden" ? "kitden" : "gateway"));
+  else if (GATEWAY_KINDS.includes(row.kind)) name.append(mark("kitden"));
   else if (row.kind === "held" || row.kind === "tool") {
     const dot = el("span", row.state === "on" ? "tg-dot on" : "tg-dot");
     dot.setAttribute("aria-hidden", "true");
@@ -1638,7 +1603,7 @@ function listRow(row, block, { current, selected, view, press }) {
   const action = cell("tg-action");
   if (row.action === "move") {
     // The drag's keyboard path: the same review as "Move into the gateway…" in Details.
-    const move = button("Move in…", () => moveInto(movesTo(view, block.groupKey, block.row), block.row.items, block.name), "btn small");
+    const move = button("Move in…", () => moveInto(movesTo(view, block.groupKey, block.row)[0], block.row.items), "btn small");
     move.tabIndex = current ? 0 : -1;
     move.dataset.focus = `move:${row.id}`;
     action.append(move);
@@ -1685,10 +1650,8 @@ function openDetails(block) {
   } else if (GATEWAY_KINDS.includes(block.kind)) {
     setState({ selected: null });
     showGateway(block.gateway.id);
-  } else if (block.kind === "held") {
-    if (block.gateway.kind === "kitden") showHeld(block.server.name).catch(reportError);
-    else showRegistered(block.server, block.gateway);
-  } else if (block.kind === "tool") showTool(block.server.name, block.name).catch(reportError);
+  } else if (block.kind === "held") showHeld(block.server.name).catch(reportError);
+  else if (block.kind === "tool") showTool(block.server.name, block.name).catch(reportError);
   else if (block.kind === "outside") showOutside(block.groupKey, block.name).catch(reportError);
 }
 
@@ -1742,22 +1705,3 @@ async function openArrival(view, model, mode) {
   } else if (found.client) showRow(model, `client:${found.client}`);
   else if (found.group) showRow(model, `group:${found.group}`, { unfold: true });
 }
-
-// Details of a server a registered gateway holds: what it is and where it is set. The address
-// stays behind Details, as on the other lists.
-function showRegistered(server, gateway) {
-  const body = el("div", "body");
-  const row = el("div", "layer");
-  const middle = el("div");
-  const kind = heldKind(server);
-  middle.append(el("div", "name", `In ${gatewayName(gateway)} · ${kind === "Remote" ? "Streamable HTTP" : kind === "Hosted" ? `Hosted by ${gatewayName(gateway)} (${server.type})` : kind}`));
-  const url = el("div", "why mono", server.url || "");
-  url.title = server.url || "";
-  if (server.url) middle.append(url);
-  row.append(mark("gateway"), middle);
-  const stack = el("div", "stack");
-  stack.append(row);
-  body.append(stack, el("p", "muted", `Tools and access are set in ${gatewayName(gateway)} itself.`));
-  openInfo("MCP server", server.name, body);
-}
-

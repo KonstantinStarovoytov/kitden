@@ -164,9 +164,9 @@ def test_every_command_copies_the_old_data_folder_once(tmp_path, capsys, system)
     system("mac")  # the old folder is macOS's only
 
     (tmp_path / OLD_DATA_DIR).mkdir(parents=True)
-    (tmp_path / OLD_DATA_DIR / "settings.json").write_text('{"gateways": []}')
+    (tmp_path / OLD_DATA_DIR / "changes.log").write_text("")
     cli.main(["scan", "--home", str(tmp_path)])
-    assert (data_dir(tmp_path) / "settings.json").is_file()
+    assert (data_dir(tmp_path) / "changes.log").is_file()
     assert "Copied" in capsys.readouterr().err
 
 

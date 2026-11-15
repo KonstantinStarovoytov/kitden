@@ -1,25 +1,18 @@
 """Which items offer which actions (FR-025, FR-026) and the steps each client uses (T045)."""
 
-import json
-
 import pytest
 
 from kitden.changes.actions import (
-    connect_steps,
     folder_readers,
     plugin_skill_steps,
     plugin_skills_left_out,
     remove_steps,
 )
 from kitden.changes.json_splice import ABSENT
-from kitden.model import Gateway, GatewayAuth
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.skills import skill_catalog
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_skills_catalog import PLUGIN, add_skills_marketplace
-
-URL = "http://127.0.0.1:12008/metamcp/dev/mcp"
-KEYED = Gateway(url=URL, auth=GatewayAuth.ENV_KEY, key_env_var="GW_KEY")
 
 
 @pytest.fixture
@@ -75,55 +68,6 @@ def test_only_direct_entries_in_files_can_be_removed_and_nothing_adds_or_toggles
     }
 
 
-def test_gateway_entries_use_key_references_in_each_client(home, adapters):
-    steps = {
-        s.client: s
-        for s in connect_steps(adapters, ["claude_code", "codex", "cursor"], KEYED, "gateway")
-    }
-
-    claude = steps["claude_code"]
-    assert claude.mechanism == "client_cli"
-    assert claude.command[:6] == ["claude", "mcp", "add-json", "-s", "user", "gateway"]
-    value = {"type": "http", "url": URL, "headers": {"Authorization": "Bearer ${GW_KEY}"}}
-    assert json.loads(claude.command[6]) == value == claude.edit.after
-    assert (claude.edit.path, claude.edit.key, claude.edit.check) == (
-        str(home / ".claude.json"),
-        ("mcpServers", "gateway"),
-        "entry",
-    )
-
-    codex = steps["codex"]
-    assert (codex.mechanism, codex.edit.fmt, codex.edit.path) == (
-        "format_preserving_edit",
-        "toml",
-        str(home / ".codex/config.toml"),
-    )
-    assert codex.edit.after == {"url": URL, "bearer_token_env_var": "GW_KEY"}
-
-    cursor = steps["cursor"]
-    assert cursor.edit.path == str(home / ".cursor/mcp.json")
-    assert cursor.edit.after == {"url": URL, "headers": {"Authorization": "Bearer ${env:GW_KEY}"}}
-
-    assert all(s.restart_note for s in steps.values())
-    assert not any(s.shared_file or s.login_note for s in steps.values())
-
-
-def test_oauth_gateway_shows_each_clients_login_step(adapters):
-    oauth = Gateway(url=URL, auth=GatewayAuth.OAUTH)
-    notes = {
-        s.client: s.login_note
-        for s in connect_steps(adapters, ["claude_code", "codex", "cursor"], oauth, "gw")
-    }
-    assert "/mcp" in notes["claude_code"]
-    assert "codex mcp login gw" in notes["codex"]
-    assert "Cursor" in notes["cursor"]
-
-
-def test_unknown_client_is_refused(adapters):
-    with pytest.raises(ValueError, match="claude_desktop_code_tab"):
-        connect_steps(adapters, ["claude_desktop_code_tab"], KEYED, "gateway")
-
-
 def test_remove_steps_for_each_client_and_scope(home, adapters):
     inventory = build_inventory(home)
     website = str(home / "work/website")
@@ -156,7 +100,7 @@ def test_remove_steps_for_each_client_and_scope(home, adapters):
 
 def test_removal_is_refused_for_items_without_the_action(home, adapters):
     inventory = build_inventory(home)
-    desktop = _item(inventory, "claude_desktop_code_tab", "metamcp-local", "user")
+    desktop = _item(inventory, "claude_desktop_code_tab", "team-proxy", "user")
     with pytest.raises(ValueError, match="cannot be removed"):
         remove_steps(adapters, desktop)
 

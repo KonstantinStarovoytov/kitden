@@ -16,16 +16,15 @@ const { data, state } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, cancelTray, changeOutcome, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
 const direct = { name: 'github', items: ['entry-1', 'entry-2'] };
-const obot = { id: 'gw-1', movable: true };
-const other = { id: 'gw-2', movable: false };
 const kitden = { id: 'kitden', kind: 'kitden', name: 'Kitden gateway', movable: true };
 const model = (gateways, local = []) => ({ gateways, groups: { move: [direct], local, plugin: [] } });
 
-test('the Kitden gateway is offered first, a registered gateway second, never in its place', () => {
-  assert.deepEqual(moveTargets(model([kitden, other, obot]), 'move'), [kitden, obot]);
-  // A local server starts a program on this computer: only the Kitden gateway can hold it.
-  assert.deepEqual(moveTargets(model([kitden, obot]), 'local'), [kitden]);
-  assert.deepEqual(moveTargets(model([kitden, obot]), 'plugin'), []);
+test('the Kitden gateway takes remote and local servers, never a plugin\'s', () => {
+  assert.deepEqual(moveTargets(model([kitden]), 'move'), [kitden]);
+  // A local server starts a program on this computer: the Kitden gateway runs here too.
+  assert.deepEqual(moveTargets(model([kitden]), 'local'), [kitden]);
+  assert.deepEqual(moveTargets(model([kitden]), 'plugin'), []);
+  assert.deepEqual(moveTargets(model([]), 'move'), []);
   assert.deepEqual(moveTargets(null, 'move'), []);
 });
 
@@ -88,9 +87,6 @@ test('a move into the Kitden gateway names the servers and that gateway, not its
   const words = changeWords(kitdenMove);
   assert.equal(words.title, 'Move files into the Kitden gateway');
   assert.equal(words.done, 'Moved files into the Kitden gateway · Restart Claude Code');
-  // A registered gateway keeps its words.
-  const obotMove = { action: 'gateway.move', steps: [{ client: 'gateway', name: 'docs' }, { client: 'cursor', name: 'docs' }] };
-  assert.equal(changeWords(obotMove).title, 'Move docs into the gateway');
   // A server the Kitden gateway holds as it is: the move only removes the client's entry.
   const held = { action: 'gateway.move', steps: [{ client: 'cursor', name: 'files' }] };
   assert.equal(changeWords(held).title, 'Move files into the Kitden gateway');
@@ -141,10 +137,8 @@ test('an add names its scope in the title and, with All projects, in the lede', 
   assert.deepEqual(changeWords(setup), { title: 'Connect Cursor to Kitden', done: 'Connected Cursor to Kitden' });
   assert.equal(reviewLede({ action: 'marketplace.add' }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
   assert.equal(reviewLede({ action: 'setup_server.register' }, ''), 'Nothing is written until you press Apply. A backup is kept.');
-  // Connecting a gateway and putting a server back write each client's own entry: for all
-  // projects. The page and the server agree on the adds (test_api_changes.py).
-  const connect = { action: 'gateway.connect', steps: [{ client: 'codex', name: 'gateway' }] };
-  assert.equal(changeWords(connect, { params: { gateway: 'g1', name: 'gateway' } }).title, 'Connect the gateway to Codex for all projects');
+  // Putting a server back writes each client's own entry: for all projects. The page and the
+  // server agree on the adds (test_api_changes.py).
   assert.equal(reviewLede({ action: 'gateway.put_back' }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
   // Add missing names its project in the title; an update changes an entry where it is.
   const align = { action: 'project.align', steps: [{ client: 'codex', name: 'tidy' }], align: { candidates: [] } };

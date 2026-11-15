@@ -44,8 +44,6 @@ from kitden.model import (
     Client,
     Enabled,
     FileEdit,
-    Gateway,
-    GatewayAuth,
     Item,
     ItemKind,
     ReadStatus,
@@ -361,21 +359,12 @@ class CodexAdapter(ClientAdapter):
             roots.setdefault(listed["name"], curated)
         return roots
 
-    def gateway_step(self, gateway: Gateway, name: str) -> Step:
-        value = {"url": gateway.url}
-        if gateway.auth is GatewayAuth.ENV_KEY and gateway.key_env_var:
-            value["bearer_token_env_var"] = gateway.key_env_var
-        login = f"Run: codex mcp login {name}" if gateway.auth is GatewayAuth.OAUTH else None
-        return self._add_entry(name, value, login)
-
     def setup_server_step(self, command: str, args: list[str]) -> Step:
         return self._add_entry(SETUP_NAME, {"command": command, "args": args})
 
-    def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
+    def _add_entry(self, name: str, value: dict[str, Any]) -> Step:
         path = self.codex_home / "config.toml"
-        return file_step(
-            CLIENT, path, "toml", ("mcp_servers", name), value, Scope.USER, RESTART, login
-        )
+        return file_step(CLIENT, path, "toml", ("mcp_servers", name), value, Scope.USER, RESTART)
 
     def remove_step(self, item: Item) -> Step:
         if REMOVE_DIRECT not in self.item_actions(item):

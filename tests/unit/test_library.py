@@ -13,8 +13,8 @@ from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import REACTIVE_KEY, CursorAdapter
 from kitden.demo import build_demo_home
-from kitden.model import FindingType, Gateway
-from kitden.views.findings import find_findings, mark_gateways
+from kitden.model import FindingType
+from kitden.views.findings import find_findings
 from kitden.views.inventory import LastGood, build_inventory, default_adapters, keep_last_good
 from kitden.views.library import _cell as list_cell
 from kitden.views.library import differs, library, library_list
@@ -86,7 +86,7 @@ def home(tmp_path):
 def _library(home: Path, kind: str = "plugin", **options) -> dict:
     inventory = build_inventory(home)
     adapters = {a.id: a for a in default_adapters(home)}
-    return library(inventory, adapters, None, gateway_registered=False, kind=kind, **options)
+    return library(inventory, adapters, None, kind=kind, **options)
 
 
 def _row(answer: dict, name: str, source: str | None = None) -> dict:
@@ -176,7 +176,7 @@ def test_codex_plugin_offers_add_skills_to_claude_code(home):
 def test_cursor_add_skills_in_a_project_says_it_is_for_all_projects(home):
     inventory, adapters = build_inventory(home), {a.id: a for a in default_adapters(home)}
     website = str(home / "work/website")
-    answer = library(inventory, adapters, website, gateway_registered=False, kind="plugin")
+    answer = library(inventory, adapters, website, kind="plugin")
     hint = _row(answer, "documents")["cells"]["cursor"]["add"]["project_hint"]
     assert hint.startswith("Adds its skills for all projects. To add a plugin to one project")
 
@@ -290,9 +290,7 @@ def test_a_plugin_in_another_project_is_not_offered_again(home):
     adapters = {a.id: a for a in default_adapters(home)}
 
     def toolbox(project):
-        answer = library(
-            inventory, adapters, project, gateway_registered=False, kind="plugin", show="all"
-        )
+        answer = library(inventory, adapters, project, kind="plugin", show="all")
         return _row(answer, "toolbox")["cells"]["claude_code"]
 
     assert toolbox(str(home / "work/website"))["state"] == "on"
@@ -543,62 +541,17 @@ def test_same_name_from_two_marketplaces_is_marked(home):
     assert other["cells"]["claude_code"]["add"]["warn"] is None
 
 
-def _server_reasons(home: Path, gateway: bool, project: str | None = None) -> dict:
-    """Per MCP server row, the reason of each dash."""
+def test_a_server_dash_has_no_reason_without_the_gateway(home):
     inventory = build_inventory(home)
-    if gateway:
-        mark_gateways(inventory, [Gateway(url="https://mcp.neon.tech/mcp")])
     adapters = {a.id: a for a in default_adapters(home)}
-    answer = library(inventory, adapters, project, gateway_registered=gateway, kind="mcp_server")
-    return {
-        r["name"]: {c: cell["reason"] for c, cell in r["cells"].items() if cell["state"] == "none"}
+    answer = library(inventory, adapters, None, kind="mcp_server")
+    reasons = [
+        cell["reason"]
         for r in answer["rows"]
-    }
-
-
-def _server_adds(home: Path, gateway: bool) -> dict:
-    """Per MCP server row, the action of each dash's add, or None."""
-    inventory = build_inventory(home)
-    if gateway:
-        mark_gateways(inventory, [Gateway(url="https://mcp.neon.tech/mcp")])
-    adapters = {a.id: a for a in default_adapters(home)}
-    answer = library(inventory, adapters, None, gateway_registered=gateway, kind="mcp_server")
-    return {
-        r["name"]: {
-            c: (cell["add"] or {}).get("action")
-            for c, cell in r["cells"].items()
-            if cell["state"] == "none"
-        }
-        for r in answer["rows"]
-    }
-
-
-def test_a_server_dash_says_how_the_gateway_would_share_it(home):
-    # Codex and Cursor reach the gateway through their neon entries; Claude Code does not.
-    reasons = _server_reasons(home, gateway=True)
-    connect = "Connect Claude Code to the gateway on the Gateway page."
-    share = "Move it into the gateway to share it."
-    assert reasons["neon"] == {"claude_code": connect, "cursor": None}
-    # A direct server another client lacks is copied there; the add replaces the share reason.
-    assert reasons["github"] == {"codex": None, "cursor": None}
-    assert reasons["langfuse-data"] == {"claude_code": None, "cursor": None}
-    adds = _server_adds(home, gateway=True)
-    assert adds["github"] == {"codex": "mcp.add", "cursor": "mcp.add"}
-    # A row a gateway serves: Claude Code is told to connect, not offered a copy.
-    assert adds["neon"]["claude_code"] is None
-    assert share not in {r for row in reasons.values() for r in row.values()}
-    # A server that runs on this computer does not move.
-    assert reasons["n8n-mcp"] == {"claude_code": None, "codex": None}
-    without = _server_reasons(home, gateway=False)
-    assert all(r is None for row in without.values() for r in row.values())
-
-
-def test_a_project_only_server_a_gateway_client_cannot_move_says_why(home):
-    # Codex and Cursor use the gateway; website's old-search runs on this computer, so it
-    # does not move, and only website has it.
-    reasons = _server_reasons(home, gateway=True, project=str(home / "work/website"))
-    only = "Kitden adds MCP servers for all projects only."
-    assert reasons["old-search"] == {"codex": only, "cursor": only}
+        for cell in r["cells"].values()
+        if cell["state"] == "none"
+    ]
+    assert all(r is None for r in reasons)
 
 
 def test_a_marketplace_dash_says_when_an_add_brings_it(home):
@@ -701,7 +654,6 @@ def test_agents_md_is_one_row_for_codex_and_cursor_without_a_flag(home):
         inventory,
         {a.id: a for a in default_adapters(home)},
         site,
-        gateway_registered=False,
         kind="instructions",
     )
     (row,) = [r for r in answer["rows"] if r["name"] == "AGENTS.md"]
@@ -732,7 +684,7 @@ def test_a_client_that_could_not_be_read_keeps_its_column_as_unknown(home):
     assert {r.cells["codex"].state for r in rows} == {"unk"}
     assert {r.cells["codex"].reason for r in rows} == {"Could not read Codex."}
     adapters = {a.id: a for a in default_adapters(home)}
-    answer = library(inventory, adapters, None, gateway_registered=False, kind="mcp_server")
+    answer = library(inventory, adapters, None, kind="mcp_server")
     assert [(c["id"], c["note"]) for c in answer["columns"]] == [
         ("claude_code", None),
         ("codex", "Could not read"),
@@ -793,7 +745,7 @@ def test_the_medium_sample_names_its_unreadable_file_above_the_table(tmp_path):
     adapters = {a.id: a for a in default_adapters(home)}
 
     def answer(project):
-        return library(inventory, adapters, project, gateway_registered=False, kind="mcp_server")
+        return library(inventory, adapters, project, kind="mcp_server")
 
     website = answer(str(home / "work/website"))
     assert "Could not read mcp.json; its items are not shown." in website["notes"]
@@ -835,7 +787,7 @@ def _notes(home: Path, project: Path | None) -> list[str]:
     inventory = build_inventory(home)
     adapters = {a.id: a for a in default_adapters(home)}
     where = str(project) if project else None
-    answer = library(inventory, adapters, where, gateway_registered=False, kind="mcp_server")
+    answer = library(inventory, adapters, where, kind="mcp_server")
     return answer["notes"]
 
 
@@ -866,7 +818,7 @@ def test_a_failed_client_keeps_its_rows_from_the_last_good_read(home):
         build_inventory(home, adapters=broken), last, "2026-10-22T14:05:00+00:00"
     )
     adapters = {a.id: a for a in default_adapters(home)}
-    answer = library(inventory, adapters, None, gateway_registered=False, kind="mcp_server")
+    answer = library(inventory, adapters, None, kind="mcp_server")
     # Only Codex had langfuse-data: its row stays, as Codex had it at the last good read.
     row = _row(answer, "langfuse-data")
     assert row["mine"] is True
@@ -898,7 +850,6 @@ def _after_a_break(tmp_path: Path, broken: str):
             inventory,
             adapters,
             str(home / "work" / project),
-            gateway_registered=False,
             kind=kind,
             show="all",
         )
@@ -941,9 +892,7 @@ def test_project_items_stay_while_codex_config_is_broken(tmp_path):
 def _toolbox_cell(home: Path, project: Path) -> dict:
     inventory = build_inventory(home)
     adapters = {a.id: a for a in default_adapters(home)}
-    answer = library(
-        inventory, adapters, str(project), gateway_registered=False, kind="plugin", show="all"
-    )
+    answer = library(inventory, adapters, str(project), kind="plugin", show="all")
     return _row(answer, "toolbox")["cells"]["claude_code"]
 
 
@@ -1009,7 +958,6 @@ def test_review_rows_on_the_medium_sample_offer_no_add(tmp_path):
         build_inventory(home),
         {a.id: a for a in default_adapters(home)},
         None,
-        gateway_registered=False,
         kind="mcp_server",
     )
     docs = _row(answer, "docs")["cells"]  # Part 1: same name, two sources; a tie keeps Claude Code
@@ -1028,7 +976,6 @@ def test_every_empty_cell_of_a_review_row_says_to_decide_first(tmp_path):
         build_inventory(home),
         {a.id: a for a in default_adapters(home)},
         str(home / "work/atlas"),
-        gateway_registered=False,
         kind="mcp_server",
     )
     cursor = _row(atlas, "docs")["cells"]["cursor"]  # empty, with no add to take away
@@ -1097,7 +1044,7 @@ def test_a_project_only_skill_adds_into_the_project(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     inventory, adapters = build_inventory(home), {a.id: a for a in default_adapters(home)}
     atlas_path = str(home / "work/atlas")
-    atlas = library(inventory, adapters, atlas_path, gateway_registered=False, kind="skill")
+    atlas = library(inventory, adapters, atlas_path, kind="skill")
     style = _row(atlas, "api-style")
     add = style["cells"]["claude_code"]["add"]
     assert (add["action"], add["skill"], add["project_only"]) == (
@@ -1108,9 +1055,7 @@ def test_a_project_only_skill_adds_into_the_project(tmp_path):
     assert (add["project_place"], add["project_hint"]) == (False, None)
     assert style["cells"]["codex"]["where"] == "Only this project"
     assert (style["source"], style["offer"]) == ("atlas", None)
-    everywhere = library(
-        inventory, adapters, None, gateway_registered=False, kind="skill", show="all"
-    )
+    everywhere = library(inventory, adapters, None, kind="skill", show="all")
     assert not any(r["name"] == "api-style" for r in everywhere["rows"])
 
 
@@ -1119,7 +1064,6 @@ def test_a_project_only_server_says_why_it_has_no_add(home):
         build_inventory(home),
         {a.id: a for a in default_adapters(home)},
         str(home / "work/website"),
-        gateway_registered=False,
         kind="mcp_server",
     )
     docs = _row(answer, "docs")["cells"]  # only website's own .mcp.json has docs
@@ -1135,7 +1079,7 @@ def test_a_project_only_server_says_why_it_has_no_add(home):
 def _list(home: Path, tab: str = "plugin", project: str | None = None, **options) -> dict:
     inventory = build_inventory(home)
     adapters = {a.id: a for a in default_adapters(home)}
-    return library_list(inventory, adapters, project, gateway_registered=False, tab=tab, **options)
+    return library_list(inventory, adapters, project, tab=tab, **options)
 
 
 def _items(answer: dict) -> dict[str, dict]:
@@ -1357,7 +1301,7 @@ def test_an_instruction_file_cell_is_unknown_for_a_client_kitden_could_not_read(
         home, adapters=[ClaudeCodeAdapter(home), _BrokenCodex(home), CursorAdapter(home)]
     )
     adapters = {a.id: a for a in default_adapters(home)}
-    answer = library_list(inventory, adapters, None, gateway_registered=False, tab="instructions")
+    answer = library_list(inventory, adapters, None, tab="instructions")
     files = [f for g in answer["groups"] for f in g["items"]]
     assert files and {f["cells"]["codex"]["state"] for f in files} == {"unk"}
     assert {f["cells"]["codex"]["reason"] for f in files} == {"Could not read Codex."}
@@ -1392,10 +1336,8 @@ def test_cursor_gets_nothing_through_claude_code_when_claude_code_is_not_found(h
         for c in inventory.clients
     ]
     adapters = {a.id: a for a in default_adapters(home)}
-    answer = library(inventory, adapters, None, gateway_registered=False, kind="plugin", show="new")
-    listed = library_list(
-        inventory, adapters, None, gateway_registered=False, tab="plugin", show="new"
-    )
+    answer = library(inventory, adapters, None, kind="plugin", show="new")
+    listed = library_list(inventory, adapters, None, tab="plugin", show="new")
     assert "Via Claude Code" not in json.dumps(answer)
     assert "loads Claude Code's plugins" not in json.dumps(answer)
     assert "Via Claude Code" not in json.dumps(listed)

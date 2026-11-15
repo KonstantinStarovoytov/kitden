@@ -21,7 +21,6 @@ from kitden.model import (
     CLIENTS,
     Finding,
     FindingType,
-    Gateway,
     ItemKind,
     Severity,
     UnknownReason,
@@ -349,7 +348,6 @@ def note_count(findings: list[Finding]) -> int:
 
 def overview(
     inventory,
-    gateways: list[Gateway],
     project: str | None,
     held: list[dict] | None = None,
     adapters: dict | None = None,
@@ -376,10 +374,10 @@ def overview(
         + _context(list(context_cards or []))
     )
     # Servers outside the gateway and clients not connected are options, not problems. The rows
-    # are the Gateway page's, so a server in two clients is one card. Nothing moves into a gateway
-    # whose settings Kitden cannot read.
+    # are the Gateway page's, so a server in two clients is one card. Nothing moves into the
+    # gateway when Kitden cannot read its settings.
     if held is not None and not problem:
-        groups = gateway_view(inventory, gateways, project, kitden=held)["groups"]
+        groups = gateway_view(inventory, project, kitden=held)["groups"]
         cards += _move_ins(groups)
     if held and not problem:
         cards += _connects(inventory)

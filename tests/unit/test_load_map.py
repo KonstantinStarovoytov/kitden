@@ -10,7 +10,6 @@ from kitden.model import (
     CLIENTS,
     Client,
     ClientStatus,
-    Gateway,
     Item,
     ItemKind,
     Scope,
@@ -18,7 +17,6 @@ from kitden.model import (
     SourceKind,
 )
 from kitden.views.explain import explain
-from kitden.views.findings import mark_gateways
 from kitden.views.inventory import Inventory, build_inventory
 from kitden.views.load_map import load_map, map_dict
 from tests.conftest import make_home, write_cursor_fixture_state
@@ -133,17 +131,6 @@ def test_cross_loaded_cells_say_via_which_client(home):
     assert row.cells["claude_code"].where is None
 
 
-def test_gateway_entries_are_state_gw(home):
-    inventory = build_inventory(home)
-    mark_gateways(inventory, [Gateway(url="https://mcp.neon.tech/mcp")])
-    rows = load_map(inventory, None, gateway_registered=True)
-    assert rows_by(rows, "mcp_server", "Neon").cells["cursor"].state == "gw"
-    # A direct server is an option to move, not a problem.
-    assert rows_by(rows, "mcp_server", "langfuse-data").flags == [
-        {"text": "Direct connection", "level": "info"}
-    ]
-
-
 def test_unknown_state_is_said_by_the_cell_alone(home):
     rows = load_map(build_inventory(home), None)
     gmail = rows_by(rows, "plugin", "gmail")
@@ -158,7 +145,7 @@ def test_direct_entries_are_only_info_without_a_gateway(home):
 
 
 def test_desktop_items_show_in_the_claude_code_column(home):
-    row = rows_by(load_map(build_inventory(home), None), "mcp_server", "metamcp-local")
+    row = rows_by(load_map(build_inventory(home), None), "mcp_server", "team-proxy")
     cell = row.cells["claude_code"]
     assert (cell.state, cell.route) == ("on", "from the Desktop app")
 
@@ -292,8 +279,8 @@ def test_the_route_leaves_the_word_slot(home):
         "through Claude Code's folder",
     )
     assert brandkit["claude_code"].route is None
-    metamcp = rows_by(rows, "mcp_server", "metamcp-local").cells["claude_code"]
-    assert metamcp.route == "from the Desktop app"
+    proxy = rows_by(rows, "mcp_server", "team-proxy").cells["claude_code"]
+    assert proxy.route == "from the Desktop app"
     assert rows_by(rows, "mcp_server", "md-index").cells["claude_code"].route == "from a plugin"
 
 

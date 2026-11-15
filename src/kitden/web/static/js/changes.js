@@ -374,9 +374,9 @@ function factMark(lead, words) {
   return node;
 }
 
-// Each client's restart and log-in notes, in amber, or "Nothing to do".
+// Each client's restart notes, in amber, or "Nothing to do".
 function takesEffect(entry) {
-  const lines = entry.takes_effect.flatMap((t) => [t.note, t.login && `Log in: ${t.login}`]).filter(Boolean);
+  const lines = entry.takes_effect.map((t) => t.note).filter(Boolean);
   if (!lines.length) return { label: "Takes effect", value: NOTHING_TO_DO };
   const value = el("span", "fact-lines");
   value.append(...lines.map((line) => el("span", null, line)));

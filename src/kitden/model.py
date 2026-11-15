@@ -1,7 +1,6 @@
-"""Shared data model: clients, items, sources, gateways and changes."""
+"""Shared data model: clients, items, sources and changes."""
 
 import hashlib
-import re
 import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -91,12 +90,6 @@ class ChangeState(StrEnum):
     RESTORED = "restored"
     UNDONE = "undone"
     UNDO_BLOCKED = "undo_blocked"
-
-
-class GatewayAuth(StrEnum):
-    NONE = "none"
-    ENV_KEY = "env_key"
-    OAUTH = "oauth"
 
 
 class ClientStatus(StrEnum):
@@ -240,19 +233,6 @@ class FileEdit:
     masked_diff: str = ""
 
 
-@dataclass
-class GatewayEdit:
-    """One remote server added to a gateway (feature 006). `server` may hold secrets."""
-
-    gateway_id: str
-    url: str  # the gateway's endpoint address: the step's place on the Changes page
-    name: str  # the server's name in the gateway
-    server: dict = field(repr=False)  # type, url, headers, as the gateway takes them
-    server_uuid: str | None = None  # known after apply; undo removes it
-    masked_diff: str = ""
-
-
-GATEWAY_CLIENT = "gateway"  # the pseudo-client of a gateway step
 COPY_FOLDER = "copy_folder"  # the mechanism of a step that copies a skill folder
 
 
@@ -316,24 +296,21 @@ class KeychainItem:
 class Step:
     """One target of a change: one client, scope and entry, written by one mechanism.
 
-    A step has a file edit, a gateway edit, a folder copy or a folder removal; a gateway
-    step's client is "gateway".
+    A step has a file edit, a folder copy or a folder removal.
     """
 
     client: str
     scope: Scope
     name: str
     edit: FileEdit | None = None
-    # or "client_cli", "gateway_api", "copy_folder", "remove_folder"
+    # or "client_cli", "copy_folder", "remove_folder"
     mechanism: str = "format_preserving_edit"
-    gateway: GatewayEdit | None = None
     copy: FolderCopy | None = None
     removal: FolderRemoval | None = None
     command: list[str] | None = None
     undo_command: list[str] | None = None  # the inverse command; Undo runs it, no file restore
     cwd: str | None = None
     restart_note: str | None = None
-    login_note: str | None = None
     shared_file: bool = False
     # A gateway rule carried over from these clients' settings; only the review's words use it.
     carried_from: tuple[str, ...] = ()
@@ -355,12 +332,6 @@ class Step:
         """The file edit, for a step that has one."""
         assert self.edit is not None
         return self.edit
-
-    @property
-    def gateway_edit(self) -> GatewayEdit:
-        """The gateway edit, for a gateway step."""
-        assert self.gateway is not None
-        return self.gateway
 
     @property
     def folder_copy(self) -> FolderCopy:
@@ -417,65 +388,8 @@ class Change:
         return any(step.shared_file for step in self.steps)
 
 
-_ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
-
-
 def normalize_url(url: str) -> str:
     parts = urlsplit(url.strip())
     return urlunsplit(
         (parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), parts.query, "")
     )
-
-
-@dataclass(frozen=True)
-class Gateway:
-    url: str
-    ui_url: str | None = None
-    auth: GatewayAuth = GatewayAuth.NONE
-    key_env_var: str | None = None
-    # Sign-in for managing the gateway from Kitden (feature 006): the email is kept, the
-    # password lives in an environment variable whose name is kept.
-    login_email: str | None = None
-    login_password_env_var: str | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "url", normalize_url(self.url))
-        if self.auth is GatewayAuth.ENV_KEY and not self.key_env_var:
-            raise ValueError("key_env_var must be an environment variable name, never a secret")
-        if self.key_env_var and not _ENV_NAME.fullmatch(self.key_env_var):
-            raise ValueError("key_env_var must be an environment variable name, never a secret")
-        if bool(self.login_email) != bool(self.login_password_env_var):
-            raise ValueError("A sign-in needs both the email and the password variable's name")
-        if self.login_password_env_var and not _ENV_NAME.fullmatch(self.login_password_env_var):
-            raise ValueError(
-                "login_password_env_var must be an environment variable name, never a password"
-            )
-        if self.login_email and ("@" not in self.login_email or " " in self.login_email):
-            raise ValueError("The sign-in email does not look like an email address")
-
-    @property
-    def kind(self) -> str:
-        """Which gateway the address belongs to, told from its path: MetaMCP serves
-        `/metamcp/<endpoint>/mcp`, Obot `/mcp-connect/<vmcp id>` (feature 007)."""
-        path = urlsplit(self.url).path
-        if path.startswith("/metamcp/"):
-            return "metamcp"
-        if path.startswith("/mcp-connect/"):
-            return "obot"
-        return "other"
-
-    @property
-    def managed(self) -> bool:
-        """Kitden can read what the gateway holds: MetaMCP with a sign-in, Obot with a key."""
-        if self.kind == "obot":
-            return bool(self.key_env_var)
-        return bool(self.login_email and self.login_password_env_var)
-
-    @property
-    def movable(self) -> bool:
-        """Kitden can move servers into it from here: a managed MetaMCP or Obot gateway."""
-        return self.kind in ("metamcp", "obot") and self.managed
-
-    @property
-    def id(self) -> str:
-        return _hash(self.url)

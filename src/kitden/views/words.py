@@ -49,16 +49,14 @@ ONLY_IN_PROJECT = "This skill is in one project only. Pick that project to add i
 PROJECT_TRUST = "To add it to {name}, trust {name} in Codex first."
 
 # Socket state and word per action, as the Library shows them after the change. "Removed",
-# "Added", "Updated" and "Via the new gateway" say what the change did, not a state.
+# "Added" and "Updated" say what the change did, not a state.
 AFTER_WORDS: dict[str, tuple[str, str]] = {
     "plugin.enable": ("on", STATE_WORDS["on"]),
     "plugin.disable": ("off", STATE_WORDS["off"]),
     "mcp.remove_direct": ("off", "Removed"),
     "plugin.remove": ("off", "Removed"),
     "skill.remove": ("off", "Removed"),
-    "gateway.connect": ("gw", STATE_WORDS["gw"]),
     "gateway.move": ("gw", STATE_WORDS["gw"]),
-    "gateway.switch": ("gw", "Via the new gateway"),
     "plugin.install": ("on", STATE_WORDS["on"]),
     "marketplace.add": ("on", "Added"),
     "setup_server.register": ("on", "Added"),

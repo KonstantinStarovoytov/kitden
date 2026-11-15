@@ -1,4 +1,4 @@
-"""Real clients in a sandbox home (T049, quickstart scenario 3).
+"""Real clients in a sandbox home: remove entries and undo (T049, quickstart scenario 3).
 
 Runs the installed `claude` and `codex` commands with HOME and CODEX_HOME pointing at a copy of
 the fixtures, so the owner's real settings are never touched. Run with: pytest -m contract
@@ -10,18 +10,17 @@ import subprocess
 
 import pytest
 
-from kitden.changes.actions import connect_steps, remove_steps
+from kitden.changes.actions import remove_steps
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import Engine
-from kitden.model import ChangeState, Gateway, GatewayAuth
+from kitden.model import ChangeState
 from kitden.views.inventory import build_inventory, default_adapters
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.contract.conftest import need_command
 
 pytestmark = pytest.mark.contract
 
-URL = "http://127.0.0.1:12008/metamcp/dev/mcp"
 FILES = [".claude.json", ".codex/config.toml", ".cursor/mcp.json", "work/website/.mcp.json"]
 
 
@@ -53,35 +52,10 @@ def _codex_servers(home) -> dict:
     return {s["name"]: s for s in (data if isinstance(data, list) else data.get("servers", []))}
 
 
-def _claude_get(home, name, cwd=None) -> str:
-    env = {**os.environ, "HOME": str(home)}
-    done = subprocess.run(
-        [need_command("claude", home), "mcp", "get", name],
-        env=env,
-        cwd=cwd or home,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    return done.stdout + done.stderr
-
-
-def test_connect_remove_and_undo_with_real_clients(home):
+def test_remove_and_undo_with_real_clients(home):
     original = _bytes(home)
     adapters = {a.id: a for a in default_adapters(home)}
     engine = Engine(ChangeStore(home / "data"), CommandRunner(home))
-    gateway = Gateway(url=URL, auth=GatewayAuth.ENV_KEY, key_env_var="GW_KEY")
-
-    connect = engine.preview(
-        "gateway.connect",
-        connect_steps(adapters, ["claude_code", "codex", "cursor"], gateway, "gateway"),
-    )
-    engine.apply(connect.id)
-    assert connect.state is ChangeState.VERIFIED, connect.error
-    codex_entry = _codex_servers(home)["gateway"]
-    assert codex_entry["transport"]["bearer_token_env_var"] == "GW_KEY"
-    assert "Bearer ${GW_KEY}" in _claude_get(home, "gateway")
 
     inventory = build_inventory(home)
     local = next(i for i in inventory.items if i.name == "local-db" and str(i.scope) == "local")
@@ -103,7 +77,7 @@ def test_connect_remove_and_undo_with_real_clients(home):
     engine.apply(remove_codex.id)
     assert "neon" not in _codex_servers(home)
 
-    for change in (remove_codex, remove_project, remove_local, connect):
+    for change in (remove_codex, remove_project, remove_local):
         engine.undo(change.id)
         assert change.state is ChangeState.UNDONE, change.error
     assert _bytes(home) == original

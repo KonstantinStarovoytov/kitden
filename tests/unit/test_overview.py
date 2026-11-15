@@ -10,10 +10,9 @@ from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.clients import version_cache
 from kitden.context.rules import codex_rule
 from kitden.demo import build_demo_home
-from kitden.gateways import add_gateway
-from kitden.model import FindingType, Gateway
+from kitden.model import FindingType
 from kitden.views.context_view import context_view
-from kitden.views.findings import find_findings, mark_gateways
+from kitden.views.findings import find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.views.load_map import load_map
@@ -51,7 +50,7 @@ def _cards(data, group=None):
 
 
 def test_attention_cards_and_the_notes_count(home):
-    data = overview(build_inventory(home), [], None)
+    data = overview(build_inventory(home), None)
     assert [c["name"] for c in _cards(data, "attention")] == ["docker-expert", "superpowers"]
     assert data["counts"]["attention"] == 2
     assert data["notes"] == 14  # 14 names with notes (each note here is about another name)
@@ -61,9 +60,7 @@ def test_no_card_shows_a_file_path(home, tmp_path):
     db = cursor_db(home)
     db.write_bytes(b"this is not a database")
     inventory = build_inventory(home)
-    gateway = Gateway(url="https://mcp.neon.tech/mcp")
-    mark_gateways(inventory, [gateway])
-    for card in overview(inventory, [gateway], None, held=[])["cards"]:
+    for card in overview(inventory, None, held=[])["cards"]:
         assert "/" not in card["name"] + card["line"], card
 
 
@@ -72,7 +69,7 @@ def test_unreadable_file_becomes_an_attention_card(tmp_path):
     db = cursor_db(home)
     db.parent.mkdir(parents=True)
     db.write_bytes(b"this is not a database")
-    first = overview(build_inventory(home), [], None)["cards"][0]
+    first = overview(build_inventory(home), None)["cards"][0]
     assert first["name"] == "Could not read state.vscdb"
     assert first["line"] == (
         "The file format is not recognized, so items from Cursor may be missing or wrong."
@@ -83,7 +80,7 @@ def test_untested_version_is_an_attention_card(home, monkeypatch):
     monkeypatch.setattr(
         version_cache, "cached_version", lambda home, c: "2.0.0" if c == "claude_code" else None
     )
-    first = overview(build_inventory(home), [], None)["cards"][0]
+    first = overview(build_inventory(home), None)["cards"][0]
     assert first["name"] == "Claude Code 2.0.0 is not tested"
     assert first["line"] == "Tested from 2.1.283, so some items may be missing or wrong."
 
@@ -91,7 +88,7 @@ def test_untested_version_is_an_attention_card(home, monkeypatch):
 def test_an_empty_home_has_no_cards(tmp_path):
     empty = tmp_path / "empty-home"
     empty.mkdir()
-    data = overview(build_inventory(empty), [], None)
+    data = overview(build_inventory(empty), None)
     assert data["cards"] == [] and data["counts"]["attention"] == 0
 
 
@@ -115,7 +112,7 @@ def test_a_turned_off_kitden_entry_is_not_linked_to_the_gateway(connected):
     off = '\n[mcp_servers.kitden]\ncommand = "kitden"\nargs = ["mcp"]\nenabled = false\n'
     codex.write_text(codex.read_text() + off)
     held = [{"name": "github", "kind": "local", "state": "on", "differs": False}]
-    data = overview(build_inventory(connected), [], None, held=held)
+    data = overview(build_inventory(connected), None, held=held)
     gateway = sorted(x["client"] for x in data["map"]["links"] if x["to"] == "gateway")
     assert gateway == ["claude_code", "cursor"]
 
@@ -126,22 +123,13 @@ def test_an_old_entry_is_not_linked_to_the_gateway(connected):
     config = connected / ".codex/config.toml"
     old = {"command": "/Users/me/.local/bin/agentsetup", "args": ["mcp"]}
     config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "agentsetup"), old))
-    data = overview(build_inventory(connected), [], None, held=[])
+    data = overview(build_inventory(connected), None, held=[])
     assert "codex" not in [x["client"] for x in data["map"]["links"] if x["to"] == "gateway"]
-
-
-def test_a_registered_gateway_alone_gets_no_move_in_card(home):
-    # The move cards say "Kitden's rules", so they need the Kitden gateway.
-    inventory = build_inventory(home)
-    gateway = Gateway(url="https://mcp.neon.tech/mcp")
-    mark_gateways(inventory, [gateway])
-    data = overview(inventory, [gateway], None)
-    assert _cards(data, "improve") == []
 
 
 def test_servers_outside_the_gateway_can_improve_and_need_no_attention(home):
     held = [{"name": "kept", "kind": "local", "tools": 0}]
-    data = overview(build_inventory(home), [], None, held=held)
+    data = overview(build_inventory(home), None, held=held)
     assert _cards(data, "improve")
     assert all(c["action"]["label"] != "Move in…" for c in _cards(data, "attention"))
     assert data["counts"]["attention"] == 2  # the two duplicates only
@@ -151,8 +139,8 @@ def test_a_server_in_two_clients_is_one_card(home):
     # The cards are the Gateway page's rows: a row holds every client's entry.
     inventory = build_inventory(home)
     held = [{"name": "kept", "kind": "local", "tools": 0}]
-    data = overview(inventory, [], None, held=held)
-    rows = gateway_view(inventory, [], None, kitden=held)["groups"]
+    data = overview(inventory, None, held=held)
+    rows = gateway_view(inventory, None, kitden=held)["groups"]
     moves = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Move in…"]
     names = [c["name"] for c in moves]
     assert names and len(names) == len(set(names))
@@ -167,7 +155,7 @@ def test_old_kitden_entries_get_one_card(home):
     config = home / ".codex/config.toml"
     old = {"command": "/Users/me/.local/bin/agentsetup", "args": ["mcp"]}
     config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "agentsetup"), old))
-    data = overview(build_inventory(home), [], None)
+    data = overview(build_inventory(home), None)
     [card] = [c for c in data["cards"] if c["name"].startswith("Old Kitden")]
     assert card["name"] == "Old Kitden entry in Codex"
     assert data["counts"]["attention"] == 3
@@ -179,7 +167,7 @@ def test_kitden_entries_whose_program_is_gone_say_so(home, real_programs):
     config = home / ".codex/config.toml"
     gone = {"command": str(home / "gone/bin/kitden"), "args": ["mcp"]}
     config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "kitden"), gone))
-    data = overview(build_inventory(home), [], None)
+    data = overview(build_inventory(home), None)
     [card] = [c for c in data["cards"] if c["name"].startswith("Old Kitden")]
     assert card["line"] == (
         "Its program is gone: Kitden was moved or removed. Update it so Codex starts this Kitden."
@@ -194,7 +182,7 @@ def test_overview_duplicate_points_at_a_row_the_map_has(home):
         for f in find_findings(inventory, None)
         if f.type is FindingType.DUPLICATE_IN_CLIENT and by_id[f.items[0]].name.startswith("superp")
     )
-    card = next(c for c in overview(inventory, [], None)["cards"] if c["name"] == "superpowers")
+    card = next(c for c in overview(inventory, None)["cards"] if c["name"] == "superpowers")
     first = by_id[twice.items[0]]
     assert card["action"]["go"] == {"view": "library", "sel": f"{first.kind}:{first.name}"}
     assert first.name in {r.lookup for r in load_map(inventory, None)}
@@ -208,7 +196,7 @@ def test_a_server_without_a_removable_entry_gets_no_card(home):
     for index, item in enumerate(inventory.items):
         if item.name == "github":
             inventory.items[index] = replace(item, actions=())
-    data = overview(inventory, [], None, held=held)
+    data = overview(inventory, None, held=held)
     assert "github" not in [c["name"] for c in data["cards"]]
 
 
@@ -245,11 +233,10 @@ def test_duplicate_cards_are_in_name_order_then_client_order():
 
 def test_notes_count_items_not_findings(tmp_path):
     home = build_demo_home(tmp_path, "medium")  # 16 notes about 14 names: docs has three
-    assert overview(build_inventory(home), [], None)["notes"] == 14
+    assert overview(build_inventory(home), None)["notes"] == 14
 
 
-def test_the_notes_count_is_the_rows_the_page_draws_also_with_a_gateway(home):
-    add_gateway(home, Gateway(url="https://gw.example.test/mcp"))
+def test_the_notes_count_is_the_rows_the_page_draws(home):
     with page_for(home) as page:
         count = page.get("/api/overview").json()["notes"]
         findings = page.get("/api/findings").json()
@@ -264,8 +251,8 @@ def test_the_notes_count_is_the_rows_the_page_draws_also_with_a_gateway(home):
 def test_a_server_that_skips_the_gateway_is_a_move_in_card_with_its_body(home):
     inventory = build_inventory(home)
     held = [{"name": "kept", "kind": "local", "state": "on", "differs": False, "tools": 2}]
-    data = overview(inventory, [], None, held=held)
-    rows = gateway_view(inventory, [], None, kitden=held)["groups"]
+    data = overview(inventory, None, held=held)
+    rows = gateway_view(inventory, None, kitden=held)["groups"]
     row = next(r for r in rows["move"] if r["name"] == "github")
     card = next(c for c in _cards(data, "improve") if c["name"] == "github")
     assert card == {
@@ -299,7 +286,7 @@ def test_a_server_a_move_would_refuse_gets_no_card(home):
     for index, item in enumerate(inventory.items):
         if item.name == "github":
             inventory.items[index] = replace(item, stays_direct="It stays direct.")
-    data = overview(inventory, [], None, held=[{"name": "kept", "kind": "local", "tools": 0}])
+    data = overview(inventory, None, held=[{"name": "kept", "kind": "local", "tools": 0}])
     assert "github" not in [c["name"] for c in data["cards"]]
 
 
@@ -374,9 +361,9 @@ def test_four_servers_give_three_cards_and_one_more_server(home):
     config.write_text(text)
     inventory = build_inventory(home)
     held = [{"name": "kept", "kind": "local", "tools": 0}]
-    rows = gateway_view(inventory, [], None, kitden=held)["groups"]
+    rows = gateway_view(inventory, None, kitden=held)["groups"]
     movable = [r for g in ("move", "local") for r in rows[g] if r["items"] and not r["stays"]]
-    data = overview(inventory, [], None, held=held)
+    data = overview(inventory, None, held=held)
     names = [c["name"] for c in _cards(data, "improve")]
     left = len(movable) - 3
     assert f"{left} more {'server skips' if left == 1 else 'servers skip'} the gateway" in names
@@ -384,7 +371,7 @@ def test_four_servers_give_three_cards_and_one_more_server(home):
 
 def test_a_client_not_connected_gets_a_connect_card(connected):
     held = [{"name": "github", "kind": "local", "state": "on", "differs": False, "tools": 3}]
-    data = overview(build_inventory(connected), [], None, held=held)
+    data = overview(build_inventory(connected), None, held=held)
     connect = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]
     assert connect == [
         {
@@ -413,7 +400,7 @@ def test_a_turned_off_codex_entry_is_turned_on_by_its_connect_card(connected):
     off = '\n[mcp_servers.kitden]\ncommand = "kitden"\nargs = ["mcp"]\nenabled = false\n'
     codex.write_text(codex.read_text() + off)
     held = [{"name": "github", "kind": "local", "tools": 0}]
-    data = overview(build_inventory(connected), [], None, held=held)
+    data = overview(build_inventory(connected), None, held=held)
     [card] = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]
     assert card["action"]["body"] == {
         "action": "setup_server.enable",
@@ -423,7 +410,7 @@ def test_a_turned_off_codex_entry_is_turned_on_by_its_connect_card(connected):
 
 
 def test_no_connect_card_while_the_gateway_holds_nothing(connected):
-    data = overview(build_inventory(connected), [], None, held=[])
+    data = overview(build_inventory(connected), None, held=[])
     assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]
 
 
@@ -435,7 +422,7 @@ def test_old_kitden_entries_card_adds_the_update_row(connected):
     config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "agentsetup"), old))
     inventory = build_inventory(connected)
     item = next(i for i in inventory.items if i.name == "agentsetup")
-    data = overview(inventory, [], None, held=[{"name": "github", "kind": "local", "tools": 0}])
+    data = overview(inventory, None, held=[{"name": "github", "kind": "local", "tools": 0}])
     [card] = [c for c in data["cards"] if c["name"].startswith("Old Kitden")]
     assert card["group"] == "attention"
     assert card["icon"] == "house"
@@ -454,7 +441,7 @@ def test_old_kitden_entries_card_adds_the_update_row(connected):
 
 
 def test_a_duplicate_card_opens_the_item(home):
-    data = overview(build_inventory(home), [], None)
+    data = overview(build_inventory(home), None)
     card = next(c for c in data["cards"] if c["name"] == "superpowers")
     assert card["group"] == "attention"
     assert card["icon"] == "puzzle"
@@ -475,7 +462,7 @@ def test_unreadable_and_untested_cards_have_no_button(home, monkeypatch):
         version_cache, "cached_version", lambda home, c: "2.0.0" if c == "claude_code" else None
     )
     (cursor_db(home)).write_bytes(b"this is not a database")
-    data = overview(build_inventory(home), [], None)
+    data = overview(build_inventory(home), None)
     unread = next(c for c in data["cards"] if c["name"] == "Could not read state.vscdb")
     assert unread["action"] is None
     assert unread["icon"] == "file-text"
@@ -505,7 +492,7 @@ def test_the_map_counts_servers_tools_plugins_skills_and_own_rules(tmp_path):
         {"name": "b", "kind": "remote", "tools": None},
         {"name": "c", "kind": "remote", "tools": 7},
     ]
-    data = overview(inventory, [], None, held=held, adapters=adapters)
+    data = overview(inventory, None, held=held, adapters=adapters)
     shared = library_map(inventory, adapters, None)
     items = [i for g in shared["groups"] for i in g["items"]]
 
@@ -554,12 +541,12 @@ def test_the_map_counts_servers_tools_plugins_skills_and_own_rules(tmp_path):
     }
     # A project with gateway rules of its own has its own rules too.
     other = next(p for p in inventory.projects if p not in ruled)
-    more = overview(inventory, [], None, held=held, adapters=adapters, gateway_rules={other.path})
+    more = overview(inventory, None, held=held, adapters=adapters, gateway_rules={other.path})
     assert more["map"]["own_rules"] == len(ruled) + 1
 
 
 def test_the_map_links_a_connected_client_to_the_gateway(connected):
-    data = overview(build_inventory(connected), [], None, held=[])
+    data = overview(build_inventory(connected), None, held=[])
     gateway = sorted(x["client"] for x in data["map"]["links"] if x["to"] == "gateway")
     assert gateway == ["claude_code", "cursor"]
 
@@ -586,7 +573,7 @@ def test_no_card_or_map_field_holds_a_path(home, monkeypatch):
     old = {"command": str(home / ".local/bin/agentsetup"), "args": ["mcp"]}
     config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "agentsetup"), old))
     held = [{"name": "kept", "kind": "local", "tools": 1}]
-    data = overview(build_inventory(home), [], None, held=held)
+    data = overview(build_inventory(home), None, held=held)
     kinds = {c["action"]["label"] for c in data["cards"] if c["action"]}
     assert {"Keep one…", "Update…", "Move in…", "Connect…"} <= kinds
     for text in _strings({"cards": data["cards"], "map": data["map"]}):
@@ -631,7 +618,7 @@ def test_the_page_answers_the_map_with_the_library_and_gateway_rules(tmp_path):
 
 def test_a_client_not_on_this_mac_is_on_the_map_but_off_and_unlinked(tmp_path):
     home = make_home(tmp_path, "claude_code/2.1.283")
-    data = overview(build_inventory(home), [], None, held=[])
+    data = overview(build_inventory(home), None, held=[])
     on = {c["id"]: c["on"] for c in data["map"]["clients"]}
     assert on["claude_code"] is True
     assert on.get("cursor") is not True
@@ -682,7 +669,7 @@ def _context_cards(home, project=None, **kwargs):
     inventory = build_inventory(home)
     folder = str(project) if project else None
     clients = context_view(inventory, home, home / ".codex", folder, {})["clients"]
-    data = overview(inventory, [], folder, context_cards=clients, **kwargs)
+    data = overview(inventory, folder, context_cards=clients, **kwargs)
     return [c for c in data["cards"] if c["icon"] == "gauge"]
 
 
@@ -765,7 +752,6 @@ def test_the_cards_come_after_the_came_back_cards(tmp_path):
     back = [{"name": "docs", "client": "codex", "app": None}]
     data = overview(
         build_inventory(home),
-        [],
         None,
         came_back=back,
         context_cards=view(home).values(),

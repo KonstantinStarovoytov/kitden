@@ -37,9 +37,6 @@ def test_readme_is_short_and_the_guide_names_the_page_words():
     guide = " ".join((ROOT / "docs/guide.md").read_text().split())
     for words in ("Add missing plugins and skills…", "Show changes", "Redo…", "See it on the map"):
         assert words in guide, words
-    # Obot and MetaMCP cannot be added from the page now.
-    for words in (text, guide):
-        assert "Obot" not in words and "MetaMCP" not in words
 
 
 def test_the_check_before_a_release_names_the_management_actions():

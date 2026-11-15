@@ -654,10 +654,6 @@ div.map .block.page .block-label { color: var(--ink-4); }
 .fact-tiles { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .fact-tiles .client-mark, .fact-tiles .mono-mark { --tile: 18px; border-radius: 5px; }
 .fact-tiles > span:last-child { margin-left: 4px; }
-/* A form under a card's actions scrolls in a short window instead of leaving the column. */
-#drawer footer:has(> .add-gateway, > details.connect) { overflow-y: auto; }
-.add-gateway h2 { margin: 0 0 4px; font-size: 13px; }
-.add-gateway .form { margin: 0; }
 
 /* Map (map.js): HTML blocks over one SVG of links, each where the layout puts it (map-view.js
    moves them by `translate` and `transform` and owns their opacity; a look here never sets any of
@@ -1050,8 +1046,8 @@ div.map .block-count.leaving:focus-visible { filter: none; }
 /* Words in the accent that show only while a change waits in the tray ("· change in preview"). */
 .fact-mark .accent, .client-rows small .accent { color: var(--route); }
 /* A panel's head with a tile beside its title and the quiet line under it (gateway-details.js
-   headTile): a client's 28 px tile, the Kitden house at 32 px, a registered gateway's mark, or a
-   server's icon on a 28 px tile. A link's title has a quiet arrow between its two ends. */
+   headTile): a client's 28 px tile, the Kitden house at 32 px, or a server's icon on a 28 px
+   tile. A link's title has a quiet arrow between its two ends. */
 .drawer header.has-tile { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; }
 .drawer header.has-tile > .top { grid-column: 1 / -1; }
 .drawer header.has-tile > .p-tile { grid-column: 1; grid-row: 2 / span 2; align-self: center; }
@@ -1197,8 +1193,7 @@ details.file-change > summary, details.tech > summary { cursor: pointer; color: 
 .fold > .fold-in { overflow: hidden; min-height: 0; display: grid; gap: 10px; align-content: start; opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 280ms var(--calm); }
 .fold.open { grid-template-rows: 1fr; }
 .fold.open > .fold-in { opacity: 1; transform: none; transition-delay: 40ms; }
-details.file-change .fold-in, details.tech .fold-in, details.connect .fold-in { padding-top: 10px; }
-details.connect .fold-in > .form { margin: 0; }
+details.file-change .fold-in, details.tech .fold-in { padding-top: 10px; }
 summary::-webkit-details-marker { transition: transform 200ms ease; }
 .step { border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
 .step-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
@@ -1261,9 +1256,6 @@ pre.diff .del { color: var(--diff-del); background: color-mix(in srgb, var(--dan
 .fact-lines { display: grid; gap: 4px; }
 .gone-note { margin: 0; color: var(--ink-3); font-size: 12px; }
 .gone-note:empty { display: none; }
-details.connect { margin-top: 4px; }
-details.connect > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
-details.connect .fold > .fold-in { display: block; }
 
 /* Page changes and the theme switch (View Transitions, where supported) */
 ::view-transition-group(*) { animation-duration: 340ms; animation-timing-function: var(--ease-drawer); }

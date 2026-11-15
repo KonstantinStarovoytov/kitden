@@ -22,7 +22,6 @@ from kitden.clients.base import (
     ClientAdapter,
     Reader,
     Scan,
-    bearer_header,
     check_toggle,
     expand,
     file_source,
@@ -47,8 +46,6 @@ from kitden.model import (
     ClientStatus,
     Enabled,
     FileEdit,
-    Gateway,
-    GatewayAuth,
     Item,
     ItemKind,
     ReadStatus,
@@ -467,20 +464,10 @@ class ClaudeCodeAdapter(ClientAdapter):
                     break
         return out
 
-    def gateway_step(self, gateway: Gateway, name: str) -> Step:
-        value: dict[str, Any] = {"type": "http", "url": gateway.url}
-        headers = bearer_header(gateway, "${{{}}}")
-        if headers:
-            value["headers"] = headers
-        login = None
-        if gateway.auth is GatewayAuth.OAUTH:
-            login = f"In Claude Code, run /mcp, choose {name}, then choose Authenticate."
-        return self._add_entry(name, value, login)
-
     def setup_server_step(self, command: str, args: list[str]) -> Step:
         return self._add_entry(SETUP_NAME, {"type": "stdio", "command": command, "args": args})
 
-    def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
+    def _add_entry(self, name: str, value: dict[str, Any]) -> Step:
         """A user-scope MCP entry, added with `claude mcp add-json` (FR-021, FR-024), or written
         directly when it holds a secret."""
         edit = FileEdit(
@@ -505,7 +492,6 @@ class ClaudeCodeAdapter(ClientAdapter):
             name=name,
             edit=edit,
             restart_note=NEW_SESSION,
-            login_note=login,
             **cli,
         )
 

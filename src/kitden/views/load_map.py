@@ -77,8 +77,7 @@ def row_key(item: Item) -> str:
 
 def _route(item: Item, column: str) -> str | None:
     """How the client gets the item, or None when it is the client's own plain entry. An
-    account, managed or local entry and a registered gateway get none: the state or Details
-    says it."""
+    account, managed or local entry gets none: the state or Details says it."""
     if item.client == DESKTOP:
         return ROUTE_WORDS["desktop"]
     if item.via_gateway == KITDEN_GATEWAY:
@@ -212,7 +211,7 @@ def _cross_client_fix(client: str, via: str, kind: ItemKind) -> str:
     )
 
 
-def _flag(finding, item: Item, gateway_registered: bool, copies: list[Item]) -> dict | None:
+def _flag(finding, item: Item, copies: list[Item]) -> dict | None:
     """A short flag for the row; warnings also carry the fix in words and the action."""
     if finding.type is FindingType.DUPLICATE_IN_CLIENT:
         text = f"{CLIENT_WORDS.get(finding.client, finding.client)} loads it twice"
@@ -227,14 +226,12 @@ def _flag(finding, item: Item, gateway_registered: bool, copies: list[Item]) -> 
         fix, action = DUPLICATE_FIXES.get(item.kind, ("Remove one copy to keep the other.", None))
         return _warning(text, finding.client, fix, action)
     if finding.type is FindingType.BYPASSES_GATEWAY:
-        text = {"plugin": "From plugin", "local": "Local server"}.get(group_of(item))
-        # With a gateway, a direct server is an option to move, not a problem.
-        text = text or ("Direct connection" if gateway_registered else "Direct")
+        text = {"plugin": "From plugin", "local": "Local server"}.get(group_of(item), "Direct")
         return {"text": text, "level": "info"}
     return None
 
 
-def load_map(inventory, project: str | None, gateway_registered: bool = False) -> list[Row]:
+def load_map(inventory, project: str | None) -> list[Row]:
     status = {c.id: c.status for c in inventory.clients}
     views = {c: effective_view(inventory, c, project) for c in CLIENTS}
     desktop = effective_view(inventory, DESKTOP, project) if status.get(DESKTOP) else None
@@ -317,7 +314,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
         for item_id in finding.items:
             row, item = item_rows.get(item_id), items_by_id.get(item_id)
             copies = [items_by_id[i] for i in finding.items if i in items_by_id]
-            flag = _flag(finding, item, gateway_registered, copies) if row and item else None
+            flag = _flag(finding, item, copies) if row and item else None
             if flag and row and flag not in row.flags:
                 row.flags.append(flag)
     order = {ItemKind.MCP_SERVER: 0, ItemKind.PLUGIN: 1, ItemKind.SKILL: 2, ItemKind.HOOK: 3}

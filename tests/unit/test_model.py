@@ -7,9 +7,6 @@ from kitden.model import (
     FileEdit,
     Finding,
     FindingType,
-    Gateway,
-    GatewayAuth,
-    GatewayEdit,
     Item,
     ItemKind,
     ReadStatus,
@@ -85,7 +82,7 @@ def test_finding_needs_at_least_one_item():
     ],
 )
 def test_change_follows_the_state_diagram(path, allowed):
-    change = Change(action="gateway.connect")
+    change = Change(action="mcp.add")
     assert change.state is ChangeState.PREVIEWED
     if allowed:
         for state in path:
@@ -95,30 +92,6 @@ def test_change_follows_the_state_diagram(path, allowed):
         with pytest.raises(ValueError, match="cannot move"):
             for state in path:
                 change.move_to(state)
-
-
-def test_gateway_url_is_normalized_and_drives_the_id():
-    a = Gateway(url="HTTP://LocalHost:8880/mcp-connect/work/")
-    b = Gateway(url="http://localhost:8880/mcp-connect/work")
-    assert a.url == "http://localhost:8880/mcp-connect/work"
-    assert a.id == b.id
-
-
-def test_gateway_key_must_be_a_variable_name_not_a_secret():
-    assert (
-        Gateway(
-            url="http://localhost:12008/mcp", auth=GatewayAuth.ENV_KEY, key_env_var="METAMCP_KEY"
-        ).key_env_var
-        == "METAMCP_KEY"
-    )
-    with pytest.raises(ValueError, match="variable name"):
-        Gateway(
-            url="http://localhost:12008/mcp",
-            auth=GatewayAuth.ENV_KEY,
-            key_env_var="sk_mt_9f8e7d6c5b4a",
-        )
-    with pytest.raises(ValueError, match="variable name"):
-        Gateway(url="http://localhost:12008/mcp", auth=GatewayAuth.ENV_KEY)
 
 
 def test_instruction_items_name_files_and_stems(tmp_path):
@@ -170,13 +143,7 @@ def test_edits_hide_their_values_from_repr():
         after={"env": {"TOKEN": SECRET}},
         before={"env": {"TOKEN": SECRET}},
     )
-    gateway = GatewayEdit(
-        gateway_id="obot",
-        url="https://gw.example/mcp",
-        name="x",
-        server={"headers": {"Authorization": f"Bearer {SECRET}"}},
-    )
-    step = Step(client="claude_code", scope=Scope.USER, name="x", edit=file_edit, gateway=gateway)
-    for shown in (repr(file_edit), repr(gateway), repr(step)):
+    step = Step(client="claude_code", scope=Scope.USER, name="x", edit=file_edit)
+    for shown in (repr(file_edit), repr(step)):
         assert SECRET not in shown
-    assert "/h/.claude.json" in repr(file_edit) and "gw.example" in repr(gateway)
+    assert "/h/.claude.json" in repr(file_edit)

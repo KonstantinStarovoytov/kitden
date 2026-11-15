@@ -140,7 +140,7 @@ function change(id, when, over = {}) {
     id, time: when.time, day: when.day,
     title_parts: { action: 'batch', steps: [], target: { scope: 'all' }, rule: null, rows },
     state: 'verified', clients: ['claude_code', 'codex'], project: 'mcp-gateway', backup: 'kept',
-    takes_effect: [{ client: 'codex', note: RESTART, login: null }],
+    takes_effect: [{ client: 'codex', note: RESTART }],
     history: [{ time: when.time, state: 'previewed' }, { time: when.time, state: 'verified' }],
     rows, redo: [RULE], map: { view: 'gateway', sel: 'tool:github/push_files', gone: false },
     technical: { paths: ['/Users/me/.codex/config.toml'], backups: ['/Users/me/.kitden/backups/c1/config.toml'], commands: ['claude mcp add github'], error: null },
@@ -361,8 +361,8 @@ test('Details show Project, State, Backup, Takes effect, Clients and History', a
   assert.deepEqual(facts().slice(0, 4).map(([, v]) => v), ['mcp-gateway', 'Undone', 'Back in place', RESTART]);
   await fire(row('c3'), 'click');
   assert.deepEqual(facts().slice(0, 4).map(([, v]) => v), ['mcp-gateway', 'Not applied: the file changed first', 'None, nothing was written', 'Nothing to do']);
-  show([change('a1', TODAY, { project: null, clients: ['codex'], takes_effect: [{ client: 'codex', note: null, login: 'codex login' }] })]);
-  assert.deepEqual(facts().map(([, v]) => v).filter((v, i) => [0, 3, 4].includes(i)), ['All projects', 'Log in: codex login', '1 client']);
+  show([change('a1', TODAY, { project: null, clients: ['codex'], takes_effect: [{ client: 'codex', note: RESTART }] })]);
+  assert.deepEqual(facts().map(([, v]) => v).filter((v, i) => [0, 3, 4].includes(i)), ['All projects', RESTART, '1 client']);
 });
 
 test('the backup words follow the state, not the backup alone', () => {

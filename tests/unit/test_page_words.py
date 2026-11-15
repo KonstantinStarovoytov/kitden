@@ -933,8 +933,6 @@ def test_gateway_list_is_a_tree_grid_the_keys_move_through():
     text = script("gateway.js")
     assert 'setAttribute("role", "treegrid")' in text and "gridKeys(grid, rows," in text
     assert "gridKey(rows," in script("dom.js").split("export function gridKeys")[1]
-    # "Connect clients" folds smoothly in a registered gateway's Details.
-    assert "fold(box)" in gw()
 
 
 def test_library_shows_one_flag_per_wording():
@@ -996,59 +994,20 @@ def test_overview_notes_are_sentences_with_an_info_icon():
 # Feature 006: the gateway is managed from here --------------------------------------------
 
 
-def test_gateway_offers_move_and_keeps_the_side_door_small():
+def test_gateway_offers_move_and_move_all():
     text = gw()
     assert "Move into the gateway…" in text
     assert "Move all ${" in text
-    # A registered gateway's own page is one plain action in its Details, never the primary one.
-    assert "`Open ${name} ↗`" in text
-
-
-def test_gateway_form_never_takes_the_password_itself():
-    text = gw()
-    assert "Password variable name (not the password)" in text
-    assert 'type: "password"' not in text
-
-
-def test_moves_are_named_on_changes_and_in_the_review():
-    assert '"gateway.move": "Moved into the gateway"' in script("parts.js")
-    code = panel()
-    assert "Move ${names} into the gateway" in code
-    assert "into the gateway" in code
-
-
-# Feature 007: an Obot gateway beside MetaMCP ---------------------------------------------
-
-
-def test_gateway_form_takes_an_obot_key_variable_never_the_key():
-    text = gw()
-    assert 'path.startsWith("/mcp-connect/")' in script("parts.js")
-    assert "Obot API key variable name (not the key)" in text
-    assert "ok1-" not in text
-    # The gateways that take a server are offered in order, never one picked silently.
+    # The gateway that takes a server comes from one rule (details.js moveTargets).
     assert "moveTargets(model, key)" in text and "model.gateways.find((g) => g.movable)" not in text
 
 
-def test_held_rows_say_remote_hosted_or_sse_and_keep_addresses_behind_details():
-    text = gw()
-    assert 'return "Hosted";' in text and 'return "Remote";' in text
-    assert "Nothing yet. Add servers in ${gatewayName(gateway)} itself." in text
-
-
-def test_a_gateway_the_clients_do_not_use_offers_to_take_them_over():
-    text = gw()
-    assert "Use this gateway…" in text and '"gateway.switch"' in text
-    # The registered gateway the clients use comes first under the Kitden one (gatewayTree).
-    assert "model.used.includes(b.id)" in script("gateway.js")
-
-
-def test_diagram_nodes_open_the_client_apps_and_the_gateway():
+def test_diagram_nodes_open_the_client_apps():
     text = gw()
     # The scheme comes from the installed app, read by the server; none is hard-coded.
     for scheme in ('"claude://"', '"codex://"', '"cursor://"'):
         assert scheme not in text
     assert "found.app_url" in text
-    assert 'window.open(page, "_blank", "noopener")' in text
 
 
 def test_library_adds_plugins_and_marketplaces_in_one_review():
@@ -1190,15 +1149,6 @@ def test_a_project_switch_marks_the_old_page_as_waiting():
     assert ".page.pending { opacity: 0.5; pointer-events: none;" in style
 
 
-def test_gateway_connect_form_serves_its_own_card_only():
-    text = script("gateway-details.js")
-    # The form is for the card's gateway; a client in any gateway is not offered again.
-    assert "connectForm(gateway, waiting)" in text
-    # The Kitden gateway holds other servers: its clients can connect to a registered one too.
-    assert 'Object.entries(model.connections).filter(([id]) => id !== "kitden")' in text
-    assert "connectForm(model.gateways" not in text
-
-
 def test_direct_servers_are_options_and_details_offers_move_first():
     overview = script("overview.js")
     assert '{ id: "improve", words: "Can improve", icon: "sparkles", look: "btn" }' in overview
@@ -1262,9 +1212,8 @@ def test_every_control_a_render_replaces_names_itself_for_focus():
 def test_client_checkboxes_come_from_one_named_part():
     check = script("parts.js").split("export function clientCheck")[1].split("\n}")[0]
     assert 'setAttribute("aria-label"' in check and "box.value = client" in check
-    for name in ("offer.js", "gateway-details.js"):
-        text = script(name)
-        assert "clientCheck(" in text and 'type = "checkbox"' not in text
+    text = script("offer.js")
+    assert "clientCheck(" in text and 'type = "checkbox"' not in text
 
 
 def test_apply_waits_for_work_not_for_a_timer():
@@ -1306,8 +1255,7 @@ def test_buttons_show_progress_and_the_scan_line_no_longer_blinks():
     assert ".btn.busy::after" in css and ".btn.busy { color: transparent; }" in css
     assert 'node.addEventListener("click", (event) => {' in script("dom.js")
     assert "busyWhile(node" in script("dom.js")
-    for name in ("offer.js", "gateway-details.js"):
-        assert "busyWhile(submit" in script(name)
+    assert "busyWhile(submit" in script("offer.js")
     assert 'busyWhile($("#rescan")' in script("app.js")
     # A change with several steps counts them in the Apply button, from the server's events.
     assert '"change_progress"' in script("app.js") and '"kitden:progress"' in script("app.js")
@@ -1483,7 +1431,6 @@ def test_the_kitden_gateway_card_comes_first_and_sets_up_missing_clients():
     assert "`Set up in ${CLIENT_NAMES[entry.client]}…`" in parts
     assert '"setup_server.register"' in parts and '"setup_server.update"' in parts
     assert "kitdenClients(setup)" in text and "setup: data.setupServer" in text
-    assert "Nothing yet. Move a server in from the outside group." in text
     # Its rows show a name and what it is; commands and env stay out of the page.
     assert "server.command" not in text and "server.env" not in text
 
@@ -1545,8 +1492,8 @@ def test_the_kitden_card_says_only_what_it_knows_about_clients():
 def test_moves_into_the_kitden_gateway_name_it():
     code = panel()
     assert "Move ${names} into the Kitden gateway" in code
-    # Two gateways can take a server: the panel asks which, never picks one silently.
-    assert 'openInfo("Move into the gateway", title, body' in code
+    # The move goes to the tray at once: the Kitden gateway is the only one that takes it.
+    assert "return review(moveBody(gateway, items));" in code
     # The Changes page names the server first: "Moved files into the Kitden gateway · …".
     assert "into the Kitden gateway${place} · ${clients.join" in script("parts.js")
 
@@ -2133,12 +2080,6 @@ def test_the_gateway_opens_and_keeps_the_selected_server():
     assert "takeArrival()" in text
 
 
-def test_saving_a_gateway_drops_an_arrival_still_waiting():
-    # The person's own action wins: a server picked by Back must not open after the save.
-    save = gw().split("async function save() {")[1].split("\n  }\n")[0]
-    assert "arrival.pending = false;" in save
-
-
 def test_the_gateway_lists_by_group_and_keeps_every_action():
     text = gw()
     for words in (
@@ -2147,11 +2088,6 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
         '"Move into the gateway…"',
         '"Remove direct entry…"',
         "Move all ${",
-        '"Add another gateway…"',
-        # Its form closes again: a quiet Cancel beside Save gateway (Escape in the form too).
-        'el("h2", null, "Add another gateway")',
-        'button("Cancel", () => onCancel(), "btn")',
-        '"Use this gateway…"',
         "Set up in",
         '"Connect your agents. Shape what they can use."',
         "The gateway controls only the servers in it. "
@@ -2597,11 +2533,8 @@ def test_a_control_that_waits_for_another_change_says_why():
     assert "linksWait" in script("gateway.js") and "linksWait" in script("library-map.js")
 
 
-def test_a_gateway_kitden_cannot_reach_says_a_short_state_and_no_block_words_run_out():
-    # The reason (it may name a variable) waits in the gateway's Details; the map and the List say
-    # a short state (2026-10-26 owner screenshot: Obot's error ran out of its block).
-    assert 'export const NOT_REACHED = "Not connected";' in script("gateway-details.js")
-    assert "? NOT_REACHED :" in script("gateway.js")
+def test_no_block_words_run_out_of_their_block():
+    # 2026-10-26 owner screenshot: a long error ran out of its block.
     # A block's lines end in "…" inside it, also where the gateway centres them.
     assert "div.map .block-text > *, div.map .block-stats { max-width: 100%; min-width: 0; }" in CSS
     for rule in ("div.map .block-name {", "div.map .block-words {"):
@@ -2651,11 +2584,12 @@ def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
 
 def test_gateway_forms_say_in_preview_while_their_row_waits():
     details, gateway = script("details.js"), script("gateway-details.js")
-    # One look for a button whose row waits: previewButton and the Connect clients button use it.
+    # One look for a button whose row waits: previewButton and the Add form's button use it.
     assert "export function showInPreview(node, words, label, key) {" in details
     assert details.count("showInPreview(node, words, label, key);") == 1
-    assert "showInPreview(submit, words, PREVIEW, keyFor(body()))" in gateway
-    assert 'const PREVIEW = "Preview";' in gateway
+    offer = script("offer.js")
+    assert "showInPreview(submit, words, PREVIEW, keyFor(bodyOf()))" in offer
+    assert 'const PREVIEW = "Preview";' in offer
     # A project pick says it on its small line and in its name for a screen reader.
     assert "`${text} · in preview`" in gateway
     assert "`${name}, ${said}`" in gateway
@@ -3111,11 +3045,11 @@ def test_the_changes_page_says_the_mockups_words():
     assert 'GONE = "This item is no longer there."' in text
     # A change that touched only Kitden's own settings shows the gateway, never "0 clients".
     assert '"Kitden gateway"' in text
-    # A change with no day, the history's points and the log-in note.
+    # A change with no day and the history's points; no log-in note any more.
     assert 'return "Earlier"' in text
     assert 'previewed: ["Preview"]' in text and '["Applied", "Checked"]' in text
     assert 'stale: ["Stopped: the file changed first"]' in text
-    assert "`Log in: ${t.login}`" in text
+    assert "Log in:" not in text
     # The Kitden house is drawn in one place (parts.js) for the Gateway, its Details and Changes.
     house = '"/static/brand/kitden.svg"'
     names = sorted(p.name for p in (STATIC / "js").glob("*.js"))

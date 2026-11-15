@@ -21,13 +21,11 @@ from kitden.demo import (
     demo_build,
     keychain_file,
 )
-from kitden.gateways import add_gateway, data_dir
+from kitden.gateways import data_dir
 from kitden.local_gateway.settings import load_settings
-from kitden.model import Gateway
 from kitden.system import secret_store_name
 from kitden.views import inventory as inventory_module
 from kitden.views.inventory import Inventory, build_inventory
-from kitden.web import app as page_app
 from kitden.web.app import create_app
 from tests.conftest import make_home
 
@@ -148,7 +146,7 @@ def test_the_demo_reads_no_app_folder(tmp_path, monkeypatch):
     assert seen and all(list(roots) == [] for roots in seen)
 
 
-def test_a_marketplace_and_a_registered_gateway_are_not_part_of_the_demo(tmp_path):
+def test_a_marketplace_is_not_part_of_the_demo(tmp_path):
     with demo_page(tmp_path) as page:
         body = {
             "action": "marketplace.add",
@@ -156,35 +154,7 @@ def test_a_marketplace_and_a_registered_gateway_are_not_part_of_the_demo(tmp_pat
             "params": {"source": "team/market"},
         }
         market = page.post("/api/changes/preview", json=body, headers=POST)
-        gateway = page.post(
-            "/api/gateways",
-            json={"url": "http://127.0.0.1:12008/mcp", "auth": "none"},
-            headers=POST,
-        )
-    for answer in (market, gateway):
-        assert (answer.status_code, answer.json()) == (422, {"detail": NOT_IN_DEMO})
-
-
-def test_the_demo_shows_no_registered_gateway(tmp_path, monkeypatch):
-    # A class, not a function: the page writes `MetaMcpClient | ObotClient` as a return type,
-    # and Python 3.13 works that out when the page is built.
-    class Never:
-        def __init__(self, *args, **kwargs):
-            raise AssertionError("the demo reached a gateway")
-
-    monkeypatch.setattr(page_app, "MetaMcpClient", Never)
-    monkeypatch.setattr(page_app, "ObotClient", Never)
-    with demo_page(tmp_path) as page:
-        gateway = add_gateway(page.home, Gateway(url="http://127.0.0.1:12008/metamcp/team/mcp"))
-        assert page.get("/api/gateways").json() == []
-        assert page.get(f"/api/gateways/{gateway.id}/servers").status_code == 404
-        body = {
-            "action": "gateway.connect",
-            "targets": [{"client": "cursor"}],
-            "params": {"gateway": gateway.id, "name": "team"},
-        }
-        answer = page.post("/api/changes/preview", json=body, headers=POST)
-    assert (answer.status_code, answer.json()) == (422, {"detail": "Register the gateway first."})
+    assert (market.status_code, market.json()) == (422, {"detail": NOT_IN_DEMO})
 
 
 def test_moving_a_remote_server_in_uses_the_stand_ins(tmp_path):

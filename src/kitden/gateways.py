@@ -1,23 +1,16 @@
-"""Registered MCP gateways (T044, FR-033 to FR-035, FR-040).
-
-Stored in the tool's settings file (mode 0600). Only addresses, the auth type and the name of the
-key's environment variable are kept; a key value or a URL with credentials is refused.
-"""
+"""Kitden's own data folder: where it is, the one-time copy from the working version's folder,
+and removing what older versions kept there that Kitden no longer uses."""
 
 import contextlib
 import json
 import shutil
 import tempfile
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from kitden import system
-from kitden.changes.atomic import write_atomic
-from kitden.model import Gateway, GatewayAuth
-from kitden.redact import redact
 
 OLD_DATA_DIR = "Library/Application Support/agentsetup"  # the working name, macOS only
-SETTINGS_FILE = "settings.json"
+OLD_SETTINGS_FILE = "settings.json"  # the outside gateways older versions kept
 
 
 def data_dir(home: Path) -> Path:
@@ -87,75 +80,8 @@ def _point_backups_at(record: Path, old: Path, new: Path) -> None:
     record.write_text(json.dumps(data, indent=2))
 
 
-def _check_web_address(url: str, what: str) -> None:
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https") or not parts.hostname:
-        raise ValueError(f"{what} must be an http or https address")
-    if parts.username or parts.password or redact({"url": url})[1]:
-        raise ValueError(f"{what} must not contain a secret; use a key variable instead")
-
-
-def check_gateway(gateway: Gateway) -> None:
-    _check_web_address(gateway.url, "The gateway address")
-    if gateway.ui_url:
-        _check_web_address(gateway.ui_url, "The interface link")
-
-
-UNREADABLE = "Kitden could not read its settings, so it saved nothing."
-
-
-def _read(home: Path, strict: bool = False) -> dict:
-    """Kitden's settings; {} when there are none. With `strict`, settings that are there but
-    cannot be read raise ValueError, so that a write never replaces them."""
-    path = data_dir(home) / SETTINGS_FILE
-    try:
-        data = json.loads(path.read_text())
-    except FileNotFoundError:
-        return {}
-    except (OSError, ValueError):
-        data = None
-    if isinstance(data, dict):
-        return data
-    if strict:
-        raise ValueError(UNREADABLE)
-    return {}
-
-
-def load_gateways(home: Path) -> list[Gateway]:
-    gateways = []
-    for raw in _read(home).get("gateways", []):
-        try:
-            gateway = Gateway(
-                url=raw["url"],
-                ui_url=raw.get("ui_url"),
-                auth=GatewayAuth(raw.get("auth", "none")),
-                key_env_var=raw.get("key_env_var"),
-                login_email=raw.get("login_email"),
-                login_password_env_var=raw.get("login_password_env_var"),
-            )
-            check_gateway(gateway)
-        except (KeyError, TypeError, ValueError):
-            continue
-        gateways.append(gateway)
-    return gateways
-
-
-def add_gateway(home: Path, gateway: Gateway) -> Gateway:
-    """Save a gateway; one with the same address is replaced."""
-    check_gateway(gateway)
-    settings = _read(home, strict=True)
-    kept = [g for g in load_gateways(home) if g.id != gateway.id]
-    settings["gateways"] = [
-        {
-            "url": g.url,
-            "ui_url": g.ui_url,
-            "auth": str(g.auth),
-            "key_env_var": g.key_env_var,
-            "login_email": g.login_email,
-            "login_password_env_var": g.login_password_env_var,
-        }
-        for g in [*kept, gateway]
-    ]
-    private_data_dir(home)
-    write_atomic(data_dir(home) / SETTINGS_FILE, json.dumps(settings, indent=2).encode())
-    return gateway
+def forget_gateways(home: Path) -> None:
+    """Delete the list of outside gateways that older versions kept. Kitden works with its own
+    gateway only now, and this file held nothing else."""
+    with contextlib.suppress(OSError):
+        (data_dir(home) / OLD_SETTINGS_FILE).unlink()

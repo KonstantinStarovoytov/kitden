@@ -360,9 +360,9 @@ export function versionsOpened(before, after) {
   return !versionsOpen(before) && versionsOpen(after);
 }
 
-// "gateway" is a registered gateway's own step; "kitden" is the Kitden gateway's settings file.
+// "kitden" is the Kitden gateway's settings file.
 const CLIENT_MARKS = {
-  claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", gateway: "GW", kitden: "GW",
+  claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", kitden: "GW",
 };
 // Icon file names under /static/brand/clients. Codex and Cursor also ship a "-dark" version.
 const CLIENT_ICONS = {
@@ -379,7 +379,7 @@ export const WRITABLE = ["claude_code", "codex", "cursor"];
 export const INSTALLERS = ["claude_code", "codex"];
 export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
-  claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway", kitden: "Kitden gateway",
+  claude_desktop_code_tab: "Claude Desktop (Code tab)", kitden: "Kitden gateway",
 };
 // A checkbox: the real input, which keeps the keys and the screen reader, and the box drawn after
 // it (.chk, with a check that springs in). CSS ticks the box from the input; both go in a label.
@@ -405,39 +405,13 @@ export function clientCheck(client, checked, note, onChange) {
   return label;
 }
 
-// Which gateway an address belongs to, told from its path (the server does the same).
-export function kindOf(url) {
-  try {
-    const path = new URL(url).pathname;
-    if (path.startsWith("/metamcp/")) return "metamcp";
-    if (path.startsWith("/mcp-connect/")) return "obot";
-  } catch { /* not an address yet */ }
-  return "other";
-}
-
-const KIND_NAMES = { metamcp: "MetaMCP", obot: "Obot" };
-
-// The Kitden gateway has its own name; a registered one goes by its kind or its address.
-export function gatewayName(gateway) {
-  if (gateway.name) return gateway.name;
-  const kind = gateway.kind || kindOf(gateway.url);
-  if (KIND_NAMES[kind]) return KIND_NAMES[kind];
-  try { return new URL(gateway.url).host || "Gateway"; } catch { return "Gateway"; }
-}
-
-// A move's steps that take an entry out of a client. The gateway's own steps and the kitden
-// entry a move adds to a client are not servers.
-const leavesClient = (s) => s.client !== "gateway" && s.client !== "kitden" && s.name !== "kitden";
+// A move's steps that take an entry out of a client. The Kitden gateway's own steps and the
+// kitden entry a move adds to a client are not servers.
+const leavesClient = (s) => s.client !== "kitden" && s.name !== "kitden";
 
 // The servers a move takes, each once.
 export function movedNames(steps) {
   return [...new Set(steps.filter(leavesClient).map((s) => s.name))];
-}
-
-// A move into a registered gateway has that gateway's own step; one into the Kitden gateway has
-// none, also when the Kitden gateway holds the server already and only the entries go.
-export function kitdenMove(change) {
-  return change.action === "gateway.move" && !change.steps.some((s) => s.client === "gateway");
 }
 
 // A direct server, when no gateway here can take it: the Gateway page and Details say the same.
@@ -632,7 +606,6 @@ export function staleNote(time) {
 
 const ACTION_WORDS = {
   "gateway.connect": "Added gateway",
-  "gateway.move": "Moved into the gateway",
   "gateway.switch": "Switched the gateway",
   "plugin.install": "Added",
   "marketplace.add": "Added marketplace",
@@ -734,14 +707,14 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.access" && entry.steps.length) return `Changed the access of ${entry.steps[0].name}`;
   // An add's first step is the server's entry; a PATH step and Codex's timeouts may follow.
   if (entry.action === "gateway.add" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} to the Kitden gateway`;
-  const kitden = kitdenMove(entry);
-  const verb = kitden ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
+  const move = entry.action === "gateway.move";
+  const verb = move ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
   const plugin = ["plugin.enable", "plugin.disable", "plugin.install", "plugin.remove", "skill.rule"].includes(entry.action);
   // The gateway's own step is not a client: the line names the clients the entry left. An
   // install's marketplace steps only make the plugin reachable: the line names the plugin.
-  const steps = entry.action === "gateway.move"
+  const steps = move
     ? entry.steps.filter(leavesClient)
-    : entry.steps.filter((s) => s.client !== "gateway" && (entry.action !== "plugin.install" || s.name.includes("@")));
+    : entry.steps.filter((s) => entry.action !== "plugin.install" || s.name.includes("@"));
   const names = [...new Set(steps.map((s) => (plugin ? s.name.split("@")[0] : s.name)))];
   // A copied skill folder reaches every client that reads that folder.
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
@@ -759,7 +732,7 @@ export function changeTitle(entry) {
   if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")}${place} · ${clients.join(", ")}`;
   const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "setup_server.enable", "client.disconnect", "project.align"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
-  if (kitden) return `${verb}${what} into the Kitden gateway${place} · ${clients.join(", ")}`;
+  if (move) return `${verb}${what} into the Kitden gateway${place} · ${clients.join(", ")}`;
   return `${verb}${what}${place} · ${clients.join(", ")}`;
 }
 
@@ -775,9 +748,9 @@ export function diffCounts(text) {
   return { added, removed };
 }
 
-// The restart and log-in notes of a change's steps, each once, under a heading. Null when none.
+// The restart notes of a change's steps, each once, under a heading. Null when none.
 export function notesSection(heading, steps) {
-  const notes = [...new Set(steps.flatMap((s) => [s.restart_note, s.login_note && `Log in: ${s.login_note}`]).filter(Boolean))];
+  const notes = [...new Set(steps.map((s) => s.restart_note).filter(Boolean))];
   if (!notes.length) return null;
   const section = el("section");
   const list = el("ul", "checklist");
