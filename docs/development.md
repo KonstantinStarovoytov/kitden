@@ -306,3 +306,16 @@ about macOS words or `security` command lines say so with `pytestmark =
 pytest.mark.usefixtures("as_mac")`.
 
 Windows is not supported yet: `install.ps1` stops with a message.
+
+## Planned AI review of forks
+
+The current `agents-review.yml` calls kitden-sdlc directly and skips forks. The
+[new design](https://github.com/KonstantinStarovoytov/kitden-sdlc/blob/main/docs/fork-review-design.md)
+replaces that with a secret-free gate and a trusted receiver. PR source is inert review
+data; tests run only in separate unprivileged CI. Models, effort, cross-file context,
+finding history and the single Lantern comment must be preserved.
+
+Implementation order, security cases, paired evals and rollback are in the
+[rollout plan](https://github.com/KonstantinStarovoytov/kitden-sdlc/blob/main/docs/fork-review-plan.md).
+Activation updates the two callers, their full-SHA pins and the AI policy together.
+This is a documentation proposal; no runtime or client-setting behaviour changes.

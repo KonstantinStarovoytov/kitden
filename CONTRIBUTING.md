@@ -85,3 +85,10 @@ Commit subjects inside the pull request follow the same style.
 
 If a client file format or external API is involved, check its official documentation and
 record the date beside the claim.
+
+## Pull requests from forks
+
+Fork contributions are welcome. AI review currently skips them; the maintainer reviews
+them manually. The [planned safe review path](https://github.com/KonstantinStarovoytov/kitden-sdlc/blob/main/docs/fork-review-design.md)
+is not enabled yet. You do not need to provide API keys, change workflow permissions or
+copy your branch into this repository. A missing AI comment is not an approval.
