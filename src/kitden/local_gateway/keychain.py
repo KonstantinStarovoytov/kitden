@@ -10,9 +10,31 @@ Facts about `security` this relies on (from `man security`, checked 2026-10-22):
   fails, so `store` reads the item back instead of trusting it.
 - `add-generic-password -U` updates the item when it is there; `-X` takes the value as a
   hexadecimal string, so it needs no quoting.
-- `find-generic-password -w` prints only the value; `delete-generic-password` removes the item.
+- `delete-generic-password` removes the item.
 - Exit code 44 means the item is not there. The man page does not list exit codes; 44 is what
   `security` returns for a missing item (errSecItemNotFound), not tried on this machine.
+
+Seen on a GitHub macOS runner on 2026-11-15, not in the man page:
+- A `security -i` line of up to 4,095 bytes before its newline is read whole; from 4,096 bytes
+  on it is cut there, and the rest of the line runs as another command. So `store` refuses a
+  value whose line would be longer than LINE_LIMIT, before it runs anything.
+- `find-generic-password -w` prints a value with a byte outside printable ASCII as hex
+  (`d0bad0bb…`), the same as an ASCII value made of hex digits would look. `-g` writes the item's
+  attributes on stdout and the password on stderr, in one of these forms:
+  `password: "cafe1234"` for printable ASCII;
+  `password: 0x6120226222205C20632764  "a "b" \\134 c'd"` for a value with a quote and a
+  backslash (seen only together, so which one brings the hex is not known), and
+  `password: 0x6109620A63  "a\\011b\\012c"` when a byte is outside printable ASCII: the hex,
+  then the bytes in quotes, a backslash and the bytes outside printable ASCII in octal;
+  `password: 0xE697A5E69CAC ` (no quotes) when no byte is printable; `password: ` for an empty
+  value. The `0x` form tells hex from a value, so Kitden reads `-g` and takes the bytes from the
+  hex. Quotes with no hex are read only when they hold printable ASCII and no backslash. Any
+  other line is not a value, and Kitden says it could not read the secret; so is an empty
+  password, which Kitden never stores.
+- `-w` as the last option of `add-generic-password` asks for the value and reads it from stdin,
+  but keeps only its first 128 bytes; inside `-i`, and on a `-i` line continued with a
+  backslash, the rest runs as commands. No way was found to write a longer value whole without
+  it in the arguments.
 
 On Linux the same item is kept by `secret-tool` (package libsecret-tools; GNOME Keyring and KDE
 Wallet serve it), with the attributes `service kitden account <server>/<key>`. Facts from its
@@ -32,6 +54,7 @@ Debian man page and libsecret's `tool/secret-tool.c`, checked 2026-11-03:
 """
 
 import os
+import re
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -52,12 +75,34 @@ LINUX_REACH = (
 )
 # Characters that would break the `security -i` command line.
 NOT_IN_ACCOUNTS = {'"', "\\"}
+# The longest `security -i` line Kitden writes, its newline included: 95 bytes under the 4,095
+# (newline not counted) that a runner read whole.
+LINE_LIMIT = 4000
+TOO_LONG = (
+    "The secret {account} is too long for the Keychain: {size:,} bytes, and Kitden can store "
+    "at most {most:,}. Keep the server in the client's own settings, or use a shorter token."
+)
+UNREADABLE = "Kitden could not read a secret of {server} from the {store}."
+# `find-generic-password -g`'s password line: the hex of the bytes, then the printable ones in
+# quotes if there are any, when a byte is not printable ASCII or the value has a backslash and a
+# quote (seen together); else the value in quotes. The value comes from the hex, or from quotes
+# that hold printable ASCII and no backslash: only these forms were seen.
+PASSWORD = re.compile(r'password: (?:0x(?P<hex>(?:[0-9A-Fa-f]{2})+)(?: +".*"| *)|"(?P<shown>.*)")')
+PLAIN = re.compile(r"[ -\[\]-~]+")  # printable ASCII but a backslash
 
 Runner = Callable[..., tuple[int, str, str]]  # (args, stdin=None) → (code, stdout, stderr)
 
 
 class KeychainError(Exception):
     """The Keychain could not be used. The message is one plain sentence, never a value."""
+
+
+class TooLong(KeychainError):
+    """A secret too long for the Keychain; nothing was written."""
+
+
+class Unreadable(KeychainError):
+    """The Keychain answered with a password Kitden does not read as a value."""
 
 
 def from_source() -> bool:
@@ -100,20 +145,24 @@ def tool_env() -> dict[str, str]:
 def run_security(args: list[str], stdin: str | None = None) -> tuple[int, str, str]:
     """Run this system's secret tool (`security` or `secret-tool`) with args and return its
     exit code, output and error output."""
-    tool = security_path() if system.SYSTEM == "mac" else secret_tool_path()
+    mac = system.SYSTEM == "mac"
+    tool = security_path() if mac else secret_tool_path()
     try:
         done = subprocess.run(  # noqa: S603 - a fixed program and no shell
             [tool, *args],
-            input=stdin,
+            input=None if stdin is None else stdin.encode(),
             capture_output=True,
-            text=True,
             timeout=TIMEOUT,
             check=False,
             env=tool_env(),
         )
-    except (OSError, subprocess.SubprocessError):
+        # `secret-tool lookup` prints the value on stdout, so its bytes are read strictly. On
+        # macOS stdout holds only an item's attributes (the keychain's path among them), and
+        # stderr on both only `security`'s escaped password line or a message.
+        out = done.stdout.decode(errors="replace" if mac else "strict")
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
         raise KeychainError(reach()) from None
-    return done.returncode, done.stdout, done.stderr
+    return done.returncode, out, done.stderr.decode(errors="replace")
 
 
 def _attributes(account: str) -> list[str]:
@@ -134,15 +183,35 @@ def store(server: str, key: str, value: str, run: Runner = run_security) -> dict
     account = f"{server}/{key}"
     if NOT_IN_ACCOUNTS & set(account) or not account.isprintable():
         raise KeychainError(reach())
+    check_size(server, key, value)
     if system.SYSTEM == "mac":
-        line = f'add-generic-password -U -s {SERVICE} -a "{account}" -X {value.encode().hex()}\n'
-        code, _, _ = run(["-i"], stdin=line)
+        code, _, _ = run(["-i"], stdin=_line(account, value))
     else:
         label = f"--label=Kitden: {account}"
         code, _, _ = run(["store", label, *_attributes(account)], stdin=value)
     if code != 0 or _find(account, run) != value:
         raise KeychainError(reach())
     return {"keychain": account}
+
+
+def _line(account: str, value: str) -> str:
+    """The `security -i` line that writes the item."""
+    return f'add-generic-password -U -s {SERVICE} -a "{account}" -X {value.encode().hex()}\n'
+
+
+def longest(server: str, key: str) -> int:
+    """The most bytes of value that fit on the `security -i` line for this item."""
+    return (LINE_LIMIT - len(_line(f"{server}/{key}", "").encode())) // 2
+
+
+def check_size(server: str, key: str, value: str) -> None:
+    """Refuse a value too long to be written whole, before anything is written. Only macOS has
+    a limit: `secret-tool store` reads the value from stdin until EOF."""
+    if system.SYSTEM != "mac":
+        return
+    size, most = len(value.encode()), longest(server, key)
+    if size > most:
+        raise TooLong(TOO_LONG.format(account=f"{server}/{key}", size=size, most=most))
 
 
 def read(ref: dict, run: Runner = run_security) -> str | None:
@@ -189,22 +258,42 @@ def _value(value: object, run: Runner) -> object:
     found = read(value, run)
     if found is None:
         server = value["keychain"].rpartition("/")[0]
-        store = system.secret_store_name()
-        raise KeychainError(f"Kitden could not read a secret of {server} from the {store}.")
+        raise KeychainError(UNREADABLE.format(server=server, store=system.secret_store_name()))
     return found
 
 
 def _find(account: str, run: Runner) -> str | None:
     if system.SYSTEM == "mac":
-        code, out, _ = run(["find-generic-password", "-s", SERVICE, "-a", account, "-w"])
+        code, _, err = run(["find-generic-password", "-s", SERVICE, "-a", account, "-g"])
         if code == NOT_FOUND:
             return None
         if code != 0:
             raise KeychainError(reach())
-        return out.removesuffix("\n")
+        try:
+            return _password(err)
+        except ValueError:  # also a value that is not UTF-8
+            server = account.rpartition("/")[0]
+            raise Unreadable(UNREADABLE.format(server=server, store="Keychain")) from None
     code, out, err = run(["lookup", *_attributes(account)])
     if code == 0:
         return out
     if code == 1 and not out and not err.strip():
         return None
     raise KeychainError(reach())
+
+
+def _password(said: str) -> str:
+    """The value on `find-generic-password -g`'s password line. ValueError for any other line,
+    no line or more than one."""
+    lines = [line for line in said.splitlines() if line.startswith("password:")]
+    found = PASSWORD.fullmatch(lines[0]) if len(lines) == 1 else None
+    if found is None:
+        raise ValueError("not a password line")
+    if found["hex"] is not None:
+        return bytes.fromhex(found["hex"]).decode()
+    # Kitden never stores an empty secret (`secrets_out` leaves an empty value in place), and
+    # `security` writes one as `password: ` anyway. A backslash in quotes with no hex before it
+    # was never seen, so what it would mean is not guessed.
+    if not PLAIN.fullmatch(found["shown"]):
+        raise ValueError("not printable ASCII without a backslash")
+    return found["shown"]

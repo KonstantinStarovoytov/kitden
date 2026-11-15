@@ -12,7 +12,6 @@ starts `kitden-ci-`, and a `finally` removes it, also when the test fails halfwa
 import json
 import os
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -163,7 +162,18 @@ def found(account: str) -> str | None:
     return done.stdout
 
 
-# Check 21: four facts about `security`, and the same round trips through `secret-tool`.
+def printed(value: str) -> str:
+    """What `found` gets for a value: `security find-generic-password -w` prints a value with a
+    byte outside printable ASCII as hex (seen 2026-11-15 on a GitHub macOS runner);
+    `secret-tool lookup` prints it as it is."""
+    data = value.encode()
+    if MAC and not all(0x20 <= byte <= 0x7E for byte in data):
+        return data.hex()
+    return value
+
+
+# Check 21: facts about `security` (any value comes back whole, a long one is refused), and the
+# same round trips through `secret-tool`.
 
 
 @mac_only
@@ -191,7 +201,7 @@ def _round_trip(key: str, value: str) -> None:
     item = ref("kitden-ci-values", key)
     try:
         assert keychain.store("kitden-ci-values", key, value) == item
-        assert found(item["keychain"]) == value
+        assert found(item["keychain"]) == printed(value)
         assert keychain.read(item) == value
     finally:
         remove(item)
@@ -201,6 +211,16 @@ def _round_trip(key: str, value: str) -> None:
 @mac_only
 def test_a_value_with_quotes_and_spaces_comes_back_unchanged():
     _round_trip("QUOTES", 'a "b" \\ c\'d')
+
+
+def test_a_value_with_a_quote_comes_back_unchanged():
+    """`-g` prints it in quotes, with the hex or without it: Kitden reads either."""
+    _round_trip("QUOTE", 'a"b')
+
+
+def test_a_value_with_a_backslash_comes_back_unchanged():
+    """`-g` prints it as hex, then in quotes with the backslash as `\\134`."""
+    _round_trip("BACKSLASH", "a\\b")
 
 
 @mac_only
@@ -217,17 +237,19 @@ def test_an_account_with_a_space_is_quoted_on_the_security_line():
     assert found(item["keychain"]) is None
 
 
-@pytest.mark.xfail(
-    sys.platform == "darwin",
-    strict=True,
-    raises=KeychainError,
-    reason="Kitden bug: a secret with letters outside ASCII is stored in the macOS Keychain, but "
-    "`security find-generic-password -w` prints it back as hex, so Kitden's read-back differs "
-    "and it says it could not reach the Keychain. Seen 2026-11-15 on a GitHub macOS runner. "
-    "Strict: remove this mark when Kitden is fixed.",
-)
 def test_a_value_in_other_alphabets_comes_back_unchanged():
+    """`find-generic-password -w` prints this value as hex; Kitden reads `-g`'s `0x` form."""
     _round_trip("ALPHABETS", "ключ-héllo-日本")
+
+
+def test_a_value_with_no_ascii_letter_comes_back_unchanged():
+    """`find-generic-password -g` prints this value as hex alone, with no quoted part."""
+    _round_trip("NOASCII", "日本")
+
+
+@mac_only
+def test_an_ascii_value_of_hex_digits_is_not_decoded():
+    _round_trip("HEXDIGITS", "cafe1234")
 
 
 @mac_only
@@ -236,19 +258,57 @@ def test_a_1024_character_value_comes_back_unchanged():
     _round_trip("MEDIUM", ("kitden-ci-1kb-" * 80)[:1024])
 
 
-@pytest.mark.xfail(
-    sys.platform == "darwin",
-    strict=True,
-    raises=KeychainError,
-    reason="Kitden bug: a secret longer than about 2,000 characters is cut by the length of a "
-    "`security -i` line (1,024 works, 2,048 does not), so Kitden's read-back differs and it "
-    "says it could not reach the Keychain. Seen 2026-11-15 on a GitHub macOS runner. Strict: "
-    "remove this mark when Kitden is fixed.",
-)
 def test_a_4_kb_value_comes_back_unchanged():
+    """The name is from before Kitden had a limit; check 21 of docs/development.md cites it.
+    On Linux a 4 KB secret comes back unchanged. On macOS a `security -i` line longer than
+    4,095 bytes is cut (seen 2026-11-15 on a GitHub macOS runner), so Kitden refuses the secret
+    before it writes anything, and the item that was there stays as it was."""
     value = ("kitden-ci-4kb-" * 300)[:4096]
     assert len(value) == 4096
-    _round_trip("LONG", value)
+    if not MAC:
+        _round_trip("LONG", value)
+        return
+    item = ref("kitden-ci-values", "LONG")
+    remove(item)
+    most = keychain.longest("kitden-ci-values", "LONG")
+    try:
+        keychain.store("kitden-ci-values", "LONG", "SENTINEL_CI_EARLIER")
+        with pytest.raises(KeychainError) as error:
+            keychain.store("kitden-ci-values", "LONG", value)
+        assert str(error.value) == (
+            "The secret kitden-ci-values/LONG is too long for the Keychain: 4,096 bytes, and "
+            f"Kitden can store at most {most:,}. Keep the server in the client's own settings, "
+            "or use a shorter token."
+        )
+        assert found(item["keychain"]) == "SENTINEL_CI_EARLIER"
+    finally:
+        remove(item)
+    assert found(item["keychain"]) is None
+
+
+@mac_only
+def test_the_longest_value_that_fits_comes_back_whole():
+    """The edge of Kitden's limit on the `security -i` line: the longest value it accepts."""
+    most = keychain.longest("kitden-ci-values", "EDGE")
+    _round_trip("EDGE", ("kitden-ci-edge-" * 300)[:most])
+
+
+@mac_only
+def test_one_byte_more_is_refused_and_nothing_is_stored():
+    item = ref("kitden-ci-values", "EDGE")
+    remove(item)
+    most = keychain.longest("kitden-ci-values", "EDGE")
+    try:
+        with pytest.raises(KeychainError) as error:
+            keychain.store("kitden-ci-values", "EDGE", "e" * (most + 1))
+        assert str(error.value) == (
+            f"The secret kitden-ci-values/EDGE is too long for the Keychain: {most + 1:,} "
+            f"bytes, and Kitden can store at most {most:,}. Keep the server in the client's "
+            "own settings, or use a shorter token."
+        )
+        assert found(item["keychain"]) is None
+    finally:
+        remove(item)
 
 
 # Checks 17 and 19: a move into the gateway stores the token; Undo removes it.

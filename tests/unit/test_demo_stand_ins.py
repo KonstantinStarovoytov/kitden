@@ -183,3 +183,21 @@ def test_the_stand_in_keyring_keeps_values_on_linux(tmp_path, system):
     keychain.delete(ref, run=run)
     assert keychain.read(ref, run=run) is None
     keychain.delete(ref, run=run)  # quiet when it is not there
+
+
+def test_the_stand_in_keychain_prints_the_password_as_security_does(tmp_path):
+    """`find-generic-password -g`: the attributes on stdout, the password on stderr, in hex
+    when a byte is outside printable ASCII."""
+    run = DemoKeychain(tmp_path / "items.json")
+    for value in ("DEMO_SECRET_X", "ключ-日本", 'a "b" \\ c'):
+        ref = keychain.store("files", "FILES_TOKEN", value, run=run)
+        assert keychain.read(ref, run=run) == value
+    code, out, err = run(["find-generic-password", "-s", "kitden", "-a", "files/FILES_TOKEN", "-g"])
+    assert (code, err) == (0, 'password: 0x6120226222205C2063  "a "b" \\134 c"\n')
+    assert 'class: "genp"' in out
+    keychain.store("files", "FILES_TOKEN", "日本", run=run)
+    code, _, err = run(["find-generic-password", "-s", "kitden", "-a", "files/FILES_TOKEN", "-g"])
+    assert (code, err) == (0, "password: 0xE697A5E69CAC \n")
+    keychain.store("files", "FILES_TOKEN", "cafe1234", run=run)
+    code, _, err = run(["find-generic-password", "-s", "kitden", "-a", "files/FILES_TOKEN", "-g"])
+    assert (code, err) == (0, 'password: "cafe1234"\n')

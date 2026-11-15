@@ -4,9 +4,17 @@
 
 It keeps generic password items in ITEMS_FILE, a JSON object of "service account" → value.
 It knows only what Kitden runs: `-i` with `add-generic-password` lines on stdin,
-`find-generic-password -w` and `delete-generic-password`. Like the real one, a missing item
-exits with 44, and `-i` exits with 0 even when a line fails. An option without its value
-(`-X` at the end of a line) is a usage error: it exits with 2, also under `-i`.
+`find-generic-password -g` (and `-w`) and `delete-generic-password`. Like the real one, a
+missing item exits with 44, and `-i` exits with 0 even when a line fails. An option without its
+value (`-X` at the end of a line) is a usage error: it exits with 2, also under `-i`.
+
+It prints a value the way the real one did on a GitHub macOS runner (2026-11-15): `-w` prints
+it as it is when every byte is printable ASCII, else as hex. `-g` writes the item's attributes
+on stdout and the password on stderr: `password: "<value>"` for printable ASCII;
+`password: 0x<HEX>  "<bytes>"` when a byte is a backslash or a character that is not printable
+ASCII (the runner's backslash was seen together with a quote; this stand-in takes the backslash
+to bring the hex), with a backslash and the bytes outside printable ASCII in octal (`\\134`,
+`\\320`); `password: 0x<HEX> ` when no byte is printable.
 """
 
 import json
@@ -16,6 +24,23 @@ from pathlib import Path
 
 NOT_FOUND = 44
 USAGE = 2
+
+
+def printable(data: bytes) -> bool:
+    return all(0x20 <= byte <= 0x7E for byte in data)
+
+
+def password_line(value: str) -> str:
+    """The line `find-generic-password -g` writes on stderr."""
+    data = value.encode()
+    quoted = "".join(
+        chr(byte) if 0x20 <= byte <= 0x7E and byte != 0x5C else f"\\{byte:03o}" for byte in data
+    )
+    if printable(data) and 0x5C not in data:
+        return f'password: "{quoted}"'
+    if not any(0x20 <= byte <= 0x7E for byte in data):
+        return f"password: 0x{data.hex().upper()} "
+    return f'password: 0x{data.hex().upper()}  "{quoted}"'
 
 
 def options(words: list[str]) -> dict[str, str | None]:
@@ -41,7 +66,12 @@ def command(items: dict, words: list[str]) -> int:
         if key not in items:
             print("The specified item could not be found in the keychain.", file=sys.stderr)
             return NOT_FOUND
-        print(items[key])
+        if "-g" in flags:
+            print('keychain: "fake.keychain-db"\nclass: "genp"\nattributes:')
+            print(password_line(items[key]), file=sys.stderr)
+            return 0
+        data = items[key].encode()
+        print(items[key] if printable(data) else data.hex())
         return 0
     if name == "delete-generic-password":
         return 0 if items.pop(key, None) is not None else NOT_FOUND

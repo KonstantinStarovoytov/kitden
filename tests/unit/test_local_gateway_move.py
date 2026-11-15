@@ -26,8 +26,9 @@ from kitden.changes.actions import (
 )
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
-from kitden.changes.engine import Engine
+from kitden.changes.engine import ChangeRefusedError, Engine
 from kitden.gateways import data_dir
+from kitden.local_gateway import keychain
 from kitden.local_gateway.settings import (
     SETTINGS_FILE,
     load_settings,
@@ -1213,6 +1214,82 @@ def test_a_failing_keychain_at_apply_restores_every_file(
     assert change.error.startswith(REACH)
     assert client_files(home) == before
     assert keychain_items(fake_keychain) == {}
+
+
+def too_long(account: str, size: int) -> str:
+    server, _, key = account.rpartition("/")
+    return (
+        f"The secret {account} is too long for the Keychain: {size:,} bytes, and Kitden can "
+        f"store at most {keychain.longest(server, key):,}. Keep the server in the client's own "
+        "settings, or use a shorter token."
+    )
+
+
+def test_a_secret_too_long_for_the_keychain_is_refused_at_preview(home, fake_keychain):
+    token = "SENTINEL_" + "x" * 2000
+    add_claude(home, "files", {"type": "stdio", **FILES, "env": {"FILES_TOKEN": token}})
+    before = client_files(home)
+    engine = Engine(ChangeStore(data_dir(home)), run=FakeClaude(home))
+    with pytest.raises(ChangeRefusedError) as refused:
+        engine.preview("gateway.move", move(home, ("claude_code", "files")))
+    assert str(refused.value) == too_long("files/FILES_TOKEN", 2009)
+    assert client_files(home) == before
+    assert keychain_items(fake_keychain) == {}
+
+
+def test_a_secret_too_long_at_apply_leaves_the_item_there_as_it_was(home, fake_keychain):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    apply(home, move(home, ("claude_code", "files")))
+    add_claude(home, "files", {"type": "stdio", **FILES, "env": {"FILES_TOKEN": "SENTINEL_NEW"}})
+    before = client_files(home)
+    engine = Engine(ChangeStore(data_dir(home)), run=FakeClaude(home))
+    change = engine.preview("gateway.move", move(home, ("claude_code", "files")))
+    # Longer after the review than at it: `store` itself refuses it and writes nothing.
+    [item] = [i for s in change.steps for i in s.keychain]
+    item.value = "SENTINEL_" + "x" * 2000
+    engine.apply(change.id)
+    assert str(change.state) == "restored"
+    assert change.error.startswith(too_long("files/FILES_TOKEN", 2009))
+    assert client_files(home) == before
+    assert keychain_items(fake_keychain) == {"kitden files/FILES_TOKEN": "SENTINEL_SECRET_FILES"}
+
+
+def test_an_old_item_too_long_to_store_again_is_named_after_a_failed_apply(
+    home, fake_keychain, monkeypatch
+):
+    """An item an earlier Kitden stored whole at 1,972 to 2,019 bytes is now too long to write
+    back: a failed Apply says so, and the item keeps the new value."""
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    apply(home, move(home, ("claude_code", "files")))
+    old = "SENTINEL_" + "o" * 1990
+    fake_keychain.write_text(json.dumps({"kitden files/FILES_TOKEN": old}))
+    add_claude(home, "files", {"type": "stdio", **FILES, "env": {"FILES_TOKEN": "SENTINEL_NEW"}})
+    engine = Engine(ChangeStore(data_dir(home)), run=FakeClaude(home))
+    change = engine.preview("gateway.move", move(home, ("claude_code", "files")))
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("The gateway did not answer.")
+
+    monkeypatch.setattr(Engine, "_apply_gateway", broken)
+    engine.apply(change.id)
+    assert str(change.state) == "restored"
+    assert change.error == (
+        "The gateway did not answer. files/FILES_TOKEN in your Keychain was not put back."
+    )
+    assert keychain_items(fake_keychain) == {"kitden files/FILES_TOKEN": "SENTINEL_NEW"}
+
+
+def test_an_item_that_cannot_be_read_blocks_the_undo_with_its_own_words(home, fake_keychain):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    engine, change = apply(home, move(home, ("claude_code", "files")))
+    after = client_files(home)
+    fake_keychain.write_text(json.dumps({"kitden files/FILES_TOKEN": ""}))  # `password: `
+    engine.undo(change.id)
+    assert str(change.state) == "undo_blocked"
+    assert change.error == (
+        "Kitden could not read a secret of files from the Keychain; nothing was changed."
+    )
+    assert client_files(home) == after
 
 
 def test_a_keychain_item_that_cannot_be_removed_blocks_the_undo(
