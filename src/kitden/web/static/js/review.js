@@ -6,7 +6,7 @@ import { $, $$, button, el, joinWords, plural, reportError, secretsWord, shortPa
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
-import { allPutBack, baseNames, byClientOrder, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
+import { allPutBack, baseNames, byClientOrder, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, data, gatewayShows, reload, render, setBusy, state } from "./store.js";
 import { projectLabel } from "./tools.js";
 import { addToTray, changeOutcome, checkTrayStale, onTray, ruleState, takeOut, tray, undone, writing } from "./tray.js";
@@ -32,7 +32,7 @@ const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 // projects. app.py's ADD_ACTIONS has four more: Add missing names its project in its title
 // already, setup_server.update changes an entry where it is, setup_server.register says "to
 // Kitden" and gateway.move_out names the client it goes into.
-export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "gateway.connect", "gateway.put_back", "gateway.add"];
+export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "gateway.put_back", "gateway.add"];
 // No promise of Undo for every change: the server names the known limit (`undo_note`).
 const LEDE = "Nothing is written until you press Apply. A backup is kept.";
 // The twin of views/words.py UNCHANGED; said only when the server guarantees it.
@@ -88,8 +88,7 @@ export function changeWords(change, previewBody) {
     return rulesText({ ...params, tools: params.tools || [] }, params.project ? projectLabel(params.project) : null);
   }
   // A move names the servers it takes; the Kitden gateway's own steps are not a client.
-  const kitden = kitdenMove(change);
-  const steps = change.steps.filter((s) => s.client !== "gateway" && s.client !== "kitden");
+  const steps = change.steps.filter((s) => s.client !== "kitden");
   const listed = change.action === "gateway.move" ? movedNames(change.steps) : [...new Set(steps.map((s) => s.name))];
   const names = joinWords(listed);
   const short = joinWords([...new Set(listed.map((name) => name.split("@")[0]))]);
@@ -104,7 +103,7 @@ export function changeWords(change, previewBody) {
   // An add names the server, not its row in the Add panel ("<plugin>@<marketplace>/<name>").
   const added = change.steps[0] ? change.steps[0].name : String(server).split("/").pop();
   let title = {
-    "gateway.move": kitden ? `Move ${names} into the Kitden gateway` : `Move ${names} into the gateway`,
+    "gateway.move": `Move ${names} into the Kitden gateway`,
     "plugin.disable": `Turn off ${names} in ${clients}`,
     "plugin.enable": `Turn on ${names} in ${clients}`,
     "mcp.remove_direct": `Remove ${names} from ${clients}`,
@@ -155,7 +154,7 @@ export function changeWords(change, previewBody) {
   } else if (change.action === "client.disconnect") {
     what = `${verb} ${clients} from Kitden`;
   } else if (change.action === "gateway.move") {
-    what = `${verb} ${short} into ${kitden ? "the Kitden gateway" : "the gateway"}`;
+    what = `${verb} ${short} into the Kitden gateway`;
   } else if (change.action === "gateway.remove") {
     what = `${verb} ${server} from the Kitden gateway`;
   } else if (change.action === "gateway.put_back") {

@@ -44,7 +44,7 @@ globalThis.window = { addEventListener: (type, fn) => { heard[type] = fn; } };
 // or a key sets it itself.
 beforeEach(() => { media.matches = false; heard.pointerdown?.({}); });
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
-const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, menuItems, morphSocket, opens, optionAfter, originText, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 // details.js builds the switch and loads with the same stand-in.
 const { switchNode } = await import('../../src/kitden/web/static/js/details.js');
@@ -216,8 +216,6 @@ test('the Changes page names what moved into the Kitden gateway and which rule c
     { client: 'cursor', name: 'kitden' }, { client: 'codex', name: 'kitden' },
   ];
   assert.equal(changeTitle({ action: 'gateway.move', steps }), 'Moved files into the Kitden gateway · Claude Code, Cursor');
-  const obot = [{ client: 'gateway', name: 'docs' }, { client: 'cursor', name: 'docs' }];
-  assert.equal(changeTitle({ action: 'gateway.move', steps: obot }), 'Moved into the gateway docs · Cursor');
   // The Kitden gateway holds files as it is already: only the client's entry goes.
   const held = [{ client: 'cursor', name: 'files' }];
   assert.equal(changeTitle({ action: 'gateway.move', steps: held }), 'Moved files into the Kitden gateway · Cursor');
@@ -258,13 +256,6 @@ test('a rule says where its state comes from', () => {
   assert.equal(originText({ origin: 'default' }), 'On by default');
   assert.equal(originText({}), null);
   assert.deepEqual(TOOL_ORIGIN_WORDS, { global: 'All projects', default: 'On by default', strict: 'New · waits' });
-});
-
-test('a gateway goes by its own name, its kind, or its address', () => {
-  assert.equal(gatewayName({ kind: 'kitden', name: 'Kitden gateway' }), 'Kitden gateway');
-  assert.equal(gatewayName({ kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x' }), 'Obot');
-  assert.equal(gatewayName({ url: 'http://127.0.0.1:12008/metamcp/local/mcp' }), 'MetaMCP');
-  assert.equal(gatewayName({ url: 'https://tools.example.com/mcp' }), 'tools.example.com');
 });
 
 // The first scan: one quiet line that says what is still read, and how much is done.

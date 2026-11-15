@@ -21,8 +21,8 @@ from kitden.model import CLIENTS, Change, Item, ItemKind, Scope, Step
 from kitden.redact import masked_command, redact_text
 from kitden.views.effective import client_order
 
-# Steps whose client is not one the person uses: a registered gateway and Kitden's own settings.
-NOT_CLIENTS = {"gateway", KITDEN}
+# Steps whose client is not one the person uses: Kitden's own settings.
+NOT_CLIENTS = {KITDEN}
 # The states of a change that wrote something and still has it, or had it put back.
 HAPPENED = {"verified", "undone", "undo_blocked"}
 # A Library action; any other item opens on the Gateway.
@@ -80,17 +80,12 @@ def _backup(state: str, error: str | None) -> str:
 
 
 def _takes_effect(state: str, steps: list[dict]) -> list[dict]:
-    """Each client's restart note and log-in note (None when it has none), once; nothing for a
-    change that wrote nothing."""
+    """Each client's restart note, once; nothing for a change that wrote nothing."""
     if state not in HAPPENED:
         return []
-    notes = {
-        (s["client"], s.get("restart_note"), s.get("login_note")): None
-        for s in steps
-        if s.get("restart_note") or s.get("login_note")
-    }
+    notes = {(s["client"], s["restart_note"]): None for s in steps if s.get("restart_note")}
     found = sorted(notes, key=lambda found: client_order(found[0]))
-    return [{"client": client, "note": note, "login": login} for client, note, login in found]
+    return [{"client": client, "note": note} for client, note in found]
 
 
 def _history(change_id: str, lines: list[dict]) -> list[dict]:

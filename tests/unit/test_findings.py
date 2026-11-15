@@ -9,14 +9,13 @@ from kitden.model import (
     ClientStatus,
     Enabled,
     FindingType,
-    Gateway,
     Item,
     ItemKind,
     Scope,
     Source,
     SourceKind,
 )
-from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
+from kitden.views.findings import find_bypasses, find_findings, finding_dict
 from kitden.views.inventory import Inventory, build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
 
@@ -202,9 +201,6 @@ def mcp(client, name, url=None, command=None, scope=Scope.USER, source_kind=Sour
     )
 
 
-GATEWAY_URL = "http://127.0.0.1:12008/metamcp/dev/mcp"
-
-
 def test_every_mcp_server_outside_the_gateway_is_flagged_with_its_kind():
     items = [
         mcp("codex", "neon", url="https://mcp.neon.tech/mcp"),
@@ -222,21 +218,6 @@ def test_every_mcp_server_outside_the_gateway_is_flagged_with_its_kind():
 def test_kitdens_own_entry_is_not_flagged():
     items = [mcp("codex", "kitden", command="kitden"), mcp("codex", "n8n", command="npx")]
     assert [f.names for f in find_bypasses(Inventory(items=items))] == [("n8n",)]
-
-
-def test_entries_that_point_to_a_registered_gateway_are_marked_and_not_flagged():
-    gateway = Gateway(url=GATEWAY_URL)
-    inventory = Inventory(
-        items=[
-            mcp("codex", "gateway", url=GATEWAY_URL + "/"),
-            mcp("codex", "neon", url="https://mcp.neon.tech/mcp"),
-        ]
-    )
-    mark_gateways(inventory, [gateway])
-    marked = inventory.items[0]
-    assert marked.via_gateway == gateway.id
-    assert "mcp.remove_direct" not in marked.actions
-    assert [f.names for f in find_bypasses(inventory)] == [("neon",)]
 
 
 def test_a_user_entry_beside_the_plugin_server_is_reported():

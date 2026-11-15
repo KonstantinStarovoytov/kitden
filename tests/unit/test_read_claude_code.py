@@ -32,7 +32,7 @@ EXPECTED = {
     ("claude_code", "skill", "brainstorming", "plugin", "on", None),
     ("claude_code", "hook", "PreToolUse: Bash", "user", "on", None),
     ("claude_code", "marketplace", "claude-plugins-official", "user", "on", None),
-    ("claude_desktop_code_tab", "mcp_server", "metamcp-local", "user", "on", None),
+    ("claude_desktop_code_tab", "mcp_server", "team-proxy", "user", "on", None),
     ("claude_code", "instructions", "CLAUDE.md", "user", "on", None),
     ("claude_code", "instructions", "review", "user", "on", None),
     ("claude_code", "instructions", "reviewer", "user", "on", None),

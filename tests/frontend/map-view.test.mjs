@@ -247,13 +247,13 @@ test("a block's tile is drawn again when its icon, client or gateway kind change
   assert.deepEqual([tileOf('s1').dataset.look, tileOf('c1').dataset.look], ['remote//kitden', '/codex/']);
   await show(as({ s1: { icon: 'local', gateway: { kind: 'kitden' } }, c1: { client: 'codex' } }));
   assert.equal(tileOf('s1').dataset.look, 'local//kitden');
-  await show(as({ s1: { icon: 'local', gateway: { kind: 'metamcp' } }, c1: { client: 'codex' } }));
-  assert.equal(tileOf('s1').dataset.look, 'local//metamcp');
-  await show(as({ s1: { icon: 'local', gateway: { kind: 'metamcp' } }, c1: { client: 'cursor' } }));
+  await show(as({ s1: { icon: 'local', gateway: { kind: 'other' } }, c1: { client: 'codex' } }));
+  assert.equal(tileOf('s1').dataset.look, 'local//other');
+  await show(as({ s1: { icon: 'local', gateway: { kind: 'other' } }, c1: { client: 'cursor' } }));
   assert.equal(tileOf('c1').dataset.look, '/cursor/');
   // Nothing changed: the tile stays.
   const kept = tileOf('s1');
-  await show(as({ s1: { icon: 'local', gateway: { kind: 'metamcp' } }, c1: { client: 'cursor' } }));
+  await show(as({ s1: { icon: 'local', gateway: { kind: 'other' } }, c1: { client: 'cursor' } }));
   assert.equal(tileOf('s1'), kept);
 });
 

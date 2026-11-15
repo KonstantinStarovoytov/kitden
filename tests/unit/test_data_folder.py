@@ -9,7 +9,7 @@ import pytest
 from kitden.changes.backup import ChangeStore
 from kitden.changes.engine import Engine
 from kitden.changes.json_splice import ABSENT
-from kitden.gateways import OLD_DATA_DIR, data_dir, ensure_data_folder, load_gateways
+from kitden.gateways import OLD_DATA_DIR, data_dir, ensure_data_folder
 from kitden.model import FileEdit, Scope, Step
 
 
@@ -22,6 +22,10 @@ def _as_mac(system, request):
 
 SETTINGS = {"gateways": [{"url": "http://127.0.0.1:12008/mcp", "auth": "none"}]}
 CONFIG = '[mcp_servers.neon]\nurl = "https://mcp.neon.tech/mcp"\n'
+
+
+def _settings(home):
+    return json.loads((data_dir(home) / "settings.json").read_text())
 
 
 def _old_folder_with_a_change(home):
@@ -47,7 +51,7 @@ def test_only_the_old_folder_is_copied_once_and_left_as_it_is(tmp_path):
     note = ensure_data_folder(tmp_path)
     new = data_dir(tmp_path)
     assert "Copied" in note
-    assert load_gateways(tmp_path)[0].url == "http://127.0.0.1:12008/mcp"
+    assert _settings(tmp_path) == SETTINGS
     assert stat.S_IMODE(new.stat().st_mode) == 0o700
     assert stat.S_IMODE((new / "settings.json").stat().st_mode) == 0o600
     record = json.loads((new / "changes" / change_id / "change.json").read_text())
@@ -63,7 +67,7 @@ def test_after_the_copy_both_folders_use_the_new_one_and_say_so(tmp_path):
     (data_dir(tmp_path) / "settings.json").write_text('{"gateways": []}')
     note = ensure_data_folder(tmp_path)
     assert "not used" in note and "delete" not in note
-    assert load_gateways(tmp_path) == []  # the new folder wins
+    assert _settings(tmp_path) == {"gateways": []}  # the new folder wins
     assert json.loads((old / "settings.json").read_text()) == SETTINGS
 
 
@@ -115,7 +119,7 @@ def test_a_failed_copy_is_retried_after_the_page_made_the_folder(tmp_path, monke
     monkeypatch.setattr(shutil, "copytree", real)
     note = ensure_data_folder(tmp_path)
     assert "Copied" in note and "delete" not in note
-    assert load_gateways(tmp_path)[0].url == "http://127.0.0.1:12008/mcp"
+    assert _settings(tmp_path) == SETTINGS
 
 
 def test_two_commands_copying_at_once_both_end_complete(tmp_path, monkeypatch):
@@ -134,7 +138,7 @@ def test_two_commands_copying_at_once_both_end_complete(tmp_path, monkeypatch):
     notes.append(ensure_data_folder(tmp_path))
     assert all("Could not copy" not in n for n in notes), notes
     assert (data_dir(tmp_path) / "changes" / change_id / "change.json").is_file()
-    assert load_gateways(tmp_path)[0].url == "http://127.0.0.1:12008/mcp"
+    assert _settings(tmp_path) == SETTINGS
 
 
 def test_a_broken_change_record_does_not_stop_the_copy(tmp_path):

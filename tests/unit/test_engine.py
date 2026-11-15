@@ -13,19 +13,8 @@ from kitden.changes.client_cli import CommandResult
 from kitden.changes.copy_folder import digest
 from kitden.changes.engine import ChangeRefusedError, Engine
 from kitden.changes.json_splice import ABSENT
-from kitden.gateway_api import MetaMcpClient
-from kitden.model import (
-    GATEWAY_CLIENT,
-    ChangeState,
-    FileEdit,
-    FolderRemoval,
-    Gateway,
-    GatewayEdit,
-    Scope,
-    Step,
-)
+from kitden.model import ChangeState, FileEdit, FolderRemoval, Scope, Step
 from kitden.web.app import change_dict
-from tests.unit.fake_metamcp import FakeMetaMcp
 
 CONFIG = """# my Codex settings
 model = "gpt-5"  # keep this comment
@@ -126,7 +115,7 @@ def test_preview_refuses_an_empty_change(tmp_path):
 def test_apply_writes_verifies_keeps_comments_and_logs(tmp_path, config):
     written = []
     engine = make_engine(tmp_path, written=written)
-    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = engine.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
     engine.apply(change.id)
     assert change.state is ChangeState.VERIFIED
     text = config.read_text()
@@ -141,7 +130,7 @@ def test_apply_writes_verifies_keeps_comments_and_logs(tmp_path, config):
 
 def test_a_file_changed_after_preview_blocks_apply(tmp_path, config):
     engine = make_engine(tmp_path)
-    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = engine.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
     config.write_text(CONFIG + "# edited by hand\n")
     engine.apply(change.id)
     assert change.state is ChangeState.STALE
@@ -151,7 +140,7 @@ def test_a_file_changed_after_preview_blocks_apply(tmp_path, config):
 
 def test_stale_reason_sees_a_file_changed_after_preview(tmp_path, config):
     engine = make_engine(tmp_path)
-    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = engine.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
     config.write_text(CONFIG + "# edited by hand\n")
     assert "changed since preview" in engine.stale_reason(change.id)
     assert change.state is ChangeState.PREVIEWED  # only looked
@@ -161,7 +150,7 @@ def test_stale_reason_sees_a_file_changed_after_preview(tmp_path, config):
 
 def test_an_untouched_preview_is_not_stale(tmp_path, config):
     engine = make_engine(tmp_path)
-    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = engine.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
     assert engine.stale_reason(change.id) is None
     # Only a previewed change is checked: a cancelled one is not stale, whatever its file says.
     engine.cancel(change.id)
@@ -174,7 +163,7 @@ def test_a_failed_verify_restores_the_backup(tmp_path, claude_json):
     engine = make_engine(tmp_path, run=FakeClaude(claude_json, wrong_value=True))
     value = {"type": "http", "url": "http://127.0.0.1:12008/mcp"}
     command = ["claude", "mcp", "add-json", "-s", "user", "gw", json.dumps(value)]
-    change = engine.preview("gateway.connect", [claude_step(claude_json, "gw", value, command)])
+    change = engine.preview("mcp.add", [claude_step(claude_json, "gw", value, command)])
     engine.apply(change.id)
     assert change.state is ChangeState.RESTORED
     assert claude_json.read_bytes() == original
@@ -195,7 +184,7 @@ def test_undo_restores_the_exact_bytes(tmp_path, config):
 
 def test_undo_is_blocked_after_an_outside_edit(tmp_path, config):
     engine = make_engine(tmp_path)
-    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = engine.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
     engine.apply(change.id)
     edited = config.read_text() + "# later edit\n"
     config.write_text(edited)
@@ -210,7 +199,7 @@ def test_entry_check_ignores_other_changes_to_the_same_file(tmp_path, claude_jso
     engine = make_engine(tmp_path, run=fake)
     value = {"type": "http", "url": "http://127.0.0.1:12008/mcp"}
     command = ["claude", "mcp", "add-json", "-s", "user", "gw", json.dumps(value)]
-    change = engine.preview("gateway.connect", [claude_step(claude_json, "gw", value, command)])
+    change = engine.preview("mcp.add", [claude_step(claude_json, "gw", value, command)])
     claude_json.write_text(json_splice.set_value(claude_json.read_text(), ("numStartups",), 2))
     engine.apply(change.id)
     assert change.state is ChangeState.VERIFIED
@@ -229,7 +218,7 @@ def test_unknown_format_is_refused(tmp_path):
     edit = FileEdit(path=str(path), fmt="json", key=("mcpServers", "gw"), after={"url": "u"})
     with pytest.raises(ChangeRefusedError, match="not strict JSON"):
         make_engine(tmp_path).preview(
-            "gateway.connect", [Step(client="cursor", scope=Scope.USER, name="gw", edit=edit)]
+            "mcp.add", [Step(client="cursor", scope=Scope.USER, name="gw", edit=edit)]
         )
 
 
@@ -237,7 +226,7 @@ def test_hard_linked_file_is_refused(tmp_path, config):
     os.link(config, tmp_path / "second-name.toml")
     with pytest.raises(ChangeRefusedError, match="hard link"):
         make_engine(tmp_path).preview(
-            "gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)]
+            "mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)]
         )
 
 
@@ -247,7 +236,7 @@ def test_a_target_that_cannot_be_read_is_refused_not_an_error(tmp_path):
     folder.mkdir()
     with pytest.raises(ChangeRefusedError, match="could not read"):
         make_engine(tmp_path).preview(
-            "gateway.connect", [toml_step(folder, ("mcp_servers", "gw"), GATEWAY)]
+            "mcp.add", [toml_step(folder, ("mcp_servers", "gw"), GATEWAY)]
         )
 
 
@@ -260,7 +249,7 @@ def test_nothing_to_change_is_refused(tmp_path, config):
 
 def test_cancelled_change_cannot_be_applied(tmp_path, config):
     engine = make_engine(tmp_path)
-    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = engine.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
     engine.cancel(change.id)
     assert change.state is ChangeState.CANCELLED
     with pytest.raises(ValueError, match="cannot move"):
@@ -274,7 +263,7 @@ def test_new_file_is_created_private_and_undo_removes_it(tmp_path):
     edit = FileEdit(path=str(path), fmt="json", key=("mcpServers", "gw"), after={"url": "u"})
     engine = make_engine(tmp_path)
     change = engine.preview(
-        "gateway.connect", [Step(client="cursor", scope=Scope.USER, name="gw", edit=edit)]
+        "mcp.add", [Step(client="cursor", scope=Scope.USER, name="gw", edit=edit)]
     )
     engine.apply(change.id)
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -284,7 +273,7 @@ def test_new_file_is_created_private_and_undo_removes_it(tmp_path):
 
 def test_applied_changes_can_be_undone_after_a_restart(tmp_path, config):
     first = make_engine(tmp_path)
-    change = first.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = first.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
     first.apply(change.id)
     second = make_engine(tmp_path)
     second.undo(change.id)
@@ -294,7 +283,7 @@ def test_applied_changes_can_be_undone_after_a_restart(tmp_path, config):
 
 def test_a_change_knows_when_its_backup_holds_a_secret(tmp_path, config):
     engine = make_engine(tmp_path)
-    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = engine.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
     assert change.holds_secret is False  # nothing is saved before Apply
     engine.apply(change.id)
     assert change.holds_secret is True  # the backup of config.toml has NEON_KEY
@@ -327,7 +316,7 @@ def test_change_reports_restarts_and_shared_files(tmp_path, config):
     step = toml_step(
         config, ("mcp_servers", "gw"), GATEWAY, restart_note="Restart Codex.", shared_file=True
     )
-    change = make_engine(tmp_path).preview("gateway.connect", [step])
+    change = make_engine(tmp_path).preview("mcp.add", [step])
     assert change.restart_needed == {"codex": True}
     assert change.shared_file_warning is True
 
@@ -400,76 +389,17 @@ def test_two_steps_on_the_same_entry_are_refused(tmp_path, config):
         toml_step(config, ("mcp_servers", "gw"), ABSENT),
     ]
     with pytest.raises(ChangeRefusedError, match="twice"):
-        engine.preview("gateway.connect", steps)
+        engine.preview("mcp.add", steps)
 
 
-# Moving a server into the gateway (feature 006) --------------------------------------------
-
-NEON = {
-    "type": "STREAMABLE_HTTP",
-    "url": "https://mcp.neon.tech/mcp",
-    "headers": {"Authorization": "Bearer SENTINEL_SECRET_NEON"},
-}
-
-
-@pytest.fixture
-def fake():
-    fake = FakeMetaMcp().start()
-    yield fake
-    fake.stop()
-
-
-def gateway_engine(tmp_path, fake, run=None):
-    gateway = Gateway(url=fake.mcp_url, login_email="me@example.com", login_password_env_var="PW")
-
-    def clients(edit):
-        return MetaMcpClient(gateway, {"PW": "right-password"})
-
-    store = ChangeStore(tmp_path / "data")
-    return Engine(store, run=run or FakeClaude(None), gateway_clients=clients), gateway
-
-
-def gateway_step(gateway, name="neon", server=NEON):
-    edit = GatewayEdit(gateway_id=gateway.id, url=gateway.url, name=name, server=server)
-    return Step(
-        client=GATEWAY_CLIENT, scope=Scope.USER, name=name, gateway=edit, mechanism="gateway_api"
-    )
-
-
-def move_steps(gateway, config):
-    return [gateway_step(gateway), toml_step(config, ("mcp_servers", "neon"), ABSENT)]
-
-
-def test_move_adds_to_the_gateway_then_removes_the_entry_and_undoes(tmp_path, fake, config):
-    engine, gateway = gateway_engine(tmp_path, fake)
-    change = engine.preview("gateway.move", move_steps(gateway, config))
-    assert change.state is ChangeState.PREVIEWED
-    assert fake.held_names() == [] and config.read_text() == CONFIG
-    diff = change.steps[0].gateway.masked_diff
-    assert "+" in diff and "neon" in diff and "SENTINEL" not in diff and "[secret]" in diff
-
-    engine.apply(change.id)
-    assert change.state is ChangeState.VERIFIED
-    assert fake.held_names() == ["neon"]
-    assert toml_edit.get_value(config.read_text(), ("mcp_servers", "neon")) is ABSENT
-    uuid = change.steps[0].gateway.server_uuid
-    assert fake.servers[uuid]["headers"]["Authorization"].endswith("SENTINEL_SECRET_NEON")
-    assert "SENTINEL" not in json.dumps(engine.store.entries())
-    entry = engine.store.entries()[0]
-    assert entry["steps"][0]["path"] == gateway.url and entry["steps"][0]["client"] == "gateway"
-    assert fake.sessions == set()
-
-    second, _ = gateway_engine(tmp_path, fake)  # undo after a restart, from the record
-    second.undo(change.id)
-    assert second.changes[change.id].state is ChangeState.UNDONE
-    assert fake.held_names() == [] and fake.servers == {}
-    assert config.read_text() == CONFIG
-
-
-def test_apply_and_undo_say_how_many_steps_are_done(tmp_path, fake, config):
-    # The page shows "Applying 1 of 2" from these counts, so a long move is not a silent wait.
-    engine, gateway = gateway_engine(tmp_path, fake)
-    change = engine.preview("gateway.move", move_steps(gateway, config))
+def test_apply_and_undo_say_how_many_steps_are_done(tmp_path, config):
+    # The page shows "Applying 1 of 2" from these counts, so a long change is not a silent wait.
+    engine = make_engine(tmp_path)
+    steps = [
+        toml_step(config, ("mcp_servers", "neon"), ABSENT),
+        toml_step(config, ("model",), "gpt-6"),
+    ]
+    change = engine.preview("mcp.remove_direct", steps)
     seen = []
     engine.on_progress = lambda change_id, done, total, step: seen.append(
         (change_id, done, total, step)
@@ -479,104 +409,8 @@ def test_apply_and_undo_say_how_many_steps_are_done(tmp_path, fake, config):
     assert seen == [(change.id, 1, 2, 0), (change.id, 2, 2, 1)]
     seen.clear()
     engine.undo(change.id)
-    assert seen[0] == (change.id, 1, 2, 0) and seen[-1] == (change.id, 2, 2, None)
+    assert seen[-1] == (change.id, 2, 2, None)
     assert all(done <= total for _, done, total, _ in seen)
-
-
-def test_a_name_the_gateway_already_holds_is_refused(tmp_path, fake, config):
-    engine, gateway = gateway_engine(tmp_path, fake)
-    fake.hold("neon", "https://mcp.neon.tech/mcp")
-    with pytest.raises(ChangeRefusedError, match="already has neon"):
-        engine.preview("gateway.move", move_steps(gateway, config))
-
-
-def test_an_unreachable_gateway_refuses_the_preview(tmp_path, config):
-    fake = FakeMetaMcp().start()
-    engine, gateway = gateway_engine(tmp_path, fake)
-    fake.stop()
-    with pytest.raises(ChangeRefusedError, match="Could not reach"):
-        engine.preview("gateway.move", move_steps(gateway, config))
-    assert config.read_text() == CONFIG
-
-
-def test_without_a_gateway_client_the_step_is_refused(tmp_path, fake, config):
-    _, gateway = gateway_engine(tmp_path, fake)
-    with pytest.raises(ChangeRefusedError, match="cannot be managed"):
-        make_engine(tmp_path).preview("gateway.move", move_steps(gateway, config))
-
-
-def test_a_failed_file_step_removes_the_server_from_the_gateway_again(tmp_path, fake, claude_json):
-    original = claude_json.read_bytes()
-    engine, gateway = gateway_engine(tmp_path, fake, run=FakeClaude(claude_json, wrong_value=True))
-    value = {"type": "http", "url": "http://127.0.0.1:12008/mcp"}
-    command = ["claude", "mcp", "add-json", "-s", "user", "gw", json.dumps(value)]
-    steps = [gateway_step(gateway), claude_step(claude_json, "gw", value, command)]
-    change = engine.preview("gateway.move", steps)
-    engine.apply(change.id)
-    assert change.state is ChangeState.RESTORED
-    assert claude_json.read_bytes() == original
-    assert fake.held_names() == [] and fake.servers == {}
-
-
-def test_undo_stops_when_the_gateway_cannot_be_reached(tmp_path, config):
-    fake = FakeMetaMcp().start()
-    engine, gateway = gateway_engine(tmp_path, fake)
-    change = engine.preview("gateway.move", move_steps(gateway, config))
-    engine.apply(change.id)
-    after = config.read_text()
-    fake.stop()
-    engine.undo(change.id)
-    assert change.state is ChangeState.UNDO_BLOCKED
-    assert "not changed" in change.error
-    assert config.read_text() == after
-
-
-def test_undo_goes_on_when_the_server_was_removed_by_hand(tmp_path, fake, config):
-    engine, gateway = gateway_engine(tmp_path, fake)
-    change = engine.preview("gateway.move", move_steps(gateway, config))
-    engine.apply(change.id)
-    del fake.servers[change.steps[0].gateway.server_uuid]
-    fake.in_namespace = []
-    engine.undo(change.id)
-    assert change.state is ChangeState.UNDONE
-    assert "already been removed" in change.error
-    assert config.read_text() == CONFIG
-
-
-def test_undo_takes_the_server_out_of_the_gateway_last_and_can_be_tried_again(
-    tmp_path, fake, claude_json
-):
-    # If putting the client entry back fails, the gateway still has the server: it is never
-    # in neither place. Once the cause is gone, Undo can be pressed again and finishes.
-    cli = FakeClaude(claude_json)
-    engine, gateway = gateway_engine(tmp_path, fake, run=cli)
-    entry = {"command": "x"}
-    remove = claude_step(
-        claude_json, "old", ABSENT, ["claude", "mcp", "remove", "-s", "user", "old"]
-    )
-    remove.undo_command = ["claude", "mcp", "add-json", "-s", "user", "old", json.dumps(entry)]
-    change = engine.preview("gateway.move", [gateway_step(gateway), remove])
-    assert engine.apply(change.id).state is ChangeState.VERIFIED
-
-    engine.run = lambda command, cwd: CommandResult(returncode=1, output="no network")
-    assert engine.undo(change.id).state is ChangeState.UNDO_BLOCKED
-    assert fake.held_names() == ["neon"]
-
-    engine.run = cli
-    assert engine.undo(change.id).state is ChangeState.UNDONE, change.error
-    assert fake.held_names() == []
-    assert json.loads(claude_json.read_text())["mcpServers"] == {"old": entry}
-
-
-def test_a_change_without_file_steps_is_still_recorded(tmp_path, fake):
-    engine, gateway = gateway_engine(tmp_path, fake)
-    change = engine.preview("gateway.move", [gateway_step(gateway)])
-    engine.apply(change.id)
-    assert change.state is ChangeState.VERIFIED
-    assert fake.held_names() == ["neon"]
-    assert engine.store.entries()[0]["state"] == "verified"
-    engine.undo(change.id)
-    assert change.state is ChangeState.UNDONE and fake.held_names() == []
 
 
 class FakePluginCli:
@@ -1091,7 +925,7 @@ def test_any_error_during_apply_restores_files_and_keychain(tmp_path, config):
     first = toml_step(config, ("mcp_servers", "gw"), GATEWAY)
     first.keychain = [KeychainItem("gw", "GW_KEY", "SENTINEL_SECRET_NEW")]
     steps = [first, toml_step(second, ("mcp_servers", "gw"), GATEWAY)]
-    change = engine.preview("gateway.connect", steps)
+    change = engine.preview("mcp.add", steps)
     real = engine._apply_step
 
     def apply_step(step, data):
@@ -1205,7 +1039,7 @@ def test_a_failed_apply_puts_back_the_old_keychain_value(tmp_path, config):
     items.write_text(json.dumps({"kitden gw/GW_KEY": "OLD"}))
     step = toml_step(config, ("mcp_servers", "gw"), GATEWAY)
     step.keychain = [KeychainItem("gw", "GW_KEY", "SENTINEL_SECRET_NEW")]
-    change = engine.preview("gateway.connect", [step])
+    change = engine.preview("mcp.add", [step])
     items.write_text(json.dumps({"kitden gw/GW_KEY": "A"}))  # rotated since the preview
 
     def verify(step, expected, exact=None):
@@ -1229,7 +1063,7 @@ def test_a_cancelled_change_forgets_the_secrets_typed_for_it(tmp_path, config):
         config, ("mcp_servers", "gw"), {**GATEWAY, "http_headers": {"Authorization": typed}}
     )
     step.keychain = [KeychainItem("gw", "GW_KEY", typed)]
-    change = engine.preview("gateway.connect", [step])
+    change = engine.preview("mcp.add", [step])
     engine.cancel(change.id)
     assert change.state is ChangeState.CANCELLED
     assert typed not in json.dumps(dataclasses.asdict(change), default=str)
@@ -1240,7 +1074,7 @@ def test_a_crash_during_apply_leaves_a_record_that_says_so(tmp_path, config):
         pass
 
     engine = make_engine(tmp_path)
-    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = engine.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
 
     def die(path, data):
         raise Crash
@@ -1261,7 +1095,7 @@ def test_a_crash_during_apply_leaves_a_record_that_says_so(tmp_path, config):
 
 def test_apply_refuses_when_its_record_cannot_be_saved(tmp_path, config):
     engine = make_engine(tmp_path)
-    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    change = engine.preview("mcp.add", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
     real = engine.store.save
 
     def full(change_id, record):
@@ -1288,7 +1122,7 @@ def test_a_crash_record_says_what_secrets_it_may_have_left(tmp_path, config):
     )
     step = toml_step(config, ("mcp_servers", "gw"), GATEWAY)
     step.keychain = [KeychainItem("gw", "GW_KEY", "SENTINEL_SECRET_NEW")]
-    change = engine.preview("gateway.connect", [step])
+    change = engine.preview("mcp.add", [step])
 
     def die(path, data):
         raise Crash
@@ -1310,7 +1144,7 @@ def test_a_stale_change_forgets_the_secrets_typed_for_it(tmp_path, config):
     step = toml_step(
         config, ("mcp_servers", "gw"), {**GATEWAY, "http_headers": {"Authorization": typed}}
     )
-    change = engine.preview("gateway.connect", [step])
+    change = engine.preview("mcp.add", [step])
     config.write_text(CONFIG + "\n# changed\n")
     assert engine.apply(change.id).state is ChangeState.STALE
     assert typed not in json.dumps(dataclasses.asdict(change), default=str)
@@ -1319,44 +1153,45 @@ def test_a_stale_change_forgets_the_secrets_typed_for_it(tmp_path, config):
 # The client writes its file during Apply (review 2026-11-03) --------------------------------
 
 
-def test_a_client_write_during_apply_is_kept(tmp_path, fake, claude_json):
-    engine, gateway = gateway_engine(tmp_path, fake)
+def _old_entry_step(claude_json):
     edit = FileEdit(
         path=str(claude_json), fmt="json", key=("mcpServers", "old"), after=ABSENT, check="entry"
     )
-    step = Step(client="claude_code", scope=Scope.USER, name="old", edit=edit)
-    change = engine.preview("gateway.move", [gateway_step(gateway), step])
-    real = engine._apply_gateway
+    return Step(client="claude_code", scope=Scope.USER, name="old", edit=edit)
 
-    def apply_gateway(steps, tick):  # Claude Code writes its file meanwhile
-        real(steps, tick)
+
+def _write_during_apply(engine, write):
+    """Run `write` after the backup is taken and before the first file step."""
+    real = engine._store_secrets
+
+    def store_secrets(change, stored):
+        real(change, stored)
+        write()
+
+    engine._store_secrets = store_secrets
+
+
+def test_a_client_write_during_apply_is_kept(tmp_path, claude_json):
+    engine = make_engine(tmp_path)
+    change = engine.preview("mcp.remove_direct", [_old_entry_step(claude_json)])
+
+    def write():  # Claude Code writes its file meanwhile
         data = json.loads(claude_json.read_text())
         data["numStartups"] = 2
         claude_json.write_text(json.dumps(data, indent=2))
 
-    engine._apply_gateway = apply_gateway
+    _write_during_apply(engine, write)
     engine.apply(change.id)
     assert change.state is ChangeState.VERIFIED, change.error
     assert json.loads(claude_json.read_text()) == {"numStartups": 2, "mcpServers": {}}
 
 
-def test_a_client_write_to_the_entry_during_apply_stops_it(tmp_path, fake, claude_json):
-    engine, gateway = gateway_engine(tmp_path, fake)
-    edit = FileEdit(
-        path=str(claude_json), fmt="json", key=("mcpServers", "old"), after=ABSENT, check="entry"
-    )
-    step = Step(client="claude_code", scope=Scope.USER, name="old", edit=edit)
-    change = engine.preview("gateway.move", [gateway_step(gateway), step])
-    real = engine._apply_gateway
+def test_a_client_write_to_the_entry_during_apply_stops_it(tmp_path, claude_json):
+    engine = make_engine(tmp_path)
+    change = engine.preview("mcp.remove_direct", [_old_entry_step(claude_json)])
     newer = {"numStartups": 2, "mcpServers": {"old": {"command": "y"}}}
-
-    def apply_gateway(steps, tick):
-        real(steps, tick)
-        claude_json.write_text(json.dumps(newer))
-
-    engine._apply_gateway = apply_gateway
+    _write_during_apply(engine, lambda: claude_json.write_text(json.dumps(newer)))
     engine.apply(change.id)
     assert change.state is ChangeState.RESTORED
     assert "changed since preview" in change.error
     assert json.loads(claude_json.read_text()) == newer
-    assert fake.held_names() == []

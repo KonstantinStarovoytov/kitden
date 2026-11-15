@@ -24,7 +24,6 @@ LEAVES = "“{other}” in the preview removes {server} from the gateway. " + AF
 REMOVES = (
     "This removes {server} from the gateway, but “{other}” in the preview changes it. " + AFTER
 )
-TWO_GATEWAYS = "“{other}” in the preview moves servers into another gateway. " + AFTER
 
 
 @dataclass
@@ -161,13 +160,6 @@ def _between(old: Part, new: Part) -> str | None:
     """Why `new` cannot join a change that has `old`, or None."""
     other = old.title
     pairs = [(a, b) for a in old.steps for b in new.steps if not same_write(a, b)]
-    # The engine moves servers into one registered gateway per change, each name once.
-    for a, b in pairs:
-        if a.gateway is not None and b.gateway is not None:
-            if a.gateway.gateway_id != b.gateway.gateway_id:
-                return TWO_GATEWAYS.format(other=other)
-            if a.gateway.name == b.gateway.name:
-                return SAME.format(other=other, what="server")
     # A server that leaves the Kitden gateway takes its rules with it, also ones not set yet.
     for a, b in pairs:
         if (server := _removed(b)) and kitden_server(a) == server:
@@ -197,8 +189,8 @@ def _between(old: Part, new: Part) -> str | None:
 
 def clash(earlier: list[Part], new: Part) -> str | None:
     """Why `new` cannot join the parts already in the tray, in plain words; None when it can.
-    One change cannot write the same entry twice, an entry inside another, or into two
-    registered gateways, and a server it removes from the Kitden gateway gets no other change."""
+    One change cannot write the same entry twice or an entry inside another, and a server it
+    removes from the Kitden gateway gets no other change."""
     return next((reason for old in earlier if (reason := _between(old, new))), None)
 
 

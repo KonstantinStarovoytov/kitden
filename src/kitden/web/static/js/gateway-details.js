@@ -1,18 +1,17 @@
 // Details on the Gateway page for a client, a gateway, a link of the map, a server outside the
 // gateway, a server in the Kitden gateway and one of its tools: a card builder each (a plain object
 // that detailsCard draws, so a test reads it without a page), and a show… that opens it beside the
-// page. The forms to add a gateway and to connect clients live here too, with what each registered
-// gateway holds.
+// page.
 import { addAccess, replaceAccess, signInAgain } from "./access-form.js";
-import { getJson, postJson, query } from "./api.js";
-import { $, busyWhile, button, el, icon, joinWords, plural, reportError, secretsWord, withFocusKey } from "./dom.js";
+import { getJson, query } from "./api.js";
+import { $, button, el, icon, joinWords, plural, reportError, secretsWord, withFocusKey } from "./dom.js";
 import { ADD_SERVER, openAdd } from "./gateway-add.js";
 import { loadLibraryFor, raceSlow } from "./library.js";
-import { animateTo, fold } from "./motion.js";
+import { animateTo } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { callsText, closePanel, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, showInPreview, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, kitdenHouse, mark, menuItems, originText, STATE_WORDS, versionsOpen, WRITABLE } from "./parts.js";
-import { arrival, current, data, freshness, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
+import { callsText, closePanel, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, loadPanel, moveBody, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toolRows, toolsHead, writingToolsOn } from "./panel.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, FIND_PROJECT, folderName, GATEWAY_NOTE, kitdenClients, kitdenHouse, mark, menuItems, originText, STATE_WORDS, versionsOpen, WRITABLE } from "./parts.js";
+import { current, data, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, TAKE_OUT, takeOut, tray, trayRow } from "./tray.js";
 
 // The kitden entry is the same one that lets agents read this setup.
@@ -40,15 +39,7 @@ export function foundClients() {
   return (data.clients || []).filter((c) => WRITABLE.includes(c.id) && c.status === "found").map((c) => c.id);
 }
 
-// "Use this gateway…" moves the clients from another registered gateway to this one. The
-// Kitden gateway sits beside the registered ones: it is never switched to or away from.
-export function offersSwitch(model, gateway) {
-  if (gateway.kind === "kitden") return false;
-  const used = model.used.filter((id) => id !== "kitden");
-  return used.length > 0 && !used.includes(gateway.id);
-}
-
-// The gateways that can take an outside row now, in the order offered; none when it has no
+// The gateways that can take an outside row now (the Kitden gateway); none when it has no
 // entries to take or something keeps it out (`stays`). The List's "Move in…", Details and
 // "Move all" agree by asking here.
 export function movesTo(model, key, row) {
@@ -68,8 +59,8 @@ function clientsFact(clients) {
   return { label: "Clients", value: tiles(clients, text), text };
 }
 
-// What a panel's head shows beside its title: a client's tile, the Kitden house, a registered
-// gateway's mark, or a server's icon on a tile.
+// What a panel's head shows beside its title: a client's tile, the Kitden house, or a server's
+// icon on a tile.
 export function headTile(...nodes) {
   const tile = el("span", "p-tile");
   tile.append(...nodes);
@@ -291,51 +282,6 @@ export function clientCard(client, { setup, clients, progress = data.progress, v
 
 // Gateways -----------------------------------------------------------------------------------
 
-// What each registered gateway holds, read from the gateway itself when the page draws and again
-// after every reload. An answer that fails never blocks the rest of the page.
-const held = new Map(); // gateway id -> { servers, error, at, loading }
-
-async function loadHeld(gateway) {
-  const at = performance.now();
-  // The last answer stays while it is read again, so the map's links do not go and draw again.
-  held.set(gateway.id, { ...held.get(gateway.id), loading: true, at });
-  let answer;
-  try {
-    answer = await getJson(`/api/gateways/${encodeURIComponent(gateway.id)}/servers`);
-  } catch {
-    answer = { servers: null, error: "Could not read what the gateway holds." };
-  }
-  held.set(gateway.id, { ...answer, at });
-  if (state.view !== "gateway") return;
-  render();
-  // Its open Details say what it holds now.
-  if (panelState.current && panelState.current.gateway === gateway.id) showGateway(gateway.id);
-}
-
-// The live reads of the registered gateways Kitden can read, started again after a reload.
-export function liveHeld(view) {
-  for (const gateway of view.gateways) {
-    if (gateway.kind === "kitden" || !gateway.managed) continue;
-    const entry = held.get(gateway.id);
-    if (!entry || entry.at < freshness.reloadStartedAt) loadHeld(gateway);
-  }
-  return held;
-}
-
-// The gateway's own page: the saved link, or the address it serves.
-function gatewayPage(gateway) {
-  if (gateway.ui_url) return gateway.ui_url;
-  try { return new URL(gateway.url).origin; } catch { return null; }
-}
-
-// Only clients without an entry in any registered gateway are offered. One that uses another
-// gateway moves with "Use this gateway…"; connecting it here too would load its servers twice.
-// The Kitden gateway holds other servers, so its clients can connect here too.
-function waitingClients(model, found) {
-  const registered = Object.entries(model.connections).filter(([id]) => id !== "kitden").map(([, per]) => per);
-  return found.filter((c) => !registered.some((per) => (per[c] || []).length));
-}
-
 // How many tools of the gateway's servers are on, for the picked project or all projects:
 // "3 of 6 on"; "Not known yet" while Kitden does not know the tools of one of them.
 function toolsWords(servers) {
@@ -412,13 +358,13 @@ function movesOutNow(name) {
   return tray.phase !== "applied" && Boolean(trayRow(key)?.part);
 }
 
-// The Kitden gateway, as the mockup's gateway panel (gateway-notes 3.6): the house, where it runs;
-// its servers and the servers outside it, how many of their tools are on; one row per client with
-// its own Connect or Disconnect (not without the setup read: the warning says so); the sentence of
-// what it controls. Under More (D18): "Add a server…", which opens the Add a server panel, "Move
-// all N…", every outside server a move can take, in one review, and "Add another gateway…", which
-// shows the form in the panel (`adding`).
-function kitdenCard(gateway, { view, setup, clientList, adding }) {
+// Details of the Kitden gateway, as the mockup's gateway panel (gateway-notes 3.6): the house,
+// where it runs; its servers and the servers outside it, how many of their tools are on; one row
+// per client with its own Connect or Disconnect (not without the setup read: the warning says so);
+// the sentence of what it controls. Under More (D18): "Add a server…", which opens the Add a server
+// panel, and Move all, every outside server a move can take, in one review. `clientList`: the
+// scan's clients, each with its status.
+export function gatewayCard(gateway, { view, setup, clientList = data.clients } = {}) {
   const { known } = kitdenClients(setup);
   const servers = gateway.servers || [];
   const outside = Object.values(view.groups).flat();
@@ -436,98 +382,10 @@ function kitdenCard(gateway, { view, setup, clientList, adding }) {
     const targets = rows.flatMap((row) => row.items).map((item) => ({ item }));
     more.push({ label: `Move all ${rows.length}…`, body: { action: "gateway.move", targets, params: { gateway: gateway.id } } });
   }
-  // While the form is open its own heading stands in the place of its entry.
-  if (!adding) more.push({ label: ADD_ANOTHER, run: () => showGateway(gateway.id, { adding: true }) });
   let warning = known ? null : "Kitden could not read which clients use it.";
   if (gateway.problem) warning = gateway.problem;
-  let after = null;
-  if (adding) {
-    after = el("section", "add-gateway");
-    after.append(el("h2", null, "Add another gateway"), addForm({ onCancel: () => stopAdding(gateway.id) }));
-  }
   const why = "The gateway controls only the servers in it. Direct entries and terminal tools are outside it.";
-  return { kind: KIND.gateway, title: gateway.name, id: gateway.where, tile: houseTile(), facts, list: known ? clientRows(setup, clientList) : null, why, actions: [], more, after, warning };
-}
-
-// A registered gateway Kitden could not read says only this on the map, in the List and as its
-// Servers fact; its Details say why in a callout (heldProblem). The reason may name a variable or
-// an address, which stay behind Details.
-export const NOT_REACHED = "Not connected";
-
-// What a registered gateway holds, as its Servers fact.
-function heldWords(entry) {
-  if (!entry || entry.loading) return "Reading what it holds…";
-  if (!entry.servers) return NOT_REACHED;
-  return plural(entry.servers.length, "server", "servers");
-}
-
-// Why Kitden could not read what a registered gateway holds, or null.
-function heldProblem(entry) {
-  if (!entry || entry.loading || entry.servers) return null;
-  return entry.error || "Could not read what the gateway holds.";
-}
-
-// One sentence on where its servers and tools are set.
-function heldWhy(gateway, entry) {
-  if (!gateway.managed) {
-    const need = gateway.kind === "obot" ? "the name of the variable that holds an Obot API key" : "its sign-in details";
-    return `To see what it holds from here, save the gateway again with ${need}.`;
-  }
-  if (entry && entry.servers && !entry.servers.length) {
-    return gateway.movable ? "Nothing yet. Move a server in from the outside group." : `Nothing yet. Add servers in ${gatewayName(gateway)} itself.`;
-  }
-  return `Tools and access are set in ${gatewayName(gateway)} itself.`;
-}
-
-// A registered gateway (Obot, MetaMCP): its clients, what it holds (`held`, the live read) and,
-// with two of them, whether the clients use it. Its own page, "Use this gateway…", and the form to
-// connect clients that use no registered gateway yet; its address waits under Technical details.
-function registeredCard(gateway, { view, held: entry, clients }) {
-  const name = gatewayName(gateway);
-  const per = view.connections[gateway.id] || {};
-  const facts = [clientsFact(WRITABLE.filter((c) => (per[c] || []).length))];
-  if (gateway.managed) facts.push({ label: "Servers", value: heldWords(entry) });
-  if (view.gateways.filter((g) => g.kind !== "kitden").length > 1) {
-    facts.push({ label: "State", value: view.used.includes(gateway.id) ? "Used" : "Not used" });
-  }
-  const actions = [];
-  const page = gatewayPage(gateway);
-  // A side door: everything Kitden can do happens here, so it is never the primary action.
-  if (page) actions.push({ label: `Open ${name} ↗`, run: () => window.open(page, "_blank", "noopener") });
-  // Clients use another registered gateway: one review moves all of them here (the old entries go).
-  if (offersSwitch(view, gateway)) {
-    const entryName = name.toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
-    actions.push({ label: "Use this gateway…", body: { action: "gateway.switch", targets: [], params: { gateway: gateway.id, name: entryName } }, primary: true });
-  }
-  const waiting = waitingClients(view, clients);
-  let after = null;
-  if (waiting.length) {
-    const box = el("details", "connect");
-    box.open = draft.connectOpen === null ? true : draft.connectOpen;
-    box.addEventListener("toggle", () => { draft.connectOpen = box.open; });
-    box.append(el("summary", null, "Connect clients"), connectForm(gateway, waiting));
-    after = fold(box);
-  }
-  const rows = [{ title: "MCP address", summary: gateway.url }, ...(gateway.ui_url ? [{ title: "Interface link", summary: gateway.ui_url }] : [])];
-  const warning = gateway.managed ? heldProblem(entry) : null;
-  return { kind: KIND.gateway, title: name, id: null, tile: headTile(mark("gateway")), facts, why: heldWhy(gateway, entry), actions, after, technical: technical(rows), warning };
-}
-
-// Cancel, or Escape in the form: the card is drawn again without it, focus on its entry (or on More,
-// which it waits under again).
-const ADD_ANOTHER = "Add another gateway…";
-function stopAdding(id) {
-  showGateway(id);
-  const drawer = $("#drawer");
-  const back = withFocusKey(drawer, `action:${ADD_ANOTHER}`) || withFocusKey(drawer, "more");
-  if (back) back.focus();
-}
-
-// Details of a gateway: the Kitden one, or a registered one. `clients` are the found clients Kitden
-// writes; `clientList` the scan's clients, each with its status.
-export function gatewayCard(gateway, { view, setup, held: entry = null, clients = foundClients(), clientList = data.clients, adding = false } = {}) {
-  if (gateway.kind === "kitden") return kitdenCard(gateway, { view, setup, clientList, adding });
-  return registeredCard(gateway, { view, held: entry, clients });
+  return { kind: KIND.gateway, title: gateway.name, id: gateway.where, tile: houseTile(), facts, list: known ? clientRows(setup, clientList) : null, why, actions: [], more, warning };
 }
 
 // Servers outside the gateway ----------------------------------------------------------------
@@ -549,9 +407,8 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
   const actions = [];
   const more = [];
   const moves = movesTo(view, group, row);
-  // With one gateway the button is the move's own, so it says when the move waits in the tray.
-  if (moves.length === 1) actions.push({ label: "Move into the gateway…", body: moveBody(moves[0], row.items), primary: true });
-  else if (moves.length) actions.push({ label: "Move into the gateway…", run: () => moveInto(moves, row.items, row.name), primary: true });
+  // The button is the move's own, so it says when the move waits in the tray.
+  if (moves.length) actions.push({ label: "Move into the gateway…", body: moveBody(moves[0], row.items), primary: true });
   else if (group === "move" && row.items.length && !targets.length) {
     more.push({ label: "Remove direct entry…", body: { action: "mcp.remove_direct", targets: row.items.map((item) => ({ item })), params: {} } });
   }
@@ -598,15 +455,15 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
 
 // What the outside panel says: who calls it on their own (who has it set up, when Kitden does not
 // know that any client loads it), so Kitden's switches do not reach its tools; that a move brings
-// them here, where one can take it; and that its clients keep it either way, only where the move
-// goes into the Kitden gateway and every one of them uses it (a move takes their own entries).
+// them here, where one can take it; and that its clients keep it either way, only where every one
+// of them uses the Kitden gateway (a move takes their own entries).
 function outsideSay(row, columns, names, moves, linked) {
   const many = columns.length > 1;
   const who = row.unknown ? `${names} ${many ? "have" : "has"} ${row.name} set up` : `${names} ${many ? "call" : "calls"} ${row.name}`;
   const own = many ? "their own" : "its own";
   const words = [`${who} on ${own}, so Kitden can't turn its tools on or off.`];
   if (moves.length) words.push("Move it into the gateway to manage them here.");
-  const keeps = moves.length === 1 && moves[0].kind === "kitden" && Boolean(linked) && columns.every((c) => linked.includes(c));
+  const keeps = moves.length > 0 && Boolean(linked) && columns.every((c) => linked.includes(c));
   if (keeps) words.push(`${names} ${many ? "keep" : "keeps"} it either way.`);
   return words.join(" ");
 }
@@ -997,8 +854,7 @@ const DESKTOP_TAB = "claude_desktop_code_tab";
 // Where a change to a link is written, in words, never a path: the client's settings, a plugin's
 // files (for a server a plugin gives), or the Kitden gateway's own file, which holds its
 // servers and its rules (gateway.json: there is no rules file of its own). Null where Kitden does
-// not say: a registered gateway keeps its servers itself, and a Claude Code line may also, or only,
-// come from the Desktop app's Code tab.
+// not say: a Claude Code line may also, or only, come from the Desktop app's Code tab.
 function writtenIn(kind, from, to) {
   if (kind === "change") return "Not written yet";
   if (kind === "client") return `${from.name}'s settings`;
@@ -1007,7 +863,7 @@ function writtenIn(kind, from, to) {
     const own = (to.row.clients || []).includes(from.client) && !(from.client === "claude_code" && to.row.clients.includes(DESKTOP_TAB));
     return own ? `${from.name}'s settings` : null;
   }
-  return kind === "tool" || from.gateway.kind === "kitden" ? "Kitden's gateway file" : null;
+  return "Kitden's gateway file";
 }
 
 // What a server in the Kitden gateway passes on, by the clients that use the gateway (`linked`,
@@ -1020,13 +876,11 @@ function heldSay(name, linked) {
 
 // What a link means, while no change to it waits in the tray (gateway-notes 3.7), for the picked
 // project (its folder): what a client gets through the Kitden gateway; who passes on what a server
-// holds or a tool that is on; that a server a client sets up on its own skips Kitden's rules. A
-// registered gateway's links say where its tools are set.
+// holds or a tool that is on; that a server a client sets up on its own skips Kitden's rules.
 function linkSay(kind, from, to, { linked, view, picked, folder, unk }) {
   const place = placeWords(picked, folder);
-  if (kind === "client" && to.gateway.kind !== "kitden") return `Tools and access are set in ${to.name} itself.`;
   if (kind === "client") return throughSay(from.name, throughKitden(view), place).say;
-  if (kind === "held") return from.gateway.kind === "kitden" ? heldSay(to.name, linked) : `Tools and access are set in ${from.name} itself.`;
+  if (kind === "held") return heldSay(to.name, linked);
   if (kind === "tool") {
     const none = nobody(linked);
     return none ? `${to.name} is on ${place}. ${none}` : `${to.name} is on ${place}: ${joinWords(linked.map((c) => CLIENT_NAMES[c]))} can call it through Kitden.`;
@@ -1386,19 +1240,15 @@ export function showClient(id) {
 }
 
 // A gateway that is gone since closes its Details.
-export function showGateway(id, { adding = false } = {}) {
+export function showGateway(id) {
   const view = current("gateway");
   const gateway = view && view.gateways.find((g) => g.id === id);
   if (!gateway) {
     closePanel();
     return;
   }
-  const card = gatewayCard(gateway, { view, setup: data.setupServer, held: held.get(id), adding });
+  const card = gatewayCard(gateway, { view, setup: data.setupServer });
   openCard(card, { type: "gateway", gateway: id }, () => showGateway(id));
-  if (adding) {
-    const first = $("#drawer .add-gateway input");
-    if (first) first.focus();
-  }
 }
 
 // Details of a server outside the gateway: drawn at once from its row, then again with its
@@ -1554,161 +1404,4 @@ async function refreshHeld(name) {
     const again = withFocusKey($("#drawer"), "action:Refresh tools") || withFocusKey($("#drawer"), "more");
     if (again && $("#drawer").contains(document.activeElement)) again.focus();
   }, heldShown(name));
-}
-
-// Forms --------------------------------------------------------------------------------------
-
-// What the person typed survives a redraw (a rescan can redraw the page at any time).
-const EMPTY_ADD = { url: "", ui_url: "", auth: "none", key_env_var: "", login_email: "", login_password_env_var: "" };
-const draft = { add: { ...EMPTY_ADD }, connect: null, connectOpen: null };
-// Every client gets the same entry name; the review shows the exact entry before Apply.
-const ENTRY_NAME = "gateway";
-const PREVIEW = "Preview";
-
-function field(label, control) {
-  const box = el("label", "field");
-  box.append(el("span", null, label), control);
-  return box;
-}
-
-function input(attrs, value, onInput) {
-  const node = el("input");
-  Object.assign(node, attrs);
-  node.value = value;
-  node.addEventListener("input", () => onInput(node.value));
-  return node;
-}
-
-// Connect clients to the gateway of this card, and only to it. The button says "In preview" while
-// the row for the clients ticked now waits in the tray.
-function connectForm(gateway, waiting) {
-  if (!draft.connect || draft.connect.gateway !== gateway.id) {
-    draft.connect = { gateway: gateway.id, clients: new Set(waiting) };
-  }
-  const chosen = draft.connect;
-  const body = () => ({ action: "gateway.connect", targets: waiting.filter((c) => chosen.clients.has(c)).map((client) => ({ client })), params: { gateway: chosen.gateway, name: ENTRY_NAME } });
-  const form = el("form", "form");
-  const checks = el("fieldset", "checks");
-  checks.append(el("legend", null, "Add to"));
-  const submit = el("button", "btn primary");
-  const words = el("span", "cut", PREVIEW);
-  submit.type = "submit";
-  submit.append(words);
-  const follow = () => showInPreview(submit, words, PREVIEW, keyFor(body()));
-  for (const client of waiting) {
-    checks.append(clientCheck(client, chosen.clients.has(client), null, (checked) => {
-      if (checked) chosen.clients.add(client); else chosen.clients.delete(client);
-      follow();
-    }));
-  }
-  form.append(checks);
-  const message = el("span", "form-message");
-  message.setAttribute("aria-live", "polite");
-  follow();
-  form.append(submit, message);
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const { targets } = body();
-    if (!targets.length) {
-      message.className = "form-message error";
-      message.textContent = "Choose at least one client.";
-      return;
-    }
-    message.textContent = "";
-    if (inTray(keyFor(body())) || submit.dataset.working) return;
-    busyWhile(submit, review(body())).catch(reportError);
-  });
-  return form;
-}
-
-// Add a registered gateway. Saved, its Details open, where clients connect to it.
-// The form to add a gateway. `onCancel`: it ends with a quiet Cancel too, which Escape in the form
-// presses (the panel stays open).
-export function addForm({ onCancel = null } = {}) {
-  const typed = draft.add;
-  const form = el("form", "form");
-  const url = input({ type: "url", required: true, placeholder: "http://127.0.0.1:12008/metamcp/local/mcp or http://127.0.0.1:8080/mcp-connect/<id>", autocomplete: "off" }, typed.url, (v) => { typed.url = v; showFields(); });
-  const ui = input({ type: "url", placeholder: "http://127.0.0.1:12008", autocomplete: "off" }, typed.ui_url, (v) => { typed.ui_url = v; });
-  const login = el("select");
-  for (const [value, text] of [["none", "None"], ["env_key", "Key in an environment variable"], ["oauth", "OAuth login"]]) {
-    const option = el("option", null, text);
-    option.value = value;
-    login.append(option);
-  }
-  login.value = typed.auth;
-  const key = input({ pattern: "[A-Z_][A-Z0-9_]*", placeholder: "GATEWAY_KEY", autocomplete: "off", spellcheck: false }, typed.key_env_var, (v) => { typed.key_env_var = v; });
-  const keyLabel = el("span", null, "Variable name (not the key)");
-  const keyField = el("label", "field");
-  keyField.append(keyLabel, key);
-  // The fields follow the address: an Obot gateway needs the variable that holds an API key
-  // (Kitden reads what it holds with it, even when the clients sign in with OAuth); a MetaMCP
-  // gateway needs a sign-in. The key or password itself is never typed into Kitden.
-  const showFields = () => {
-    const kind = kindOf(typed.url);
-    const needsKey = login.value === "env_key" || kind === "obot";
-    keyField.hidden = !needsKey;
-    key.required = needsKey;
-    keyLabel.textContent = kind === "obot" && login.value !== "env_key" ? "Obot API key variable name (not the key)" : "Variable name (not the key)";
-    emailField.hidden = passwordField.hidden = kind === "obot";
-  };
-  login.addEventListener("change", () => { typed.auth = login.value; showFields(); });
-  const urlField = field("MCP address", url);
-  urlField.classList.add("grow");
-  const uiField = field("Interface link (optional)", ui);
-  uiField.classList.add("grow");
-  // Sign-in for managing the gateway from here (feature 006). The password itself is never
-  // typed into Kitden: only the name of the variable that holds it.
-  const email = input({ type: "email", placeholder: "you@example.com", autocomplete: "off" }, typed.login_email, (v) => { typed.login_email = v; });
-  const password = input({ pattern: "[A-Z_][A-Z0-9_]*", placeholder: "METAMCP_PASSWORD", autocomplete: "off", spellcheck: false }, typed.login_password_env_var, (v) => { typed.login_password_env_var = v; });
-  const emailField = field("Sign-in email (to manage it from here)", email);
-  emailField.classList.add("grow");
-  const passwordField = field("Password variable name (not the password)", password);
-  showFields();
-  const message = el("span", "form-message");
-  message.setAttribute("aria-live", "polite");
-  const submit = el("button", "btn primary", "Save gateway");
-  submit.type = "submit";
-  form.append(urlField, uiField, field("Login", login), keyField, emailField, passwordField, submit);
-  if (onCancel) {
-    const cancel = button("Cancel", () => onCancel(), "btn");
-    cancel.dataset.focus = "add-cancel";
-    form.append(cancel);
-    form.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      onCancel();
-    });
-  }
-  form.append(message);
-  async function save() {
-    // The person's own action wins over an arrival still waiting (store.js).
-    arrival.pending = false;
-    {
-      const result = await postJson("/api/gateways", {
-        url: typed.url.trim(),
-        ui_url: typed.ui_url.trim() || null,
-        auth: typed.auth,
-        key_env_var: typed.auth === "env_key" || kindOf(typed.url) === "obot" ? typed.key_env_var.trim() : null,
-        login_email: typed.login_email.trim() || null,
-        login_password_env_var: typed.login_password_env_var.trim() || null,
-      });
-      if (!result.ok) {
-        message.className = "form-message error";
-        message.textContent = (result.data && result.data.detail) || `Not saved (${result.status}).`;
-        return;
-      }
-      draft.add = { ...EMPTY_ADD };
-      await reload();
-      render();
-      toast("Gateway saved. Now connect your clients to it.");
-      showGateway(result.data && result.data.id);
-    }
-  }
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (submit.dataset.working) return;
-    busyWhile(submit, save()).catch(reportError);
-  });
-  return form;
 }

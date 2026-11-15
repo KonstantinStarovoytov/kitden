@@ -132,17 +132,10 @@ def test_takes_effect_is_per_client_from_restart_notes():
     line = _line("20261027T140200Z-eeeeee", "2026-10-27T14:02:10+00:00", "verified", steps=steps)
     [entry] = _entries(line)
     assert entry["takes_effect"] == [
-        {"client": "claude_code", "note": "New session.", "login": None},
-        {"client": "codex", "note": "Restart Codex.", "login": None},
+        {"client": "claude_code", "note": "New session."},
+        {"client": "codex", "note": "Restart Codex."},
     ]
     assert entry["clients"] == ["claude_code", "codex"]
-    # A log-in note goes with its client, beside the restart note.
-    login = {"client": "cursor", "name": "gw", "scope": "user", "restart_note": "Restart Cursor."}
-    login["login_note"] = "Open the gateway and sign in."
-    line = _line("20261027T140230Z-efefef", "2026-10-27T14:02:40+00:00", "verified", steps=[login])
-    assert _entries(line)[0]["takes_effect"] == [
-        {"client": "cursor", "note": "Restart Cursor.", "login": "Open the gateway and sign in."}
-    ]
     # A change that wrote nothing needs nothing done.
     stale = _line("20261027T140300Z-ffffff", "2026-10-27T14:03:10+00:00", "stale", steps=steps)
     assert _entries(stale)[0]["takes_effect"] == []

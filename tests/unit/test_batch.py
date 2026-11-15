@@ -12,7 +12,6 @@ from kitden.changes.batch import (
     REMOVES,
     SAME,
     SAME_ID,
-    TWO_GATEWAYS,
     Part,
     clash,
     combine,
@@ -32,10 +31,8 @@ from kitden.local_gateway.settings import (
     settings_step,
 )
 from kitden.model import (
-    GATEWAY_CLIENT,
     ChangeState,
     FileEdit,
-    GatewayEdit,
     KeychainItem,
     Scope,
     Step,
@@ -172,13 +169,6 @@ def _json_step(path, key, after):
     return Step(client="cursor", scope=Scope.USER, name=key[-1], edit=edit)
 
 
-def _gateway_step(gateway_id, name):
-    edit = GatewayEdit(gateway_id=gateway_id, url=f"http://{gateway_id}/mcp", name=name, server={})
-    return Step(
-        client=GATEWAY_CLIENT, scope=Scope.USER, name=name, gateway=edit, mechanism="gateway_api"
-    )
-
-
 def test_removing_a_server_clashes_with_a_rule_for_it(tmp_path):
     _hold(tmp_path, {"github": {"url": "https://github.example.test/mcp"}})
     remove = Part("a", "Remove github from the gateway", remove_server_steps(tmp_path, "github"))
@@ -213,16 +203,6 @@ def test_one_entry_inside_another_clashes(tmp_path):
         "c", "Remove x there", [_json_step(tmp_path / "b.json", ("mcpServers", "x"), ABSENT)]
     )
     assert clash([whole], elsewhere) is None
-
-
-def test_two_registered_gateways_clash():
-    one = Part("a", "Move neon into MetaMCP", [_gateway_step("g1", "neon")])
-    two = Part("b", "Move docs into Obot", [_gateway_step("g2", "docs")])
-    same = Part("c", "Move neon into MetaMCP", [_gateway_step("g1", "neon")])
-    other = Part("d", "Move docs into MetaMCP", [_gateway_step("g1", "docs")])
-    assert clash([one], two) == TWO_GATEWAYS.format(other="Move neon into MetaMCP")
-    assert clash([one], same) == SAME.format(other="Move neon into MetaMCP", what="server")
-    assert clash([one], other) is None
 
 
 def test_first_clash_names_the_part_that_cannot_join(tmp_path):

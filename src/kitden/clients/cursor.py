@@ -21,7 +21,6 @@ from kitden.clients.base import (
     ClientAdapter,
     Reader,
     Scan,
-    bearer_header,
     expand,
     file_source,
     file_step,
@@ -39,8 +38,6 @@ from kitden.clients.base import (
 from kitden.local_gateway.settings import as_dict
 from kitden.model import (
     Enabled,
-    Gateway,
-    GatewayAuth,
     Item,
     ItemKind,
     ReadStatus,
@@ -155,24 +152,12 @@ class CursorAdapter(ClientAdapter):
         _, flags = self._state(Reader(CLIENT))
         return _switches(flags)[1]
 
-    def gateway_step(self, gateway: Gateway, name: str) -> Step:
-        value: dict[str, Any] = {"url": gateway.url}
-        headers = bearer_header(gateway, "${{env:{}}}")
-        if headers:
-            value["headers"] = headers
-        login = None
-        if gateway.auth is GatewayAuth.OAUTH:
-            login = f"In Cursor, open Settings → MCP, find {name} and choose Connect to log in."
-        return self._add_entry(name, value, login)
-
     def setup_server_step(self, command: str, args: list[str]) -> Step:
         return self._add_entry(SETUP_NAME, {"command": command, "args": args})
 
-    def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
+    def _add_entry(self, name: str, value: dict[str, Any]) -> Step:
         path = self.home / ".cursor/mcp.json"
-        return file_step(
-            CLIENT, path, "json", ("mcpServers", name), value, Scope.USER, RESTART, login
-        )
+        return file_step(CLIENT, path, "json", ("mcpServers", name), value, Scope.USER, RESTART)
 
     def remove_step(self, item: Item) -> Step:
         if REMOVE_DIRECT not in self.item_actions(item):

@@ -14,7 +14,6 @@ from kitden.changes.actions import (
     GATEWAY_RULE,
     GATEWAY_RULES,
     GATEWAY_STRICT,
-    KITDEN_GATEWAY,
     MCP_ADD,
     PROJECT_ALIGN,
     SKILL_RULE,
@@ -38,7 +37,7 @@ from kitden.local_gateway.settings import (
     rule_parts,
     state_in,
 )
-from kitden.model import CLIENT_WORDS, CLIENTS, GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
+from kitden.model import CLIENT_WORDS, CLIENTS, Change, ItemKind, Scope, SourceKind
 from kitden.redact import redact
 from kitden.system import secret_store_name
 from kitden.views.effective import effective_view
@@ -551,35 +550,27 @@ def home_path(path: str, home: Path) -> str:
 
 def _gateway_remove_words(change: Change, inventory, into: str | None = None) -> list[dict]:
     """A server leaves the Kitden gateway: each client that offers the gateway's tools loses
-    it. The note says whether a client still has its own entry for it, or still reaches it
-    through a registered gateway. `into` is the client that gets its own entry in the same
-    change: it keeps the server, so it is not listed as losing it."""
+    it. The note says whether a client still has its own entry for it. `into` is the client
+    that gets its own entry in the same change: it keeps the server, so it is not listed as
+    losing it."""
     server = change.steps[0].name
 
-    def having(via) -> list[str]:
-        return [
-            c
-            for c in CLIENTS
-            if any(
-                i.client == c
-                and i.kind is ItemKind.MCP_SERVER
-                and i.name == server
-                and via(i.via_gateway)
-                for i in inventory.items
-            )
-        ]
-
-    direct = having(lambda g: g is None)
-    other = having(lambda g: g not in (None, KITDEN_GATEWAY))
+    direct = [
+        c
+        for c in CLIENTS
+        if any(
+            i.client == c
+            and i.kind is ItemKind.MCP_SERVER
+            and i.name == server
+            and i.via_gateway is None
+            for i in inventory.items
+        )
+    ]
     lines = []
     if direct:
         who = join_words([CLIENT_WORDS[c] for c in direct])
         own = "has its own entry" if len(direct) == 1 else "have their own entries"
         lines.append(f"{who} still {own} for {server}.")
-    if other:
-        who = join_words([CLIENT_WORDS[c] for c in other])
-        reach = "reaches" if len(other) == 1 else "reach"
-        lines.append(f"{who} still {reach} {server} through another gateway.")
     alone = f"Only {CLIENT_WORDS[into]} then loads {server}." if into else None
     first = " ".join(lines) or alone or f"{server} is then in no client."
     entries = [s.edit.before for s in change.steps if s.edit and s.edit.key[0] == "servers"]
@@ -876,23 +867,13 @@ def after_words(
         return _add_server_words(change, home)
     if change.action == PROJECT_ALIGN:
         return _align_words(change, inventory, skills or [], home, cursor_imports)
-    # A move into a registered gateway has that gateway's own step; one into the Kitden
-    # gateway has none, also when the gateway holds the server already.
-    if change.action == "gateway.move" and not any(
-        s.client == GATEWAY_CLIENT for s in change.steps
-    ):
+    if change.action == "gateway.move":
         return _kitden_move_words(change, inventory, home)
     out: list[dict] = []
-    # The gateway a server moves into; a client reaches the server only through an entry for it.
-    target = next((s.gateway.gateway_id for s in change.steps if s.gateway is not None), None)
     for step in change.steps:
-        if step.client == GATEWAY_CLIENT or any(e["client"] == step.client for e in out):
+        if any(e["client"] == step.client for e in out):
             continue
         state, word = AFTER_WORDS.get(change.action, ("on", "Changed"))
-        if change.action == "gateway.move" and not any(
-            i.client == step.client and i.via_gateway == target for i in inventory.items
-        ):
-            state, word = "off", "Removed"
         if change.action in ("plugin.disable", "plugin.remove") and _other_copy_loads(
             inventory, step.client, step.name
         ):

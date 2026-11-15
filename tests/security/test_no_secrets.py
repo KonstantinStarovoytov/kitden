@@ -88,20 +88,8 @@ def _page_outputs(home) -> list[str]:
             outputs.append(response.text)
             return response.json()
 
-        gateway = post(
-            "/api/gateways",
-            {"url": "http://127.0.0.1:12008/mcp", "auth": "env_key", "key_env_var": "GW_KEY"},
-        )
         targets = [{"client": c} for c in ("claude_code", "codex", "cursor")]
         changes = [
-            post(
-                "/api/changes/preview",
-                {
-                    "action": "gateway.connect",
-                    "targets": targets,
-                    "params": {"gateway": gateway["id"], "name": "gw"},
-                },
-            ),
             post(
                 "/api/changes/preview",
                 {"action": "setup_server.register", "targets": targets, "params": {}},
@@ -142,12 +130,10 @@ def _page_outputs(home) -> list[str]:
         # A tray change keeps its rows' bodies for Redo…: secrets in them stay hidden there too.
         tray_row = {
             "id": "r1",
-            "kind": "gateway.connect",
-            "title": "Add gateway",
+            "kind": "setup_server.register",
+            "title": "Connect Kitden",
             "targets": targets,
             "params": {
-                "gateway": gateway["id"],
-                "name": "gw2",
                 "note": "ghp_SENTINEL_SECRET_IN_A_REQUEST",
                 "url": "https://me:SENTINEL_SECRET_PW@x.test/mcp",
                 "env": {"TOKEN": "SENTINEL_SECRET_ENV_IN_A_REQUEST"},
@@ -156,7 +142,8 @@ def _page_outputs(home) -> list[str]:
         tray = page.post("/api/batch/preview", json={"requests": [tray_row]}, headers=POST)
         outputs.append(tray.text)
         changes.append(tray.json())
-        assert len(changes) >= 9
+        assert len(changes) >= 8
+        assert all(c.get("id") for c in changes), changes
         for change in changes:
             post(f"/api/changes/{change['id']}/apply")
             post(f"/api/changes/{change['id']}/undo")
@@ -168,7 +155,6 @@ def _page_outputs(home) -> list[str]:
             "/api/problems",
             "/api/findings",
             "/api/changes",
-            "/api/gateways",
             "/api/overview",
             "/api/map",
             "/api/gateway-view",
@@ -288,7 +274,7 @@ def _demo_outputs(home) -> list[str]:
 
         for path in ["/api/clients", "/api/items", "/api/projects", "/api/problems"]:
             get(path)
-        for path in ["/api/changes", "/api/gateways", "/api/about"]:
+        for path in ["/api/changes", "/api/about"]:
             get(path)
         projects = page.get("/api/projects").json()
         for project in [None, *projects]:

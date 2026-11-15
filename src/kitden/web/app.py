@@ -28,7 +28,6 @@ from kitden.changes.actions import (
     CLIENT_DISCONNECT,
     GATEWAY_ACCESS,
     GATEWAY_ADD,
-    GATEWAY_CONNECT,
     GATEWAY_KEYCHAIN,
     GATEWAY_MOVE,
     GATEWAY_MOVE_OUT,
@@ -38,7 +37,6 @@ from kitden.changes.actions import (
     GATEWAY_RULES,
     GATEWAY_SIGN_IN,
     GATEWAY_STRICT,
-    GATEWAY_SWITCH,
     KITDEN_GATEWAY,
     MARKETPLACE_ADD,
     MCP_ADD,
@@ -53,14 +51,12 @@ from kitden.changes.actions import (
     access_steps,
     add_refusals,
     add_server_steps,
-    connect_steps,
     disconnect_steps,
     gateway_add_steps,
     install_steps,
     keychain_steps,
     local_move_steps,
     marketplace_steps,
-    move_steps,
     plugin_skill_steps,
     plugin_skills_left_out,
     plugin_steps,
@@ -72,7 +68,6 @@ from kitden.changes.actions import (
     skill_remove_steps,
     skill_rule_steps,
     skill_steps,
-    switch_steps,
     tools_to_read,
     update_steps,
 )
@@ -110,8 +105,7 @@ from kitden.clients.base import (
 )
 from kitden.command import installed_command
 from kitden.discovery import Discovery, configured_entry, short_name
-from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient, client_for
-from kitden.gateways import add_gateway, data_dir, load_gateways
+from kitden.gateways import data_dir
 from kitden.local_gateway.project import project_chain, project_chains
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import (
@@ -143,10 +137,6 @@ from kitden.model import (
     CLIENTS,
     Change,
     ChangeState,
-    Gateway,
-    GatewayAuth,
-    GatewayEdit,
-    ItemKind,
     Step,
 )
 from kitden.redact import masked_command, redact_text
@@ -164,8 +154,8 @@ from kitden.views.commands import commands_for
 from kitden.views.context_view import context_view
 from kitden.views.effective import project_views
 from kitden.views.explain import explain, with_page_fields
-from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
-from kitden.views.gateway_view import gateway_dict, gateway_view
+from kitden.views.findings import find_bypasses, find_findings, finding_dict
+from kitden.views.gateway_view import gateway_view
 from kitden.views.instructions_map import instructions_map
 from kitden.views.inventory import (
     Inventory,
@@ -258,7 +248,7 @@ async def event_lines(
 
 
 def _step_diff(step) -> str:
-    part = step.edit or step.gateway or step.copy or step.removal
+    part = step.edit or step.copy or step.removal
     return part.masked_diff if part else ""
 
 
@@ -286,7 +276,6 @@ def change_dict(change: Change) -> dict:
                 "keeps": s.removal.keeps if s.removal else None,
                 "command": redact_text(" ".join(masked_command(s.command))) if s.command else None,
                 "restart_note": s.restart_note,
-                "login_note": s.login_note,
                 "shared_file": s.shared_file,
                 "check_note": s.check_note,
             }
@@ -545,7 +534,6 @@ ADD_ACTIONS = frozenset(
         PLUGIN_SKILLS,
         MARKETPLACE_ADD,
         PROJECT_ALIGN,
-        GATEWAY_CONNECT,
         SETUP_SERVER,
         SETUP_SERVER_UPDATE,
         GATEWAY_PUT_BACK,
@@ -691,17 +679,12 @@ def create_app(
         keychain_run = stand_ins.DemoKeychain(stand_ins.keychain_file(home))
         sign_in = stand_ins.no_sign_in
 
-    def _registered() -> list[Gateway]:
-        """The registered gateways; none in the demo, which never goes online."""
-        return load_gateways(home) if home is not None and not demo else []
-
     def build_marked(**options) -> Inventory:
         inventory = build(**options)
         # A source that fails keeps its last good items while the page runs.
         now = datetime.now(UTC).isoformat(timespec="seconds")
         keep_last_good(inventory, last_good, now)
         if home is not None:
-            mark_gateways(inventory, _registered())
             inventory.items += gateway_items(inventory, load_settings(home), home)
         return inventory
 
@@ -735,17 +718,10 @@ def create_app(
             if sha and watcher_ref:
                 watcher_ref[0].expect(Path(path), sha)
 
-        def gateway_client(edit: GatewayEdit) -> MetaMcpClient | ObotClient:
-            found = _gateway(edit.gateway_id)
-            if found is None:
-                raise GatewayError("This gateway is no longer registered")
-            return client_for(found)
-
         engine = Engine(
             ChangeStore(data_dir(home)),
             run or CommandRunner(home),
             on_write,
-            None if demo else gateway_client,
             roots=lambda: (home, writable_roots(home, state.inventory)),
             keychain_run=keychain_run,
         )
@@ -1096,15 +1072,13 @@ def create_app(
         return endpoint
 
     def _map(request, project, path):
-        gateways = _registered()
-        rows = load_map(state.inventory, path, gateway_registered=bool(gateways))
+        rows = load_map(state.inventory, path)
         return JSONResponse({"project": project, **map_dict(state.inventory, rows)})
 
     def _list_query(params) -> dict:
         """What both Library lists read from the address: the search, the hidden columns and
-        Needs attention; and whether a gateway is registered."""
+        Needs attention."""
         return {
-            "gateway_registered": bool(_registered()),
             "q": params.get("q", ""),
             "hidden": frozenset(c for c in params.get("hidden", "").split(",") if c),
             "attention": params.get("attention") == "1",
@@ -1186,7 +1160,6 @@ def create_app(
             context = []
         answer = overview(
             state.inventory,
-            _registered(),
             path,
             held,
             adapters,
@@ -1237,7 +1210,7 @@ def create_app(
 
     def _gateway_view(request, project, path):
         held, problem = _kitden(path)
-        view = gateway_view(state.inventory, _registered(), path, kitden=held, problem=problem)
+        view = gateway_view(state.inventory, path, kitden=held, problem=problem)
         # The picked project's own rules, for the scope bar; 0 for all projects, and None when
         # the gateway settings could not be read.
         rules = own_rules(load_settings(home), _chain(path)) if home is not None else 0
@@ -1279,46 +1252,6 @@ def create_app(
         except ValueError:
             return {}
         return body if isinstance(body, dict) else {}
-
-    async def gateways(request: Request) -> JSONResponse:
-        if home is None:
-            return JSONResponse([])
-        if request.method == "GET":
-            return JSONResponse([gateway_dict(g) for g in _registered()])
-        if stand_ins:
-            return _error(stand_ins.NOT_IN_DEMO, 422)
-        body = await _body(request)
-        try:
-            gateway = Gateway(
-                url=str(body.get("url", "")),
-                ui_url=body.get("ui_url") or None,
-                auth=GatewayAuth(body.get("auth", "none")),
-                key_env_var=body.get("key_env_var") or None,
-                login_email=str(body.get("login_email") or "").strip() or None,
-                login_password_env_var=body.get("login_password_env_var") or None,
-            )
-            add_gateway(home, gateway)
-        except ValueError as error:
-            return _error(str(error), 422)
-        await state.rescan()
-        return JSONResponse(gateway_dict(gateway))
-
-    async def gateway_servers(request: Request) -> JSONResponse:
-        """What the gateway holds, read live; an error never blocks the page (FR-008)."""
-        gateway = _gateway(request.path_params["gateway_id"])
-        if gateway is None:
-            return _error("Unknown gateway.", 404)
-
-        def read() -> list[dict]:
-            with client_for(gateway) as client:
-                held = client.held()
-            return [{"name": s["name"], "type": s["type"], "url": s["url"]} for s in held]
-
-        try:
-            servers = await asyncio.to_thread(read)
-        except GatewayError as error:
-            return JSONResponse({"servers": None, "error": redact_text(str(error))})
-        return JSONResponse({"servers": servers, "error": None})
 
     def _item(item_id: str):
         return next((i for i in state.inventory.items if i.id == item_id), None)
@@ -1366,15 +1299,6 @@ def create_app(
             raise ValueError("Choose a known server.")
         return items
 
-    def _gateway(gateway_id: object) -> Gateway | None:
-        return next((g for g in _registered() if g.id == gateway_id), None)
-
-    def _registered_gateway(params: dict) -> Gateway:
-        gateway = _gateway(params.get("gateway"))
-        if gateway is None:
-            raise ValueError("Register the gateway first.")
-        return gateway
-
     def _kitden_command(needed: bool = True) -> str | None:
         """The installed kitden command; refused when it is needed and not installed."""
         command = (setup_command or installed_command)()
@@ -1419,11 +1343,7 @@ def create_app(
         kept = next((i for i in found if i is not None and i.stale_at), None)
         if kept is not None:
             raise ValueError(kept_refusal(kept))
-        if action == GATEWAY_CONNECT:
-            gateway = _registered_gateway(params)
-            clients = _clients(targets)
-            steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
-        elif action == PLUGIN_INSTALL:
+        if action == PLUGIN_INSTALL:
             clients = _clients(targets)
             if params.get("discovery"):
                 row = _online_row(params, "plugin", "Choose a plugin.")
@@ -1503,10 +1423,6 @@ def create_app(
                 raise ValueError(str(error)) from None
             clients = _clients(targets)
             steps = marketplace_steps(adapters, market, clients)
-        elif action == GATEWAY_SWITCH:
-            gateway = _registered_gateway(params)
-            mcp = [i for i in state.inventory.items if i.kind is ItemKind.MCP_SERVER]
-            steps = switch_steps(adapters, mcp, gateway, str(params.get("name", "")))
         elif action == SETUP_SERVER:
             command = _kitden_command()
             assert command is not None  # needed, so it was refused above when missing
@@ -1652,9 +1568,6 @@ def create_app(
             if not steps:
                 return Built(steps=[], align=align)
             copied = skill_catalog(state.inventory, adapters)
-        elif action == GATEWAY_MOVE:
-            gateway = _registered_gateway(params)
-            steps = move_steps(adapters, _known_servers(targets), gateway)
         elif action == SKILL_REMOVE:
             items = _items(targets)
             if len(items) != 1 or items[0] is None:
@@ -2082,13 +1995,7 @@ def create_app(
         if not action:
             listed = commands_for(item, adapters)
             return JSONResponse({"commands": [c.__dict__ for c in listed]})
-        if home is None or action != "gateway.login" or not item.via_gateway:
-            return _error("No command for this item and action.", 404)
-        gateway = _gateway(item.via_gateway)
-        adapter = adapters.get(item.client)
-        if gateway is None or adapter is None or gateway.auth is not GatewayAuth.OAUTH:
-            return _error("No login is needed.", 404)
-        return JSONResponse({"command": adapter.gateway_step(gateway, item.name).login_note})
+        return _error("No command for this item and action.", 404)
 
     async def rescan(request: Request) -> JSONResponse:
         """The Rescan button: read every client again, then its version and the gateway's tools."""
@@ -2120,8 +2027,6 @@ def create_app(
             Route("/api/projects/{project_id}/effective", project_view),
             Route("/api/findings", findings),
             Route("/api/rescan", rescan, methods=["POST"]),
-            Route("/api/gateways", gateways, methods=["GET", "POST"]),
-            Route("/api/gateways/{gateway_id}/servers", gateway_servers),
             Route("/api/gateway/tools", _with_changes(gateway_tools)),
             Route(
                 "/api/gateway/tools/refresh", _with_changes(gateway_tools_refresh), methods=["POST"]

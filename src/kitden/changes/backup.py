@@ -90,6 +90,15 @@ def file_holds_secret(data: bytes, name: str) -> bool:
     return redact_text(text) != text
 
 
+def _outside_gateway(record: dict) -> bool:
+    """A change an older Kitden made in an outside gateway, which Kitden no longer works with:
+    such a step's client is "gateway". It is left out of the history; its files stay."""
+    steps = record.get("steps")
+    return isinstance(steps, list) and any(
+        isinstance(s, dict) and s.get("client") == "gateway" for s in steps
+    )
+
+
 class ChangeStore:
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
@@ -163,9 +172,11 @@ class ChangeStore:
         records = []
         for path in sorted(self.folder.glob("*/change.json")) if self.folder.is_dir() else []:
             try:
-                records.append(json.loads(path.read_text()))
+                record = json.loads(path.read_text())
             except (OSError, ValueError):
                 continue
+            if isinstance(record, dict) and not _outside_gateway(record):
+                records.append(record)
         return records
 
     def log(self, entry: dict) -> None:
@@ -178,7 +189,8 @@ class ChangeStore:
         if not self.log_path.is_file():
             return []
         lines = self.log_path.read_text().splitlines()
-        return [json.loads(line) for line in reversed(lines) if line.strip()]
+        entries = [json.loads(line) for line in reversed(lines) if line.strip()]
+        return [e for e in entries if not _outside_gateway(e)]
 
     def prune(self, now: datetime | None = None) -> None:
         if not self.folder.is_dir():

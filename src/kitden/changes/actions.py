@@ -10,7 +10,6 @@ import tomllib
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
-from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
@@ -29,7 +28,6 @@ from kitden.clients.base import (
 )
 from kitden.clients.claude_code import holds, rule_file
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
-from kitden.gateway_api import direct_opener, gateway_name
 from kitden.local_gateway.keychain import (
     SECRET_FIELDS,
     KeychainError,
@@ -47,9 +45,6 @@ from kitden.local_gateway.settings import (
 )
 from kitden.model import (
     CLIENT_WORDS,
-    GATEWAY_CLIENT,
-    Gateway,
-    GatewayEdit,
     Item,
     ItemKind,
     KeychainItem,
@@ -77,9 +72,7 @@ from kitden.views.words import (
 if TYPE_CHECKING:
     from kitden.views.inventory import Inventory
 
-GATEWAY_CONNECT = "gateway.connect"
 GATEWAY_MOVE = "gateway.move"
-GATEWAY_SWITCH = "gateway.switch"
 PLUGIN_INSTALL = "plugin.install"
 MARKETPLACE_ADD = "marketplace.add"
 SKILL_INSTALL = "skill.install"
@@ -146,47 +139,6 @@ OWN_HEADERS = {
 def _check_entry_name(name: str) -> None:
     if not ENTRY_NAME.fullmatch(name):
         raise ValueError("The entry name may use letters, digits, '-' and '_' only")
-
-
-def connect_steps(
-    adapters: dict[str, ClientAdapter], clients: list[str], gateway: Gateway, name: str
-) -> list[Step]:
-    """One gateway entry per chosen client, in the user scope (FR-024, FR-033)."""
-    _check_entry_name(name)
-    if not clients:
-        raise ValueError("Choose at least one client")
-    steps = []
-    for client in dict.fromkeys(clients):
-        adapter = adapters.get(client)
-        if adapter is None:
-            raise ValueError(f"{client} cannot be connected to a gateway")
-        steps.append(adapter.gateway_step(gateway, name))
-    return steps
-
-
-def switch_steps(
-    adapters: dict[str, ClientAdapter], items: list[Item], gateway: Gateway, name: str
-) -> list[Step]:
-    """Move clients from their gateway to another: per client, remove each entry that points to
-    another gateway, then add one entry for this one. Both edit one file, in order."""
-    _check_entry_name(name)
-    # The Kitden gateway's servers live in its own settings, not in a client entry; they stay.
-    old = [i for i in items if i.via_gateway not in (None, gateway.id, KITDEN_GATEWAY)]
-    if not old:
-        raise ValueError("No client uses another gateway")
-    steps = []
-    for client in dict.fromkeys(i.client for i in old):
-        adapter = adapters.get(client)
-        if adapter is None:
-            raise ValueError(f"{client} cannot be connected to a gateway")
-        mine = [i for i in old if i.client == client]
-        if any(i.name == name for i in mine):
-            raise ValueError(f"{client} already has an entry named {name}; choose another name")
-        # The entry points to a gateway, so it is not "direct"; it is still an entry we may edit.
-        steps += [adapter.remove_step(replace(i, via_gateway=None)) for i in mine]
-        if not any(i.client == client and i.via_gateway == gateway.id for i in items):
-            steps.append(adapter.gateway_step(gateway, name))
-    return steps
 
 
 def install_steps(
@@ -459,27 +411,16 @@ def _raw_entry(step: Step) -> Any:
     return value if isinstance(value, dict) else None
 
 
-def _gateway_server(name: str, entry: dict) -> dict:
-    """What a gateway needs for one remote server, from a client's entry (research table)."""
-    url = entry.get("url")
-    if not isinstance(url, str) or not url.startswith(("http://", "https://")):
-        raise ValueError(f"{name} is not a remote server; a gateway cannot run it")
-    if entry.get("env_http_headers") or entry.get("bearer_token_env_var"):
-        raise ValueError(f"{name} uses a variable the gateway cannot read")
-    headers = entry.get("headers") or entry.get("http_headers") or {}
-    if not isinstance(headers, dict) or any(
-        not isinstance(v, str) or "${" in v for v in headers.values()
-    ):
-        raise ValueError(f"{name} uses a variable the gateway cannot read")
-    kind = (
-        "SSE"
-        if str(entry.get("type", "")).lower() == "sse" or url.endswith("/sse")
-        else "STREAMABLE_HTTP"
-    )
-    server: dict = {"type": kind, "url": url}
-    if headers:
-        server["headers"] = headers
-    return server
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect, so headers and keys reach the address given only."""
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+def direct_opener() -> urllib.request.OpenerDirector:
+    """No redirect followed and no proxy used, so a request goes to the address given only."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
 
 
 def is_local_address(url: str, unknown: bool = True) -> bool:
@@ -522,55 +463,6 @@ def _reaches_inside(url: str, server: str) -> bool:
     a server must not make it read what only this computer can reach. A server the user added
     at a local address may still be checked there."""
     return is_local_address(url) and not is_local_address(server)
-
-
-def move_steps(
-    adapters: dict[str, ClientAdapter], items: list[Item], gateway: Gateway
-) -> list[Step]:
-    """Move direct entries into the gateway: one gateway step per server name, then the
-    remove step of every client entry. The gateway steps come first.
-
-    MetaMCP (feature 006) cleans the name to what it accepts. Obot (checked 2026-10-19,
-    v0.26.3) keeps the name, needs an administrator's key, and refuses servers on this
-    computer or a private network; Kitden refuses those before the review."""
-    if not items:
-        raise ValueError("Choose a server to move.")
-    if not gateway.movable:
-        if gateway.kind == "metamcp":
-            raise ValueError("Add the sign-in email and password variable to the gateway first")
-        if gateway.kind == "obot":
-            raise ValueError("Add the name of the Obot key variable to the gateway first")
-        raise ValueError("Kitden cannot move servers into this gateway")
-    gateway_steps: dict[str, Step] = {}
-    file_steps: list[Step] = []
-    for item in items:
-        remove = remove_steps(adapters, item)[0]
-        file_steps.append(remove)
-        name = item.name if gateway.kind == "obot" else gateway_name(item.name)
-        if name in gateway_steps:
-            continue
-        entry = _raw_entry(remove)
-        if entry is None:
-            raise ValueError(f"{item.name} could not be read from its file.")
-        if gateway.kind == "obot" and is_local_address(str(entry.get("url", ""))):
-            raise ValueError(
-                f"Obot cannot reach {item.name}: it runs on this computer or a private "
-                "network. Keep the direct entry, or set up an Obot tunnel."
-            )
-        edit = GatewayEdit(
-            gateway_id=gateway.id,
-            url=gateway.url,
-            name=name,
-            server=_gateway_server(item.name, entry),
-        )
-        gateway_steps[name] = Step(
-            client=GATEWAY_CLIENT,
-            scope=Scope.USER,
-            name=name,
-            gateway=edit,
-            mechanism="gateway_api",
-        )
-    return [*gateway_steps.values(), *file_steps]
 
 
 class NeedsAccess(ValueError):

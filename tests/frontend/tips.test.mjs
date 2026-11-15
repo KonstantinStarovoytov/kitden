@@ -8,7 +8,7 @@ const JS = new URL('../../src/kitden/web/static/js/', import.meta.url);
 const source = readdirSync(JS).filter((f) => f.endsWith('.js')).map((f) => readFileSync(new URL(f, JS), 'utf8')).join('\n');
 
 // Words that end in "…" but are not actions: a wait, a placeholder, a search box, a step of an update.
-const NOT_ACTIONS = new Set(['Applying…', 'Bearer …', 'Checking the version…', 'Checking…', 'Downloading…', 'Find a project…', 'Installing…', 'Loading…', 'Reading what it holds…', 'Reloading…', 'Restarting Kitden…', 'Search MCP servers…', 'Search plugins and skills…', 'Searching…', 'Still checking …', 'Waiting for browser…']);
+const NOT_ACTIONS = new Set(['Applying…', 'Bearer …', 'Checking the version…', 'Checking…', 'Downloading…', 'Find a project…', 'Installing…', 'Loading…', 'Reloading…', 'Restarting Kitden…', 'Search MCP servers…', 'Search plugins and skills…', 'Searching…', 'Still checking …', 'Waiting for browser…']);
 // Actions whose label says it all: hover words would only repeat it.
 const SAYS_IT_ALL = new Set(['Add…', 'Add to Codex…', 'Add to Claude Code or Codex…', 'Show…', 'Update…']);
 
@@ -26,7 +26,7 @@ test('hover words never repeat a plain label', () => {
 
 test('labels built with a name get words that add something', () => {
   for (const label of [
-    'Connect Cursor to the gateway…', 'Disconnect Codex from the gateway…', 'Move all 3…', 'Move into Obot…',
+    'Connect Cursor to the gateway…', 'Disconnect Codex from the gateway…', 'Move all 3…',
     'Move secrets to the Keychain…', 'Put back in Cursor…', 'Remove from Codex…', 'Set up in Cursor…',
     'Turn off in website…', 'Turn on search_docs in website…', 'Turn it on in Codex…', 'Turn off Figma in this project…',
     "Update neon's Kitden entry…", "Use website's rule…", 'Apply', 'Apply all', 'Apply 3', 'Undo', 'Replace…', 'Sign out', 'Add access…',

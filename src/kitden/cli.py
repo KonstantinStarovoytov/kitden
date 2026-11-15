@@ -412,9 +412,10 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_UNSUPPORTED
     if args.command == "demo":
         return _demo(args)
-    from kitden.gateways import ensure_data_folder
+    from kitden.gateways import ensure_data_folder, forget_gateways
 
     note = ensure_data_folder(_home(args) or Path.home())
+    forget_gateways(_home(args) or Path.home())
     # The MCP server talks over stdio; keep its output clean.
     if note and args.command != "mcp":
         print(note, file=sys.stderr)

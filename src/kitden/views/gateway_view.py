@@ -5,7 +5,7 @@ from pathlib import Path
 from kitden.changes.actions import KITDEN_GATEWAY, set_up_differently
 from kitden.clients.base import REMOVE_DIRECT, found_clients
 from kitden.clients.entries import IN_PROJECT_FILES
-from kitden.model import CLIENTS, Enabled, Gateway, Item, ItemKind, Scope
+from kitden.model import CLIENTS, Enabled, Item, ItemKind, Scope
 from kitden.views.effective import DESKTOP, column_of, effective_view, overrides
 from kitden.views.explain import summary_line
 from kitden.views.findings import group_of
@@ -20,21 +20,6 @@ KITDEN = {
     "where": "On this computer",
     "movable": True,
 }
-
-
-def gateway_dict(gateway: Gateway) -> dict:
-    return {
-        "id": gateway.id,
-        "url": gateway.url,
-        "ui_url": gateway.ui_url,
-        "auth": str(gateway.auth),
-        "key_env_var": gateway.key_env_var,
-        "login_email": gateway.login_email,
-        "login_password_env_var": gateway.login_password_env_var,
-        "kind": gateway.kind,
-        "managed": gateway.managed,
-        "movable": gateway.movable,
-    }
 
 
 def loaded_mcp(inventory, project: str | None) -> tuple[list[Item], set[str]]:
@@ -74,13 +59,13 @@ def stays(item: Item, group: str) -> str | None:
 
 def gateway_view(
     inventory,
-    gateways: list[Gateway],
     project: str | None,
     kitden: list[dict] | None = None,
     problem: str | None = None,
 ) -> dict:
-    """With `kitden` (the servers it holds; see `held_servers`), the Kitden gateway comes first
-    and local servers can move too. `problem` says why its settings could not be read.
+    """With `kitden` (the servers it holds; see `held_servers`), the Kitden gateway is listed
+    and servers, local ones too, can move into it. `problem` says why its settings could not
+    be read.
 
     Each outside row has the client columns that load it (the Desktop Code tab counts as
     Claude Code) and, per column, the entries a remove can take (`client_items`, for the map's
@@ -89,13 +74,13 @@ def gateway_view(
     and whether no entry of it is known to be on (`unknown`: a project's `.mcp.json` server
     Claude Code has not approved yet). A move takes the row's entries together, so two of them
     set up differently are a reason it refuses."""
-    ids = ([KITDEN_GATEWAY] if kitden is not None else []) + [g.id for g in gateways]
+    ids = [KITDEN_GATEWAY] if kitden is not None else []
     # Per gateway and client: the servers that load in this scope and go through that gateway.
     connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in CLIENTS} for g in ids}
     # One row per server name, with the clients that have it and the entries that can go.
     groups: dict[str, dict[str, dict]] = {"move": {}, "local": {}, "plugin": {}}
     movable = {
-        "move": kitden is not None or any(g.movable for g in gateways),
+        "move": kitden is not None,
         "local": kitden is not None,
         "plugin": False,
     }
@@ -145,8 +130,7 @@ def gateway_view(
             [{**KITDEN, "servers": kitden, **({"problem": problem} if problem else {})}]
             if kitden is not None
             else []
-        )
-        + [gateway_dict(g) for g in gateways],
+        ),
         "connections": {
             g: {c: sorted(names) for c, names in columns.items()}
             for g, columns in connections.items()

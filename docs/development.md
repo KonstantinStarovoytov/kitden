@@ -39,7 +39,6 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
 | `src/kitden/clients/` | Reading and changing each client: Claude Code, Codex, Cursor |
 | `src/kitden/changes/` | Preview, Apply with backup, verify, Undo |
 | `src/kitden/views/` | What the page and the MCP server show |
-| `src/kitden/gateway_api.py` | MetaMCP and Obot |
 | `src/kitden/local_gateway/` | The Kitden gateway: settings and rules, project finding, the proxy inside `kitden mcp` |
 | `src/kitden/demo/` | Sample setups for `kitden demo` and the tests, and the demo's stand-ins |
 | `src/kitden/web/` | The local page |
@@ -309,16 +308,6 @@ made, how their addresses work on GitHub and PyPI, and what to check before prom
   the client's roots, then `WORKSPACE_FOLDER_PATHS`, then its start folder. Codex keeps a tool
   list for up to 30 minutes and ignores "list changed" (checked 2026-10-21), so the offered list
   is fixed for a session; a tool turned off is still refused at once.
-- **Obot** — sign in with OAuth; Kitden reads it with an API key from
-  `obot login --url <obot> --scope api --scope all-mcp --print-token`, kept in an environment
-  variable. Do not run `obot setup`: it edits client files without a backup.
-  "Move into the gateway" takes the administrator's path (checked 2026-10-19, v0.26.3, from
-  source; there are no reference docs): a catalog entry in the built-in catalog, then the vMCP
-  manifest written back with one more component. A key without the admin role gets a clear
-  refusal and nothing is written. Servers on this computer or a private network are refused
-  before the review: Obot blocks them unless a tunnel is set up.
-- **MetaMCP** — has no public management API; Kitden signs in with an email and a password
-  from an environment variable to move servers into it.
 
 ## Linux and Windows
 

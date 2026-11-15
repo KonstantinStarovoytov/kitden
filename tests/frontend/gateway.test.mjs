@@ -13,7 +13,7 @@ globalThis.window = {
 const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, letGoCloses, linkRemoval, linkTip, listRows, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, pressRow, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
-const { heldServer, offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const { heldServer, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree: layoutAsIs, linkClass, litFor, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 // The tests here look at the servers, so every group is open out of its stack unless a test says
 // otherwise with its own `spread`.
@@ -86,21 +86,8 @@ test('an old entry is updated, an off entry is not connected, a missing client i
   assert.deepEqual(kitdenClients(null), { linked: [], setup: [], off: [], known: false });
 });
 
-test('a registered gateway offers to take the clients over only from another registered one', () => {
-  const kitden = { id: 'kitden', kind: 'kitden' };
-  const obot = { id: 'gw-1' };
-  const meta = { id: 'gw-2' };
-  const model = (used) => ({ gateways: [kitden, obot, meta], used });
-  // The clients use only the Kitden gateway: a registered gateway has nothing to take over.
-  assert.equal(offersSwitch(model(['kitden']), obot), false);
-  assert.equal(offersSwitch(model(['kitden', 'gw-2']), obot), true);
-  assert.equal(offersSwitch(model(['gw-1']), obot), false);
-  assert.equal(offersSwitch(model([]), obot), false);
-  assert.equal(offersSwitch(model(['gw-2']), kitden), false);
-});
-
 test('a selected server the Kitden gateway holds opens in its own panel', () => {
-  const model = { gateways: [{ kind: 'kitden', servers: [{ name: 'files' }] }, { kind: 'metamcp', servers: [{ name: 'x' }] }] };
+  const model = { gateways: [{ kind: 'kitden', servers: [{ name: 'files' }] }] };
   assert.equal(heldServer(model, { kind: 'mcp_server', name: 'files' }).name, 'files');
   assert.equal(heldServer(model, { kind: 'mcp_server', name: 'x' }), null);
   assert.equal(heldServer(model, { kind: 'skill', name: 'files' }), null);
@@ -137,7 +124,7 @@ const MEDIUM_VIEW = {
 };
 const SETUP = [entry('claude_code', 'added'), entry('codex', 'added'), entry('cursor', 'missing')];
 const CLIENTS = ['claude_code', 'codex', 'cursor'].map((id) => ({ id, status: 'found', version: '1.0', app_url: null }));
-const OPTS = { setup: SETUP, clients: CLIENTS, open: new Set(), held: new Map() };
+const OPTS = { setup: SETUP, clients: CLIENTS, open: new Set() };
 const keys = (tree) => tree.links.map((l) => `${l.from}>${l.to} ${l.kind}`);
 const block = (tree, id) => tree.blocks.find((b) => b.id === id);
 
@@ -187,23 +174,6 @@ test('the tree joins linked clients to the gateway and each outside row to its c
   assert.ok(keys(tree).includes('client:claude_code>outside:move:docs direct'));
   assert.equal(block(tree, 'outside:local:files').parent, 'group:outside');
   assert.equal(block(tree, 'outside:local:docs').meta, 'In Codex');
-});
-
-test('the Kitden block comes first, then each registered gateway, the used one first', () => {
-  const obot = { id: 'gw-1', kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x', movable: true, managed: true };
-  const meta = { id: 'gw-2', kind: 'metamcp', url: 'http://127.0.0.1:12008/metamcp/local/mcp', movable: true, managed: true };
-  const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, obot, meta], used: ['gw-2', 'kitden'],
-    connections: { ...MEDIUM_VIEW.connections, 'gw-1': { claude_code: [], codex: [], cursor: [] }, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
-  const held = new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP', url: 'http://h/x' }, { name: 'y', type: 'uvx', url: null }] }]]);
-  const tree = gatewayTree(view, { ...OPTS, held });
-  assert.deepEqual(tree.blocks.filter((b) => b.kind === 'gateway').map((b) => [b.id, b.name]), [
-    ['gateway:kitden', 'Kitden gateway'], ['gateway:gw-2', 'MetaMCP'], ['gateway:gw-1', 'Obot']]);
-  assert.ok(keys(tree).includes('client:codex>gateway:gw-2 on'));
-  // Its servers come from the live read, without tools: a remote one and one it hosts.
-  assert.deepEqual([block(tree, 'held:gw-2:x').parent, block(tree, 'held:gw-2:x').meta], ['group:gw-2:remote', 'Remote']);
-  assert.deepEqual([block(tree, 'held:gw-2:y').parent, block(tree, 'held:gw-2:y').meta], ['group:gw-2:local', 'Hosted']);
-  assert.ok(keys(tree).includes('gateway:gw-2>held:gw-2:x on'));
-  assert.ok(!tree.blocks.some((b) => b.parent === 'held:gw-2:x'));
 });
 
 test("every held server's tools are in the model; a folded server shows none", () => {
@@ -261,7 +231,7 @@ test('tags say where a rule comes from', () => {
 });
 
 test('the list has clients, each gateway with Remote and Local, then the outside group', () => {
-  const rows = listRows(gatewayTree(MEDIUM_VIEW, { setup: SETUP, clients: CLIENTS, open: new Set(), held: new Map() }), new Set());
+  const rows = listRows(gatewayTree(MEDIUM_VIEW, { setup: SETUP, clients: CLIENTS, open: new Set() }), new Set());
   assert.deepEqual(rows.filter((r) => r.group).map((r) => r.name), ['Clients', 'Remote', 'Local', "Outside the gateway · calls skip Kitden's rules"]);
   assert.deepEqual(rows.find((r) => r.id === 'held:kitden:files').tools, '3 of 4 on');
   assert.equal(rows.find((r) => r.id === 'outside:move:github').action, 'move');
@@ -308,16 +278,6 @@ test('what Kitden could not read says so, never a state', () => {
   // The gateway's settings were not read: no "0 servers".
   const broken = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [], problem: 'Could not read gateway.json.' }] };
   assert.equal(listRows(gatewayTree(broken, OPTS), new Set()).find((r) => r.id === 'gateway:kitden').meta, 'Could not read its settings.');
-  // A registered gateway says a short state for a failed read, in the List and on the map, never
-  // the reason (it may name a variable: its Details say it), and nothing while it reads.
-  const obot = { id: 'gw-1', kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x', managed: true };
-  const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, obot], connections: { ...MEDIUM_VIEW.connections, 'gw-1': {} } };
-  const meta = (held) => listRows(gatewayTree(view, { ...OPTS, held }), new Set()).find((r) => r.id === 'gateway:gw-1').meta;
-  const failed = new Map([['gw-1', { servers: null, error: 'Set OBOT_API_KEY in the environment before starting Kitden' }]]);
-  assert.equal(meta(failed), 'Not connected');
-  assert.equal(block(gatewayTree(view, { ...OPTS, held: failed }), 'gateway:gw-1').meta, 'Not connected');
-  assert.equal(meta(new Map([['gw-1', { loading: true }]])), null);
-  assert.equal(meta(new Map([['gw-1', { servers: [] }]])), '0 servers');
 });
 
 test('one name in two groups is two rows', () => {
@@ -369,7 +329,7 @@ const FOUND = [
 ];
 
 test('a first run shows the gateway as a slot to set up and no grips', () => {
-  const m = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), held: new Map() });
+  const m = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set() });
   const slot = m.blocks.find((b) => b.column === 'gateway');
   assert.deepEqual([slot.kind, slot.name], ['slot', 'No gateway yet']);
   assert.deepEqual([slot.meta, slot.action], ['One place for servers, rules and logins.', 'Set up…']);
@@ -699,10 +659,8 @@ test('a tool the search showed stays on the map when the search ends', () => {
 test("a drag's preview equals the Move preview", () => {
   const row = MEDIUM_VIEW.groups.move.find((r) => r.name === 'github');
   assert.deepEqual(dropBody(row, MEDIUM_VIEW), moveBody(moveTargets(MEDIUM_VIEW, 'move')[0], row.items));
-  // A drop always moves into the Kitden gateway, also with a registered gateway that takes it.
-  const obot = { id: 'gw-1', kind: 'obot', movable: true };
-  assert.deepEqual(dropBody(row, { ...MEDIUM_VIEW, gateways: [obot, ...MEDIUM_VIEW.gateways] }).params, { gateway: 'kitden' });
-  assert.equal(dropBody(row, { ...MEDIUM_VIEW, gateways: [obot] }), null);
+  // Without the Kitden gateway there is nothing to drop into.
+  assert.equal(dropBody(row, { ...MEDIUM_VIEW, gateways: [] }), null);
 });
 
 test("a drag takes only its own row's entries", () => {
@@ -739,9 +697,6 @@ test('a move in the tray shows a preview block and link in the right group', () 
   const fresh = gatewayTree(onlyLocal, { ...OPTS, rows: [moveRow(GITHUB)] });
   assert.deepEqual(fresh.blocks.filter((b) => b.column === 'servers').map((b) => b.id).slice(0, 4), ['group:kitden:remote', 'preview:github', 'group:kitden:local', 'held:kitden:files']);
   assert.equal(block(fresh, 'group:kitden:remote').name, 'Remote');
-  // A move into another gateway is not drawn on the Kitden gateway.
-  const other = trayRow(moveBody({ id: 'gw-1', kind: 'obot' }, GITHUB.items));
-  assert.ok(!gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [other] }).blocks.some((b) => b.kind === 'preview'));
 });
 
 test('two moves in the tray show two preview blocks', () => {
@@ -1035,10 +990,6 @@ test('the × of a link in the tray takes it out, else adds it', async () => {
   answer(batch('c2')({ requests: calls.filter((c) => c.url === PREVIEW).at(-1).body.requests }));
   assert.equal(await adding, false);
   assert.deepEqual(tray.rows, []);
-  // A link the map does not act on does nothing.
-  const registered = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, { id: 'gw-2', kind: 'metamcp', url: 'http://h/mcp', movable: true, managed: true }], connections: { ...MEDIUM_VIEW.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
-  const other = gatewayTree(registered, OPTS);
-  assert.equal(removeLink(other, linkOf(other, 'client:codex>gateway:gw-2'), ''), null);
   await freshTray();
 });
 
@@ -1094,12 +1045,12 @@ test('a client is heard by its meta once, and a change that waits is still heard
 });
 
 test('a found client on a first run is heard "in preview" once while its connect row waits', () => {
-  const tree = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), held: new Map(), rows: [trayRow(CONNECT_CURSOR)] });
+  const tree = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), rows: [trayRow(CONNECT_CURSOR)] });
   const cursor = block(tree, 'client:cursor');
   assert.deepEqual([cursor.meta, cursor.wait, cursor.lamp], ['Found', '\u00a0· in preview', 'preview']);
   assert.equal(blockLabel(cursor), 'Cursor, Found, in preview');
   // Without a row it is heard as before: its meta, then Off.
-  assert.equal(blockLabel(block(gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), held: new Map() }), 'client:cursor')), 'Cursor, Found, Off');
+  assert.equal(blockLabel(block(gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set() }), 'client:cursor')), 'Cursor, Found, Off');
 });
 
 test('a connect row draws a dashed link to the gateway', () => {
@@ -2446,8 +2397,7 @@ test('a press on a grip while another project is read starts no drag', async () 
 });
 
 test('a grip shows only where the Kitden gateway can take the server', () => {
-  const obot = { id: 'gw-1', kind: 'obot', movable: true };
-  const tree = gatewayTree({ ...MEDIUM_VIEW, gateways: [obot], connections: {}, used: [] }, OPTS);
+  const tree = gatewayTree({ ...MEDIUM_VIEW, gateways: [], connections: {}, used: [] }, OPTS);
   assert.ok(tree.blocks.filter((b) => b.kind === 'outside').every((b) => !b.grip));
   assert.ok(block(gatewayTree(MEDIUM_VIEW, OPTS), 'outside:move:github').grip);
 });
@@ -2488,26 +2438,13 @@ test('a link the map can act on says what its × does', () => {
   assert.equal(linkRemoval(tree, link('client:codex>outside:local:docs'), '').tip, 'Remove docs from Codex');
 });
 
-test('a link of a registered gateway gives no ×', () => {
-  const meta = { id: 'gw-2', kind: 'metamcp', url: 'http://127.0.0.1:12008/metamcp/local/mcp', movable: true, managed: true };
-  const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, meta], used: ['gw-2', 'kitden'],
-    connections: { ...MEDIUM_VIEW.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
-  const tree = gatewayTree(view, { ...OPTS, held: new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP', url: 'http://h/x' }] }]]) });
-  const link = (key) => tree.links.find((l) => `${l.from}>${l.to}` === key);
-  assert.ok(link('gateway:gw-2>held:gw-2:x') && link('client:codex>gateway:gw-2'));
-  assert.equal(linkRemoval(tree, link('gateway:gw-2>held:gw-2:x'), ''), null);
-  assert.equal(linkRemoval(tree, link('client:codex>gateway:gw-2'), ''), null);
-  // The Kitden gateway's link in the same tree still has one.
-  assert.ok(linkRemoval(tree, link('gateway:kitden>held:kitden:files'), ''));
-});
-
 test('a link is answered from the tree it is asked of, not from an older one', () => {
   const first = gatewayTree(MEDIUM_VIEW, OPTS);
   const link = first.links.find((l) => `${l.from}>${l.to}` === 'gateway:kitden>held:kitden:files');
   assert.equal(linkRemoval(first, link, '').tip, 'Remove files from the gateway');
   assert.equal(linkRemoval(first, link, '').tip, 'Remove files from the gateway');
-  // The same ids in another tree, where the server is no longer the gateway's (a registered one).
-  const other = { ...first, blocks: first.blocks.map((b) => (b.id === 'gateway:kitden' ? { ...b, gateway: { id: 'gw-9', kind: 'metamcp' } } : b)) };
+  // The same ids in another tree, where the gateway no longer holds the server.
+  const other = { ...first, blocks: first.blocks.filter((b) => b.id !== 'held:kitden:files') };
   assert.equal(linkRemoval(other, link, ''), null);
 });
 
@@ -2691,12 +2628,6 @@ test('the gateway block counts clients and servers, one in the singular', () => 
   const broken = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [], problem: 'Kitden could not read the gateway settings.' }] };
   const unread = block(gatewayTree(broken, OPTS), 'gateway:kitden');
   assert.deepEqual([unread.meta, unread.lamp, unread.stats], ['Could not read its settings.', undefined, null]);
-  // A registered gateway says where nothing runs: it has its counts only.
-  const obot = { id: 'gw-1', kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x', movable: true, managed: true };
-  const both = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, obot], connections: { ...MEDIUM_VIEW.connections, 'gw-1': { codex: ['x'] } } };
-  const registered = block(gatewayTree(both, { ...OPTS, held: new Map([['gw-1', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP' }] }]]) }), 'gateway:gw-1');
-  assert.deepEqual([registered.meta, registered.lamp, registered.stats.map((s) => s.words)], [null, undefined, ['1 client', '1 server']]);
-  assert.equal(blockLabel(registered), 'Obot, 1 client · 1 server');
 });
 
 test('a tool says how many projects have their own rule, also under All projects', () => {
@@ -2807,21 +2738,16 @@ test('the map ends the gateway groups with an "Add a server" card, before the Ou
 });
 
 test('no "Add a server" card before the gateway is set up or while it cannot be read', () => {
-  const first = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), held: new Map(), addCard: true });
+  const first = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), addCard: true });
   assert.equal(first.blocks.some((b) => b.kind === 'addslot'), false);
   const broken = { ...MEDIUM_VIEW, gateways: MEDIUM_VIEW.gateways.map((g) => (g.kind === 'kitden' ? { ...g, problem: 'bad file' } : g)) };
   assert.equal(gatewayTree(broken, { ...OPTS, addCard: true }).blocks.some((b) => b.kind === 'addslot'), false);
 });
 
-test('the Add a server card ends the Kitden gateway, before another gateway and its servers', () => {
-  const meta = { id: 'gw-2', kind: 'metamcp', url: 'http://127.0.0.1:12008/metamcp/local/mcp', movable: true, managed: true };
-  const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, meta], used: ['kitden', 'gw-2'],
-    connections: { ...MEDIUM_VIEW.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
-  const held = new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP', url: 'http://h/x' }] }]]);
-  const ids = gatewayTree(view, { ...OPTS, held, addCard: true }).blocks.map((b) => b.id);
+test('the Add a server card ends the Kitden gateway', () => {
+  const ids = gatewayTree(MEDIUM_VIEW, { ...OPTS, addCard: true }).blocks.map((b) => b.id);
   assert.ok(ids.indexOf('addslot:servers') > ids.indexOf('held:kitden:files'));
-  assert.ok(ids.indexOf('addslot:servers') < ids.indexOf('gateway:gw-2'));
-  assert.ok(ids.indexOf('addslot:servers') < ids.indexOf('held:gw-2:x'));
+  assert.ok(ids.indexOf('addslot:servers') > ids.indexOf('held:kitden:tracker'));
 });
 
 test('the search never matches the "Add a server" card', () => {

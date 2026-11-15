@@ -403,16 +403,3 @@ def server(client, name, via=None):
         scope=Scope.USER,
         via_gateway=via,
     )
-
-
-def test_removing_from_the_kitden_gateway_counts_a_client_on_another_gateway():
-    # Codex reaches files through a registered gateway, so "then in no client" is untrue.
-    inv = inventory(server("codex", "files", via="gw-1"), server("cursor", "files", via="kitden"))
-    edit = FileEdit(path="/h/settings.json", fmt="json", key=("servers", "files"), after=0)
-    change = Change(
-        action="gateway.remove",
-        steps=[Step(client="kitden", scope=Scope.USER, name="files", edit=edit)],
-    )
-    assert after_words(change, inv) == [
-        {"note": "Codex still reaches files through another gateway. Undo brings it back."}
-    ]

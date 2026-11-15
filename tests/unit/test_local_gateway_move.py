@@ -1268,13 +1268,13 @@ def test_an_old_item_too_long_to_store_again_is_named_after_a_failed_apply(
     change = engine.preview("gateway.move", move(home, ("claude_code", "files")))
 
     def broken(*args, **kwargs):
-        raise RuntimeError("The gateway did not answer.")
+        raise RuntimeError("The file could not be written.")
 
-    monkeypatch.setattr(Engine, "_apply_gateway", broken)
+    monkeypatch.setattr(Engine, "_apply_step", broken)
     engine.apply(change.id)
     assert str(change.state) == "restored"
     assert change.error == (
-        "The gateway did not answer. files/FILES_TOKEN in your Keychain was not put back."
+        "The file could not be written. files/FILES_TOKEN in your Keychain was not put back."
     )
     assert keychain_items(fake_keychain) == {"kitden files/FILES_TOKEN": "SENTINEL_NEW"}
 

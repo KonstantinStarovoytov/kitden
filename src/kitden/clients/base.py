@@ -26,8 +26,6 @@ from kitden.model import (
     FileEdit,
     FolderCopy,
     FolderRemoval,
-    Gateway,
-    GatewayAuth,
     Item,
     ItemKind,
     Project,
@@ -339,7 +337,6 @@ def file_step(
     after: Any,
     scope: Scope,
     restart_note: str,
-    login: str | None = None,
 ) -> Step:
     """One plain edit of the entry at `key` in a client file, named by the key's last part. A
     project's own file is shared."""
@@ -349,7 +346,6 @@ def file_step(
         name=key[-1],
         edit=FileEdit(path=str(path), fmt=fmt, key=key, after=after),
         restart_note=restart_note,
-        login_note=login,
         shared_file=scope is Scope.PROJECT,
     )
 
@@ -440,10 +436,6 @@ class ClientAdapter(ABC):
         """Actions the page may offer for this item."""
         return ()
 
-    def gateway_step(self, gateway: Gateway, name: str) -> Step:
-        """The edit that adds the gateway entry for this client (user scope)."""
-        raise ValueError(f"{self.id} cannot be connected to a gateway")
-
     def remove_step(self, item: Item) -> Step:
         """The edit that removes one direct MCP entry."""
         raise ValueError(f"{item.name} cannot be removed here")
@@ -478,8 +470,8 @@ class ClientAdapter(ABC):
         """The edit that adds one MCP entry, already in this client's format (user scope)."""
         return self._add_entry(name, entry)
 
-    def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
-        """The edit that adds one user-scope MCP entry; `login` says how to sign in after."""
+    def _add_entry(self, name: str, value: dict[str, Any]) -> Step:
+        """The edit that adds one user-scope MCP entry."""
         raise ValueError(f"{self.id} cannot take an MCP entry")
 
     def plugin_step(self, item: Item, enable: bool) -> Step:
@@ -658,10 +650,3 @@ def plain_source(source: str, client: str) -> str:
     if redact(source)[1]:
         raise ValueError(f"Its source holds a password or token; add it in {client} by hand.")
     return source
-
-
-def bearer_header(gateway: Gateway, reference: str) -> dict[str, str]:
-    """Authorization header that names the key's variable, never its value (FR-035)."""
-    if gateway.auth is not GatewayAuth.ENV_KEY:
-        return {}
-    return {"Authorization": "Bearer " + reference.format(gateway.key_env_var)}

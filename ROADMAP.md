@@ -9,6 +9,11 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Only the Kitden gateway:** Kitden no longer works with outside gateways (Obot, MetaMCP or
+  one added by its address). Adding one, connecting clients to it, switching between them and
+  moving servers into one are gone. Kitden deletes their saved list when it starts; a client
+  entry that pointed at one shows as an ordinary server, and old changes made in one leave the
+  Changes page.
 - **Secrets come back from the macOS Keychain as they went in:** a secret with letters outside
   ASCII is no longer read back as hex, and one longer than about 1,970 bytes, which used to be
   stored cut, is now refused with a reason before anything is written, so a refreshed sign-in
@@ -573,9 +578,7 @@ Left for later in the alignment plan's phase notes:
 - Gateway map: a long count or tag can still run out of its block; while blocks move, a link's ×
   can jump along it; links that run behind the gateway block look as if they enter it (owner to
   decide).
-- Gateway: the Map | List pill takes a key while another project is read; the add-gateway form
-  closes on a quiet redraw.
-- Disconnect a client from a registered gateway (Obot, MetaMCP), and forget a registered gateway.
+- Gateway: the Map | List pill takes a key while another project is read.
 - The rail's Overview label gives way with "…" at a three-digit count.
 - Add a server: ask each remote server once per tray whether it signs in; read the list once per
   open panel; the narrow drawer from More gives focus back to "+ Add".

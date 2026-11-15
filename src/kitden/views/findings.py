@@ -9,21 +9,18 @@ another source. Every finding names the clients it is about.
 
 from collections import defaultdict
 from collections.abc import Iterable
-from dataclasses import replace
 
 from kitden.changes.actions import KITDEN_GATEWAY
-from kitden.clients.base import REMOVE_DIRECT, from_plugin
+from kitden.clients.base import from_plugin
 from kitden.model import (
     ClientStatus,
     Enabled,
     Finding,
     FindingType,
-    Gateway,
     Item,
     ItemKind,
     Severity,
     SourceKind,
-    normalize_url,
 )
 from kitden.views.effective import DESKTOP, effective_view
 from kitden.views.match import odd_sources, plugin_copies
@@ -208,19 +205,6 @@ def finding_dict(f: Finding) -> dict:
     }
 
 
-def mark_gateways(inventory, gateways: list[Gateway]) -> None:
-    """Mark MCP entries that point to a registered gateway (FR-034). They are not direct."""
-    by_url = {g.url: g for g in gateways}
-    for index, item in enumerate(inventory.items):
-        url = dict(item.summary).get("url")
-        gateway = (
-            by_url.get(normalize_url(url)) if item.kind is ItemKind.MCP_SERVER and url else None
-        )
-        if gateway:
-            actions = tuple(a for a in item.actions if a != REMOVE_DIRECT)
-            inventory.items[index] = replace(item, via_gateway=gateway.id, actions=actions)
-
-
 # How an MCP server that skips the gateway is set up, by its group (`group_of`).
 BYPASS_WORDS = {
     "plugin": "comes from a plugin",
@@ -242,7 +226,7 @@ def bypass_kind(item: Item) -> str:
 
 
 def find_bypasses(inventory, project: str | None = None) -> list[Finding]:
-    """Every MCP server that loads without going through a registered gateway (FR-039), except
+    """Every MCP server that loads without going through the Kitden gateway (FR-039), except
     Kitden's own entry."""
     findings = []
     for client in sorted({i.client for i in inventory.items}):

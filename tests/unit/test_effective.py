@@ -105,7 +105,7 @@ def test_desktop_code_tab_adds_its_config_and_wins_on_a_name_clash(tmp_path):
     view = effective_view(inventory, "claude_desktop_code_tab", str(home / "work/website"))
     clients = {(i.client, i.name) for i in view.items if str(i.kind) == "mcp_server"}
     assert clients == {
-        ("claude_desktop_code_tab", "metamcp-local"),
+        ("claude_desktop_code_tab", "team-proxy"),
         ("claude_desktop_code_tab", "github"),
         ("claude_code", "local-db"),
         ("claude_code", "docs"),

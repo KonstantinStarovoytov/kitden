@@ -3,8 +3,8 @@
 // (keepFrom, backToDetails). Gateway and Library Details are drawn from them.
 import { $, $$, button, el, joinWords, reportError, secretsWord, shortPath, withFocusKey } from "./dom.js";
 import { fold } from "./motion.js";
-import { header, isPanelOpen, isQuiet, openInfo, panelState } from "./panel.js";
-import { ALL_PROJECTS, byClientOrder, callout, CLIENT_NAMES, folderName, gatewayName, ROUTE_WORDS, WRITABLE } from "./parts.js";
+import { header, isPanelOpen, isQuiet, panelState } from "./panel.js";
+import { ALL_PROJECTS, byClientOrder, callout, CLIENT_NAMES, folderName, ROUTE_WORDS, WRITABLE } from "./parts.js";
 import { review } from "./review.js";
 import { data, projectPath } from "./store.js";
 import { inTray, keyFor, shownInTray, takeOut } from "./tray.js";
@@ -23,15 +23,12 @@ const ACTION_BUTTONS = {
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 export const clientName = (id) => CLIENT_NAMES[id] || id;
 
-// The gateways that can take the direct servers of one group of the Gateway page, in the order
-// offered: the Kitden gateway first (it runs on this computer, so it also takes local servers), then
-// each registered gateway that takes servers (remote ones only).
+// The gateways that can take the direct servers of one group of the Gateway page: the Kitden
+// gateway, which runs on this computer, so it takes remote and local servers alike. A plugin's
+// servers stay where they are.
 export function moveTargets(model, group) {
-  if (!model) return [];
-  const kitden = model.gateways.filter((g) => g.kind === "kitden");
-  if (group === "local") return kitden;
-  if (group !== "move") return [];
-  return [...kitden, ...model.gateways.filter((g) => g.kind !== "kitden" && g.movable)];
+  if (!model || !["move", "local"].includes(group)) return [];
+  return model.gateways.filter((g) => g.kind === "kitden");
 }
 
 // The preview request that moves `items` (entry ids) into `gateway`. A drag on the Gateway map
@@ -40,18 +37,10 @@ export function moveBody(gateway, items) {
   return { action: "gateway.move", targets: items.map((item) => ({ item })), params: { gateway: gateway.id } };
 }
 
-// Move entries into a gateway. With one gateway that can take them the move goes to the tray at
-// once; with two the panel asks which, the Kitden gateway first. A move into the Kitden gateway
-// may ask the server for its tools first, so the button that started it stays busy until then.
-export function moveInto(gateways, items, title) {
-  if (gateways.length === 1) return review(moveBody(gateways[0], items));
-  const body = el("div", "body");
-  body.append(el("p", "muted", "More than one gateway can take it. The Kitden gateway runs on this computer and turns tools on or off per project."));
-  const into = (gateway) => (gateway.kind === "kitden" ? "the Kitden gateway" : gatewayName(gateway));
-  // The primary button sits last, so the Kitden gateway is drawn last.
-  const choices = gateways.map((gateway, i) => previewButton(`Move into ${into(gateway)}…`, moveBody(gateway, items), { look: i === 0 ? "btn primary" : "btn" }));
-  openInfo("Move into the gateway", title, body, choices.reverse());
-  return null;
+// Move entries into the Kitden gateway: the move goes to the tray at once. It may ask the server
+// for its tools first, so the button that started it stays busy until then.
+export function moveInto(gateway, items) {
+  return review(moveBody(gateway, items));
 }
 
 // A server in the Kitden gateway can leave it, or be written back into a client as its own
