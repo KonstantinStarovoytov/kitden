@@ -9,6 +9,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Search finds plugins and skills with a typo or near word:** a search for `auditr` or `actons auditor` now finds `agentic-actions-auditor` on GitHub sources, using the standard library; exact matches still rank first (#100).
 - **The Claude Code plugin installs without a GitHub SSH key:** the marketplace named the
   plugin's repository in a short form that Claude Code fetches over SSH, so the install failed
   for people with no GitHub SSH key; it now names the https address (#106).
