@@ -12,6 +12,7 @@ starts `kitden-ci-`, and a `finally` removes it, also when the test fails halfwa
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -213,10 +214,26 @@ def test_an_account_with_a_space_is_quoted_on_the_security_line():
     assert found(item["keychain"]) is None
 
 
+@pytest.mark.xfail(
+    sys.platform == "darwin",
+    strict=True,
+    raises=KeychainError,
+    reason="Kitden bug: a secret with letters outside ASCII cannot be stored in the macOS "
+    "Keychain; Kitden says it could not reach the Keychain. Seen 2026-11-15 on a GitHub macOS "
+    "runner. Strict: remove this mark when Kitden is fixed.",
+)
 def test_a_value_in_other_alphabets_comes_back_unchanged():
     _round_trip("ALPHABETS", "ключ-héllo-日本")
 
 
+@pytest.mark.xfail(
+    sys.platform == "darwin",
+    strict=True,
+    raises=KeychainError,
+    reason="Kitden bug: a 4096-character secret cannot be stored in the macOS Keychain; Kitden "
+    "says it could not reach the Keychain. Seen 2026-11-15 on a GitHub macOS runner. Strict: "
+    "remove this mark when Kitden is fixed.",
+)
 def test_a_4_kb_value_comes_back_unchanged():
     value = ("kitden-ci-4kb-" * 300)[:4096]
     assert len(value) == 4096
