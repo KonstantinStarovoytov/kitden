@@ -12,9 +12,9 @@
   `node --test tests/frontend/*.test.mjs` before each commit.
 - Keep work proportional to a self-hosted tool for one person or a small team: the simplest
   mechanism that works, no speculative options.
-- Check changing facts about other tools against their own docs with the `client-fact`
-  skill (`.claude/skills/client-fact/SKILL.md`), and write the date you checked next to the
-  claim.
+- Check changing facts about other tools (client file formats, gateway APIs) against their
+  own docs, and write the date you checked next to the claim. For a fact about Claude Code,
+  Codex or Cursor, use the `client-fact` skill (`.claude/skills/client-fact/SKILL.md`).
 - In a design, each fact about a client under 'Checked facts' names the page and the day it
   was read. A plan carries, in its Global Constraints, the line: a fact about a client comes
   from Agent Docs or the vendor's page, with the address and the date; a subagent that cannot
