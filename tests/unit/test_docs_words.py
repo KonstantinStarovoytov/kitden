@@ -64,21 +64,8 @@ def test_docs_name_the_demo_and_the_write_boundary():
 
 def test_the_check_before_a_release_turns_strict_mode_on_in_the_servers_details():
     development = " ".join((ROOT / "docs/development.md").read_text().split())
-    step = (
-        "5. Move the server in again. Turn strict mode on in the server's Details "
-        '("Turn strict mode on…") and turn one tool off.'
-    )
-    assert step in development
+    assert "Turn strict mode on…" in development
     assert "Strict: only tools you turned on" not in development
-
-
-def test_the_check_before_a_release_has_the_changed_settings_step():
-    development = " ".join((ROOT / "docs/development.md").read_text().split())
-    assert "23. Add a Remove for a Claude Code plugin to the preview" in development
-    assert 'The bar says "Settings changed since this preview." and offers "Preview again"' in (
-        development
-    )
-    assert "Not run yet for step 23:" in development
 
 
 IMAGES = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/"
