@@ -80,10 +80,11 @@ def _skills_in(folder: Path, depth: int = MAX_SKILL_DEPTH) -> list[tuple[str, Pa
     """Skills in `folder`, sub-folders too, up to `depth` levels down.
 
     checked 2026-11-14 (https://cursor.com/docs/context/skills, "Nested skill directories"):
-    Cursor reads skills in `.cursor/skills`, `.agents/skills` and, with third-party on,
-    `.claude/skills` and `.codex/skills`, sub-folders too. A folder with a `SKILL.md` is a skill
-    (not searched further); one without is a category. Hidden folders and symlinked category
-    folders are skipped; a symlinked skill folder still counts, with its link.
+    Cursor reads skills in `.cursor/skills`, `.agents/skills`, `.claude/skills` and
+    `.codex/skills`, sub-folders too. The docs name no switch for the last two; Cursor 3.29.9's
+    own code reads them only with third-party on (checked 2026-11-15). A folder with a
+    `SKILL.md` is a skill (not searched further); one without is a category. Hidden folders and
+    symlinked category folders are skipped; a symlinked skill folder still counts, with its link.
     """
     if depth < 1:
         return []

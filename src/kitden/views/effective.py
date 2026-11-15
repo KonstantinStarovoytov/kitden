@@ -2,7 +2,8 @@
 
 For every client and kind, a rank table says which scope wins when the same name is defined
 more than once. The winner is kept; the others are recorded as shadowed. Items that are off do
-not load, and parts of a Claude Code plugin load only when that plugin loads.
+not load, and parts of a Claude Code plugin load only when that plugin loads. Parts of a Codex
+plugin follow the plugin's on/off in the project.
 """
 
 from dataclasses import dataclass, field, replace
@@ -35,7 +36,10 @@ RANKS: dict[str, dict[ItemKind, dict[Scope, int]]] = {
         },
         ItemKind.SKILL: {Scope.PROJECT: 1, Scope.USER: 2, Scope.MANAGED: 3},
     },
-    "codex": {ItemKind.MCP_SERVER: {Scope.USER: 1, Scope.PROJECT: 2}},
+    "codex": {
+        ItemKind.MCP_SERVER: {Scope.USER: 1, Scope.PROJECT: 2},
+        ItemKind.PLUGIN: {Scope.USER: 1, Scope.PROJECT: 2},
+    },
     "cursor": {
         ItemKind.MCP_SERVER: {Scope.USER: 1, Scope.PROJECT: 2},
         ItemKind.PLUGIN: {Scope.USER: 1, Scope.PROJECT: 2},
@@ -106,6 +110,16 @@ def effective_view(inventory, client: str, project: str | None) -> EffectiveView
             mode = "merged" if (base, item.kind) in MERGED else "override"
             view.shadowed.append((winner, item, mode))
 
+    if base == "codex":
+        # A Codex plugin's parts carry the user's on/off; in a project the winning plugin row
+        # decides. Parts with no plugin row (a remote plugin Codex has not listed) keep theirs.
+        plugins = {n: w.enabled for (k, n), w in winners.items() if k is ItemKind.PLUGIN}
+        candidates = [
+            replace(i, enabled=plugins[p])
+            if i.kind is not ItemKind.PLUGIN and (p := plugin_of(i)) in plugins
+            else i
+            for i in candidates
+        ]
     kept = [
         i
         for i in candidates

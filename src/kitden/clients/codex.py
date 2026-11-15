@@ -194,6 +194,10 @@ class CodexAdapter(ClientAdapter):
             and item.source.kind is SourceKind.FILE
             and item.source.read_status is ReadStatus.OK
         ):
+            # A project's table only turns the plugin on or off there; removing uninstalls it
+            # for every project, so it is offered on the user's row.
+            if item.scope is Scope.PROJECT:
+                return toggle_action(item)
             return (*toggle_action(item), PLUGIN_REMOVE)
         if is_own_skill(item, CLIENT):
             return (SKILL_REMOVE,)
@@ -208,7 +212,12 @@ class CodexAdapter(ClientAdapter):
             after=enable,
         )
         return Step(
-            client=CLIENT, scope=item.scope, name=item.name, edit=edit, restart_note=RESTART
+            client=CLIENT,
+            scope=item.scope,
+            name=item.name,
+            edit=edit,
+            restart_note=RESTART,
+            shared_file=item.scope is Scope.PROJECT,
         )
 
     # checked 2026-10-26 (learn.chatgpt.com/docs/build-skills, "Enable or disable local Codex
@@ -466,6 +475,27 @@ class CodexAdapter(ClientAdapter):
                     enabled=state,
                 )
             )
+        # checked 2026-11-15 (developers.openai.com/plugins/build/plugins, and Codex 0.167.0 in a
+        # sandbox home with `codex plugin list --json`): `[plugins."<id>"] enabled` in a trusted
+        # project's `.codex/config.toml` turns an installed plugin on or off in that project
+        # only. A table without `enabled` leaves the user's choice; an untrusted file does
+        # nothing.
+        if trusted:
+            for plugin_id, entry in as_dict(layer.get("plugins")).items():
+                value = as_dict(entry).get("enabled")
+                if isinstance(value, bool):
+                    items.append(
+                        Item(
+                            client=CLIENT,
+                            kind=ItemKind.PLUGIN,
+                            name=plugin_id,
+                            source=file_source(layer_path, CLIENT, f"plugins.{plugin_id}"),
+                            scope=Scope.PROJECT,
+                            project=str(root),
+                            enabled=_on(value),
+                            state_scope=Scope.PROJECT,
+                        )
+                    )
         # checked 2026-10-22 (learn.chatgpt.com/docs/build-skills): Codex reads `.agents/skills`
         # from the folder it starts in up to the repository root. The docs do not say whether an
         # untrusted project's skills load; Kitden counts them only in a trusted project, as it
