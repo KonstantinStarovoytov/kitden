@@ -161,7 +161,7 @@ own session.
 | 18 | A new session: the server's tools work | test | `tests/unit/test_real_secrets.py::test_a_session_gets_the_secret_from_the_real_store`, a stand-in session with the real Keychain and keyring |
 | 19 | Undo the move: the Keychain item is gone | test | `tests/unit/test_real_secrets.py::test_undo_of_the_move_removes_the_item` |
 | 20 | "Move secrets to the Keychain…" moves a plain token | test | `tests/unit/test_real_secrets.py::test_a_plain_token_in_gateway_json_moves_to_the_keychain` |
-| 21 | Four `security` facts | test | On macOS runners: `tests/unit/test_real_secrets.py::test_a_missing_item_ends_with_44`, `tests/unit/test_real_secrets.py::test_a_value_with_quotes_and_spaces_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_an_account_with_a_space_is_quoted_on_the_security_line`, `tests/unit/test_real_secrets.py::test_a_value_in_other_alphabets_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_a_4_kb_value_comes_back_unchanged`. The last two fail on macOS today and are marked expected to fail: a secret with letters outside ASCII, or one of 4096 characters, cannot be stored in the macOS Keychain, and Kitden says it could not reach the Keychain (seen 2026-11-15 on a GitHub macOS runner). Both work on Linux |
+| 21 | Four `security` facts | test | On macOS runners: `tests/unit/test_real_secrets.py::test_a_missing_item_ends_with_44`, `tests/unit/test_real_secrets.py::test_a_value_with_quotes_and_spaces_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_an_account_with_a_space_is_quoted_on_the_security_line`, `tests/unit/test_real_secrets.py::test_a_value_in_other_alphabets_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_a_4_kb_value_comes_back_unchanged`. The last two fail on macOS today and are marked expected to fail: a secret with letters outside ASCII, or one longer than about 2,000 characters (1,024 works, 2,048 does not), cannot be moved into the macOS Keychain; Kitden says it could not reach the Keychain and puts the settings back (seen 2026-11-15 on a GitHub macOS runner). Both work on Linux |
 | 22 | With Claude Code open, put back a server with a token; the entry stays | signed-in client | By hand until stage 2. Part of it: `tests/contract/test_manage_items.py::test_an_entry_kitden_wrote_itself_survives_the_clients_own_write`: "+ Add" (`mcp.add`) of a server with a token into Claude Code writes `~/.claude.json` with no command, the entry outlives `claude mcp add-json` rewriting the file, and Undo keeps the rest. Not tested: "Put back" with Claude Code open |
 | 23 | Settings change under an open preview: "Preview again", Cancel | test | `tests/browser/test_preview_drift.py::test_settings_changed_under_a_preview_ask_for_a_new_one_and_cancel_writes_nothing` |
 | 24 | Drag a server onto the gateway on the map, Apply, Undo from the toast | test | `tests/browser/test_map_drag.py::test_a_server_dragged_onto_the_gateway_is_moved_and_undo_from_the_toast_moves_it_back`: drag, Apply and Undo. Not tested here: a new session reaching the server through the gateway, which is part of check 3 |
@@ -206,10 +206,11 @@ Before a release that touches secrets, also check this once by hand:
 
 The Keychain is not fully proven. Its tests (checks 17 to 21) run every night against the real
 Keychain on macOS and the real keyring on Linux, but two of them fail on macOS today and are
-marked expected to fail: a secret with letters outside ASCII, or one of 4096 characters, cannot
-be stored in the macOS Keychain, and Kitden says it could not reach the Keychain (seen
-2026-11-15 on a GitHub macOS runner). Both work on Linux. Until Kitden is fixed, such a secret
-cannot be moved into the macOS Keychain.
+marked expected to fail, on macOS only: a secret with letters outside ASCII, or one longer than
+about 2,000 characters (1,024 works, 2,048 does not), cannot be moved into the macOS Keychain.
+Kitden says it could not reach the Keychain and puts the settings back (seen 2026-11-15 on a
+GitHub macOS runner). Both work on Linux. Until Kitden is fixed, such a secret stays where it
+was.
 
 ## Release
 
