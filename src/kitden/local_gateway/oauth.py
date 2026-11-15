@@ -269,8 +269,9 @@ class KeychainStorage:
             server, _, key = self.ref["keychain"].rpartition("/")
             await anyio.to_thread.run_sync(keychain.store, server, key, secret, self.run)
             self.raw = secret
-        except keychain.KeychainError:
-            print(f"Kitden could not save the new sign-in of {self.name}.", file=sys.stderr)
+        except keychain.KeychainError as error:
+            # `store` writes nothing it refuses, so the sign-in stored before stays.
+            print(f"Kitden could not save the new sign-in of {self.name}. {error}", file=sys.stderr)
 
     async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:
         self.client = client_info

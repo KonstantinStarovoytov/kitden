@@ -113,6 +113,129 @@ jobs:
             echo "::error::the keychain made for this run is not the default one"
             exit 1
           fi
+          # TEMPORARY, remove before the pull request: a probe of `security` for the Keychain fix
+          # (keychain-values). Items only under the service kitden-probe in this run's keychain,
+          # all deleted at its end; it never fails the step. Its lines start with PROBE.
+          chain="$chain" uv run python - <<'PY' || true
+          import os
+          import subprocess
+
+          from kitden.local_gateway.keychain import _password
+
+          SECURITY = "/usr/bin/security"
+          SERVICE = "kitden-probe"
+          CHAIN = os.environ["chain"]
+          made = set()
+
+
+          def sec(args, stdin=None):
+              try:
+                  done = subprocess.run(
+                      [SECURITY, *args], input=stdin, capture_output=True, timeout=20, check=False
+                  )
+              except subprocess.TimeoutExpired:
+                  return "timeout", b"", b""
+              return done.returncode, done.stdout, done.stderr
+
+
+          def back(account):
+              """The item's value by `-w`, without the newline; None when it is not there."""
+              code, out, _ = sec(["find-generic-password", "-s", SERVICE, "-a", account, "-w", CHAIN])
+              return None if code != 0 else out.removesuffix(b"\n")
+
+
+          def verdict(account, value):
+              got = back(account)
+              if got is None:
+                  return "MISSING"
+              if got == value.encode():
+                  return f"WHOLE ({len(got)} bytes)"
+              return f"CUT or CHANGED ({len(got)} of {len(value.encode())} bytes)"
+
+
+          # 1. What `find-generic-password -g` prints. Probe values only, so in argv here.
+          for name, value in [
+              ("g-quotes", 'a "b" \\ c\'d'),
+              ("g-alphabets", "ключ-héllo-日本"),
+              ("g-cjk", "日本"),
+              ("g-hexdigits", "cafe1234"),
+              ("g-control", "a\tb\nc"),
+          ]:
+              made.add(name)
+              code, _, err = sec(
+                  ["add-generic-password", "-U", "-s", SERVICE, "-a", name, "-X", value.encode().hex(), CHAIN]
+              )
+              print(f"PROBE-G {name}: add exit {code} {err!r}")
+              code, out, err = sec(["find-generic-password", "-s", SERVICE, "-a", name, "-g", CHAIN])
+              print(f"PROBE-G {name}: -g exit {code}; stderr {err!r}")
+              print(f"PROBE-G {name}: -g stdout {out!r}")
+              try:
+                  read = _password(err.decode())
+                  print(f"PROBE-G {name}: Kitden reads {read!r}, the same: {read == value}")
+              except ValueError as error:
+                  print(f"PROBE-G {name}: Kitden cannot read it: {error}")
+              code, out, _ = sec(["find-generic-password", "-s", SERVICE, "-a", name, "-w", CHAIN])
+              print(f"PROBE-W {name}: -w exit {code}; stdout {out!r}")
+          made.add("g-empty")
+          code, _, err = sec(["add-generic-password", "-U", "-s", SERVICE, "-a", "g-empty", "-w", "", CHAIN])
+          print(f"PROBE-G g-empty: add exit {code} {err!r}")
+          code, _, err = sec(["find-generic-password", "-s", SERVICE, "-a", "g-empty", "-g", CHAIN])
+          print(f"PROBE-G g-empty: -g exit {code}; stderr {err!r}")
+
+          # 2. Write paths for a long value with the value only on stdin, never in argv.
+          for size in (4096, 16384):
+              value = ("kitden-probe-" * 2000)[:size]
+              # 2a. `-w` as the last option: security prompts for the value (twice) and reads stdin.
+              name = f"long-prompt-{size}"
+              made.add(name)
+              code, _, err = sec(
+                  ["add-generic-password", "-U", "-s", SERVICE, "-a", name, "-w"],
+                  stdin=f"{value}\n{value}\n".encode(),
+              )
+              print(f"PROBE-LONG prompt {size}: exit {code}; stderr {err[:300]!r}; {verdict(name, value)}")
+              # 2b. The same prompt inside `security -i`: the command line, then the value lines.
+              name = f"long-iprompt-{size}"
+              made.add(name)
+              line = f'add-generic-password -U -s {SERVICE} -a "{name}" -w\n{value}\n{value}\n'
+              code, _, err = sec(["-i"], stdin=line.encode())
+              print(f"PROBE-LONG -i prompt {size}: exit {code}; stderr {err[:300]!r}; {verdict(name, value)}")
+              # 2c. One `security -i` command over several lines, each ending in a backslash.
+              name = f"long-joined-{size}"
+              made.add(name)
+              hex_value = value.encode().hex()
+              parts = [hex_value[at : at + 1000] for at in range(0, len(hex_value), 1000)]
+              line = f'add-generic-password -U -s {SERVICE} -a "{name}" -X ' + "\\\n".join(parts) + "\n"
+              code, _, err = sec(["-i"], stdin=line.encode())
+              print(f"PROBE-LONG -i joined {size}: exit {code}; stderr {err[:300]!r}; {verdict(name, value)}")
+
+          # 3. The longest `security -i` line read whole: lines of exactly `length` bytes before the
+          # newline, Kitden's form with `-s kitden-probe`.
+          for length in (3999, 4000, 4064, 4078, 4090, 4093, 4094, 4095, 4096, 4097, 4100, 4200, 8192):
+              name = f"lim-{length}"
+              start = f'add-generic-password -U -s {SERVICE} -a "{name}" -X '
+              if (length - len(start)) % 2:
+                  name += "x"
+                  start = f'add-generic-password -U -s {SERVICE} -a "{name}" -X '
+              value = ("v" * length)[: (length - len(start)) // 2]
+              line = start + value.encode().hex()
+              assert len(line) == length, (len(line), length)
+              made.add(name)
+              code, _, err = sec(["-i"], stdin=(line + "\n").encode())
+              print(
+                  f"PROBE-LINE {length}: -i exit {code}; stderr {err[:160]!r}; value of "
+                  f"{len(value)} bytes {verdict(name, value)}"
+              )
+
+          # 4. Clean up: every item of the service, then say whether any is left.
+          for name in sorted(made):
+              sec(["delete-generic-password", "-s", SERVICE, "-a", name, CHAIN])
+          code, _, _ = sec(["find-generic-password", "-s", SERVICE, CHAIN])
+          print(f"PROBE-CLEAN: find of any {SERVICE} item exits {code} (44: none left)")
+          PY
+          for _ in $(seq 1 100); do
+            security delete-generic-password -s kitden-probe "$chain" >/dev/null 2>&1 || break
+          done
+          # End of the TEMPORARY probe.
           KITDEN_REAL_KEYCHAIN=1 KITDEN_CI_KEYCHAIN="$chain" \
             uv run pytest -q tests/unit/test_real_secrets.py -rs
       # The page's own tests, in Node with a stand-in DOM.

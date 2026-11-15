@@ -586,10 +586,12 @@ class Engine:
         return self.keychain_run or keychain.run_security
 
     def _preview_keychain(self, steps: list[Step]) -> None:
-        """Read whether each Keychain item is there already: Undo deletes only new ones."""
+        """Refuse a secret too long for the Keychain, and read whether each item is there
+        already: Undo deletes only new ones."""
         try:
             for step in steps:
                 for item in step.keychain:
+                    keychain.check_size(item.server, item.key, item.value)
                     item.existed = keychain.read(item.ref, run=self._security()) is not None
         except KeychainError as error:
             raise ChangeRefusedError(str(error)) from None

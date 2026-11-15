@@ -100,3 +100,9 @@ def test_the_tool_env_fills_in_the_session_bus(monkeypatch):
 def test_the_tool_env_keeps_a_bus_that_is_set(monkeypatch):
     monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/tmp/mine")
     assert keychain.tool_env()["DBUS_SESSION_BUS_ADDRESS"] == "unix:path=/tmp/mine"
+
+
+def test_a_long_value_is_stored_whole(fake_keychain):
+    """`secret-tool store` reads the value from stdin until EOF: no line to cut, so no limit."""
+    value = "SENTINEL_" + "v" * 20_000
+    assert read(store("srv", "KEY", value)) == value
