@@ -18,10 +18,10 @@ What Kitden does today and what comes next. Ideas and bugs:
   approval of the servers in a project's `.mcp.json` in its settings files, and moves older
   approvals there from `~/.claude.json`. Kitden read only `~/.claude.json`, so approved and
   rejected servers showed as unknown; it now reads the settings files and folder trust as
-  Claude Code does.
+  Claude Code does (#115).
 - **Codex plugins turned on or off in one project:** a trusted project's `.codex/config.toml`
   can switch an installed plugin on or off there. Kitden now shows that choice, counts it in
-  what the project loads, and can change it with preview, backup and Undo.
+  what the project loads, and can change it with preview, backup and Undo (#115).
 - **Secrets come back from the macOS Keychain as they went in:** a secret with letters outside
   ASCII is no longer read back as hex, and one longer than about 1,970 bytes, which used to be
   stored cut, is now refused with a reason before anything is written, so a refreshed sign-in
