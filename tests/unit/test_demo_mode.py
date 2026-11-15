@@ -166,11 +166,14 @@ def test_a_marketplace_and_a_registered_gateway_are_not_part_of_the_demo(tmp_pat
 
 
 def test_the_demo_shows_no_registered_gateway(tmp_path, monkeypatch):
-    def never(*args, **kwargs):
-        raise AssertionError("the demo reached a gateway")
+    # A class, not a function: the page writes `MetaMcpClient | ObotClient` as a return type,
+    # and Python 3.13 works that out when the page is built.
+    class Never:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("the demo reached a gateway")
 
-    monkeypatch.setattr(page_app, "MetaMcpClient", never)
-    monkeypatch.setattr(page_app, "ObotClient", never)
+    monkeypatch.setattr(page_app, "MetaMcpClient", Never)
+    monkeypatch.setattr(page_app, "ObotClient", Never)
     with demo_page(tmp_path) as page:
         gateway = add_gateway(page.home, Gateway(url="http://127.0.0.1:12008/metamcp/team/mcp"))
         assert page.get("/api/gateways").json() == []
