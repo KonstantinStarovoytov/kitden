@@ -18,7 +18,8 @@ def _jobs() -> dict[str, str]:
 
 def test_it_runs_every_night_and_by_hand_never_on_a_pull_request_and_holds_no_secret():
     assert 'cron: "37 2 * * *"' in TEXT and "workflow_dispatch:" in TEXT
-    assert "pull_request" not in TEXT and "secrets." not in TEXT
+    # `secrets.` as a word, so the file name test_real_secrets.py does not count.
+    assert "pull_request" not in TEXT and not re.search(r"\bsecrets\.", TEXT)
     assert "\npermissions: {}\n" in TEXT and "persist-credentials: false" in TEXT
     assert TEXT.startswith("# What: ") and "\n# Why: " in TEXT and "\nname: Nightly tests\n" in TEXT
 
@@ -42,8 +43,19 @@ def test_systems_runs_four_systems_and_two_pythons():
         "uv run python scripts/measure-start.py",
         "--set-aside=only",
         "test_real_keyring.py",
+        "test_real_secrets.py",
+        "KITDEN_REAL_KEYCHAIN=1",
     ):
         assert step in job, step
+    # The Keychain step runs on macOS only, after the full suite, in a keychain of its own.
+    keychain = _step(job, "The real Keychain (macOS)")
+    assert "if: runner.os == 'macOS'" in keychain
+    assert 'chain="$RUNNER_TEMP/kitden-ci.keychain-db"' in keychain
+    assert 'security default-keychain -d user -s "$chain"' in keychain
+    assert job.index("\n      - run: uv run pytest -q\n") < job.index("The real Keychain (macOS)")
+    linux = _step(job, "The real keyring, release checks (Ubuntu)")
+    assert "if: runner.os == 'Linux'" in linux
+    assert "KITDEN_REAL_KEYRING=1 uv run pytest -q tests/unit/test_real_secrets.py" in linux
 
 
 def test_clients_installs_the_newest_and_runs_the_contract_tests_with_no_account():
