@@ -122,6 +122,10 @@ def _text(s) -> str:
     return s if isinstance(s, str) else json.dumps(s, sort_keys=True)
 
 
+# How each sentence below ends: the steps, not a shortcut that turns the night green.
+STEPS = "What to do is in tests/fixtures/README.md."
+
+
 def unknown(real: dict[str, list], stored: dict[str, list]) -> list[str]:
     """One sentence for each shape in `real` that `stored` lacks for that part, and one for
     each part `stored` has and `real` does not."""
@@ -133,17 +137,14 @@ def unknown(real: dict[str, list], stored: dict[str, list]) -> list[str]:
     ]
     for part, shapes in real.items():
         if part not in stored:
-            lines.append(f"{part}: no fixture has this part. Add the saved file as a fixture.")
+            lines.append(f"{part}: no fixture has this part. {STEPS}")
             continue
         for s in shapes:
             if s in stored[part]:
                 continue
             found = _differences(s, _closest(s, stored[part]), "")
             if found:
-                lines.append(
-                    f"{part}: {'; '.join(found)}. "
-                    "Add the saved files as a new version folder (tests/fixtures/README.md)."
-                )
+                lines.append(f"{part}: {'; '.join(found)}. {STEPS}")
     return lines
 
 

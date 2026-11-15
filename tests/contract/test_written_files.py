@@ -1,8 +1,9 @@
 """The newest clients write their files in a sandbox home, and the parts Kitden reads keep
 shapes a fixture knows. Run with: pytest -m contract
 
-A failure means a client writes a shape no fixture knows: add the saved files as a new version
-folder (tests/fixtures/README.md). Set KITDEN_WRITTEN to a folder to keep the files.
+A failure means a client writes something no fixture knows, or stopped writing something: read
+the sentences it prints and follow the steps in tests/fixtures/README.md. Set KITDEN_WRITTEN to
+a folder to keep the files.
 """
 
 import os

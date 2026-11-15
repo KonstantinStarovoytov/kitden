@@ -24,6 +24,8 @@ def test_a_new_key_a_missing_key_and_a_changed_type_are_each_named():
     assert unknown(stored, stored) == []
     (line,) = unknown({"p": [{"command": "str", "args": ["str"], "trust": "bool"}]}, stored)
     assert "p" in line and "new key" in line and "trust" in line
+    # The log is read first: it points at the steps, never only "add a folder".
+    assert "tests/fixtures/README.md" in line and "folder" not in line
     (line,) = unknown({"p": [{"command": "str"}]}, stored)
     assert "missing key" in line and "args" in line
     (line,) = unknown({"p": [{"command": "str", "args": "str"}]}, stored)
