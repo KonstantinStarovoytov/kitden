@@ -13,7 +13,12 @@
 - Keep work proportional to a self-hosted tool for one person or a small team: the simplest
   mechanism that works, no speculative options.
 - Check changing facts about other tools (client file formats, gateway APIs) against their
-  own docs, and write the date you checked next to the claim.
+  own docs, and write the date you checked next to the claim. For a fact about Claude Code,
+  Codex or Cursor, use the `client-fact` skill (`.claude/skills/client-fact/SKILL.md`).
+- In a design, each fact about a client under 'Checked facts' names the page and the day it
+  was read. A plan carries, in its Global Constraints, the line: a fact about a client comes
+  from Agent Docs or the vendor's page, with the address and the date; a subagent that cannot
+  reach them writes `not checked`.
 - A change to how Kitden reads or writes a client's files updates `docs/clients.md` in the same
   pull request.
 - When you finish a task that changes what Kitden does or plans, update ROADMAP.md in the same
