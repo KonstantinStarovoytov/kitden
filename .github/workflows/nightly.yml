@@ -81,6 +81,34 @@ jobs:
           test "$(secret-tool lookup service kitden-ci account smoke)" = ci
           secret-tool clear service kitden-ci account smoke
           KITDEN_REAL_KEYRING=1 uv run pytest -q tests/unit/test_real_keyring.py -rs
+      # Release checks 17 to 21 against the real keyring. A step of its own, because the one
+      # above must stay the same as in release.yml; it starts its own bus and keyring the same
+      # way, unlocked with the same throwaway password.
+      - name: The real keyring, release checks (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          XDG_RUNTIME_DIR="$(mktemp -d)"
+          export XDG_RUNTIME_DIR
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          dbus-daemon --session --address="$DBUS_SESSION_BUS_ADDRESS" --fork
+          printf 'kitden-ci' | gnome-keyring-daemon --unlock --components=secrets
+          sleep 1
+          dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus.ListNames | grep -q org.freedesktop.secrets
+          KITDEN_REAL_KEYRING=1 uv run pytest -q tests/unit/test_real_secrets.py -rs
+      # Release checks 17 to 21 against the real Keychain, never the runner's login one: a
+      # keychain for this run in $RUNNER_TEMP, made the default, with a throwaway password and
+      # no lock timeout, so `security` never asks.
+      - name: The real Keychain (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          chain="$RUNNER_TEMP/kitden-ci.keychain-db"
+          security create-keychain -p kitden-ci "$chain"
+          security set-keychain-settings "$chain"
+          security unlock-keychain -p kitden-ci "$chain"
+          security list-keychains -d user -s "$chain"
+          security default-keychain -d user -s "$chain"
+          KITDEN_REAL_KEYCHAIN=1 uv run pytest -q tests/unit/test_real_secrets.py -rs
       # The page's own tests, in Node with a stand-in DOM.
       - run: node --test tests/frontend/*.test.mjs
       # The page opens within its time budgets (docs/development.md, Speed).
