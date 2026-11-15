@@ -179,7 +179,9 @@ def turn_off(home: Path, name: str) -> None:
     if name == "codex":
         path = home / ".codex/config.toml"
         on = f'[plugins."{PLUGIN}"]\nenabled = true\n'
-        assert on in path.read_text()
+        assert on in path.read_text(), (
+            "Codex's formatting of config.toml changed: no plugin table written as expected"
+        )
         path.write_text(path.read_text().replace(on, on.replace("true", "false")))
     else:
         client(home, "claude", "plugin", "disable", PLUGIN, "-s", "user")
@@ -310,6 +312,8 @@ def test_an_entry_kitden_wrote_itself_survives_the_clients_own_write(home, page)
     other = json.dumps({"type": "stdio", "command": "echo", "args": ["other"]})
     client(home, "claude", "mcp", "add-json", "-s", "user", "other", other)
     assert URL in client(home, "claude", "mcp", "get", "notes").stdout
+    kept = json.loads((home / ".claude.json").read_text())["mcpServers"]["notes"]
+    assert kept["headers"] == {"Authorization": f"Bearer {TOKEN}"}
 
     undo(page, change)
     assert client(home, "claude", "mcp", "get", "notes", check=False).returncode != 0
