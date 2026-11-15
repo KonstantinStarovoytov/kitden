@@ -132,13 +132,17 @@ jobs:
       # read. Both put their command in ~/.local/bin.
       - name: Install the newest clients
         run: |
-          curl -fsSL https://claude.ai/install.sh | bash
-          curl -fsSL https://chatgpt.com/codex/install.sh | sh
+          set -o pipefail
+          curl -fsSL https://claude.ai/install.sh | bash ||
+            { echo "::error::Claude Code could not be installed"; exit 1; }
+          curl -fsSL https://chatgpt.com/codex/install.sh | sh ||
+            { echo "::error::Codex could not be installed"; exit 1; }
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The commands just installed, by their full path: never another copy on the runner.
       - name: Which versions
         run: |
           for client in claude codex; do
-            if ! version="$("$client" --version)"; then
+            if ! version="$("$HOME/.local/bin/$client" --version)"; then
               echo "::error::$client could not be installed"
               exit 1
             fi

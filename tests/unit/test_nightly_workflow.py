@@ -52,6 +52,12 @@ def test_clients_installs_the_newest_and_runs_the_contract_tests_with_no_account
     assert "curl -fsSL https://claude.ai/install.sh | bash" in job
     assert "curl -fsSL https://chatgpt.com/codex/install.sh | sh" in job
     assert "enable-cache: false" in job and "npm install" not in job
+    # A failed download or installer stops the job with its own line, and only the commands
+    # just installed are run, never another copy on the runner's PATH.
+    assert "set -o pipefail" in job
+    assert "::error::Claude Code could not be installed" in job
+    assert "::error::Codex could not be installed" in job
+    assert "$HOME/.local/bin/" in _step(job, "Which versions")
     assert 'KITDEN_NEED_CLIENTS: "1"' in job and 'DISABLE_AUTOUPDATER: "1"' in job
     assert 'uv run pytest -m "contract and not signed_in" -q -rs' in job
     assert "secrets." not in job and "contents: read" in job
