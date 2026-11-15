@@ -1,6 +1,8 @@
 """Helpers for the tests that run the real clients."""
 
+import json
 import os
+import shutil
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -23,6 +25,27 @@ SIGNALS: dict[str, str | None] = {
 
 # A whole session fails after this many seconds rather than hang; each request after 60.
 SESSION_SECONDS = 180
+
+CHECKOUT = Path(__file__).resolve().parents[2]
+
+
+def checkout_marketplace(folder: Path) -> Path:
+    """A copy of the checkout's two marketplace files in `folder`, with the plugin's source
+    changed to a copy of the checkout's plugins/kitden beside them, so a client installs this
+    checkout's plugin and clones nothing. The checkout's own files name the `release` branch on
+    GitHub as the source: a client that adds the checkout itself clones that branch."""
+    shutil.copytree(CHECKOUT / "plugins/kitden", folder / "plugins/kitden")
+    sources = {
+        ".claude-plugin/marketplace.json": "./plugins/kitden",
+        ".agents/plugins/marketplace.json": {"source": "local", "path": "./plugins/kitden"},
+    }
+    for name, source in sources.items():
+        data = json.loads((CHECKOUT / name).read_text())
+        (plugin,) = data["plugins"]
+        plugin["source"] = source
+        (folder / name).parent.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_text(json.dumps(data, indent=2))
+    return folder
 
 
 def _missing(name: str) -> NoReturn:
