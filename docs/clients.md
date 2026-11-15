@@ -60,7 +60,7 @@ The table shape is fixed, because a daily check reads it. `Source` is a full add
 | `[plugins."<id>"] enabled` in `config.toml`; installs are for the whole environment, none per project (2026-10-22) | key | `src/kitden/clients/codex.py` | plugin on or off, installing | same | https://learn.chatgpt.com/docs/plugins |
 | `[marketplaces.<name>]` with `source` and `source_type` (`local` or `git`); git copies at `.tmp/marketplaces/<name>` (2026-10-20, version 0.163.0) | key | `src/kitden/clients/codex.py` | scan | same | install |
 | Plugin cache at `plugins/cache/<marketplace>/<plugin>/`, files maybe one version folder down; `.codex-plugin` folder; remote plugins keep `.codex-remote-plugin-install.json` | path | `src/kitden/clients/codex.py` | scan | same | install |
-| Plugins can bundle `mcp.json` or `.mcp.json` (2026-11-15) | path | `src/kitden/clients/codex.py` | scan | same | https://developers.openai.com/plugins/build/plugins |
+| Plugins can bundle `mcp.json` or `.mcp.json` | path | `src/kitden/clients/codex.py` | scan | same | install |
 | `[projects."<path>"] trust_level = "trusted"`; project `.codex/config.toml` and `.agents/skills` count only when trusted | key | `src/kitden/clients/codex.py` | scan | same | install |
 | `[[skills.config]]` with `path` of a `SKILL.md` and `enabled = false` turns a skill off; restart Codex (2026-10-26) | key | `src/kitden/clients/codex.py` | turning a skill off | same | https://learn.chatgpt.com/docs/build-skills |
 | Skills in `~/.agents/skills` and `~/.codex/skills`; a project reads `.agents/skills` from its folder up to the repository root (2026-10-22) | path | `src/kitden/clients/codex.py` | scan | same | https://learn.chatgpt.com/docs/build-skills |
