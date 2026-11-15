@@ -121,6 +121,33 @@ jobs:
           echo "With HOME=$empty:"
           HOME="$empty" security default-keychain -d user || true
           HOME="$empty" security list-keychains -d user || true
+          echo "(i) Set under HOME=$empty with no Library folders, read back:"
+          HOME="$empty" security list-keychains -d user -s "$chain" || true
+          HOME="$empty" security default-keychain -d user -s "$chain" || true
+          HOME="$empty" security default-keychain -d user || true
+          HOME="$empty" security list-keychains -d user || true
+          ls -la "$empty/Library/Preferences" || true
+          echo "(ii) The same after making Library/Preferences and Library/Keychains:"
+          mkdir -p "$empty/Library/Preferences" "$empty/Library/Keychains" || true
+          HOME="$empty" security list-keychains -d user -s "$chain" || true
+          HOME="$empty" security default-keychain -d user -s "$chain" || true
+          HOME="$empty" security default-keychain -d user || true
+          HOME="$empty" security list-keychains -d user || true
+          ls -la "$empty/Library/Preferences" || true
+          plutil -p "$empty/Library/Preferences/com.apple.security.plist" || true
+          echo "(iii) Does a set under a moved HOME change the runner's own settings (cfprefsd)?"
+          probe="$RUNNER_TEMP/kitden-probe.keychain-db"
+          security create-keychain -p kitden-ci "$probe" || true
+          other="$(mktemp -d)"
+          mkdir -p "$other/Library/Preferences" "$other/Library/Keychains" || true
+          HOME="$other" security default-keychain -d user -s "$probe" || true
+          echo "The runner's HOME now says:"
+          security default-keychain -d user || true
+          echo "HOME=$other now says:"
+          HOME="$other" security default-keychain -d user || true
+          # Back to the run's keychain, whatever (iii) did.
+          security list-keychains -d user -s "$chain" || true
+          security default-keychain -d user -s "$chain" || true
           KITDEN_REAL_KEYCHAIN=1 KITDEN_CI_KEYCHAIN="$chain" \
             uv run pytest -q tests/unit/test_real_secrets.py -rs
       # The page's own tests, in Node with a stand-in DOM.

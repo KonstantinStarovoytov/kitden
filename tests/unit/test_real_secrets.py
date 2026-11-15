@@ -83,21 +83,39 @@ def ci_keychain() -> Path:
 
 @pytest.fixture(autouse=True)
 def _the_ci_keychain_in_the_sandbox_home(_never_the_real_home, _the_real_tool):
-    """macOS: `security` keeps the user's keychain list and default keychain under HOME, and the
-    tests run with HOME in the sandbox, where there is none: a write then waits for a keychain.
-    So the run's keychain becomes the list and the default of this test's HOME too."""
+    """macOS: `security` keeps the user's keychain list and default keychain under HOME (in
+    Library/Preferences/com.apple.security.plist), and the tests run with HOME in the sandbox,
+    where there is none: a write then waits for a keychain. So the run's keychain becomes the
+    list and the default of this test's HOME too. The sandbox home gets the Library folders a
+    real home has first: `security` does not make them, and without them its settings are lost
+    with exit code 0."""
     if not MAC:
         return
     chain = str(ci_keychain())
+    home = Path(os.environ["HOME"])
+    for folder in ("Library/Preferences", "Library/Keychains"):
+        (home / folder).mkdir(parents=True, exist_ok=True)
+    said = []
     for args in (
         ["list-keychains", "-d", "user", "-s", chain],
         ["default-keychain", "-d", "user", "-s", chain],
         ["unlock-keychain", "-p", "kitden-ci", chain],
     ):
         done = run_tool([keychain.SECURITY, *args], f"security {args[0]}")
-        assert done.returncode == 0, f"security {args[0]}: {done.stderr}"
+        said.append(f"security {args[0]}: exit {done.returncode}, stderr {done.stderr.strip()!r}")
     default = run_tool([keychain.SECURITY, "default-keychain", "-d", "user"], "the default")
-    assert Path(chain).name in default.stdout, f"the default keychain is {default.stdout!r}"
+    listed = run_tool([keychain.SECURITY, "list-keychains", "-d", "user"], "the list")
+    plist = home / "Library/Preferences/com.apple.security.plist"
+    if Path(chain).name not in default.stdout or any(" exit 0," not in line for line in said):
+        pytest.fail(
+            "the run's keychain is not the default under the sandbox HOME "
+            f"({home}):\n"
+            + "\n".join(said)
+            + f"\nread back: default-keychain exit {default.returncode}, "
+            f"stdout {default.stdout.strip()!r}, stderr {default.stderr.strip()!r}; "
+            f"list-keychains stdout {listed.stdout.strip()!r}"
+            f"\n{plist} exists: {plist.exists()}"
+        )
 
 
 @pytest.fixture
