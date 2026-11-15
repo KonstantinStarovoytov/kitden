@@ -6,6 +6,7 @@ GitHub: docs.github.com/en/rest/git/trees. No downloaded code is executed here.
 """
 
 import copy
+import difflib
 import hashlib
 import io
 import json
@@ -113,19 +114,47 @@ def safe_path(path: str) -> str:
     return value.as_posix()
 
 
-def words_match(query: str, value: str) -> bool:
-    def normalize(text):
-        return re.sub(r"[-_\s]+", " ", text.casefold()).strip()
+def _normalize(text: str) -> str:
+    return re.sub(r"[-_\s]+", " ", text.casefold()).strip()
 
-    return all(word in normalize(value) for word in normalize(query).split())
+
+def _close_enough(word: str, candidates: list[str]) -> bool:
+    """True for an exact substring or a close spelling (one or two letters off)."""
+    if not word:
+        return True
+    if any(word in cand for cand in candidates):
+        return True
+    # Prefer matching whole tokens for fuzzy; cutoff depends on length for 1-2 edits.
+    cutoff = 0.8 if len(word) <= 5 else 0.75
+    return bool(difflib.get_close_matches(word, candidates, n=1, cutoff=cutoff))
+
+
+def words_match(query: str, value: str) -> bool:
+    """Every word of the query matches a word or close spelling in the value."""
+    q_norm = _normalize(query)
+    v_norm = _normalize(value)
+    q_words = q_norm.split()
+    v_words = v_norm.split()
+    if not q_words:
+        return True
+    return all(_close_enough(qw, v_words) or qw in v_norm for qw in q_words)
 
 
 def rank(query: str, row: dict) -> tuple:
-    """Sort key: the exact name, then names that start with the query, plugins before skills,
-    then the most installed. Otherwise the source's own order stays."""
-    words = re.sub(r"[-_\s]+", " ", query.casefold()).strip()
-    name = re.sub(r"[-_\s]+", " ", row["name"].casefold())
-    match = 0 if name == words else 1 if words and name.startswith(words) else 2
+    """Sort key: exact name, then prefix, then close name match, then description match,
+    plugins before skills, then most installed."""
+    words = _normalize(query)
+    name = _normalize(row["name"])
+    name_words = name.split()
+    q_words = words.split()
+    if name == words:
+        match = 0
+    elif words and name.startswith(words):
+        match = 1
+    elif q_words and all(_close_enough(w, name_words) or w in name for w in q_words):
+        match = 2  # close match on the name
+    else:
+        match = 3  # description or other
     return (match, row["kind"] != "plugin", -(row.get("installs") or 0))
 
 
