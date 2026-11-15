@@ -28,5 +28,6 @@ Each version folder mirrors the client's real paths under a fake home, for examp
 ## A red night
 
 - A red `clients` job in Nightly tests means a client writes a shape no fixture knows.
-- Download the run's `written-files-<os>` artifact: the files the newest clients wrote.
-- Add them as a new version folder (`<client>/<version>/home/`), with every secret a sentinel.
+- Download the run's `written-files-<os>` artifact: the files the newest clients wrote, holding
+  only the parts Kitden reads, with the home's path as `{HOME}`.
+- Copy it as it is into a new version folder (`<client>/<version>/home/`).

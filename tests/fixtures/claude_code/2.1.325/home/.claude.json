@@ -1,10 +1,4 @@
 {
-  "firstStartTime": "2026-11-15T01:14:07.790Z",
-  "firstStartVersion": "2.1.325",
-  "opusProMigrationComplete": true,
-  "seenNotifications": {},
-  "hasResetAutoModeOptInForDefaultOffer": true,
-  "migrationVersion": 15,
   "mcpServers": {
     "notes": {
       "type": "stdio",

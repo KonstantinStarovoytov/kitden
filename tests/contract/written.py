@@ -9,6 +9,8 @@ import tomllib
 from collections.abc import Callable
 from pathlib import Path
 
+import tomlkit
+
 from kitden.clients.versions import highest_version
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -187,14 +189,22 @@ def newest_fixture(client: str) -> Path:
 
 
 def save(home: Path, client: str, to: Path) -> None:
-    """Copy the watched files to `to/<client>/`, with the home's path as {HOME}."""
+    """Write the watched parts of the watched files to `to/<client>/`, with the home's path as
+    {HOME}. Nothing else is kept: a signed-in client writes the account into its files too."""
     # On macOS the temp folder has two names, /var/… and /private/var/…: the longer goes first.
     homes = sorted({str(home), str(home.resolve())}, key=len, reverse=True)
     for name in dict.fromkeys(file for file, _ in WATCHED[client]):
         source = home / name
         if not source.is_file():
             continue
-        text = source.read_text()
+        data = _read(source)
+        tops = {path[0] for file, path in WATCHED[client] if file == name}
+        if "*" not in tops:
+            data = {key: value for key, value in data.items() if key in tops}
+        if source.suffix == ".toml":
+            text = tomlkit.dumps(data)
+        else:
+            text = json.dumps(data, indent=2) + "\n"
         for path in homes:
             text = text.replace(path, "{HOME}")
         target = to / client / name
