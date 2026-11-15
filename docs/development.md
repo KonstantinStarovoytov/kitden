@@ -8,7 +8,14 @@ uv run pytest -q
 ```
 
 `uv tool install --reinstall .` gives you the `kitden` command from this folder. Contract tests
-against the real clients run in sandbox homes: `uv run pytest -m contract`. Tests can build a
+against the real clients run in sandbox homes: `uv run pytest -m contract`. Each client gets a
+sandbox home, so your real settings files are never read or changed. But on a machine where you
+are signed in, a real client can still find your account in the system's keychain and run as
+you, and `ssh` still uses your real keys. The test keeps nothing of that: a saved copy holds only
+the parts Kitden reads. Every night the contract tests also run against the newest Claude Code
+and Codex, with no account (`.github/workflows/nightly.yml`, job `clients`);
+`-m "contract and not signed_in"` is what runs there. The job installs the clients with the
+vendors' own installers. Tests marked `signed_in` need a signed-in client. Tests can build a
 sample home with `kitden.demo.build_demo_home(root, size)`.
 
 Built with Python 3.13+, uv, Starlette and the official MCP SDK. The page is plain ES modules
@@ -41,6 +48,8 @@ The normal run leaves it out. It runs only in the nightly run's last step
 (`uv run pytest -q --set-aside=only`), which never fails the job. Delete the line to take the
 test back. The desk shows how many tests are set aside. To run a set-aside test by hand, add
 `--set-aside=run`; without it pytest leaves the test out and runs nothing.
+Contract tests are never listed there: fix them, or mark them `signed_in` when they need an
+account.
 
 ## Commands
 

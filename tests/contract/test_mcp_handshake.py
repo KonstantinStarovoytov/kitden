@@ -6,7 +6,6 @@ stdio the way a client does, calls `show_setup`, then undoes. Run with: pytest -
 
 import json
 import os
-import shutil
 import subprocess
 
 import pytest
@@ -14,15 +13,15 @@ from mcp import Client, StdioServerParameters
 
 from kitden.changes.actions import setup_server_steps
 from kitden.changes.backup import ChangeStore
-from kitden.changes.client_cli import CommandRunner, find_command
+from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import Engine
 from kitden.command import installed_command
 from kitden.model import ChangeState
 from kitden.views.inventory import default_adapters
 from tests.conftest import make_home
+from tests.contract.conftest import need_command, need_kitden
 
 pytestmark = [pytest.mark.contract, pytest.mark.anyio]
-CODEX_APP = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
 
 
 @pytest.fixture
@@ -30,14 +29,11 @@ def anyio_backend():
     return "asyncio"
 
 
-def _codex() -> str | None:
-    return shutil.which("codex") or (CODEX_APP if os.path.exists(CODEX_APP) else None)
-
-
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    if _codex() is None or find_command("claude", tmp_path) is None or installed_command() is None:
-        pytest.skip("needs codex, claude and the kitden command")
+    need_command("codex", tmp_path)
+    need_command("claude", tmp_path)
+    need_kitden()
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
     return make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
@@ -61,7 +57,7 @@ async def test_register_handshake_and_undo(home):
     assert change.state is ChangeState.VERIFIED, change.error
 
     listed = subprocess.run(
-        [_codex(), "mcp", "list", "--json"],
+        [need_command("codex", home), "mcp", "list", "--json"],
         env=_env(home),
         capture_output=True,
         text=True,
@@ -93,7 +89,7 @@ async def test_old_entries_update_to_kitden_with_real_clients(home):
     from kitden.views.setup_server import is_old_entry
 
     old = {"type": "stdio", "command": "/opt/old/bin/agentsetup", "args": ["mcp"]}
-    claude = find_command("claude", home)
+    claude = need_command("claude", home)
     subprocess.run(
         [claude, "mcp", "add-json", "-s", "user", "agentsetup", json.dumps(old)],
         env=_env(home),
@@ -121,7 +117,7 @@ async def test_old_entries_update_to_kitden_with_real_clients(home):
     )
     assert got.returncode == 0 and command in got.stdout
     listed = subprocess.run(
-        [_codex(), "mcp", "list", "--json"],
+        [need_command("codex", home), "mcp", "list", "--json"],
         env=_env(home),
         capture_output=True,
         text=True,

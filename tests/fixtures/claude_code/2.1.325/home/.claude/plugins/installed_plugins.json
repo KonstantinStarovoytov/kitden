@@ -1,0 +1,14 @@
+{
+  "plugins": {
+    "kitden@kitden": [
+      {
+        "scope": "user",
+        "installPath": "{HOME}/.claude/plugins/cache/kitden/kitden/0.9.2",
+        "version": "0.9.2",
+        "installedAt": "2026-11-15T01:14:10.478Z",
+        "lastUpdated": "2026-11-15T01:14:10.478Z",
+        "gitCommitSha": "69a92eaf830ea3c82cbe6869abdebad2fbda7966"
+      }
+    ]
+  }
+}

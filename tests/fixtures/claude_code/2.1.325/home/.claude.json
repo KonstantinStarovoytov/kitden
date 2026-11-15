@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "notes": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "notes-mcp"
+      ]
+    },
+    "remote": {
+      "type": "http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer SENTINEL_SECRET_TOKEN"
+      }
+    }
+  }
+}

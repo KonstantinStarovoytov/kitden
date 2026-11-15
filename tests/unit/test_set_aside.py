@@ -29,4 +29,6 @@ def test_every_listed_test_exists_and_says_since_when_and_why():
         if line.strip() and not line.startswith("#"):
             found = LINE.fullmatch(line)
             assert found, line
+            # The nightly runs this list under the default markers: a contract test would not run.
+            assert not found[1].startswith("tests/contract/"), line
             assert f"def {found[2]}(" in (ROOT / found[1]).read_text(), line

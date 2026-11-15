@@ -1,0 +1,14 @@
+[mcp_servers.notes]
+command = "npx"
+args = ["-y", "notes-mcp"]
+
+[mcp_servers.remote]
+url = "https://mcp.example.com/mcp"
+bearer_token_env_var = "TOKEN"
+
+[marketplaces.kitden]
+source_type = "local"
+source = "{HOME}/work/kitden"
+
+[plugins."kitden@kitden"]
+enabled = true

@@ -11,12 +11,13 @@ import pytest
 
 from kitden.changes.actions import plugin_steps
 from kitden.changes.backup import ChangeStore
-from kitden.changes.client_cli import CommandRunner, find_command
+from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import Engine
 from kitden.changes.toml_edit import get_value
 from kitden.model import ChangeState
 from kitden.views.inventory import build_inventory, default_adapters
 from tests.conftest import make_home
+from tests.contract.conftest import need_command
 
 pytestmark = pytest.mark.contract
 PLUGIN = "superpowers@claude-plugins-official"
@@ -24,8 +25,7 @@ PLUGIN = "superpowers@claude-plugins-official"
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    if find_command("claude", tmp_path) is None:
-        pytest.skip("needs the claude command")
+    need_command("claude", tmp_path)
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
     return make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
@@ -33,7 +33,7 @@ def home(tmp_path, monkeypatch):
 
 def _claude_plugins(home, cwd=None) -> dict:
     done = subprocess.run(
-        [find_command("claude", home), "plugin", "list", "--json"],
+        [need_command("claude", home), "plugin", "list", "--json"],
         env={**os.environ, "HOME": str(home)},
         cwd=cwd or home,
         capture_output=True,

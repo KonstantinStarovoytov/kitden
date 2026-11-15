@@ -79,5 +79,6 @@ ignore = ["S101", "PERF401", "RUF001", "RUF002", "RUF003"]
 testpaths = ["tests"]
 addopts = "-m 'not contract'"
 markers = [
-    "contract: tests against real installed clients in sandbox homes (local only)",
+    "contract: tests against real installed clients in sandbox homes (locally and every night)",
+    "signed_in: needs a client that is signed in; the nightly leaves these tests out",
 ]

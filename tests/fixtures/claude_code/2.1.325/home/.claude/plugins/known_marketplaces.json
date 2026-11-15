@@ -1,0 +1,10 @@
+{
+  "kitden": {
+    "source": {
+      "source": "directory",
+      "path": "{HOME}/work/kitden"
+    },
+    "installLocation": "{HOME}/work/kitden",
+    "lastUpdated": "2026-11-15T01:14:08.334Z"
+  }
+}

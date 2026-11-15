@@ -1,8 +1,8 @@
 """The Library with the real clients in a sandbox home: add a marketplace, install a plugin in
 Claude Code and Codex in one review, then Undo both. Run with: pytest -m contract
 
-The marketplace is this repository's folder, so nothing is downloaded. The real home folder is
-never touched.
+The marketplace is this repository's folder, but the plugin itself is fetched from the `release`
+branch on GitHub. The real home folder is never touched.
 """
 
 import json
@@ -12,10 +12,10 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from kitden.changes.client_cli import find_command
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home
+from tests.contract.conftest import need_command
 
 pytestmark = pytest.mark.contract
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,8 +25,8 @@ POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    if find_command("claude", tmp_path) is None or find_command("codex", tmp_path) is None:
-        pytest.skip("needs the claude and codex commands")
+    need_command("claude", tmp_path)
+    need_command("codex", tmp_path)
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")

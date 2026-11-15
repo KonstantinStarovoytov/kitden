@@ -6,18 +6,18 @@ the fixtures, so the owner's real settings are never touched. Run with: pytest -
 
 import json
 import os
-import shutil
 import subprocess
 
 import pytest
 
 from kitden.changes.actions import connect_steps, remove_steps
 from kitden.changes.backup import ChangeStore
-from kitden.changes.client_cli import CommandRunner, find_command
+from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import Engine
 from kitden.model import ChangeState, Gateway, GatewayAuth
 from kitden.views.inventory import build_inventory, default_adapters
 from tests.conftest import make_home, write_cursor_fixture_state
+from tests.contract.conftest import need_command
 
 pytestmark = pytest.mark.contract
 
@@ -25,18 +25,10 @@ URL = "http://127.0.0.1:12008/metamcp/dev/mcp"
 FILES = [".claude.json", ".codex/config.toml", ".cursor/mcp.json", "work/website/.mcp.json"]
 
 
-def _codex() -> str | None:
-    return shutil.which("codex") or (
-        "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
-        if os.path.exists("/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex")
-        else None
-    )
-
-
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    if find_command("claude", tmp_path) is None or _codex() is None:
-        pytest.skip("needs the claude and codex commands")
+    need_command("claude", tmp_path)
+    need_command("codex", tmp_path)
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
@@ -51,7 +43,11 @@ def _bytes(home):
 def _codex_servers(home) -> dict:
     env = {**os.environ, "HOME": str(home), "CODEX_HOME": str(home / ".codex")}
     out = subprocess.run(
-        [_codex(), "mcp", "list", "--json"], env=env, capture_output=True, text=True, check=True
+        [need_command("codex", home), "mcp", "list", "--json"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     data = json.loads(out)
     return {s["name"]: s for s in (data if isinstance(data, list) else data.get("servers", []))}
@@ -60,7 +56,7 @@ def _codex_servers(home) -> dict:
 def _claude_get(home, name, cwd=None) -> str:
     env = {**os.environ, "HOME": str(home)}
     done = subprocess.run(
-        [find_command("claude", home), "mcp", "get", name],
+        [need_command("claude", home), "mcp", "get", name],
         env=env,
         cwd=cwd or home,
         capture_output=True,

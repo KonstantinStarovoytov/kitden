@@ -8,6 +8,7 @@ import shutil
 import sqlite3
 import sys
 import time
+from collections.abc import Mapping
 from contextlib import closing
 from pathlib import Path
 
@@ -114,28 +115,64 @@ def _words(args) -> list[str]:
     return [w for word in words for w in _words(word)]
 
 
+def refused(words: list[str], home: str | None, sandbox: Path, contract: bool) -> str | None:
+    """Why a test must not run this command, or None. A program inside the sandbox may run.
+    This process never runs the Keychain command, but a real client may read the Keychain
+    itself. A real client may run only in a contract test, and only with its home folder
+    inside the sandbox. A full path is judged by both its names, as written and as resolved:
+    Claude Code's launcher `claude` is a link to a file named after its version."""
+    sandbox = sandbox.resolve()
+    for word in words:
+        path = Path(word).resolve() if Path(word).is_absolute() else Path(word)
+        if path.is_relative_to(sandbox):
+            continue
+        names = {Path(word).name.lower(), path.name.lower()}
+        if names & KEYCHAIN_BINARIES:
+            return f"a test tried to run the real Keychain: {word}"
+        if names & CLIENT_BINARIES:
+            if not contract:
+                return f"a test tried to run a real client: {word}"
+            if home is None or not Path(home).resolve().is_relative_to(sandbox):
+                return (
+                    f"a contract test tried to run {word} with its home or settings folder "
+                    f"outside the sandbox: {home}"
+                )
+    return None
+
+
+def client_homes(env: Mapping[str, str]) -> list[str | None]:
+    """Every folder a client could take as its home: HOME, then Claude Code's and Codex's own."""
+    homes: list[str | None] = [env.get("HOME")]
+    homes += [env[name] for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME") if name in env]
+    return homes
+
+
 @pytest.fixture(autouse=True)
-def _no_client_commands(tmp_path_factory, monkeypatch):
-    """No test finds or runs a real client; a test that needs one uses a fake in its tmp folder."""
+def _no_client_commands(request, tmp_path_factory, monkeypatch):
+    """No test runs a real client: a test that needs one uses a fake in its tmp folder. Only a
+    contract test may find and run a real client, with HOME, CLAUDE_CONFIG_DIR and CODEX_HOME in
+    the sandbox."""
     import subprocess
 
     from kitden.clients import codex, version_cache
 
-    monkeypatch.setattr(version_cache, "version_command", lambda client: None)
-    monkeypatch.setattr(codex, "version_command", lambda client: None)
-    monkeypatch.setattr(codex, "_LIST_CACHE", {})
+    contract = request.node.get_closest_marker("contract") is not None
+    if not contract:
+        monkeypatch.setattr(version_cache, "version_command", lambda client: None)
+        monkeypatch.setattr(codex, "version_command", lambda client: None)
+        monkeypatch.setattr(codex, "_LIST_CACHE", {})
     sandbox = tmp_path_factory.getbasetemp().resolve()
 
     class Guarded(subprocess.Popen):
         def __init__(self, args, *rest, **options):
-            for word in _words(args):
-                path = Path(word).resolve() if Path(word).is_absolute() else Path(word)
-                if path.is_relative_to(sandbox):
-                    continue
-                if path.name.lower() in CLIENT_BINARIES:
-                    raise AssertionError(f"a test tried to run a real client: {word}")
-                if path.name.lower() in KEYCHAIN_BINARIES and not REAL_KEYRING:
-                    raise AssertionError(f"a test tried to run the real Keychain: {word}")
+            words = _words(args)
+            if REAL_KEYRING:
+                words = [w for w in words if Path(w).name.lower() not in KEYCHAIN_BINARIES]
+            env = options.get("env")
+            for home in client_homes(os.environ if env is None else env):
+                message = refused(words, home, sandbox, contract)
+                if message:
+                    raise AssertionError(message)
             super().__init__(args, *rest, **options)
 
     monkeypatch.setattr(subprocess, "Popen", Guarded)
@@ -283,8 +320,10 @@ def all_text(value) -> str:
 
 @pytest.fixture(autouse=True)
 def _no_real_client_homes(monkeypatch):
-    """Tests must never read the real ~/.codex through CODEX_HOME."""
+    """Tests must never reach the real ~/.codex or Claude Code folder through CODEX_HOME or
+    CLAUDE_CONFIG_DIR."""
     monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
 
 
 @pytest.fixture(autouse=True)
