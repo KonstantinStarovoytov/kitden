@@ -15,18 +15,24 @@ Facts about `security` this relies on (from `man security`, checked 2026-10-22):
   `security` returns for a missing item (errSecItemNotFound), not tried on this machine.
 
 Seen on a GitHub macOS runner on 2026-11-15, not in the man page:
-- A `security -i` line is cut at about 4 KB: of a line for a 2,048-character value, about 2,020
-  characters were stored (so at least 4,078 bytes of the line were read whole), and the rest of
-  the line ran as another command. 1,024 characters (a line of about 2,100 bytes) came back
-  whole. So `store` refuses a value whose line would be longer than LINE_LIMIT, before it runs
-  anything.
+- A `security -i` line of up to 4,095 bytes before its newline is read whole; from 4,096 bytes
+  on it is cut there, and the rest of the line runs as another command. So `store` refuses a
+  value whose line would be longer than LINE_LIMIT, before it runs anything.
 - `find-generic-password -w` prints a value with a byte outside printable ASCII as hex
   (`d0bad0bb…`), the same as an ASCII value made of hex digits would look. `-g` writes the item's
-  attributes on stdout and on stderr `password: 0xD0BA…  "\\320\\272…"`: the bytes in hex, then
-  in quotes with such bytes in octal. That `0x` form tells the two apart, so Kitden reads `-g`.
-  A printable value is taken to be `password: "<value>"`, with a backslash in octal (`\\134`) or
-  escaped (`\\\\`) and quotes as they are: to confirm on a runner. Any other line is not a
-  value, and Kitden says it could not read the secret.
+  attributes on stdout and the password on stderr, in one of these forms:
+  `password: "cafe1234"` for printable ASCII;
+  `password: 0x6120226222205C20632764  "a "b" \\134 c'd"` when a byte is a quote or a backslash
+  (the value had both), or `password: 0x6109620A63  "a\\011b\\012c"` when it is outside printable
+  ASCII: the hex, then the bytes in quotes, a backslash and the bytes outside printable ASCII in
+  octal; `password: 0xE697A5E69CAC ` (no quotes) when no byte is printable; `password: ` for an
+  empty value. The `0x` form tells hex from a value, so Kitden reads `-g`, and takes the bytes
+  from the hex. A line in no such form is not a value, and Kitden says it could not read the
+  secret; so is an empty password, which Kitden never stores.
+- `-w` as the last option of `add-generic-password` asks for the value and reads it from stdin,
+  but keeps only its first 128 bytes; inside `-i`, and on a `-i` line continued with a
+  backslash, the rest runs as commands. No way was found to write a longer value whole without
+  it in the arguments.
 
 On Linux the same item is kept by `secret-tool` (package libsecret-tools; GNOME Keyring and KDE
 Wallet serve it), with the attributes `service kitden account <server>/<key>`. Facts from its
@@ -67,8 +73,8 @@ LINUX_REACH = (
 )
 # Characters that would break the `security -i` command line.
 NOT_IN_ACCOUNTS = {'"', "\\"}
-# The longest `security -i` line Kitden writes, its newline included: under the 4,078 bytes a
-# runner read whole, with room to spare.
+# The longest `security -i` line Kitden writes, its newline included: 95 bytes under the 4,095
+# (newline not counted) that a runner read whole.
 LINE_LIMIT = 4000
 TOO_LONG = (
     "The secret {account} is too long for the Keychain: {size:,} bytes, and Kitden can store "
@@ -76,8 +82,9 @@ TOO_LONG = (
 )
 UNREADABLE = "Kitden could not read a secret of {server} from the {store}."
 # `find-generic-password -g`'s password line: the hex of the bytes when one is not printable
-# ASCII (then the same bytes in quotes), else the value in quotes.
-PASSWORD = re.compile(r'password: (?:0x(?P<hex>(?:[0-9A-Fa-f]{2})+)(?:  ".*")?|"(?P<shown>.*)")')
+# ASCII, a quote or a backslash, then the printable ones in quotes if there are any; else the
+# value in quotes.
+PASSWORD = re.compile(r'password: (?:0x(?P<hex>(?:[0-9A-Fa-f]{2})+)(?: +".*"| *)|"(?P<shown>.*)")')
 # In the quotes: a byte in octal, an escaped backslash or quote, or a printable ASCII letter.
 SHOWN = re.compile(r'\\([0-7]{3})|\\([\\"])|([ -\[\]-~])')
 
@@ -270,6 +277,10 @@ def _password(said: str) -> str:
         raise ValueError("not a password line")
     if found["hex"] is not None:
         return bytes.fromhex(found["hex"]).decode()
+    if not found["shown"]:
+        # Kitden never stores an empty secret (`secrets_out` leaves an empty value in place),
+        # and `security` writes one as `password: ` with nothing after it anyway.
+        raise ValueError("an empty password")
     data, at = bytearray(), 0
     for part in SHOWN.finditer(found["shown"]):
         if part.start() != at:

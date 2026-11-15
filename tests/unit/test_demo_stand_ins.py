@@ -193,5 +193,11 @@ def test_the_stand_in_keychain_prints_the_password_as_security_does(tmp_path):
         ref = keychain.store("files", "FILES_TOKEN", value, run=run)
         assert keychain.read(ref, run=run) == value
     code, out, err = run(["find-generic-password", "-s", "kitden", "-a", "files/FILES_TOKEN", "-g"])
-    assert (code, err) == (0, 'password: "a "b" \\134 c"\n')
+    assert (code, err) == (0, 'password: 0x6120226222205C2063  "a "b" \\134 c"\n')
     assert 'class: "genp"' in out
+    keychain.store("files", "FILES_TOKEN", "日本", run=run)
+    code, _, err = run(["find-generic-password", "-s", "kitden", "-a", "files/FILES_TOKEN", "-g"])
+    assert (code, err) == (0, "password: 0xE697A5E69CAC \n")
+    keychain.store("files", "FILES_TOKEN", "cafe1234", run=run)
+    code, _, err = run(["find-generic-password", "-s", "kitden", "-a", "files/FILES_TOKEN", "-g"])
+    assert (code, err) == (0, 'password: "cafe1234"\n')

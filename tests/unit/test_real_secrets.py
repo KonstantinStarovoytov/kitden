@@ -12,7 +12,6 @@ starts `kitden-ci-`, and a `finally` removes it, also when the test fails halfwa
 import json
 import os
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -232,6 +231,11 @@ def test_a_value_in_other_alphabets_comes_back_unchanged():
     _round_trip("ALPHABETS", "ключ-héllo-日本")
 
 
+def test_a_value_with_no_ascii_letter_comes_back_unchanged():
+    """`find-generic-password -g` prints this value as hex alone, with no quoted part."""
+    _round_trip("NOASCII", "日本")
+
+
 @mac_only
 def test_an_ascii_value_of_hex_digits_is_not_decoded():
     _round_trip("HEXDIGITS", "cafe1234")
@@ -243,19 +247,31 @@ def test_a_1024_character_value_comes_back_unchanged():
     _round_trip("MEDIUM", ("kitden-ci-1kb-" * 80)[:1024])
 
 
-@pytest.mark.xfail(
-    sys.platform == "darwin",
-    strict=True,
-    raises=KeychainError,
-    reason="A `security -i` line is cut at about 4 KB (seen 2026-11-15 on a GitHub macOS "
-    "runner), so Kitden refuses a secret whose line would be longer than 4,000 bytes, about "
-    "1,970 characters, and writes nothing. Strict: remove this mark when a way to store it "
-    "whole is found.",
-)
 def test_a_4_kb_value_comes_back_unchanged():
+    """The name is from before Kitden had a limit; check 21 of docs/development.md cites it.
+    On Linux a 4 KB secret comes back unchanged. On macOS a `security -i` line longer than
+    4,095 bytes is cut (seen 2026-11-15 on a GitHub macOS runner), so Kitden refuses the secret
+    before it writes anything, and the item that was there stays as it was."""
     value = ("kitden-ci-4kb-" * 300)[:4096]
     assert len(value) == 4096
-    _round_trip("LONG", value)
+    if not MAC:
+        _round_trip("LONG", value)
+        return
+    item = ref("kitden-ci-values", "LONG")
+    remove(item)
+    most = keychain.longest("kitden-ci-values", "LONG")
+    try:
+        keychain.store("kitden-ci-values", "LONG", "SENTINEL_CI_EARLIER")
+        with pytest.raises(KeychainError) as error:
+            keychain.store("kitden-ci-values", "LONG", value)
+        assert str(error.value) == (
+            "The secret kitden-ci-values/LONG is too long for the Keychain: 4,096 bytes, and "
+            f"Kitden can store at most {most:,}."
+        )
+        assert found(item["keychain"]) == "SENTINEL_CI_EARLIER"
+    finally:
+        remove(item)
+    assert found(item["keychain"]) is None
 
 
 @mac_only

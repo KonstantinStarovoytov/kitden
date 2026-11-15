@@ -165,20 +165,26 @@ def answering(said: str):
 @pytest.mark.parametrize(
     ("said", "value"),
     [
+        # The lines are as `security` wrote them on a GitHub macOS runner (2026-11-15).
         ('password: "SENTINEL_SECRET_V"', "SENTINEL_SECRET_V"),
         # An ASCII value that is all hex digits is printed as itself and never decoded.
         ('password: "cafe1234"', "cafe1234"),
         ('password: "0xCAFE"', "0xCAFE"),
-        ('password: ""', ""),
-        # Quotes stay as they are; a backslash is in octal, or escaped by a backslash.
+        # Quotes and a backslash: the hex, then the value in quotes, the backslash in octal.
+        ('password: 0x6120226222205C20632764  "a "b" \\134 c\'d"', 'a "b" \\ c\'d'),
+        # Not seen, read the same: quotes and backslash without the hex, octal or C-style.
         ('password: "a "b" \\134 c\'d"', 'a "b" \\ c\'d'),
         ('password: "a \\"b\\" \\\\ c\'d"', 'a "b" \\ c\'d'),
         ('password: "\\134134"', "\\134"),
-        # Bytes outside printable ASCII: their hex, then the same bytes escaped in octal.
+        # Bytes outside printable ASCII: their hex, then the printable ones in quotes.
+        ('password: 0x6109620A63  "a\\011b\\012c"', "a\tb\nc"),
         ('password: 0xD0BAD0BB2D68C3A9  "\\320\\272\\320\\273-h\\303\\251"', "кл-hé"),
+        # No printable byte at all: only the hex, and one space.
+        ("password: 0xE697A5E69CAC ", "日本"),
         ("password: 0xE697A5E69CAC", "日本"),
+        ("password: 0xE697A5E69CAC   ", "日本"),
         ('password: 0xe697a5e69cac  "\\346\\227\\245\\346\\234\\254"', "日本"),
-        ('password: 0x610A62  "a\\012b"', "a\nb"),
+        ('password: 0x41 "A"', "A"),
     ],
 )
 def test_the_password_line_of_find_g_is_read(said, value):
@@ -189,7 +195,9 @@ def test_the_password_line_of_find_g_is_read(said, value):
     "said",
     [
         "",  # no password line
-        "password: \n",  # an item with no password
+        # An empty password, as `security` wrote it on the runner: Kitden never stores one.
+        "password: \n",
+        'password: ""\n',
         "password:\n",
         "password: SENTINEL\n",  # not quoted
         'password: "a" more\n',
@@ -198,7 +206,8 @@ def test_the_password_line_of_find_g_is_read(said, value):
         'password: "é"\n',  # a letter that would be in hex
         "password: 0xABC\n",  # half a byte
         "password: 0xZZ\n",
-        'password: 0x41 "A"\n',  # one space, not two
+        "password: 0x\n",
+        "password: 0xE697A5E69CAC x\n",
         'password: 0xFF  "\\377"\n',  # not UTF-8
         'password: "a"\npassword: "b"\n',  # two
     ],
