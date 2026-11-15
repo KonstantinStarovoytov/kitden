@@ -1,9 +1,15 @@
 """The shapes of the files the clients write: keys and value types, never values."""
 
 import json
+import shutil
 import tomllib
+from pathlib import Path
+
+import pytest
 
 from tests.contract.written import WATCHED, newest_fixture, parts, save, shape, unknown
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_shape_keeps_keys_and_types_and_drops_values():
@@ -25,6 +31,39 @@ def test_a_new_key_a_missing_key_and_a_changed_type_are_each_named():
 def test_a_part_no_fixture_has_is_named():
     (line,) = unknown({"q": [{"a": "str"}]}, {})
     assert "q" in line and "no fixture has this part" in line
+
+
+def test_a_part_the_client_no_longer_writes_is_named():
+    stored = {"p": [{"command": "str"}], "q": [{"a": "str"}]}
+    (line,) = unknown({"p": [{"command": "str"}]}, stored)
+    assert "q" in line and "no longer writes this part" in line
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda doc: doc.update(mcp_servers=doc.pop("mcpServers")),  # the key was renamed
+        lambda doc: doc.update(mcpServers=list(doc["mcpServers"].values())),  # a map became a list
+    ],
+)
+def test_a_part_that_moved_or_changed_its_kind_is_seen(change, tmp_path):
+    fixture = newest_fixture("claude_code") / "home"
+    home = tmp_path / "home"
+    shutil.copytree(fixture, home)
+    doc = json.loads((home / ".claude.json").read_text())
+    change(doc)
+    (home / ".claude.json").write_text(json.dumps(doc))
+    found = unknown(parts(home, "claude_code"), parts(fixture, "claude_code"))
+    assert any(".claude.json: mcpServers" in line and "no longer writes" in line for line in found)
+
+
+def test_a_watched_file_that_is_gone_is_seen(tmp_path):
+    fixture = newest_fixture("claude_code") / "home"
+    home = tmp_path / "home"
+    shutil.copytree(fixture, home)
+    (home / ".claude/plugins/installed_plugins.json").unlink()
+    found = unknown(parts(home, "claude_code"), parts(fixture, "claude_code"))
+    assert any("installed_plugins.json" in line and "no longer writes" in line for line in found)
 
 
 def test_keys_outside_the_watched_parts_do_not_count(tmp_path):
@@ -70,3 +109,14 @@ def test_save_keeps_only_the_watched_tables_of_codex(tmp_path):
     saved = (tmp_path / "out/codex/.codex/config.toml").read_text()
     assert tomllib.loads(saved) == {"mcp_servers": {"a": {"command": "x"}}}
     assert "projects" not in saved and "model" not in saved
+
+
+def test_save_writes_the_checkout_as_a_folder_in_the_home(tmp_path):
+    home = tmp_path / "home"
+    (home / ".claude/plugins").mkdir(parents=True)
+    entry = {"source": {"source": "directory", "path": str(ROOT)}, "installLocation": str(ROOT)}
+    (home / ".claude/plugins/known_marketplaces.json").write_text(json.dumps({"kitden": entry}))
+    save(home, "claude_code", tmp_path / "out")
+    saved = (tmp_path / "out/claude_code/.claude/plugins/known_marketplaces.json").read_text()
+    assert "{HOME}/work/kitden" in saved
+    assert str(ROOT) not in saved and str(ROOT.resolve()) not in saved

@@ -14,6 +14,7 @@ import tomlkit
 from kitden.clients.versions import highest_version
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+CHECKOUT = Path(__file__).resolve().parents[2]
 
 # Maps whose keys the user names, such as the names in `env`: only their values' shapes count.
 FREE = frozenset({"env", "headers", "http_headers", "env_http_headers", "enabledPlugins"})
@@ -122,8 +123,13 @@ def _text(s) -> str:
 
 
 def unknown(real: dict[str, list], stored: dict[str, list]) -> list[str]:
-    """One sentence for each shape in `real` that `stored` lacks for that part."""
-    lines = []
+    """One sentence for each shape in `real` that `stored` lacks for that part, and one for
+    each part `stored` has and `real` does not."""
+    lines = [
+        f"{part}: the client no longer writes this part (it is missing, or is no longer a map)."
+        for part in stored
+        if part not in real
+    ]
     for part, shapes in real.items():
         if part not in stored:
             lines.append(f"{part}: no fixture has this part. Add the saved file as a fixture.")
@@ -190,9 +196,12 @@ def newest_fixture(client: str) -> Path:
 
 def save(home: Path, client: str, to: Path) -> None:
     """Write the watched parts of the watched files to `to/<client>/`, with the home's path as
-    {HOME}. Nothing else is kept: a signed-in client writes the account into its files too."""
+    {HOME} and the checkout's as {HOME}/work/kitden. Nothing else is kept: a signed-in client
+    writes the account into its files too."""
     # On macOS the temp folder has two names, /var/… and /private/var/…: the longer goes first.
-    homes = sorted({str(home), str(home.resolve())}, key=len, reverse=True)
+    names = {str(home): "{HOME}", str(home.resolve()): "{HOME}"}
+    names |= {str(CHECKOUT): "{HOME}/work/kitden", str(CHECKOUT.resolve()): "{HOME}/work/kitden"}
+    paths = sorted(names, key=len, reverse=True)
     for name in dict.fromkeys(file for file, _ in WATCHED[client]):
         source = home / name
         if not source.is_file():
@@ -205,8 +214,8 @@ def save(home: Path, client: str, to: Path) -> None:
             text = tomlkit.dumps(data)
         else:
             text = json.dumps(data, indent=2) + "\n"
-        for path in homes:
-            text = text.replace(path, "{HOME}")
+        for path in paths:
+            text = text.replace(path, names[path])
         target = to / client / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)
