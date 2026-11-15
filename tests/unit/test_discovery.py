@@ -735,3 +735,17 @@ def test_github_source_pages_through_every_mcp_file(tmp_path, monkeypatch):
     rest = source.search("acme/servers", "", "mcp", discovery.PAGE)
     assert [r["name"] for r in rest["results"]][-1] == "server-069"
     assert len(reads) == 70, "each file is read once"
+
+
+def test_words_match_fuzzy_and_exact_preserved():
+    # Existing exact behavior
+    assert discovery.words_match("agent docs", "io.github.example/agent-docs")
+    assert discovery.words_match("Agent_Docs", "agent docs")
+    # Fuzzy: one or two letters off
+    assert discovery.words_match("auditr", "agentic-actions-auditor")
+    assert discovery.words_match("actons auditor", "agentic-actions-auditor")
+    assert discovery.words_match("auditor", "agentic-actions-auditor")
+    # Not too far
+    assert not discovery.words_match("xyzabc", "agentic-actions-auditor")
+    # Empty still matches
+    assert discovery.words_match("", "anything")
