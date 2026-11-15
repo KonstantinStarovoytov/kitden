@@ -7,7 +7,7 @@
       "name": "kitden",
       "source": {
         "source": "git-subdir",
-        "url": "KonstantinStarovoytov/kitden",
+        "url": "https://github.com/KonstantinStarovoytov/kitden.git",
         "path": "plugins/kitden",
         "ref": "release"
       },
