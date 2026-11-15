@@ -77,8 +77,9 @@ ignore = ["S101", "PERF401", "RUF001", "RUF002", "RUF003"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not contract'"
+addopts = "-m 'not contract and not browser'"
 markers = [
+    "browser: drives the page in a real Chromium with Playwright (docs/development.md)",
     "contract: tests against real installed clients in sandbox homes (locally and every night)",
     "signed_in: needs a client that is signed in; the nightly leaves these tests out",
 ]

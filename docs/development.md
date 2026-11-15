@@ -18,6 +18,16 @@ and Codex, with no account (`.github/workflows/nightly.yml`, job `clients`);
 vendors' own installers. Tests marked `signed_in` need a signed-in client. Tests can build a
 sample home with `kitden.demo.build_demo_home(root, size)`.
 
+Browser tests (`tests/browser/`) open the page on the demo sample in a real Chromium and press
+its buttons: preview, Apply and Undo. An error in the browser console fails them, so they catch
+a break of the page's Content-Security-Policy. Playwright is not a project dependency, so these
+tests are not in the default run. Run them with:
+
+```bash
+uv run --with playwright==1.64.1 python -m playwright install chromium
+uv run --with playwright==1.64.1 pytest -m browser -q
+```
+
 Built with Python 3.13+, uv, Starlette and the official MCP SDK. The page is plain ES modules
 and one CSS file under `src/kitden/web/static/`, with a strict Content-Security-Policy: no
 framework, no bundler, nothing loaded from another site. How it looks and moves:
