@@ -2,10 +2,12 @@
 these tests run with `uv run --with playwright==1.64.1 pytest -m browser -q`."""
 
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -18,6 +20,9 @@ from kitden.demo import build_demo_home, demo_build  # noqa: E402
 from kitden.web.app import create_app  # noqa: E402
 
 START = 47950  # the first port tried; the page takes the first free one from here
+
+# The sample's Claude Code plugin that is on for every project.
+PLUGIN = "superpowers@demo-market"
 
 
 @dataclass
@@ -78,3 +83,38 @@ def page(browser, demo):
     context.close()
     if errors:
         pytest.fail("The page had errors:\n" + "\n".join(errors))
+
+
+# Helpers the tests share ------------------------------------------------------------------------
+
+
+def SETTINGS(demo):
+    return demo.home / ".claude/settings.json"
+
+
+def origin(demo) -> str:
+    parts = urlsplit(demo.url)
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def wait_until(check, seconds: float = 5) -> None:
+    deadline = time.monotonic() + seconds
+    while not check():
+        if time.monotonic() > deadline:
+            raise AssertionError("gave up waiting")
+        time.sleep(0.05)
+
+
+def details_of(page, plugin: str):
+    """Library, the plugin's marketplace, the plugin's row: its Details panel."""
+    name, market = plugin.split("@")
+    page.get_by_role("link", name="Library", exact=True).click()
+    page.get_by_role("button", name=f"Open {market}").click()
+    page.get_by_role("button", name=re.compile(rf"^{re.escape(name)}, ")).click()
+    return page.get_by_role("complementary", name="Details")
+
+
+def turn_off(page, plugin: str) -> None:
+    """The plugin's Details, "Turn off for all projects…": the plugin's own switch, which adds
+    its change to the preview."""
+    details_of(page, plugin).get_by_role("button", name="Turn off for all projects…").click()

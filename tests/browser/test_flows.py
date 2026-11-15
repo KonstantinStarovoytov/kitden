@@ -2,45 +2,13 @@
 Apply writes the file and Undo puts it back."""
 
 import json
-import re
-import time
-from urllib.parse import urlsplit
 
 import pytest
 from playwright.sync_api import expect
 
+from tests.browser.conftest import PLUGIN, SETTINGS, origin, turn_off, wait_until
+
 pytestmark = pytest.mark.browser
-
-# The sample's Claude Code plugin that is on for every project.
-PLUGIN = "superpowers@demo-market"
-
-
-def SETTINGS(demo):
-    return demo.home / ".claude/settings.json"
-
-
-def origin(demo) -> str:
-    parts = urlsplit(demo.url)
-    return f"{parts.scheme}://{parts.netloc}"
-
-
-def wait_until(check, seconds: float = 5) -> None:
-    deadline = time.monotonic() + seconds
-    while not check():
-        if time.monotonic() > deadline:
-            raise AssertionError("gave up waiting")
-        time.sleep(0.05)
-
-
-def turn_off(page, plugin: str) -> None:
-    """Library, the plugin's marketplace, the plugin's Details, "Turn off for all projects…":
-    the plugin's own switch, which adds its change to the preview."""
-    name, market = plugin.split("@")
-    page.get_by_role("link", name="Library", exact=True).click()
-    page.get_by_role("button", name=f"Open {market}").click()
-    page.get_by_role("button", name=re.compile(rf"^{re.escape(name)}, ")).click()
-    details = page.get_by_role("complementary", name="Details")
-    details.get_by_role("button", name="Turn off for all projects…").click()
 
 
 def test_the_page_opens_on_the_sample(page, demo):

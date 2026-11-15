@@ -76,6 +76,13 @@ def test_clients_installs_the_newest_and_runs_the_contract_tests_with_no_account
     assert not any(line.startswith("    name:") for line in job.splitlines())
 
 
+def test_browser_runs_the_page_in_chromium():
+    job = _jobs()["browser"]
+    assert "runs-on: ubuntu-latest" in job and "contents: read" in job
+    assert "playwright==1.64.1" in job and "playwright install --with-deps chromium" in job
+    assert "pytest -m browser -q" in job
+
+
 def test_pull_requests_keep_the_fast_set():
     build = RELEASE.split("  build:")[1].split("  publish:")[0]
     assert "os: [macos-latest, ubuntu-latest]" in build
