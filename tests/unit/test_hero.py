@@ -176,14 +176,12 @@ def test_the_hero_colours_follow_the_theme():
 
 def test_the_readme_shows_the_hero_and_says_what_kitden_shows():
     readme = (ROOT / "README.md").read_text()
-    base = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/"
     top = readme[: readme.index("One local page for")]
-    picture = re.search(r"<picture>.*?</picture>", top, re.S)
-    assert picture, "the hero comes first"
     slogan = "Your AI coding tools, under one roof."
-    dark = '<source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.svg">'
-    light = f'<img src="{base}hero.svg" width="640" alt="Kitden: {slogan}">'
-    assert dark in picture.group(0) and light in picture.group(0)
+    size = f'width="640" alt="Kitden: {slogan}">'
+    light = f'<img src="docs/images/hero.svg#gh-light-mode-only" {size}'
+    dark = f'<img src="docs/images/hero-dark.svg#gh-dark-mode-only" {size}'
+    assert top.index("<h1") < top.index(light) < top.index(dark) < top.index("</h1>"), "hero first"
     # The slogan stays in the picture; the line under it says what Kitden shows (2026-11-14).
     says = "See what Claude Code, Codex and Cursor actually load, and which skills got cut."
     assert f'<p align="center"><strong>{says}</strong></p>' in top

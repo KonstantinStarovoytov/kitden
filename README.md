@@ -1,9 +1,6 @@
 <h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.svg">
-    <source srcset="docs/images/hero.svg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/hero.svg" width="640" alt="Kitden: Your AI coding tools, under one roof.">
-  </picture>
+  <img src="docs/images/hero.svg#gh-light-mode-only" width="640" alt="Kitden: Your AI coding tools, under one roof.">
+  <img src="docs/images/hero-dark.svg#gh-dark-mode-only" width="640" alt="Kitden: Your AI coding tools, under one roof.">
 </h1>
 
 <p align="center"><strong>See what Claude Code, Codex and Cursor actually load, and which skills got cut.</strong></p>
@@ -27,11 +24,8 @@ last chat's log and shows which skills went in whole, so you can turn off the on
 use. A guess for another window is marked Estimate. Cursor gets no verdict: Kitden cannot see
 what it sends.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/context-dark.png">
-  <source srcset="docs/images/readme/context-light.png">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/context-light.png" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Two boxes list the sixteen skills whose description was sent and the four sent by name only.">
-</picture>
+<img src="docs/images/readme/context-light.png#gh-light-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Two boxes list the sixteen skills whose description was sent and the four sent by name only.">
+<img src="docs/images/readme/context-dark.png#gh-dark-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Two boxes list the sixteen skills whose description was sent and the four sent by name only.">
 
 ### Everything your agents load, on one map
 
@@ -39,11 +33,8 @@ Claude Code, Codex and Cursor each keep their own settings. Kitden puts their pl
 MCP servers and instruction files on one map, so what one agent has and another lacks shows
 at a glance. Add what an agent is missing, turn an item off or remove it, on the same page.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/library-dark.png">
-  <source srcset="docs/images/readme/library-light.png">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/library-light.png" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
-</picture>
+<img src="docs/images/readme/library-light.png#gh-light-mode-only" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
+<img src="docs/images/readme/library-dark.png#gh-dark-mode-only" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
 
 ### Add what is missing
 
@@ -51,11 +42,8 @@ Search the official MCP Registry, skills.sh, the Claude plugins marketplace and 
 GitHub repository without leaving the page. Tick the agents a plugin or skill goes to. An MCP
 server goes to the gateway, and says first whether it needs a sign-in or a token.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/find-dark.png">
-  <source srcset="docs/images/readme/find-light.png">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/find-light.png" width="860" alt="Two add panels side by side. A search for mcp in skills.sh lists six skills with their installs; mcp-builder is open, with Claude Code and Codex ticked under Add to. A search for linear in the MCP Registry lists six servers; Linear's own is open with a Sign in button, and others say Needs token or Unavailable.">
-</picture>
+<img src="docs/images/readme/find-light.png#gh-light-mode-only" width="860" alt="Two add panels side by side. A search for mcp in skills.sh lists six skills with their installs; mcp-builder is open, with Claude Code and Codex ticked under Add to. A search for linear in the MCP Registry lists six servers; Linear's own is open with a Sign in button, and others say Needs token or Unavailable.">
+<img src="docs/images/readme/find-dark.png#gh-dark-mode-only" width="860" alt="Two add panels side by side. A search for mcp in skills.sh lists six skills with their installs; mcp-builder is open, with Claude Code and Codex ticked under Add to. A search for linear in the MCP Registry lists six servers; Linear's own is open with a Sign in button, and others say Needs token or Unavailable.">
 
 ### One gateway for your MCP servers
 
@@ -63,11 +51,8 @@ Move a server into the Kitden gateway and every agent you use gets it: set it up
 once per agent. Every tool has a switch, for all projects or one, and a tool that is off is
 refused, not just hidden. A token or sign-in is given once and checked before Apply.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/tools-dark.webp">
-  <source srcset="docs/images/readme/tools-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/tools-light.webp" width="860" alt="memory in the Kitden gateway shows its nine tools; its three delete tools are turned off on the map and applied for every agent.">
-</picture>
+<img src="docs/images/readme/tools-light.webp#gh-light-mode-only" width="860" alt="memory in the Kitden gateway shows its nine tools; its three delete tools are turned off on the map and applied for every agent.">
+<img src="docs/images/readme/tools-dark.webp#gh-dark-mode-only" width="860" alt="memory in the Kitden gateway shows its nine tools; its three delete tools are turned off on the map and applied for every agent.">
 
 ### Every change can be undone
 
