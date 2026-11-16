@@ -49,6 +49,7 @@ from kitden.model import (
     Step,
 )
 from kitden.redact import masked_command, redact
+from kitden.sign_in import KEY as SIGN_IN_KEY
 from kitden.system import secret_store_name
 
 if TYPE_CHECKING:
@@ -92,7 +93,8 @@ PUT_BACK = "The original settings were restored."
 OUTSIDE = "Kitden writes only in your home folder and your known projects."
 
 # What a refusal of a secret too long for the Keychain says to do, by action; any other action
-# is for a server the gateway holds, which needs a shorter token.
+# is for a server the gateway holds, which needs a shorter token. A browser sign-in, whatever
+# the action, needs a token in a header instead (`keychain.IN_A_HEADER`).
 TOO_LONG_THEN = {
     "gateway.move": keychain.KEEP_IN_CLIENT,
     "gateway.keychain": keychain.STAYS_IN_GATEWAY,
@@ -550,7 +552,11 @@ class Engine:
         try:
             for step in steps:
                 for item in step.keychain:
-                    keychain.check_size(item.server, item.key, item.value, then)
+                    if item.key == SIGN_IN_KEY:
+                        instead = keychain.IN_A_HEADER.format(server=item.server)
+                    else:
+                        instead = then
+                    keychain.check_size(item.server, item.key, item.value, instead)
                     item.existed = keychain.read(item.ref, run=self._security()) is not None
         except KeychainError as error:
             raise ChangeRefusedError(str(error)) from None

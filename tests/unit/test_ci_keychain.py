@@ -67,6 +67,12 @@ def test_runner_temp_counts_as_a_temp_folder(temp, tmp_path, monkeypatch):
     assert ci_keychain() == (runner / NAME).resolve()
 
 
+def test_a_right_name_under_a_temp_folder_that_is_no_file_is_refused(temp, monkeypatch):
+    monkeypatch.setenv("KITDEN_CI_KEYCHAIN", str(temp / "run" / NAME))
+    with refused("names no file"):
+        ci_keychain()
+
+
 def test_no_keychain_named_is_refused(temp, monkeypatch):
     monkeypatch.delenv("KITDEN_CI_KEYCHAIN", raising=False)
     with refused("KITDEN_CI_KEYCHAIN is not set"):

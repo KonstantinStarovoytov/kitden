@@ -88,6 +88,8 @@ TOO_LONG = (
 KEEP_IN_CLIENT = "Keep the server in the client's own settings, or use a shorter token."
 STAYS_IN_GATEWAY = "The secret stays in the gateway's settings, where it works as before."
 SHORTER = "Use a shorter token."
+# A browser sign-in's item holds its tokens and client: no shorter one can be chosen.
+IN_A_HEADER = "Give {server} a token in a header instead, if it takes one."
 UNREADABLE = "Kitden could not read a secret of {server} from the {store}."
 # A lone surrogate (half of a pair, as an escaped JSON string can hold) has no UTF-8 form.
 NOT_TEXT = "The secret {account} is not valid text, so Kitden did not store it."

@@ -273,7 +273,7 @@ class KeychainStorage:
             # `store` writes nothing it refuses, so the sign-in stored before stays.
             print(
                 f"Kitden could not save the new sign-in of {self.name}: it is too long for the "
-                f"Keychain. Give {self.name} a token in a header instead, if it takes one.",
+                f"Keychain. {keychain.IN_A_HEADER.format(server=self.name)}",
                 file=sys.stderr,
             )
         except keychain.KeychainError as error:

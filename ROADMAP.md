@@ -16,7 +16,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   Changes page.
 - **A tool left off says so in Kitden's words:** a call to a gateway tool that strict mode or
   a project rule leaves off now answers "<name> is turned off in Kitden.", as a tool turned
-  off does, instead of the MCP library's "Unknown tool" (#000).
+  off does, instead of the MCP library's "Unknown tool", and one turned on during a session
+  can be called even if it was not offered at the start (#000).
 - **Claude Code project servers show whether they are approved:** Claude Code keeps the
   approval of the servers in a project's `.mcp.json` in its settings files, and moves older
   approvals there from `~/.claude.json`. Kitden read only `~/.claude.json`, so approved and
