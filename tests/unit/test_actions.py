@@ -178,21 +178,13 @@ def test_folder_readers_is_shared_with_the_views():
 
 
 @pytest.fixture
-def lookups(monkeypatch):
-    """Names under .example resolve from this table only; numbers and localhost as usual."""
-    import socket
-
-    table = {"public.example": "93.184.216.34", "inside.example": "10.0.0.5"}
-    real = socket.getaddrinfo
-
-    def getaddrinfo(host, port, *rest, **options):
-        if not host.endswith(".example"):
-            return real(host, port, *rest, **options)
-        if host not in table:
-            raise socket.gaierror("not found")
-        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (table[host], 0))]
-
-    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+def lookups(name_lookups):
+    """A public name, a private one and one that does not resolve; numbers and localhost
+    resolve as usual (`name_lookups` in tests/conftest.py)."""
+    name_lookups["public.example"] = "93.184.216.34"
+    name_lookups["inside.example"] = "10.0.0.5"
+    name_lookups["inside-v6.example"] = "fd00::5"
+    name_lookups["unknown.example"] = None
 
 
 def test_local_addresses_are_found_in_every_spelling(lookups):
@@ -211,10 +203,14 @@ def test_local_addresses_are_found_in_every_spelling(lookups):
         "http://[::ffff:127.0.0.1]/",
         "http://0.0.0.0/",
         "https://inside.example/mcp",
+        "https://inside-v6.example/mcp",
         "https://unknown.example/mcp",  # does not resolve
     ):
         assert is_local_address(url), url
     assert not is_local_address("https://public.example/mcp")
+    # A name that does not resolve is what the caller says it is.
+    assert not is_local_address("https://unknown.example/mcp", unknown=False)
+    assert not is_local_address("https://public.example/mcp", unknown=False)
 
 
 def test_a_public_server_cannot_send_the_check_to_a_local_address(lookups, monkeypatch):

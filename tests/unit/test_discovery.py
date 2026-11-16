@@ -444,7 +444,11 @@ def test_registry_search_treats_spaces_as_hyphens(tmp_path, monkeypatch):
     assert discovery.words_match("Agent_Docs", "agent docs")
 
 
-def test_token_preview_apply_and_undo_use_keychain(tmp_path, monkeypatch, fake_keychain):
+def test_token_preview_apply_and_undo_use_keychain(
+    tmp_path, monkeypatch, fake_keychain, name_lookups
+):
+    # A .test name never resolves, so the server is asked what access it needs.
+    name_lookups["example.test"] = None
     from kitden.changes import actions
 
     home = make_home(tmp_path, "codex/0.159.2")

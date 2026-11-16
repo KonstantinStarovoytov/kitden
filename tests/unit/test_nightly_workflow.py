@@ -135,3 +135,17 @@ def test_the_development_page_names_the_nightly_run():
     assert "Every night the tests also run on four systems and two Pythons" in text
     assert "the contract tests also run against the newest Claude Code and Codex" in text
     assert '`-m "contract and not signed_in"`' in text
+
+
+def test_only_the_intel_mac_gets_twice_the_start_budgets():
+    job = _jobs()["systems"]
+    lines = job.splitlines()
+    run = lines.index("      - run: uv run python scripts/measure-start.py")
+    assert lines[run + 1 : run + 3] == [
+        "        env:",
+        "          KITDEN_START_BUDGET_SCALE: ${{ matrix.os == 'macos-15-intel' && '2' || '1' }}",
+    ]
+    assert "KITDEN_START_BUDGET_SCALE" not in job.replace(lines[run + 2], "")
+    # The pull request and release checks run on no Intel Mac and keep the budgets as they are.
+    assert "macos-15-intel" not in RELEASE and "KITDEN_START_BUDGET_SCALE" not in RELEASE
+    assert "\n      - run: uv run python scripts/measure-start.py\n" in RELEASE

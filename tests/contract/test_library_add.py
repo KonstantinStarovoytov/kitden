@@ -1,13 +1,15 @@
 """The Library with the real clients in a sandbox home: add a marketplace, install a plugin in
 Claude Code and Codex in one review, then Undo both. Run with: pytest -m contract
 
-The marketplace is this repository's folder, but the plugin itself is fetched from the `release`
-branch on GitHub. The real home folder is never touched.
+The marketplace is a copy of this repository's whose plugin source is the checkout's
+plugins/kitden (`checkout_marketplace`), so nothing is cloned. Installing from the repository's
+own marketplace files, which clone the `release` branch from GitHub, and the Library on that
+plugin (on, removed, offered, installed and undone through Kitden) are tested in
+tests/contract/test_written_files.py. The real home folder is never touched.
 """
 
 import json
 import tomllib
-from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
@@ -15,10 +17,9 @@ from starlette.testclient import TestClient
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home
-from tests.contract.conftest import need_command
+from tests.contract.conftest import checkout_marketplace, need_command
 
 pytestmark = pytest.mark.contract
-ROOT = Path(__file__).resolve().parents[2]
 ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
 
@@ -34,6 +35,7 @@ def client(tmp_path, monkeypatch):
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as c:
         c.get("/?token=tok")
         c.home = home
+        c.market = checkout_marketplace(tmp_path / "market")
         yield c
 
 
@@ -67,9 +69,8 @@ def test_add_a_marketplace_and_a_plugin_to_both_clients_then_undo(client):
     config = (home / ".codex/config.toml").read_bytes()
     both = [{"client": "claude_code"}, {"client": "codex"}]
 
-    added = _run(
-        client, {"action": "marketplace.add", "targets": both, "params": {"source": str(ROOT)}}
-    )
+    source = {"source": str(client.market)}
+    added = _run(client, {"action": "marketplace.add", "targets": both, "params": source})
     assert _cells(client, "kitden@kitden") == {
         "claude_code": "plugin.install",
         "codex": "plugin.install",

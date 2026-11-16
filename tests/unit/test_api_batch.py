@@ -420,7 +420,10 @@ def _add(row_id, server_id, title="Add it to the Kitden gateway"):
     return {"id": row_id, "kind": "gateway.add", "title": title, "params": params}
 
 
-def test_two_add_rows_for_one_name_refuse_the_second(tmp_path):
+def test_two_add_rows_for_one_name_refuse_the_second(tmp_path, name_lookups):
+    # A .test name never resolves, so the add asks the server what access it needs, as for
+    # any server not on this computer or a private network.
+    name_lookups["status.example.test"] = None
     with _page(tmp_path) as page:
         # A second plugin of the demo marketplace offers a server named test-status too.
         listed = page.home / MARKET_FILE
@@ -440,7 +443,10 @@ def test_two_add_rows_for_one_name_refuse_the_second(tmp_path):
         assert answer.json() == {"detail": waits, "row": "b"}
 
 
-def test_a_failed_apply_all_with_an_add_puts_every_file_back(tmp_path):
+def test_a_failed_apply_all_with_an_add_puts_every_file_back(tmp_path, name_lookups):
+    # A .test name never resolves, so the add asks the server what access it needs, as for
+    # any server not on this computer or a private network.
+    name_lookups["status.example.test"] = None
     with _page(tmp_path, fail=["claude", "mcp", "remove"]) as page:
         before = _files(page.home)
         answer = _preview(

@@ -148,12 +148,38 @@ def unknown(real: dict[str, list], stored: dict[str, list]) -> list[str]:
     return lines
 
 
-def _run(home: Path, command: str, *args: str) -> None:
+def _run(home: Path, command: str, *args: str, why: str = "") -> None:
     env = {**os.environ, "HOME": str(home), "CODEX_HOME": str(home / ".codex")}
-    done = subprocess.run(
-        [command, *args], env=env, cwd=home, capture_output=True, text=True, timeout=180
+    try:
+        done = subprocess.run(
+            [command, *args], env=env, cwd=home, capture_output=True, text=True, timeout=180
+        )
+    except subprocess.TimeoutExpired as late:
+        raise AssertionError(f"{why}{args}: no answer in {late.timeout:g} seconds.") from None
+    assert done.returncode == 0, f"{why}{args}: {done.stdout}\n{done.stderr}"
+
+
+# The checkout's own marketplace file of each client.
+MARKETPLACES = {
+    "claude_code": ".claude-plugin/marketplace.json",
+    "codex": ".agents/plugins/marketplace.json",
+}
+
+
+def clone_failed(marketplace: str) -> str:
+    """What a failed install from the checkout's own marketplace file means. That file names
+    the plugin's source on GitHub, as users get it, so the client clones it: a failure can be
+    the network, the clone, or a broken source in the file."""
+    (plugin,) = json.loads((CHECKOUT / marketplace).read_text())["plugins"]
+    source = plugin.get("source")
+    source = source if isinstance(source, dict) else {}
+    url, ref, path = (source.get(key, "(none)") for key in ("url", "ref", "path"))
+    return (
+        f"The client could not install the plugin from {marketplace}, which clones "
+        f"{url} (ref {ref}, path {path}). The client's output "
+        "follows: a network error there means GitHub could not be reached; a missing ref or "
+        "path means that source is broken. "
     )
-    assert done.returncode == 0, f"{args}: {done.stdout}\n{done.stderr}"
 
 
 STDIO = {"type": "stdio", "command": "npx", "args": ["-y", "notes-mcp"]}
@@ -168,7 +194,8 @@ def _claude_code(home: Path, claude: str, checkout: Path) -> None:
     _run(home, claude, "mcp", "add-json", "-s", "user", "notes", json.dumps(STDIO))
     _run(home, claude, "mcp", "add-json", "-s", "user", "remote", json.dumps(HTTP))
     _run(home, claude, "plugin", "marketplace", "add", str(checkout))
-    _run(home, claude, "plugin", "install", "kitden@kitden", "--scope", "user")
+    why = clone_failed(MARKETPLACES["claude_code"])
+    _run(home, claude, "plugin", "install", "kitden@kitden", "--scope", "user", why=why)
 
 
 def _codex(home: Path, codex: str, checkout: Path) -> None:
@@ -177,11 +204,14 @@ def _codex(home: Path, codex: str, checkout: Path) -> None:
     url = "https://mcp.example.com/mcp"
     _run(home, codex, "mcp", "add", "remote", "--url", url, "--bearer-token-env-var", "TOKEN")
     _run(home, codex, "plugin", "marketplace", "add", str(checkout), "--json")
-    _run(home, codex, "plugin", "add", "kitden@kitden", "--json")
+    why = clone_failed(MARKETPLACES["codex"])
+    _run(home, codex, "plugin", "add", "kitden@kitden", "--json", why=why)
 
 
 # The client's own commands that make it write its files: (home, the client's command, the
-# checkout).
+# checkout). Each adds the checkout itself as a marketplace and installs the plugin from its
+# real source on GitHub, as users do, so a broken source in the marketplace files turns the
+# night red here; the other contract tests use `checkout_marketplace` and clone nothing.
 RECIPES: dict[str, Callable[[Path, str, Path], None]] = {
     "claude_code": _claude_code,
     "codex": _codex,

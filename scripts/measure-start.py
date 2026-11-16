@@ -10,6 +10,9 @@ The client versions are read once before each run, as on any start after the fir
 A third run times `kitden demo` on the medium sample: from building it to the first answer of
 /api/overview.
 
+KITDEN_START_BUDGET_SCALE multiplies the three budgets. The nightly sets it to 2 on its Intel
+Mac, which is slower; unset, it is 1.
+
 `--probe` measures nothing: it starts the demo page on the probe sample (the medium sample with
 direct servers added up to PROBE_SERVERS on the Gateway) and prints its link, so the map's
 performance marks can be read in a browser. Ctrl+C stops it.
@@ -20,6 +23,7 @@ Usage: uv run python scripts/measure-start.py [--slow 10] [--probe]
 import argparse
 import contextlib
 import json
+import math
 import os
 import secrets
 import socket
@@ -47,6 +51,7 @@ from kitden.web.app import create_app  # noqa: E402
 FIRST_USABLE_BUDGET = 2.0  # seconds, even while Codex's plugin list is slow
 COMPLETE_BUDGET = 5.0  # seconds, with every answer at once
 DEMO_BUDGET = 2.0  # seconds, from building the medium sample to its first overview
+SCALE = "KITDEN_START_BUDGET_SCALE"
 GIVE_UP_SECONDS = 60
 SLOW_STEP = "Codex plugins"
 # The map probe (Part 4.1): servers on the Gateway, held plus outside rows. The medium sample has
@@ -200,6 +205,32 @@ def run_probe() -> int:
     return 0
 
 
+def budgets(env) -> dict[str, float]:
+    """The budget of each time in seconds: the ones above times the scale in `env`."""
+    value = env.get(SCALE, "1")
+    try:
+        scale = float(value)
+    except ValueError:
+        scale = math.nan
+    if not (math.isfinite(scale) and scale > 0):
+        raise SystemExit(f"{SCALE} must be a positive number, not {value!r}.")
+    return {
+        "first usable": FIRST_USABLE_BUDGET * scale,
+        "complete": COMPLETE_BUDGET * scale,
+        "demo (medium)": DEMO_BUDGET * scale,
+    }
+
+
+def budget_line(limits: dict[str, float]) -> str:
+    """The line that says which budgets this run uses."""
+    return f"Budgets: {', '.join(f'{name} {limit:g} s' for name, limit in limits.items())}."
+
+
+def missed(times: dict[str, float], limits: dict[str, float]) -> list[str]:
+    """The times over their budget."""
+    return [name for name, limit in limits.items() if times[name] > limit]
+
+
 def _json(response: httpx.Response) -> dict:
     return response.json() if response.status_code == 200 else {}
 
@@ -224,6 +255,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.probe:
         return run_probe()
+    limits = budgets(os.environ)
+    print(budget_line(limits))
     real_home, real_path = os.environ.get("HOME"), os.environ.get("PATH")
     try:
         with tempfile.TemporaryDirectory(prefix="kitden-measure-") as folder:
@@ -234,16 +267,20 @@ def main() -> int:
             demo = measure_demo(Path(folder) / "demo")
     finally:
         os.environ.update(HOME=real_home or "", PATH=real_path or "")
-    first, complete = slow_run["first_usable"], quick_run["complete"]
-    print(f"first usable: {first:.1f} s (budget {FIRST_USABLE_BUDGET:g} s)")
+    times = {
+        "first usable": slow_run["first_usable"],
+        "complete": quick_run["complete"],
+        "demo (medium)": demo,
+    }
+    print(f"first usable: {times['first usable']:.1f} s (budget {limits['first usable']:g} s)")
     print(f"  the start line then said: Still checking {', '.join(slow_run['still_checking'])}")
     print(f"  gateway view: {slow_run['gateway_view'] * 1000:.0f} ms")
-    print(f"complete: {complete:.1f} s (budget {COMPLETE_BUDGET:g} s)")
-    print(f"demo (medium): {demo:.1f} s (budget {DEMO_BUDGET:g} s)")
-    missed = first > FIRST_USABLE_BUDGET or complete > COMPLETE_BUDGET or demo > DEMO_BUDGET
-    if missed:
+    print(f"complete: {times['complete']:.1f} s (budget {limits['complete']:g} s)")
+    print(f"demo (medium): {times['demo (medium)']:.1f} s (budget {limits['demo (medium)']:g} s)")
+    if missed(times, limits):
         print("A budget is missed.")
-    return 1 if missed else 0
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
