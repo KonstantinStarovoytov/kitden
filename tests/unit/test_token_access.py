@@ -6,6 +6,7 @@ import time
 
 import pytest
 
+from kitden.local_gateway import keychain
 from kitden.local_gateway.views import access_rows, masked
 from tests.unit.test_api_sign_in import Opened, held_signer, page_for, sign_in  # noqa: F401
 from tests.unit.test_local_gateway_move import (
@@ -117,6 +118,20 @@ def access(page, server, field, name, value=None):
         json={"action": "gateway.access", "targets": [], "params": params},
         headers=POST,
     )
+
+
+@pytest.mark.usefixtures("as_mac")
+def test_a_value_too_long_for_the_keychain_asks_for_a_shorter_token(home, fake_keychain):
+    write_held(home, {"tool": {"command": "uvx", "env": {"API_KEY": {"keychain": "tool/API_KEY"}}}})
+    with page_for(home, Opened()) as page:
+        answer = access(page, "tool", "env", "API_KEY", "SENTINEL_" + "x" * 2000)
+    # The server is in the gateway already: the next step is not to keep it in a client.
+    assert (answer.status_code, answer.json()["detail"]) == (
+        422,
+        "The secret tool/API_KEY is too long for the Keychain: 2,009 bytes, and Kitden can "
+        f"store at most {keychain.longest('tool', 'API_KEY'):,}. Use a shorter token.",
+    )
+    assert keychain_items(fake_keychain) == {}
 
 
 def test_replace_a_token_checks_it_and_keeps_it_in_the_keychain(home, fake_keychain):

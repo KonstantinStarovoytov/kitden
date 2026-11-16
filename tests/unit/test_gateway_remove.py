@@ -6,6 +6,7 @@ import tomllib
 import pytest
 
 from kitden.gateways import data_dir
+from kitden.local_gateway import keychain
 from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, load_tools, save_tools
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
@@ -308,6 +309,23 @@ def test_a_held_server_with_plain_secrets_says_so_and_can_move_them(home, fake_k
     assert path.read_bytes() == before
     assert json.loads(fake_keychain.read_text()) == {}
     assert "SENTINEL" not in (data_dir(home) / "changes.log").read_text()
+
+
+def test_a_secret_too_long_for_the_keychain_stays_in_the_gateway_settings(home, fake_keychain):
+    hold(home, {"files": {**FILES, "env": {"FILES_TOKEN": "SENTINEL_" + "x" * 2000}}})
+    path = data_dir(home) / SETTINGS_FILE
+    before = path.read_bytes()
+    with page_for(home) as page:
+        answer = _to_keychain(page, "files")
+    # The server is in the gateway already: the next step is not to keep it in a client.
+    assert (answer.status_code, answer.json()["detail"]) == (
+        422,
+        "The secret files/FILES_TOKEN is too long for the Keychain: 2,009 bytes, and Kitden "
+        f"can store at most {keychain.longest('files', 'FILES_TOKEN'):,}. The secret stays in "
+        "the gateway's settings, where it works as before.",
+    )
+    assert path.read_bytes() == before
+    assert not fake_keychain.exists() or json.loads(fake_keychain.read_text()) == {}
 
 
 def test_moving_secrets_warns_of_an_item_already_in_the_keychain(home, fake_keychain):

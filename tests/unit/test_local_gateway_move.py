@@ -23,6 +23,7 @@ from kitden.changes.actions import (
     access_needed,
     local_move_steps,
     needs_sign_in,
+    signed_in_server,
 )
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
@@ -36,6 +37,7 @@ from kitden.local_gateway.settings import (
     save_tools,
     servers_on,
 )
+from kitden.sign_in import SignIn
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.setup_server import setup_server_state, with_entry
 from kitden.web.app import create_app
@@ -1235,6 +1237,22 @@ def test_a_secret_too_long_for_the_keychain_is_refused_at_preview(home, fake_key
     assert str(refused.value) == too_long("files/FILES_TOKEN", 2009)
     assert client_files(home) == before
     assert keychain_items(fake_keychain) == {}
+
+
+@pytest.mark.parametrize("action", ["gateway.sign_in", "gateway.add"])
+def test_a_sign_in_too_long_for_the_keychain_names_a_token_in_a_header(home, action):
+    """No shorter sign-in can be chosen: the way out is a token in a header, as the gateway
+    says when a refreshed sign-in does not fit."""
+    signed = SignIn(id="i", url="https://x/mcp", name="signer", secret="SENTINEL_" + "s" * 2000)
+    step = signed_in_server(home, "signer", {"url": "https://x/mcp"}, None, signed, None)
+    engine = Engine(ChangeStore(data_dir(home)), run=FakeClaude(home))
+    with pytest.raises(ChangeRefusedError) as refused:
+        engine.preview(action, [step])
+    most = keychain.longest("signer", "sign-in")
+    assert str(refused.value) == (
+        f"The secret signer/sign-in is too long for the Keychain: 2,009 bytes, and Kitden can "
+        f"store at most {most:,}. Give signer a token in a header instead, if it takes one."
+    )
 
 
 def test_a_secret_too_long_at_apply_leaves_the_item_there_as_it_was(home, fake_keychain):

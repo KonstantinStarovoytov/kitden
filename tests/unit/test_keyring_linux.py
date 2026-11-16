@@ -106,3 +106,24 @@ def test_a_long_value_is_stored_whole(fake_keychain):
     """`secret-tool store` reads the value from stdin until EOF: no line to cut, so no limit."""
     value = "SENTINEL_" + "v" * 20_000
     assert read(store("srv", "KEY", value)) == value
+
+
+def test_a_value_with_half_a_character_pair_is_refused_before_secret_tool_runs(fake_keychain):
+    """A lone surrogate (half of a pair, as an escaped JSON string can hold) has no UTF-8 form."""
+    with pytest.raises(KeychainError) as error:
+        store("srv", "KEY", "a\ud800b")
+    assert str(error.value) == "The secret srv/KEY is not valid text, so Kitden did not store it."
+    assert not fake_keychain.exists()
+
+
+def test_a_value_that_is_not_utf_8_cannot_be_read_and_the_keyring_was_reached(
+    tmp_path, monkeypatch
+):
+    """Another program may keep bytes that are not UTF-8 in the item; the keyring answered."""
+    tool = tmp_path / "secret-tool"
+    tool.write_text("#!/bin/sh\nprintf 'SENTINEL_\\377'\n")
+    tool.chmod(0o755)
+    monkeypatch.setenv("KITDEN_SECRET_TOOL", str(tool))
+    with pytest.raises(KeychainError) as error:
+        read({"keychain": "srv/KEY"})
+    assert str(error.value) == "Kitden could not read a secret of srv from the keyring."

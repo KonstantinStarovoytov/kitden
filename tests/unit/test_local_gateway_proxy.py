@@ -323,6 +323,73 @@ async def test_strict_mode_offers_and_allows_only_the_tools_set_on(home):
     assert refused.is_error
 
 
+async def test_a_known_tool_left_off_is_refused_in_kitdens_words(home, tmp_path):
+    website = home / "work/website"
+    started = tmp_path / "echo-started"
+    entry = echo("echo", "--mark", str(started))
+    rules = {
+        "global": {"echo": {"mode": "strict", "tools": {"echo": "on", "where": "on"}}},
+        "projects": {str(website): {"echo": {"tools": {"where": "off"}}}},
+    }
+    write_settings(home, {"echo": entry}, rules)
+    save_tools(home, "echo", [tool("echo"), tool("where"), tool("clash")])
+
+    async with gateway(home, env={"CLAUDE_PROJECT_DIR": str(website)}) as client:
+        offered = await names_offered(client) - READ_ONLY
+        strict = await client.call_tool("clash", {})
+        project = await client.call_tool("where", {})
+        unknown = await client.call_tool("nothing", {})
+        # Refused before the server: it never started, and no call was counted.
+        assert not started.exists()
+        assert load_calls(home) == {}
+        # The rules decide each call: one turned on during the session works, as offered ones do.
+        rules["global"]["echo"]["tools"]["clash"] = "on"
+        write_settings(home, {"echo": entry}, rules)
+        later = await client.call_tool("clash", {})
+
+    assert offered == {"echo"}
+    assert not later.is_error and text(later) == "echo"
+    # Strict mode and a project rule: the gateway knows the tool, so it says it is off.
+    assert strict.is_error and text(strict) == "clash is turned off in Kitden."
+    assert project.is_error and text(project) == "where is turned off in Kitden."
+    # A name the gateway does not know keeps the MCP SDK's answer.
+    assert unknown.is_error and text(unknown) == "Unknown tool: nothing"
+
+
+async def test_a_tool_not_offered_stays_off_when_its_server_is_off_or_the_rules_break(
+    home, tmp_path
+):
+    website = home / "work/website"
+    marks = {name: tmp_path / f"{name}-started" for name in ("echo", "other")}
+    servers = {name: echo(name, "--mark", str(mark)) for name, mark in marks.items()}
+    # `other` is off for the project, by its server's rule; `echo` is strict with `clash` off.
+    rules = {
+        "global": {"echo": {"mode": "strict", "tools": {"echo": "on"}}},
+        "projects": {str(website): {"other": {"server": "off"}}},
+    }
+    write_settings(home, servers, rules)
+    save_tools(home, "echo", [tool("echo"), tool("clash")])
+    save_tools(home, "other", [tool("where")])
+    settings = data_dir(home) / SETTINGS_FILE
+
+    async with gateway(home, env={"CLAUDE_PROJECT_DIR": str(website)}) as client:
+        offered = await names_offered(client) - READ_ONLY
+        server_off = await client.call_tool("where", {})
+        # The rules file gone, then unreadable: the rules the session started with decide.
+        settings.unlink()
+        gone = await client.call_tool("clash", {})
+        settings.write_text("{ not json")
+        broken = await client.call_tool("clash", {})
+
+    assert offered == {"echo"}
+    assert server_off.is_error and text(server_off) == "where is turned off in Kitden."
+    assert gone.is_error and text(gone) == "clash is turned off in Kitden."
+    assert broken.is_error and text(broken) == "clash is turned off in Kitden."
+    # Nothing reached a server: neither started, and no call was counted.
+    assert not any(mark.exists() for mark in marks.values())
+    assert load_calls(home) == {}
+
+
 async def test_a_server_removed_during_a_session_is_refused(home):
     write_settings(home, {"echo": echo("echo")})
     save_tools(home, "echo", [tool("echo")])
