@@ -1,7 +1,9 @@
 # What: on a pull request to main, calls kitden-sdlc's review: Claude and GPT-6 Luna each read
-# the change, and the Lantern app posts one "Agent review" comment.
-# Why: a second look at every change before the owner merges. It only comments; it never
-# approves or blocks.
+# the change, and Lantern, the app that posts comments and issues, posts one "Agent review"
+# comment and updates it on later runs.
+# Why: a second look before the owner merges. It skips forks, bots, drafts, the no-agent-review
+# label, runs past the daily cap (20 by default) and every run while a switch is off. It only
+# comments; it never approves or blocks.
 name: Agent review
 
 on:

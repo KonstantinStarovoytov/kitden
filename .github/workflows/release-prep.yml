@@ -1,11 +1,14 @@
 # What: the owner runs it by hand and gets one pull request, `Kitden X.Y.Z`, with the release
-# notes, the README, the policy edits and the version already in it.
-# Why: a release takes one review and one merge, and no step is done by hand or forgotten.
+# notes, the README, the version and any policy edits already in it. It is a draft when a
+# problem is left.
+# Why: a release takes one run, one review and one merge, and the pull request lists the
+# checks and steps still done by hand.
 #
 # Run it with "Run workflow" on main, usually from the "Time for a release?" issue. Claude
-# writes the notes, the README and the policy edits with read-only tools; jobs without a model
-# set the version, record the README pictures, commit and open the PR with the release app.
-# Merging it tags the release (release.yml).
+# writes the notes, the README and the policy edits; it may read the code and write only to its
+# own output folder. Jobs without a model set the version, record the README pictures, commit
+# and open the PR with the release app. Once it is merged and the checks pass, release.yml tags
+# the release.
 name: Release prep
 
 on:

@@ -1,8 +1,10 @@
-# What: when a pull request changes docs/clients.md, runs kitden-sdlc's list check: each row
-# it adds or changes is checked against the row's doc page.
+# What: when a pull request changes docs/clients.md, Kitden's list of client facts, runs
+# kitden-sdlc's list check. For each row the pull request adds or changes whose Source is a doc
+# page, it reads the page (at most 20 pages in 3 minutes) and warns when a word the row puts in
+# backticks is not on it.
 # Why: a row that no page backs should be seen while the pull request is open. The check only
 # warns; it never turns red for a missing word.
-name: Check the list against the docs
+name: Check the client list against the docs
 
 on:
   pull_request:

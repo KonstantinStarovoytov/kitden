@@ -1,13 +1,14 @@
-# What: runs the checks on every push to main and every pull request. A tag v<version> also
-# builds Kitden and publishes it to PyPI, GitHub and the other stores.
-# Why: nothing unchecked reaches main, and every release is published the same way, with no
-# manual steps.
+# What: runs the checks on every pull request and push to main. Once they pass on main, a
+# version that has release notes and no tag yet is tagged. The tag builds Kitden, publishes it
+# to PyPI and a GitHub release, and has kitden-sdlc update the stores a script can reach.
+# Why: a break shows before or right after a merge, and every release is published the same
+# way. Two stores, the Claude plugin directory and Glama, are still checked by hand.
 #
 # The checks include kitden-sdlc's release check of the names and descriptions in listing.toml.
-# A push to main whose version has release notes and no tag yet is tagged. A tag v<version>
-# builds the package, publishes it to PyPI, creates a GitHub release with the built files and
-# docs/releases/v<version>.md as its notes, then updates the other stores through kitden-sdlc's
-# publish workflow.
+# A push to main whose version has release notes and no tag yet is tagged once the checks pass.
+# A tag v<version> builds the package, publishes it to PyPI, creates a GitHub release with the
+# built files and docs/releases/v<version>.md as its notes, then calls kitden-sdlc's publish
+# workflow for the other stores (the stores job below).
 name: Checks and release
 
 on:

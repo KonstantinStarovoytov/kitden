@@ -1,7 +1,7 @@
-# What: when a pull request changes the page or the recorder, records every README scene once
-# and fails when a scene fails.
-# Why: the README pictures are recorded again at each release. This shows a broken scene in the
-# pull request that broke it, not on release day.
+# What: when a pull request changes Kitden's code or the README recorder (its scripts and
+# tests/conftest.py), records every README scene once and fails when a scene fails.
+# Why: the README pictures are recorded again at each release. When a change to these files
+# breaks a scene, its pull request shows it, not release day.
 #
 # The run uses scripts/record_readme.py. The pictures are uploaded as the artifact `scenes` to
 # look at; nothing is committed. The recorder runs on macOS: it was tried there, and Ubuntu was

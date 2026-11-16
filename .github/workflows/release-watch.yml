@@ -1,9 +1,11 @@
-# What: every day, with no model, opens "Time for a release?" when merged changes wait for a
-# release, and "Release vX.Y.Z is not everywhere" when a store is behind.
+# What: every day, with no model, opens, updates or closes two issues: "Time for a release?"
+# while merged changes for users wait and the last release is a week old or one of them has
+# the `bug` label, and "Release vX.Y.Z is not everywhere" while a store is behind.
 # Why: so that merged work does not sit unreleased, and a release that reached only some stores
 # is noticed.
 #
-# The Lantern app posts the issues (the same app and names as agents-review.yml).
+# Lantern, the app that posts comments and issues, opens them (the same app, variable and
+# secret names as agents-review.yml).
 name: Release watch
 
 on:
