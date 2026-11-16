@@ -69,16 +69,35 @@ def test_the_version_has_release_notes():
     assert notes.read_text().strip()
 
 
-def test_the_readme_works_on_pypi():
-    """PyPI keeps absolute fallback images; GitHub sources follow the current branch."""
+def _pypi_readme() -> str:
+    """README.md as the build hands it to PyPI (hatch-fancy-pypi-readme in pyproject.toml)."""
     import re
 
-    readme = (ROOT / "README.md").read_text()
+    hooks = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["hatch"]["metadata"]
+    hook = hooks["hooks"]["fancy-pypi-readme"]
+    assert hook["fragments"] == [{"path": "README.md"}]
+    page = (ROOT / "README.md").read_text()
+    for rule in hook["substitutions"]:
+        page = re.sub(rule["pattern"], rule["replacement"], page)
+    return page
+
+
+def test_the_readme_works_on_pypi():
+    """PyPI shows every img: one light picture per place, every address absolute."""
+    import re
+
+    assert "readme" in _project()["dynamic"]
+    readme = _pypi_readme()
+    assert "-mode-only" not in readme and "<picture" not in readme
     targets = re.findall(r'(?:src|href)="([^"]+)"', readme)
     targets += re.findall(r"\]\(([^)\s]+)\)", readme)
     assert targets
     for target in targets:
         assert target.startswith("https://"), target
-    for picture in re.findall(r"<picture>.*?</picture>", readme, re.S):
-        assert "<img " in picture, "PyPI drops source; keep a plain img inside"
+    images = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/"
+    pictures = [src for src in re.findall(r'<img src="([^"]+)"', readme) if src.startswith(images)]
+    assert len(pictures) == 5 and pictures[0] == images + "hero.svg"
+    for picture in pictures:
+        assert "-dark." not in picture, picture
+        assert (ROOT / "docs/images" / picture.removeprefix(images)).is_file(), picture
     assert "https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md" in readme

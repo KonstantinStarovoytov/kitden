@@ -68,18 +68,35 @@ def test_the_check_before_a_release_turns_strict_mode_on_in_the_servers_details(
 IMAGES = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/"
 
 
-def test_every_readme_image_has_a_local_source_and_a_pypi_fallback():
+def test_every_readme_image_is_a_local_file_or_a_link():
     readme = (ROOT / "README.md").read_text()
-    images = re.findall(r'(?:src|srcset)="([^"]+)"', readme)
+    images = re.findall(r'src="([^"]+)"', readme)
     assert images
     marked = re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", readme)
     for image in images + marked:
-        if image.startswith(IMAGES):
-            assert (ROOT / "docs/images" / image.removeprefix(IMAGES)).is_file(), image
-        elif image.startswith("docs/images/"):
+        image = image.removesuffix("#gh-light-mode-only").removesuffix("#gh-dark-mode-only")
+        if image.startswith("docs/images/"):
             assert (ROOT / image).is_file(), image
         else:
             assert image.startswith("https://"), image
+
+
+def test_each_readme_picture_has_a_light_and_a_dark_copy():
+    # GitHub hides the copy for the other theme by its chosen theme, also when it is switched
+    # on an open page; <picture> followed the switch only after a reload (2026-11-16).
+    readme = (ROOT / "README.md").read_text()
+    assert "<picture" not in readme
+    pairs = re.findall(
+        r'<img src="([^"#]+)#gh-light-mode-only"([^>]*)>\n *'
+        r'<img src="([^"#]+)#gh-dark-mode-only"([^>]*)>',
+        readme,
+    )
+    assert len(pairs) == readme.count("#gh-light-mode-only") == readme.count("#gh-dark-mode-only")
+    assert len(pairs) == 5
+    for light, light_rest, dark, dark_rest in pairs:
+        assert light_rest == dark_rest, light
+        stem, kind = light.rsplit(".", 1)
+        assert dark in (f"{stem.removesuffix('-light')}-dark.{kind}", f"{stem}-dark.{kind}"), dark
 
 
 def test_the_readme_names_no_old_review():

@@ -94,9 +94,16 @@ Before promoting a release, verify both commands in temporary uv tool and cache 
 The README sample is not proof of the published package.
 uv [downloads Python if needed](https://docs.astral.sh/uv/guides/install-python/#automatic-python-downloads).
 
-Checked 2026-10-28: GitHub supports relative image sources inside
-[`picture`](https://github.blog/developer-skills/github/how-to-make-your-images-in-markdown-on-github-adjust-for-dark-mode-and-light-mode/).
-Relative sources follow the current branch. Fallback image URLs point to main. PyPI's
-[cleaner](https://github.com/pypa/readme_renderer/blob/main/readme_renderer/clean.py)
-keeps `img` and removes `source`, so its package page uses the light fallback.
-Merge the images before publishing.
+## Light and dark
+
+Each picture is two `<img>` tags: the light file ends in `#gh-light-mode-only`, the dark one
+in `#gh-dark-mode-only`. GitHub hides the other one by the theme chosen on GitHub, at once,
+also when the theme is switched on an open page. Checked 2026-11-16 on the repository page:
+GitHub keeps the ending on the link it wraps around each picture, and its CSS hides that link
+by `data-color-mode`. `<picture>` with `prefers-color-scheme` was used before; GitHub applies
+the chosen theme to it only when the page loads, so a switch left the dark pictures, white
+logo text included, on a light page until a reload.
+
+The addresses are relative, so a branch shows its own pictures. PyPI shows every `<img>`, so
+the build (`hatch-fancy-pypi-readme` in `pyproject.toml`) drops the dark copies from the
+package page and points the light ones at main. Merge the images before publishing.

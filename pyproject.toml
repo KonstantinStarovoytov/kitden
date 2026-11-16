@@ -2,7 +2,7 @@
 name = "kitden"
 version = "0.9.2"
 description = "See the MCP servers, plugins and skills Claude Code, Codex and Cursor load, and which skills got cut"
-readme = "README.md"
+dynamic = ["readme"]
 requires-python = ">=3.13"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -47,8 +47,25 @@ dev = [
 ]
 
 [build-system]
-requires = ["hatchling>=1.27"]
+requires = ["hatchling>=1.27", "hatch-fancy-pypi-readme>=25.1"]
 build-backend = "hatchling.build"
+
+# The PyPI page is README.md with one picture per place: PyPI shows every <img>, so the dark
+# copies GitHub hides by theme are dropped, and the light ones point at main.
+# See docs/readme-media.md.
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '\n *<img src="[^"]*#gh-dark-mode-only"[^>]*>'
+replacement = ""
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = 'src="(docs/images/[^"#]+)#gh-light-mode-only"'
+replacement = 'src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/\1"'
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kitden"]
