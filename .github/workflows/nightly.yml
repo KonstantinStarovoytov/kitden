@@ -117,8 +117,11 @@ jobs:
             uv run pytest -q tests/unit/test_real_secrets.py -rs
       # The page's own tests, in Node with a stand-in DOM.
       - run: node --test tests/frontend/*.test.mjs
-      # The page opens within its time budgets (docs/development.md, Speed).
+      # The page opens within its time budgets (docs/development.md, Speed). The Intel Mac is
+      # slower and gets twice the budgets; a missed one still turns the job red there.
       - run: uv run python scripts/measure-start.py
+        env:
+          KITDEN_START_BUDGET_SCALE: ${{ matrix.os == 'macos-15-intel' && '2' || '1' }}
       # The tests in tests/set-aside.txt fail by chance; run them to see if they still do.
       # This step never turns the job red.
       - name: Tests set aside

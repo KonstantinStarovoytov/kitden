@@ -34,7 +34,11 @@ DB_QUERY = "db-tools@demo-market/db-query"
 
 
 @pytest.fixture
-def home(tmp_path):
+def home(tmp_path, name_lookups):
+    # The servers' names never resolve (.test and .example are kept out of DNS), as when the
+    # real DNS was asked: a server whose name does not resolve is asked what access it needs.
+    for name in ("status.example.test", "x.example.test", "moded.example"):
+        name_lookups[name] = None
     return build_demo_home(tmp_path, "medium")
 
 
@@ -226,11 +230,16 @@ def test_add_steps_write_only_the_gateway_settings(home):
     assert local[0].edit.after == {"command": "uvx", "args": ["mcp-db-query"]}
 
 
-def test_a_plugin_server_at_a_local_address_is_not_asked_before_apply(home):
+def test_a_plugin_server_at_a_local_address_is_not_asked_before_apply(home, name_lookups):
     # A plugin's .mcp.json is someone else's file: it must not make Kitden reach this computer
     # or a private network on its own. The server is still added; the gateway reaches it only
-    # after Apply.
-    for url in ("http://169.254.169.254/latest/mcp", "http://127.0.0.1:3845/mcp"):
+    # after Apply. A name that points at a private address counts too.
+    name_lookups["inside.example"] = "10.0.0.5"
+    for url in (
+        "http://169.254.169.254/latest/mcp",
+        "http://127.0.0.1:3845/mcp",
+        "https://inside.example/mcp",
+    ):
         _offer(home, "inside", {"type": "http", "url": url})
         [step] = _steps(home, f"extra@{MARKET}/inside", _never)
         assert step.edit.after == {"url": url}

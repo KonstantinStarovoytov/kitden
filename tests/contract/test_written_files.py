@@ -4,6 +4,10 @@ shapes a fixture knows. Run with: pytest -m contract
 A failure means a client writes something no fixture knows, or stopped writing something: read
 the sentences it prints and follow the steps in tests/fixtures/README.md. Set KITDEN_WRITTEN to
 a folder to keep the files.
+
+Each client installs the plugin from this repository's own marketplace files, as users do: it
+clones the source they name on GitHub. A failure that names that clone is the network or a broken
+source, not a shape.
 """
 
 import os

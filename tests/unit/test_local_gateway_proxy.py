@@ -407,9 +407,11 @@ async def test_a_local_server_starts_in_the_folder_the_session_names(home):
 async def test_a_slow_server_does_not_hold_up_the_list_or_other_servers(
     home, tmp_path, monkeypatch
 ):
-    # In this process, so the timeouts can be short.
-    monkeypatch.setattr(proxy, "START_TIMEOUT", 4)
-    monkeypatch.setattr(proxy, "CALL_TIMEOUT", 5)
+    # Nothing here races the clock. While the rest is checked, the gateway's own times are a
+    # minute, so a pending call cannot end early on a slow machine, and one held up would wait
+    # that minute, far past each bound below. Short times come only once that is proven.
+    monkeypatch.setattr(proxy, "START_TIMEOUT", 60)
+    monkeypatch.setattr(proxy, "CALL_TIMEOUT", 60)
     started, waiting = tmp_path / "stuck-started", tmp_path / "slow-waiting"
     write_settings(
         home, {"alpha": echo("alpha"), "stuck": echo("stuck", "--mark", str(started), "--hang")}
@@ -419,9 +421,13 @@ async def test_a_slow_server_does_not_hold_up_the_list_or_other_servers(
     server = proxy.gateway_server(home, create_server(lambda: None), known=list)
     results = {}
 
+    async def until(path):
+        while not path.exists():
+            await anyio.sleep(0.05)
+
     async with Client(server, mode="legacy") as client:
         # Every list is known: the list comes at once and no server starts for it.
-        with anyio.fail_after(1):
+        with anyio.fail_after(10):
             await client.list_tools()
         assert not started.exists()
 
@@ -429,21 +435,33 @@ async def test_a_slow_server_does_not_hold_up_the_list_or_other_servers(
             results[name] = await client.call_tool(name, arguments)
 
         async with anyio.create_task_group() as calls:
-            calls.start_soon(call, "slow", {"seconds": 30, "note": str(waiting)})
             calls.start_soon(call, "wait", {})
+            with anyio.fail_after(30):
+                await until(started)
+            # While stuck hangs at start, alpha starts and a slow call of it runs...
+            calls.start_soon(call, "slow", {"seconds": 300, "note": str(waiting)})
+            with anyio.fail_after(30):
+                await until(waiting)
+            # ...and the rest answers at once.
             with anyio.fail_after(10):
-                while not (started.exists() and waiting.exists()):
-                    await anyio.sleep(0.05)
-            # While stuck hangs at start and a call of alpha runs, the rest answers at once.
-            with anyio.fail_after(1):
                 said = await client.call_tool("echo", {"text": "hi"})
                 await client.list_tools()
             assert results == {}
+            calls.cancel_scope.cancel()
+        assert text(said) == "hi"
 
-    assert text(said) == "hi"
+        # A start that hangs and a call that runs long each end at their own time, with a
+        # plain sentence. Each waits far past that time: stuck forever, slow 300 seconds.
+        monkeypatch.setattr(proxy, "START_TIMEOUT", 2)
+        monkeypatch.setattr(proxy, "CALL_TIMEOUT", 2)
+        with anyio.fail_after(30):
+            async with anyio.create_task_group() as calls:
+                calls.start_soon(call, "wait", {})
+                calls.start_soon(call, "slow", {"seconds": 300})
+
     assert [(results[name].is_error, text(results[name])) for name in ("wait", "slow")] == [
-        (True, "stuck did not start in 4 seconds."),
-        (True, "alpha did not answer in 5 seconds."),
+        (True, "stuck did not start in 2 seconds."),
+        (True, "alpha did not answer in 2 seconds."),
     ]
 
 

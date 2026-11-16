@@ -89,7 +89,8 @@ numbers:
 - **demo (medium)**: time from building the medium sample to the first answer of
   `/api/overview`. Budget: 2 s.
 
-A missed budget gives exit code 1. Times start with the page, and the demo's with building its
+A missed budget gives exit code 1. The nightly's Intel Mac is slower and has twice the budgets
+(`KITDEN_START_BUDGET_SCALE=2`). Times start with the page, and the demo's with building its
 sample; Python's own start and a `uvx` cold start are not counted. The client versions are known
 before each run, as on every start after the first: the page reads them from `versions.json` in
 the data folder (`~/Library/Application Support/kitden`) and runs a client's version command

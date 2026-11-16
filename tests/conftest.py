@@ -1,10 +1,13 @@
 """Shared test helpers: fake home folders built from tests/fixtures."""
 
 import contextlib
+import errno
+import ipaddress
 import json
 import os
 import shlex
 import shutil
+import socket
 import sqlite3
 import sys
 import time
@@ -71,6 +74,115 @@ def _watch_by_polling(monkeypatch):
     Mac, macOS can report a change 10 to 40 seconds late, and a write made before watching
     as a new change, so the tests timed out or saw a change twice."""
     monkeypatch.setenv("WATCHFILES_FORCE_POLLING", "1")
+
+
+# The address every name gets in a test that sets no other: a public one, so
+# `is_local_address` counts the name as outside. Nothing reaches it: `name_lookups` refuses it.
+PUBLIC_ADDRESS = "93.184.216.34"
+
+
+class NameLookups(dict):
+    """What names resolve to in this test. `name_lookups["mcp.example"] = "10.0.0.5"` gives a
+    name an address, `= None` makes it not resolve; every other name gets PUBLIC_ADDRESS. Keys
+    are in lower case, without a final dot. `refused` lists the connections the test tried to
+    make outside this computer."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.refused: list = []
+
+
+def _numeric(host: str) -> bool:
+    """Whether the host is an address in any spelling getaddrinfo reads as one (`127.1`)."""
+    try:
+        socket.inet_aton(host)
+        return True
+    except OSError:
+        pass
+    try:
+        socket.inet_pton(socket.AF_INET6, host.partition("%")[0])
+        return True
+    except OSError:
+        return False
+
+
+def _on_this_computer(address) -> bool:
+    """Whether a connect address stays on this computer: a Unix socket's path, localhost, or
+    a loopback or unspecified address. A name other than localhost does not: connect would
+    look it up itself."""
+    if not isinstance(address, tuple):
+        return True
+    host = os.fsdecode(address[0])
+    if host.lower().rstrip(".") == "localhost":
+        return True
+    try:
+        ip = ipaddress.ip_address(host.partition("%")[0])
+    except ValueError:
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip.is_loopback or ip.is_unspecified
+
+
+@pytest.fixture(autouse=True)
+def name_lookups(request, monkeypatch):
+    """No test but a contract or browser test looks a name up or connects outside this
+    computer, so no answer depends on the runner's network. Addresses and localhost resolve as
+    usual, other names from `NameLookups`; a connection outside is refused and fails the test."""
+    if request.node.get_closest_marker("contract") or request.node.get_closest_marker("browser"):
+        yield None
+        return
+    answers = NameLookups()
+    real_lookup, real_reverse = socket.getaddrinfo, socket.gethostbyaddr
+    real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
+
+    def getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        name = None if host is None else os.fsdecode(host)
+        if name is None or name.lower().rstrip(".") == "localhost":
+            return real_lookup(host, port, family, type, proto, flags)
+        if _numeric(name):
+            return real_lookup(host, port, family, type, proto, flags | socket.AI_NUMERICHOST)
+        address = answers.get(name.lower().rstrip("."), PUBLIC_ADDRESS)
+        if address is None:
+            raise socket.gaierror(socket.EAI_NONAME, f"{name} does not resolve in this test")
+        return real_lookup(address, port, family, type, proto, flags | socket.AI_NUMERICHOST)
+
+    def gethostbyname(host):
+        return getaddrinfo(host, None, socket.AF_INET)[0][4][0]
+
+    def gethostbyname_ex(host):
+        found = getaddrinfo(host, None, socket.AF_INET, socket.SOCK_STREAM)
+        return host, [], [info[4][0] for info in found]
+
+    def gethostbyaddr(address):
+        if _on_this_computer((address, 0)):
+            return real_reverse(address)
+        raise socket.herror(1, f"{address} is not looked up in this test")
+
+    def refuse(address) -> str:
+        answers.refused.append(address)
+        return f"A test does not connect outside this computer: {address}"
+
+    def connect(sock, address):
+        if not _on_this_computer(address):
+            raise ConnectionRefusedError(errno.ECONNREFUSED, refuse(address))
+        return real_connect(sock, address)
+
+    def connect_ex(sock, address):
+        if not _on_this_computer(address):
+            refuse(address)
+            return errno.ECONNREFUSED
+        return real_connect_ex(sock, address)
+
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket, "gethostbyname", gethostbyname)
+    monkeypatch.setattr(socket, "gethostbyname_ex", gethostbyname_ex)
+    monkeypatch.setattr(socket, "gethostbyaddr", gethostbyaddr)
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    yield answers
+    if answers.refused:
+        pytest.fail(f"The test tried to connect outside this computer: {answers.refused}")
 
 
 def aged(path: Path) -> Path:

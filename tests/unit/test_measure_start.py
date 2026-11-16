@@ -1,5 +1,5 @@
 """The start measurement's building blocks: the sandbox it builds and its slow fake Codex.
-The budgets themselves are checked by running the script, not here."""
+The times themselves are checked by running the script; here only how it reads its budgets."""
 
 import importlib.util
 import json
@@ -8,6 +8,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+import pytest
 from starlette.testclient import TestClient
 
 from kitden.clients.codex import CodexAdapter
@@ -73,3 +74,32 @@ def test_the_probe_sample_has_twenty_servers(tmp_path):
     # The added servers reach a client directly, in Claude Code and in Codex.
     probes = [r for rows in view["groups"].values() for r in rows if r["name"].startswith("probe-")]
     assert {c for row in probes for c in row["clients"]} == {"claude_code", "codex"}
+
+
+def test_the_budgets_are_the_same_everywhere_unless_the_workflow_scales_them():
+    plain = {"first usable": 2.0, "complete": 5.0, "demo (medium)": 2.0}
+    assert measure_start.budgets({}) == plain
+    assert measure_start.budgets({"KITDEN_START_BUDGET_SCALE": "1"}) == plain
+    # The Intel Mac of the nightly gets twice the budgets.
+    assert measure_start.budgets({"KITDEN_START_BUDGET_SCALE": "2"}) == {
+        "first usable": 4.0,
+        "complete": 10.0,
+        "demo (medium)": 4.0,
+    }
+
+
+@pytest.mark.parametrize("value", ["", "0", "-2", "two", "nan", "inf"])
+def test_a_scale_that_is_not_a_positive_number_stops_the_script(value):
+    with pytest.raises(SystemExit) as stopped:
+        measure_start.budgets({"KITDEN_START_BUDGET_SCALE": value})
+    assert str(stopped.value) == (
+        f"KITDEN_START_BUDGET_SCALE must be a positive number, not {value!r}."
+    )
+
+
+def test_a_time_over_its_budget_is_missed_and_twice_the_budget_still_has_a_limit():
+    times = {"first usable": 2.5, "complete": 1.0, "demo (medium)": 0.5}
+    assert measure_start.missed(times, measure_start.budgets({})) == ["first usable"]
+    doubled = measure_start.budgets({"KITDEN_START_BUDGET_SCALE": "2"})
+    assert measure_start.missed(times, doubled) == []
+    assert measure_start.missed({**times, "complete": 10.5}, doubled) == ["complete"]

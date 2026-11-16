@@ -5,8 +5,8 @@ Each test adds a copy of the repository's marketplace whose plugin source is thi
 plugins/kitden (`checkout_marketplace`), installs the plugin, compares what the client installed
 with that source, and removes everything again. Nothing is cloned. The repository's own
 marketplace names the `release` branch on GitHub as the source, so installing from it would
-compare the checkout with the last release; tests/contract/test_library_add.py installs that
-way. The real home folder is never touched.
+compare the checkout with the last release; tests/contract/test_written_files.py installs
+that way. The real home folder is never touched.
 """
 
 import json
