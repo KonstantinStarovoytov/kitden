@@ -407,11 +407,12 @@ async def test_a_local_server_starts_in_the_folder_the_session_names(home):
 async def test_a_slow_server_does_not_hold_up_the_list_or_other_servers(
     home, tmp_path, monkeypatch
 ):
-    # Nothing here races the clock. While the rest is checked, the gateway's own times are a
-    # minute, so a pending call cannot end early on a slow machine, and one held up would wait
-    # that minute, far past each bound below. Short times come only once that is proven.
-    monkeypatch.setattr(proxy, "START_TIMEOUT", 60)
-    monkeypatch.setattr(proxy, "CALL_TIMEOUT", 60)
+    # Nothing here races the clock. While the rest is checked, the gateway's own times are two
+    # minutes, more than all the bounds below together (70 s), so a pending call cannot end
+    # early on a slow machine, and one held up would wait those minutes, far past each bound.
+    # Short times come only once that is proven.
+    monkeypatch.setattr(proxy, "START_TIMEOUT", 120)
+    monkeypatch.setattr(proxy, "CALL_TIMEOUT", 120)
     started, waiting = tmp_path / "stuck-started", tmp_path / "slow-waiting"
     write_settings(
         home, {"alpha": echo("alpha"), "stuck": echo("stuck", "--mark", str(started), "--hang")}

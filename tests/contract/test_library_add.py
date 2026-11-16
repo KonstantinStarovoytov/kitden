@@ -3,7 +3,8 @@ Claude Code and Codex in one review, then Undo both. Run with: pytest -m contrac
 
 The marketplace is a copy of this repository's whose plugin source is the checkout's
 plugins/kitden (`checkout_marketplace`), so nothing is cloned. Installing from the repository's
-own marketplace files, which clone the `release` branch from GitHub, is tested in
+own marketplace files, which clone the `release` branch from GitHub, and the Library on that
+plugin (on, removed, offered, installed and undone through Kitden) are tested in
 tests/contract/test_written_files.py. The real home folder is never touched.
 """
 

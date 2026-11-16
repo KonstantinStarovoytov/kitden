@@ -4,13 +4,13 @@
 import asyncio
 import contextlib
 import http.client
+import ipaddress
 import socket
 import urllib.request
 
 import pytest
 
-import tests.conftest
-from tests.conftest import PUBLIC_ADDRESS
+from tests.conftest import PUBLIC_ADDRESS, PUBLIC_ADDRESS_V6, guarded_lookups
 
 
 def _addresses(host, family=0):
@@ -23,6 +23,10 @@ def test_a_name_gets_the_public_answer_never_the_real_one():
     assert _addresses("nothing-here.invalid") == {PUBLIC_ADDRESS}
     assert _addresses(b"GitHub.com.") == {PUBLIC_ADDRESS}
     assert socket.gethostbyname("github.com") == PUBLIC_ADDRESS
+    # Asked for IPv6 only, the name still gets a public answer, not "does not resolve".
+    assert _addresses("github.com", socket.AF_INET6) == {PUBLIC_ADDRESS_V6}
+    assert ipaddress.ip_address(PUBLIC_ADDRESS_V6).is_global
+    assert ipaddress.ip_address(PUBLIC_ADDRESS).is_global
     assert socket.gethostbyname_ex("github.com") == ("github.com", [], [PUBLIC_ADDRESS])
     # The event loop asks the same lookup, so httpx, anyio and asyncio get it too.
     assert asyncio.run(_loop_lookup("github.com")) == {PUBLIC_ADDRESS}
@@ -82,18 +86,8 @@ def _plain_connect(address):
 
 
 def test_a_refused_connection_fails_the_test_even_when_the_code_swallows_the_error(monkeypatch):
-    # The fixture itself, as it runs for a test that is not a contract or browser test.
-    class Node:
-        @staticmethod
-        def get_closest_marker(name):
-            return None
-
-    class Request:
-        node = Node()
-
-    # Not imported by name: a fixture imported into a test module would be a second one.
-    fixture = tests.conftest.name_lookups._get_wrapped_function()
-    steps = fixture(Request(), monkeypatch)
+    # What the fixture runs for a test that is not a contract or browser test.
+    steps = guarded_lookups(monkeypatch)
     answers = next(steps)
     # Code that takes any network error as "could not reach" swallows the refusal...
     with contextlib.suppress(OSError):

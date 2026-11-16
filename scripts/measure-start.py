@@ -221,6 +221,11 @@ def budgets(env) -> dict[str, float]:
     }
 
 
+def budget_line(limits: dict[str, float]) -> str:
+    """The line that says which budgets this run uses."""
+    return f"Budgets: {', '.join(f'{name} {limit:g} s' for name, limit in limits.items())}."
+
+
 def missed(times: dict[str, float], limits: dict[str, float]) -> list[str]:
     """The times over their budget."""
     return [name for name, limit in limits.items() if times[name] > limit]
@@ -251,7 +256,7 @@ def main() -> int:
     if args.probe:
         return run_probe()
     limits = budgets(os.environ)
-    print(f"Budgets: {', '.join(f'{name} {limit:g} s' for name, limit in limits.items())}.")
+    print(budget_line(limits))
     real_home, real_path = os.environ.get("HOME"), os.environ.get("PATH")
     try:
         with tempfile.TemporaryDirectory(prefix="kitden-measure-") as folder:

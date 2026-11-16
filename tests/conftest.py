@@ -77,8 +77,10 @@ def _watch_by_polling(monkeypatch):
 
 
 # The address every name gets in a test that sets no other: a public one, so
-# `is_local_address` counts the name as outside. Nothing reaches it: `name_lookups` refuses it.
+# `is_local_address` counts the name as outside, in the family asked for (IPv4 unless only
+# IPv6 is asked). Nothing reaches it: `name_lookups` refuses it.
 PUBLIC_ADDRESS = "93.184.216.34"
+PUBLIC_ADDRESS_V6 = "2606:2800:220:1:248:1893:25c8:1946"
 
 
 class NameLookups(dict):
@@ -127,11 +129,17 @@ def _on_this_computer(address) -> bool:
 @pytest.fixture(autouse=True)
 def name_lookups(request, monkeypatch):
     """No test but a contract or browser test looks a name up or connects outside this
-    computer, so no answer depends on the runner's network. Addresses and localhost resolve as
-    usual, other names from `NameLookups`; a connection outside is refused and fails the test."""
+    computer, so no answer depends on the runner's network (`guarded_lookups`)."""
     if request.node.get_closest_marker("contract") or request.node.get_closest_marker("browser"):
         yield None
         return
+    yield from guarded_lookups(monkeypatch)
+
+
+def guarded_lookups(monkeypatch):
+    """Addresses and localhost resolve as usual, other names from `NameLookups`, which it
+    yields; a connection outside this computer is refused, and when it resumes after the test
+    it fails the test if one was tried."""
     answers = NameLookups()
     real_lookup, real_reverse = socket.getaddrinfo, socket.gethostbyaddr
     real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
@@ -142,7 +150,8 @@ def name_lookups(request, monkeypatch):
             return real_lookup(host, port, family, type, proto, flags)
         if _numeric(name):
             return real_lookup(host, port, family, type, proto, flags | socket.AI_NUMERICHOST)
-        address = answers.get(name.lower().rstrip("."), PUBLIC_ADDRESS)
+        default = PUBLIC_ADDRESS_V6 if family == socket.AF_INET6 else PUBLIC_ADDRESS
+        address = answers.get(name.lower().rstrip("."), default)
         if address is None:
             raise socket.gaierror(socket.EAI_NONAME, f"{name} does not resolve in this test")
         return real_lookup(address, port, family, type, proto, flags | socket.AI_NUMERICHOST)

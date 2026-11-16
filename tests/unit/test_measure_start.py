@@ -103,3 +103,13 @@ def test_a_time_over_its_budget_is_missed_and_twice_the_budget_still_has_a_limit
     doubled = measure_start.budgets({"KITDEN_START_BUDGET_SCALE": "2"})
     assert measure_start.missed(times, doubled) == []
     assert measure_start.missed({**times, "complete": 10.5}, doubled) == ["complete"]
+
+
+def test_the_script_says_which_budgets_it_uses():
+    assert measure_start.budget_line(measure_start.budgets({})) == (
+        "Budgets: first usable 2 s, complete 5 s, demo (medium) 2 s."
+    )
+    doubled = measure_start.budgets({"KITDEN_START_BUDGET_SCALE": "2"})
+    assert measure_start.budget_line(doubled) == (
+        "Budgets: first usable 4 s, complete 10 s, demo (medium) 4 s."
+    )
