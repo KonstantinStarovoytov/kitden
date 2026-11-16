@@ -287,11 +287,13 @@ missing. A pull request that changes the page or the recorder also runs the scen
 artifact `scenes`.
 Once a day the tests also run on the newest versions of the dependencies
 (`.github/workflows/latest-deps.yml`): people who install Kitden get those, not the ones in
-`uv.lock`. When that run fails, GitHub sends an email.
+`uv.lock`.
 Every night the tests also run on four systems and two Pythons
 (`.github/workflows/nightly.yml`): macOS on ARM and on Intel, Ubuntu on x64 and on ARM, each
 with Python 3.13 and 3.14. The `browser` job of the same workflow runs the browser tests in
 Chromium on Ubuntu.
+When a job of either scheduled run is red, the desk in kitden-sdlc opens a `ci-failure` issue
+for it, rewrites it each day and closes it when the job is green again.
 `README.md` is also the PyPI page. [README media](readme-media.md) says how its pictures are
 made, how their addresses work on GitHub and PyPI, and what to check before promoting a release.
 
