@@ -44,8 +44,8 @@ Debian man page and libsecret's `tool/secret-tool.c`, checked 2026-11-03:
   reads the item back here too.
 - `lookup` prints the value with no newline when piped. It exits 1 with nothing on stdout both
   when no item matches and when the keyring cannot be reached; only the second writes to
-  stderr. So "not there" is exit 1 with empty stdout and stderr, and anything else is
-  "could not reach".
+  stderr. So "not there" is exit 1 with empty stdout and stderr, and any other failure is
+  "could not reach". A value printed with exit 0 that is not UTF-8 is "could not read".
 - `clear` removes the matching items; it is taken to exit 1 silently when there was none
   (libsecret reports a clear that removed nothing as a failure), to confirm on Ubuntu.
 - It finds the keyring through DBUS_SESSION_BUS_ADDRESS. A gateway that Codex starts gets only
@@ -80,9 +80,17 @@ NOT_IN_ACCOUNTS = {'"', "\\"}
 LINE_LIMIT = 4000
 TOO_LONG = (
     "The secret {account} is too long for the Keychain: {size:,} bytes, and Kitden can store "
-    "at most {most:,}. Keep the server in the client's own settings, or use a shorter token."
+    "at most {most:,}. {then}"
 )
+# What to do then, by the change that would store the secret: a move can leave the server in
+# the client; "Move secrets to the Keychain…" leaves the secret where it is; a server already in
+# the gateway needs a shorter token.
+KEEP_IN_CLIENT = "Keep the server in the client's own settings, or use a shorter token."
+STAYS_IN_GATEWAY = "The secret stays in the gateway's settings, where it works as before."
+SHORTER = "Use a shorter token."
 UNREADABLE = "Kitden could not read a secret of {server} from the {store}."
+# A lone surrogate (half of a pair, as an escaped JSON string can hold) has no UTF-8 form.
+NOT_TEXT = "The secret {account} is not valid text, so Kitden did not store it."
 # `find-generic-password -g`'s password line: the hex of the bytes, then the printable ones in
 # quotes if there are any, when a byte is not printable ASCII or the value has a backslash and a
 # quote (seen together); else the value in quotes. The value comes from the hex, or from quotes
@@ -156,12 +164,13 @@ def run_security(args: list[str], stdin: str | None = None) -> tuple[int, str, s
             check=False,
             env=tool_env(),
         )
-        # `secret-tool lookup` prints the value on stdout, so its bytes are read strictly. On
-        # macOS stdout holds only an item's attributes (the keychain's path among them), and
-        # stderr on both only `security`'s escaped password line or a message.
-        out = done.stdout.decode(errors="replace" if mac else "strict")
-    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+    except (OSError, subprocess.SubprocessError):
         raise KeychainError(reach()) from None
+    # `secret-tool lookup` prints the value on stdout: a byte that is not UTF-8 is kept as a
+    # surrogate, and `_find` says it could not read that secret. On macOS stdout holds only an
+    # item's attributes (the keychain's path among them), and stderr on both only `security`'s
+    # escaped password line or a message.
+    out = done.stdout.decode(errors="replace" if mac else "surrogateescape")
     return done.returncode, out, done.stderr.decode(errors="replace")
 
 
@@ -204,14 +213,20 @@ def longest(server: str, key: str) -> int:
     return (LINE_LIMIT - len(_line(f"{server}/{key}", "").encode())) // 2
 
 
-def check_size(server: str, key: str, value: str) -> None:
-    """Refuse a value too long to be written whole, before anything is written. Only macOS has
-    a limit: `secret-tool store` reads the value from stdin until EOF."""
+def check_size(server: str, key: str, value: str, then: str = KEEP_IN_CLIENT) -> None:
+    """Refuse a value that is not valid text, or too long to be written whole, before anything
+    is written; `then` says what to do instead of a long one. Only macOS has a limit:
+    `secret-tool store` reads the value from stdin until EOF."""
+    account = f"{server}/{key}"
+    try:
+        size = len(value.encode())
+    except UnicodeEncodeError:
+        raise KeychainError(NOT_TEXT.format(account=account)) from None
     if system.SYSTEM != "mac":
         return
-    size, most = len(value.encode()), longest(server, key)
+    most = longest(server, key)
     if size > most:
-        raise TooLong(TOO_LONG.format(account=f"{server}/{key}", size=size, most=most))
+        raise TooLong(TOO_LONG.format(account=account, size=size, most=most, then=then))
 
 
 def read(ref: dict, run: Runner = run_security) -> str | None:
@@ -276,6 +291,11 @@ def _find(account: str, run: Runner) -> str | None:
             raise Unreadable(UNREADABLE.format(server=server, store="Keychain")) from None
     code, out, err = run(["lookup", *_attributes(account)])
     if code == 0:
+        try:
+            out.encode()
+        except UnicodeEncodeError:  # bytes that are not UTF-8: the keyring was reached
+            server = account.rpartition("/")[0]
+            raise Unreadable(UNREADABLE.format(server=server, store="keyring")) from None
         return out
     if code == 1 and not out and not err.strip():
         return None

@@ -323,6 +323,34 @@ async def test_strict_mode_offers_and_allows_only_the_tools_set_on(home):
     assert refused.is_error
 
 
+async def test_a_known_tool_left_off_is_refused_in_kitdens_words(home):
+    website = home / "work/website"
+    rules = {
+        "global": {"echo": {"mode": "strict", "tools": {"echo": "on", "where": "on"}}},
+        "projects": {str(website): {"echo": {"tools": {"where": "off"}}}},
+    }
+    write_settings(home, {"echo": echo("echo")}, rules)
+    save_tools(home, "echo", [tool("echo"), tool("where"), tool("clash")])
+
+    async with gateway(home, env={"CLAUDE_PROJECT_DIR": str(website)}) as client:
+        offered = await names_offered(client) - READ_ONLY
+        strict = await client.call_tool("clash", {})
+        project = await client.call_tool("where", {})
+        unknown = await client.call_tool("nothing", {})
+        # The rules decide each call: one turned on during the session works, as offered ones do.
+        rules["global"]["echo"]["tools"]["clash"] = "on"
+        write_settings(home, {"echo": echo("echo")}, rules)
+        later = await client.call_tool("clash", {})
+
+    assert offered == {"echo"}
+    assert not later.is_error and text(later) == "echo"
+    # Strict mode and a project rule: the gateway knows the tool, so it says it is off.
+    assert strict.is_error and text(strict) == "clash is turned off in Kitden."
+    assert project.is_error and text(project) == "where is turned off in Kitden."
+    # A name the gateway does not know keeps the MCP SDK's answer.
+    assert unknown.is_error and text(unknown) == "Unknown tool: nothing"
+
+
 async def test_a_server_removed_during_a_session_is_refused(home):
     write_settings(home, {"echo": echo("echo")})
     save_tools(home, "echo", [tool("echo")])

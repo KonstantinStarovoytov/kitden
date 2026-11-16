@@ -202,9 +202,8 @@ async def test_strict_mode_offers_only_the_tools_set_on(home, client):
         refused = await opened.call_tool("clash", {})
     assert names == {"echo", "where"}
     assert not allowed.is_error and text(allowed) == "hi"
-    # A tool strict mode leaves off is not offered, so the MCP SDK answers as for any unknown
-    # tool ("Unknown tool: clash"): its words are the SDK's, the tool's name is the stable part.
-    assert refused.is_error and "clash" in text(refused)
+    # A tool strict mode leaves off is not offered, and a call to it gets Kitden's words.
+    assert refused.is_error and text(refused) == "clash is turned off in Kitden."
 
 
 async def test_an_open_session_is_refused_a_tool_turned_off_and_gets_it_back(home):

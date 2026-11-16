@@ -91,6 +91,13 @@ PUT_BACK = "The original settings were restored."
 
 OUTSIDE = "Kitden writes only in your home folder and your known projects."
 
+# What a refusal of a secret too long for the Keychain says to do, by action; any other action
+# is for a server the gateway holds, which needs a shorter token.
+TOO_LONG_THEN = {
+    "gateway.move": keychain.KEEP_IN_CLIENT,
+    "gateway.keychain": keychain.STAYS_IN_GATEWAY,
+}
+
 
 def _real(path: str | Path) -> Path:
     return Path(os.path.realpath(path))
@@ -484,7 +491,7 @@ class Engine:
             self._check_places(steps, *self.roots())
         self._preview_copies([s for s in steps if s.copy is not None])
         self._preview_removals([s for s in steps if s.removal is not None])
-        self._preview_keychain(steps)
+        self._preview_keychain(action, steps)
         targets: list[tuple[str, tuple]] = []
         for step in steps:
             edit = step.edit
@@ -536,13 +543,14 @@ class Engine:
         """The stand-in when one was given, else the real `security`."""
         return self.keychain_run or keychain.run_security
 
-    def _preview_keychain(self, steps: list[Step]) -> None:
-        """Refuse a secret too long for the Keychain, and read whether each item is there
-        already: Undo deletes only new ones."""
+    def _preview_keychain(self, action: str, steps: list[Step]) -> None:
+        """Refuse a secret too long for the Keychain, with the next step that fits the action,
+        and read whether each item is there already: Undo deletes only new ones."""
+        then = TOO_LONG_THEN.get(action, keychain.SHORTER)
         try:
             for step in steps:
                 for item in step.keychain:
-                    keychain.check_size(item.server, item.key, item.value)
+                    keychain.check_size(item.server, item.key, item.value, then)
                     item.existed = keychain.read(item.ref, run=self._security()) is not None
         except KeychainError as error:
             raise ChangeRefusedError(str(error)) from None

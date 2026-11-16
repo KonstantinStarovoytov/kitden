@@ -5,6 +5,7 @@ Kitden's own read-only tools and the tools turned on for the session's project, 
 are unique, the same in every project, and short enough for every client. It finds the session's
 folder, its projects and the tool list at the first `tools/list` and keeps them for the session.
 On each call of an upstream tool it reads the rules again and refuses a tool that is off now.
+A tool it knows but did not offer (strict mode or a rule left it off) goes by the same rules.
 A local server starts in that folder (or in its own start folder, `cwd`) when one of its tools
 is first called, or at that first `tools/list` when its tool list is not known yet.
 
@@ -478,7 +479,8 @@ class _Gateway:
         self.known = known
         self.settings = load_settings(home)
         self.upstreams = Upstreams(home, self.settings)
-        self.names: dict[str, tuple[str, str]] = {}
+        self.names: dict[str, tuple[str, str]] = {}  # the offered names
+        self.known_names: dict[str, tuple[str, str]] = {}  # every held tool, on or off
         self.tools: list[Tool] | None = None
         self.chain: list[str] = []
         self.rules_time: int | None = None  # when the rules file last changed, as last seen
@@ -495,7 +497,8 @@ class _Gateway:
         arguments = params.arguments or {}
         if params.name not in {t.name for t in await self.own.list_tools()}:
             await self._offered(ctx)
-            target = self.names.get(params.name)
+            # A known tool that is not offered gets Kitden's words, not the SDK's "Unknown tool".
+            target = self.known_names.get(params.name)
             if target is not None:
                 await self._tell_new_list(ctx)
                 # The rules are read again on each call: a tool turned off is refused at once.
@@ -557,6 +560,7 @@ class _Gateway:
                 await anyio.to_thread.run_sync(save_names, self.home, bare)
             except (OSError, RefusedWriteError):
                 _say("Kitden could not keep the tool names; they may change when servers change.")
+        self.known_names = names
         self.names = {name: key for name, key in names.items() if key in found}
         return [_tool(name, found[key]) for name, key in self.names.items()]
 

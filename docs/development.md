@@ -163,7 +163,7 @@ own session.
 | 18 | A new session: the server's tools work | test | `tests/unit/test_real_secrets.py::test_a_session_gets_the_secret_from_the_real_store`, a stand-in session with the real Keychain and keyring |
 | 19 | Undo the move: the Keychain item is gone | test | `tests/unit/test_real_secrets.py::test_undo_of_the_move_removes_the_item` |
 | 20 | "Move secrets to the Keychain…" moves a plain token | test | `tests/unit/test_real_secrets.py::test_a_plain_token_in_gateway_json_moves_to_the_keychain` |
-| 21 | `security` facts: any value comes back whole, a long one is refused | test | On macOS runners: `tests/unit/test_real_secrets.py::test_a_missing_item_ends_with_44`, `tests/unit/test_real_secrets.py::test_a_value_with_quotes_and_spaces_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_an_account_with_a_space_is_quoted_on_the_security_line`, `tests/unit/test_real_secrets.py::test_a_value_in_other_alphabets_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_a_value_with_no_ascii_letter_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_a_4_kb_value_comes_back_unchanged`. A secret in any characters comes back whole: Kitden reads `find-generic-password -g`, whose `0x` form tells a value's hex from the value. `security` cuts a `-i` line longer than 4,095 bytes, so on macOS Kitden refuses a secret longer than about 1,970 bytes before it writes anything, with "The secret <server>/<key> is too long for the Keychain: …", and the item that was there stays as it was; the 4 KB test checks that refusal (`tests/unit/test_real_secrets.py::test_the_longest_value_that_fits_comes_back_whole` and `tests/unit/test_real_secrets.py::test_one_byte_more_is_refused_and_nothing_is_stored` check the edge; seen 2026-11-15 on a GitHub macOS runner). With a stand-in `security`, the move is refused at preview and the files are unchanged: `tests/unit/test_local_gateway_move.py::test_a_secret_too_long_for_the_keychain_is_refused_at_preview`. On Linux the same values, 4 KB too, come back whole |
+| 21 | `security` facts: any value comes back whole, a long one is refused | test | On macOS runners: `tests/unit/test_real_secrets.py::test_a_missing_item_ends_with_44`, `tests/unit/test_real_secrets.py::test_a_value_with_quotes_and_spaces_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_a_value_with_a_quote_comes_back_unchanged` (`a"b`), `tests/unit/test_real_secrets.py::test_a_value_with_a_backslash_comes_back_unchanged` (`a\b`), `tests/unit/test_real_secrets.py::test_an_account_with_a_space_is_quoted_on_the_security_line`, `tests/unit/test_real_secrets.py::test_a_value_in_other_alphabets_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_a_value_with_no_ascii_letter_comes_back_unchanged`, `tests/unit/test_real_secrets.py::test_a_4_kb_value_comes_back_unchanged`. A secret in any characters comes back whole: Kitden reads `find-generic-password -g`, whose `0x` form tells a value's hex from the value. `security` cuts a `-i` line longer than 4,095 bytes, so on macOS Kitden refuses a secret longer than about 1,970 bytes before it writes anything, with "The secret <server>/<key> is too long for the Keychain: …", and the item that was there stays as it was; the 4 KB test checks that refusal (`tests/unit/test_real_secrets.py::test_the_longest_value_that_fits_comes_back_whole` and `tests/unit/test_real_secrets.py::test_one_byte_more_is_refused_and_nothing_is_stored` check the edge; seen 2026-11-15 on a GitHub macOS runner). With a stand-in `security`, the move is refused at preview and the files are unchanged: `tests/unit/test_local_gateway_move.py::test_a_secret_too_long_for_the_keychain_is_refused_at_preview`. On Linux the same values, 4 KB too, come back whole |
 | 22 | With Claude Code open, put back a server with a token; the entry stays | signed-in client | By hand until the tester runs it. Part of it: `tests/contract/test_manage_items.py::test_an_entry_kitden_wrote_itself_survives_the_clients_own_write`: "+ Add" (`mcp.add`) of a server with a token into Claude Code writes `~/.claude.json` with no command, the entry outlives `claude mcp add-json` rewriting the file, and Undo keeps the rest. Not tested: "Put back" with Claude Code open |
 | 23 | Settings change under an open preview: "Preview again", Cancel | test | `tests/browser/test_preview_drift.py::test_settings_changed_under_a_preview_ask_for_a_new_one_and_cancel_writes_nothing`; it writes the settings file as Claude Code would, and does not run Claude Code |
 | 24 | Drag a server onto the gateway on the map, Apply, Undo from the toast | test | `tests/browser/test_map_drag.py::test_a_server_dragged_onto_the_gateway_is_moved_and_undo_from_the_toast_moves_it_back`: drag, Apply and Undo. Not tested here: a new session reaching the server through the gateway, which is part of check 3 |
@@ -176,7 +176,8 @@ throwaway folder; never your own project). Kitden must know the project: open it
 client, so that it shows in the page's project list. For Cursor, check the IDE, which names the
 project to the gateway; Cursor's command line does not (checked 2026-10-21).
 
-Before a release that touches the Kitden gateway, check these once by hand, on a test project:
+Before a release that touches the Kitden gateway, check these once by hand, on a test project
+(the tester is a planned nightly run with a signed-in client):
 1. In the Cursor IDE: move a server in, turn one tool off for the project, see in a new chat
    that the tool is gone, undo.
 2. Check 3, in Claude Code and in Codex: move a server with a few tools into the gateway and
@@ -188,7 +189,8 @@ Before a release that touches the Kitden gateway, check these once by hand, on a
    with "<name> is turned off in Kitden."; turn it on again and the call works in the same
    session. Undo the switches and the move (until the tester runs it)
 
-Before a release that adds, removes or puts back items, also check these once by hand:
+Before a release that adds, removes or puts back items, also check these once by hand (the
+tester is a planned nightly run with a signed-in client):
 1. In the Cursor IDE: a server added from Claude Code with a `${VAR}` header answers in a new
    chat; "Add missing plugins and skills…" shows in a new chat; undo.
 2. Check 11, in Codex: "+ Add" a server whose header reads a `${VAR}` from Claude Code into
@@ -200,7 +202,8 @@ session after a server is put back (check 10; the test reads `claude mcp get`), 
 or a skill that "Add missing plugins and skills…" adds into Claude Code (check 13; the tests
 add into Codex, and a server into Claude Code).
 
-Before a release that touches secrets, also check this once by hand:
+Before a release that touches secrets, also check this once by hand (the tester is a planned
+nightly run with a signed-in client):
 1. Check 22: with Claude Code open, "Put back in Claude Code…" a held server that has a token.
    Use Claude Code for a minute, then check the entry is still in `~/.claude.json` and a new
    session has the server. Undo; the entry is gone and the rest of the file is kept

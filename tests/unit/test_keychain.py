@@ -326,6 +326,14 @@ def test_bytes_that_are_not_utf_8_on_stdout_do_not_break_a_read(tmp_path, monkey
     assert read({"keychain": "s/k"}) == "SENTINEL_V"
 
 
+def test_a_value_with_half_a_character_pair_is_refused_and_nothing_is_stored(fake_keychain):
+    """A lone surrogate (half of a pair, as an escaped JSON string can hold) has no UTF-8 form."""
+    with pytest.raises(KeychainError) as error:
+        store("srv", "KEY", "a\ud800b")
+    assert str(error.value) == "The secret srv/KEY is not valid text, so Kitden did not store it."
+    assert not fake_keychain.exists() or json.loads(fake_keychain.read_text()) == {}
+
+
 def test_the_runner_returns_stderr_too(fake_keychain):
     code, out, err = keychain.run_security(
         ["find-generic-password", "-s", "kitden", "-a", "x/y", "-w"]
