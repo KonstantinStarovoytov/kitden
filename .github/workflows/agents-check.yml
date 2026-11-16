@@ -1,8 +1,8 @@
 # What: when a pull request changes a workflow file, runs kitden-sdlc's check on all of them:
-# zizmor, actionlint and the agent-workflow rules.
-# Why: the workflows hold the secrets. An unsafe change must show as a red check before it is
-# merged.
-name: Check agent workflows
+# zizmor, actionlint and the rule checker for 7 of the 11 rules in kitden-sdlc's RULES.md.
+# Why: the workflows hold the secrets. This shows the unsafe changes these tools know as a red
+# check before the merge.
+name: Check the workflows
 
 on:
   pull_request:
