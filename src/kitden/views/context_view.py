@@ -726,6 +726,14 @@ def _codex_limit(codex_home: Path) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
 
 
+def _codex_cap(full: str | None) -> int | None:
+    """The most of a description Codex sends: all of one up to 1,024 characters, else the first
+    1,021 and `...` (rules.codex_catalog)."""
+    if full is None or len(full) <= CODEX_DESCRIPTION_CAP:
+        return None
+    return CODEX_DESCRIPTION_CAP - 3
+
+
 def _codex_kind(sent: int | None, full: int) -> str:
     """Codex sends at most the first 1,024 characters of a description: that much is full."""
     if sent is None:
@@ -994,7 +1002,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
         size = len(r.full) if r.full is not None else len(r.sent or "")
         text, seen = (
             r.full if r.full is not None else r.sent,
-            _seen(r.full, r.sent, side, CODEX_DESCRIPTION_CAP - 3),
+            _seen(r.full, r.sent, side, _codex_cap(r.full)),
         )
         skills.append(_skill(client, r.name, r.item, size, side, note, description=text, seen=seen))
     for item in extras:

@@ -10,7 +10,7 @@ import pytest
 from kitden.context.rules import CodexSkill, codex_rule
 from kitden.context.tables import CLAUDE_ALWAYS_FULL
 from kitden.system import claude_desktop_dir
-from kitden.views.context_view import _codex_estimate, context_view
+from kitden.views.context_view import _codex_cap, _codex_estimate, _seen, context_view
 from kitden.views.inventory import build_inventory
 from kitden.views.overview import overview
 from tests.unit.test_context_claude_log import assistant, list_entry, write_chat
@@ -1277,3 +1277,34 @@ def test_a_skill_added_during_the_chat_got_its_whole_description_past_the_cap(ho
     write_chat(home, "p", "chat", [first, late, assistant("claude-opus-5-5")], 100)
     [row] = [s for s in view(home)["claude_code"]["skills"] if s["name"] == "late"]
     assert row["seen"] is None
+
+
+def test_a_codex_description_of_up_to_1024_characters_is_sent_whole(home):
+    # Codex cuts to 1,021 characters and `...` only a description longer than 1,024.
+    text = ("word " * 205)[:1023]
+    path = str(skill(home / ".agents/skills", "alpha", text).resolve())
+    write_json(home / ".codex/models_cache.json", {"models": []})
+    codex_chat(home, [f"- alpha: {text} (file: {path})"])
+    [row] = view(home)["codex"]["skills"]
+    assert (len(row["description"]), row["seen"]) == (1023, None)
+
+
+@pytest.mark.parametrize(
+    ("full", "sent", "side", "cap", "seen"),
+    [
+        (None, "x", 1, 10, None),  # no file: nothing to compare
+        ("abcdef", "abcdef", 0, 10, None),  # sent whole
+        ("abcdef", "abcdef", 0, 4, 4),  # past the client's cap
+        ("abcdef", "abcdef", 0, None, None),  # no cap: added during the chat
+        ("abcdef", "abc", 1, 10, 3),  # cut short
+        ("abcdef", "", 1, 10, 0),  # name only
+        ("abcdef", None, 1, 10, 0),  # left out
+        ("abcdef", "abcdefgh", 1, 10, None),  # a longer sent text is not a cut
+    ],
+)
+def test_seen_in_every_case(full, sent, side, cap, seen):
+    assert _seen(full, sent, side, cap) == seen
+
+
+def test_the_codex_cap_starts_past_1024_characters():
+    assert (_codex_cap(None), _codex_cap("x" * 1024), _codex_cap("x" * 1025)) == (None, None, 1021)
