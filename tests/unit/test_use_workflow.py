@@ -63,7 +63,10 @@ def test_no_pypi_records_nothing_and_stays_green():
 def test_nights_measure_the_gateway_with_the_checkouts_python_and_backfills_do_not():
     job = _jobs()["use"]
     assert 'if [ -z "$VERSIONS" ]; then uv sync --locked; fi' in job
-    assert 'set -- --gateway "$GITHUB_WORKSPACE/.venv/bin/python"' in _step(job, "Measure")
+    measure = _step(job, "Measure")
+    assert 'set -- --gateway "$GITHUB_WORKSPACE/.venv/bin/python"' in measure
+    backfill = measure.split("\n          else\n")[1].split("\n          fi\n")[0]
+    assert "set -- --backfill" in backfill and "--gateway" not in backfill
 
 
 def test_the_numbers_are_uploaded_before_the_limits_are_checked():

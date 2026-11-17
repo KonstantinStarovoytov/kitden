@@ -240,6 +240,21 @@ def test_two_versions_with_one_label_are_refused_before_anything_runs(tmp_path, 
     assert not out.exists()
 
 
+def test_a_backfill_with_the_gateway_is_refused_before_anything_runs(tmp_path, monkeypatch):
+    # The gateway is measured on nights only, never for old releases.
+    def no_process(*args, **kwargs):
+        raise AssertionError("nothing may run")
+
+    monkeypatch.setattr(measure_use.subprocess, "run", no_process)
+    monkeypatch.setattr(measure_use.subprocess, "Popen", no_process)
+    out = tmp_path / "backfill.json"
+    with pytest.raises(SystemExit, match="nights only"):
+        measure_use.main(
+            ["run", "--out", str(out), "--backfill", "--gateway", "/e/python", "0.3.0=/a/kitden"]
+        )
+    assert not out.exists()
+
+
 def test_store_refuses_a_kind_that_is_no_night_or_backfill(tmp_path):
     with pytest.raises(SystemExit, match="kind"):
         measure_use.store(result("nightly", [version("0.9.2"), version("main@1")]), tmp_path)

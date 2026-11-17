@@ -526,7 +526,13 @@ def gateway_run(kitden: Path, root: Path, python: Path) -> dict:
     stdin, stdout = child.stdin, child.stdout
     assert stdin is not None and stdout is not None
     sent = [0]
-    seen: list = []  # the tree, last read: the echo servers are ended with it
+    proc = None
+    servers: dict = {}  # every process seen under kitden mcp, by pid: ended with the run
+
+    def look(proc) -> list:
+        tree = _tree(proc)
+        servers.update((p.pid, p) for p in tree[1:])
+        return tree
 
     def give_up(_signal: int, _frame: object) -> None:
         raise TimeoutError("kitden mcp stopped answering")
@@ -541,11 +547,14 @@ def gateway_run(kitden: Path, root: Path, python: Path) -> dict:
             if not line:
                 raise RuntimeError("kitden mcp closed its output")
             answer = json.loads(line)
-            if answer.get("id") == sent[0]:
+            # A request from the gateway may carry the same id: only an answer has no method.
+            if answer.get("id") == sent[0] and "method" not in answer:
+                if "result" not in answer:
+                    raise RuntimeError(f"kitden mcp answered {method} with {answer.get('error')}")
                 return answer
 
     # A gateway that stops answering must not hang the job: an alarm in this process.
-    signal.signal(signal.SIGALRM, give_up)
+    old = signal.signal(signal.SIGALRM, give_up)
     signal.alarm(GIVE_UP_SECONDS + IDLE_SECONDS)
     try:
         proc = psutil.Process(child.pid)
@@ -561,7 +570,7 @@ def gateway_run(kitden: Path, root: Path, python: Path) -> dict:
         stdin.flush()
         tools = call("tools/list")["result"]["tools"]
         ready, cpu_ready = time.monotonic() - start, _cpu(proc, exited=True)
-        seen = _tree(proc)
+        look(proc)
         before = _cpu(proc, exited=True)
         time.sleep(IDLE_SECONDS)
         idle = _cpu(proc, exited=True) - before
@@ -571,16 +580,18 @@ def gateway_run(kitden: Path, root: Path, python: Path) -> dict:
             if number % EVERY == 0:
                 readings.append(_rss_mb(proc))
         calls = _cpu(proc, exited=True) - before
-        seen = _tree(proc)
-        processes = len(seen)
+        processes = len(look(proc))
     finally:
         signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+        if proc is not None:
+            look(proc)  # also when the run failed before ready
         with contextlib.suppress(OSError):
             stdin.close()
         _stop(child, term=False)  # a closed input ends kitden mcp
         # The mcp client starts each server in a session of its own, out of reach of the group
         # kill in _stop: end any server that kitden mcp left.
-        for p in seen[1:]:
+        for p in servers.values():
             with contextlib.suppress(psutil.Error):
                 p.kill()
     return {
@@ -643,6 +654,8 @@ def measure(args: argparse.Namespace) -> dict:
     labels = [label_of(text)[0] for text in args.versions]
     if len(set(labels)) != len(labels):
         raise SystemExit("Each version needs its own label.")
+    if args.backfill and args.gateway:
+        raise SystemExit("The gateway is measured on nights only, never for old releases.")
     versions = []
     for text in args.versions:
         label, commit, kitden = label_of(text)
