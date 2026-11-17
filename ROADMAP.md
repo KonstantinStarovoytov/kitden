@@ -9,6 +9,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Context shows your real Codex chat:** `codex exec` runs are no longer taken for a chat,
+  and chats handed over from ChatGPT now count (#133).
 - **The page is tested in Chrome, Firefox and WebKit:** every night the browser tests run
   in Google Chrome and Firefox on Ubuntu and in WebKit on macOS as well as in Chromium, so a
   page bug in one browser shows within a day (#129).
