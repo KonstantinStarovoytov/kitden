@@ -7,6 +7,11 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **A skill's description in Context:** a skill's Details shows its description, with the part
+  the agent did not get in grey (#135).
+
 ### 0.10.0
 
 - **Context shows your real Codex chat:** `codex exec` runs are no longer taken for a chat,
