@@ -81,10 +81,11 @@ needs no other test. The table lists those written so far, in product order:
 | 3 | Search the catalogs, "Show N more", open an item's details | `test_catalog_search.py` |
 | 4 | Add a GitHub source; it is listed | `test_add_source.py` |
 | 5 | Add a skill from the catalog to Claude Code; remove it | `test_catalog_skill.py` |
+| 8 | Move servers into the gateway: drag one | `test_map_drag.py` |
 
 Flows 3 to 5 use the `sample` fixture: the demo's sample, not in demo mode, with the
 stand-ins of `tests/offline.py` and the network guard on, so a test that tries to go online
-from the test process fails; the guard cannot see an MCP server's own program, so the sample
+from the test process fails. The guard cannot see an MCP server's own program, so the sample
 starts none and refuses a move into the gateway.
 
 Also: a preview writes nothing, Apply and Undo (`test_flows.py`), and the bar that asks
