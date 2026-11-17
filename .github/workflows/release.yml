@@ -38,12 +38,12 @@ jobs:
       # alone (docs/development.md, CPU and memory). The measurement is the script, its
       # workflow and the echo server of the gateway scenario. On a pull request, HEAD is
       # GitHub's merge of it into main, so HEAD^1 is main. Pushes to main and tags skip it:
-      # main takes pull requests only.
+      # main takes pull requests only. A moved file shows both its names (--no-renames).
       - name: The measurement changes alone
         if: github.event_name == 'pull_request' && runner.os == 'Linux'
         run: |
           git fetch --no-tags --quiet --depth=2 origin "$GITHUB_SHA"
-          names="$(git diff --name-only HEAD^1 HEAD)"
+          names="$(git diff --no-renames --name-only HEAD^1 HEAD)"
           if grep -qxF -e scripts/measure-use.py -e .github/workflows/use.yml -e tests/fixtures/fake_mcp/echo_server.py <<< "$names" \
             && grep -q '^src/kitden/' <<< "$names"; then
             echo "::error::This pull request changes the CPU and memory measurement and src/kitden/. Split it in two."

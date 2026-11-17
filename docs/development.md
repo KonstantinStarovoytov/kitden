@@ -156,7 +156,8 @@ The numbers are taken the same way for every version, so they can be compared:
   `tests/fixtures/fake_mcp/echo_server.py`: a pull request that changes any of them may not
   change `src/kitden/`, or the check "The measurement changes alone" fails.
 
-Run it on this machine (it makes its own sandbox homes):
+Run it on this machine (it makes its own sandbox homes). It builds the working tree as it
+is, so commit first, or the `main@<sha>` label names a commit that was not measured:
 
 ```bash
 S=$(mktemp -d)

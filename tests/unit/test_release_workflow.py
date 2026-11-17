@@ -196,7 +196,7 @@ def test_a_pull_request_may_not_change_the_measurement_and_kitden_together():
     step = build.split(name)[1].split("\n      - ")[0]
     assert "if: github.event_name == 'pull_request' && runner.os == 'Linux'" in step
     assert 'git fetch --no-tags --quiet --depth=2 origin "$GITHUB_SHA"' in step
-    assert "git diff --name-only HEAD^1 HEAD" in step
+    assert "git diff --no-renames --name-only HEAD^1 HEAD" in step
     measurement = (
         "scripts/measure-use.py|.github/workflows/use.yml|tests/fixtures/fake_mcp/echo_server.py"
     )

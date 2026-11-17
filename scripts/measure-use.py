@@ -123,6 +123,9 @@ def same_sample(a: dict, b: dict) -> bool:
 
 def compare(a: dict, b: dict) -> tuple[list[str], list[str]]:
     """B against A on a night: (warnings, notes). Different samples are not compared."""
+    varied = [v["label"] for v in (a, b) if v["page"]["sample"]["varies"]]
+    if varied:
+        return [], [f"Not compared: the sample changed between runs of {' and '.join(varied)}."]
     if not same_sample(a, b):
         sa, sb = a["page"]["sample"], b["page"]["sample"]
         return [], [
@@ -177,8 +180,9 @@ def check(result: dict) -> int:
 
 
 def release_file(result: dict, version: dict) -> dict:
-    head = {k: result[k] for k in ("series", "kind", "run_id", "date", "time", "warm", "env")}
-    return {**head, "runs_each": result["runs_each"], "version": version}
+    # On a backfill the release files are the record, so they keep how the runs were done.
+    keys = ("series", "kind", "run_id", "date", "time", "warm", "warmup_runs", "runs_each")
+    return {**{k: result[k] for k in (*keys, "rounds", "env")}, "version": version}
 
 
 def _plain(text: str, pattern: str, what: str) -> None:
@@ -392,9 +396,9 @@ def page_run(kitden: Path, root: Path) -> dict:
         cwd=root / "home",
         start_new_session=True,
     )
-    proc = psutil.Process(child.pid)
-    assert child.stdout is not None
     try:
+        assert child.stdout is not None
+        proc = psutil.Process(child.pid)
         # A release that never prints its link must not hang the job.
         with selectors.DefaultSelector() as waiting:
             waiting.register(child.stdout, selectors.EVENT_READ)

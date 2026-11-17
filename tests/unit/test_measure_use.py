@@ -34,7 +34,9 @@ def result(kind, versions, date="2026-11-20", run_id="1", series=1, cpu="AMD EPY
         "date": date,
         "time": f"{date}T03:40:00Z",
         "warm": True,
+        "warmup_runs": 1,
         "runs_each": 5,
+        "rounds": [measure_use.in_order([v["label"] for v in versions], r) for r in range(6)],
         "env": {"cpu": cpu, "runner_image": "ubuntu24"},
         "versions": versions,
         "warnings": [],
@@ -94,6 +96,19 @@ def test_different_samples_are_not_compared_and_say_why():
     assert notes == [
         "Not compared: the samples differ (0.9.2: 548 items, 407577 bytes; "
         "main@1: 560 items, 410000 bytes)."
+    ]
+
+
+def test_a_sample_that_changed_between_runs_is_not_compared():
+    varied = {**SAMPLE, "varies": True}
+    a, b = version("0.9.2"), version("main@1", 99.0, sample=varied)
+    assert measure_use.compare(a, b) == (
+        [],
+        ["Not compared: the sample changed between runs of main@1."],
+    )
+    a = version("0.9.2", sample=varied)
+    assert measure_use.compare(a, b)[1] == [
+        "Not compared: the sample changed between runs of 0.9.2 and main@1."
     ]
 
 
@@ -161,6 +176,9 @@ def test_a_backfill_overwrites_the_release_files(tmp_path):
     measure_use.store(backfill, tmp_path)
     kept = json.loads((tmp_path / "releases/0.9.2.json").read_text())
     assert kept["kind"] == "backfill" and kept["run_id"] == "77"
+    # The swapped order and the warm-up are kept with the numbers.
+    assert kept["warmup_runs"] == 1
+    assert kept["rounds"][:2] == [["0.3.0", "0.9.2"], ["0.9.2", "0.3.0"]]
     assert kept["version"]["page"]["summary"]["peak_mb"]["median"] == 61.0
 
 
