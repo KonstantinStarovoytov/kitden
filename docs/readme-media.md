@@ -47,15 +47,13 @@ where frames differ a little, and lower settings left grain on warm dark cards.
 uv run --with playwright==1.64.1 python scripts/record_readme.py
 ```
 
-`--only pick-dark` makes one picture; `--serve` only starts the page to look around. It needs
-`ffmpeg` and `img2webp` (from libwebp) on the PATH.
-Each picture starts the real page on a fresh copy of the sample from
-`scripts/readme_demo.py`, in a temporary folder; `context` uses the demo's own sample.
-Stand-ins keep it local (`tests/offline.py`, which the browser tests share): a fake Keychain,
-fake client commands, canned tool lists and catalog answers, and no access checks. Nothing
-goes online, and nothing
-of the real home folder is read or written. `scripts/record_scenes.py` plays each scene and
-takes it.
+`--only pick-dark` makes one picture; `--serve` only starts the page to look around. It
+needs `ffmpeg` and `img2webp` (from libwebp) on the PATH. Each picture starts the real page
+on a fresh copy of the sample from `scripts/readme_demo.py`, in a temporary folder;
+`context` uses the demo's own sample. Stand-ins keep it local (`tests/offline.py`, which
+the browser tests share): a fake Keychain, fake client commands, canned tool lists and
+catalog answers, and no access checks. Nothing goes online, and nothing of the real home
+folder is read or written. `scripts/record_scenes.py` plays each scene and takes it.
 
 Look at every picture before you commit it, and do not retouch the UI.
 

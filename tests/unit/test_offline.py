@@ -30,4 +30,6 @@ def test_weather_has_more_than_one_page_of_active_servers():
 
 
 def test_the_add_panels_first_read_has_an_answer():
-    assert f"{REGISTRY}?search=&version=latest&limit=100" in CATALOG
+    url = f"{REGISTRY}?search=&version=latest&limit=100"
+    assert url in CATALOG
+    assert json.loads(canned_download(url)) == {"servers": []}  # the panel shows "No matches."
