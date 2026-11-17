@@ -166,6 +166,7 @@ def test_scenes_record_on_pull_requests_that_touch_the_page_or_the_recorder():
         "scripts/record_scenes.py",
         "scripts/readme_demo.py",
         "tests/conftest.py",
+        "tests/offline.py",
     ]
     assert "\npermissions: {}\n" in text
     job = text.split("\njobs:\n")[1]
