@@ -1,13 +1,13 @@
 # Kitden roadmap
 
-Last updated: 2026-11-16
+Last updated: 2026-11-17
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not yet released
+### 0.10.0
 
 - **Only the Kitden gateway:** Kitden no longer works with outside gateways (Obot, MetaMCP or
   one added by its address). Adding one, connecting clients to it, switching between them and
