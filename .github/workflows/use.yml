@@ -1,0 +1,155 @@
+# What: every night, measures the CPU and memory of the newest release and of main, in turn on
+# one runner, and keeps the numbers on the `use-numbers` branch. By hand, it can measure a list
+# of old releases instead.
+# Why: a slow leak or a busy loop would ship unseen, because no test measures CPU or memory and
+# no number was kept from one version to the next.
+#
+# Two jobs, so that no code under test runs next to a write token. `use` installs and runs the
+# release and the wheel with a read-only token, and uploads its numbers before it checks the
+# limits, so a red night keeps them. `use-store` runs only main's report code (standard library
+# only) and pushes the files to `use-numbers`. It holds no secret.
+name: CPU and memory
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: "Releases to measure instead of the newest and main, e.g. 0.3.0 0.4.0 (a backfill)"
+        required: false
+        default: ""
+
+permissions: {}
+
+# One run at a time, so the data branch is never written twice at once.
+concurrency:
+  group: use
+  cancel-in-progress: false
+
+jobs:
+  use:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      measured: ${{ steps.measure.outcome == 'success' }}
+    env:
+      VERSIONS: ${{ inputs.versions }}
+      PSUTIL: psutil==7.2.2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.10"
+          enable-cache: false
+      # Neither the release nor the wheel's dependencies can be installed without PyPI.
+      - name: PyPI answers
+        id: pypi
+        run: |
+          if curl -fsS --retry 3 --max-time 30 https://pypi.org/pypi/kitden/json -o "$RUNNER_TEMP/pypi.json"; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::PyPI could not be reached, so nothing was measured tonight."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      # Fresh plain venvs, made the same way and resolved at the same moment. Never the lock
+      # file, and never `uv tool install`, which turns on the gateway's update watcher.
+      - name: Install the versions
+        if: steps.pypi.outputs.ok == 'true'
+        run: |
+          set -eu
+          envs="$RUNNER_TEMP/envs"
+          : > "$RUNNER_TEMP/versions.txt"
+          if [ -z "$VERSIONS" ]; then
+            at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            newest="$(jq -r .info.version "$RUNNER_TEMP/pypi.json")"
+            uv venv --python 3.13 "$envs/a"
+            uv pip install --python "$envs/a/bin/python" --exclude-newer "$at" "kitden==$newest"
+            uv build --wheel --out-dir "$RUNNER_TEMP/dist"
+            uv venv --python 3.13 "$envs/b"
+            uv pip install --python "$envs/b/bin/python" --exclude-newer "$at" "$RUNNER_TEMP"/dist/*.whl
+            echo "$newest=$envs/a/bin/kitden" >> "$RUNNER_TEMP/versions.txt"
+            echo "main@${GITHUB_SHA::7}=$envs/b/bin/kitden" >> "$RUNNER_TEMP/versions.txt"
+          else
+            for v in $VERSIONS; do
+              case "$v" in *[!0-9.]*|"") echo "::error::Not a version: $v"; exit 1 ;; esac
+              at="$(uv run --no-project --python 3.13 python scripts/measure-use.py cutoff "$v" "$RUNNER_TEMP/pypi.json")"
+              uv venv --python 3.13 "$envs/$v"
+              uv pip install --python "$envs/$v/bin/python" --exclude-newer "$at" "kitden==$v"
+              echo "$v=$envs/$v/bin/kitden" >> "$RUNNER_TEMP/versions.txt"
+            done
+            # This commit too, last, in the same rounds: the chart's main point (B0 rule 8).
+            at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            uv build --wheel --out-dir "$RUNNER_TEMP/dist"
+            uv venv --python 3.13 "$envs/main"
+            uv pip install --python "$envs/main/bin/python" --exclude-newer "$at" "$RUNNER_TEMP"/dist/*.whl
+            echo "main@${GITHUB_SHA::7}=$envs/main/bin/kitden" >> "$RUNNER_TEMP/versions.txt"
+          fi
+      - name: Measure
+        id: measure
+        if: steps.pypi.outputs.ok == 'true'
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -eu
+          mapfile -t versions < "$RUNNER_TEMP/versions.txt"
+          if [ -z "$VERSIONS" ]; then set -- ; else set -- --backfill; fi
+          uv run --no-project --python 3.13 --with "$PSUTIL" python scripts/measure-use.py run \
+            --out "$RUNNER_TEMP/use/result.json" --run-id "$RUN_ID" "$@" "${versions[@]}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.pypi.outputs.ok == 'true'
+        with:
+          name: use
+          path: ${{ runner.temp }}/use/result.json
+          if-no-files-found: error
+          retention-days: 7
+      # Warnings keep the job green; only a broken limit turns it red.
+      - name: Warnings and limits
+        if: steps.pypi.outputs.ok == 'true'
+        run: uv run --no-project --python 3.13 python scripts/measure-use.py check "$RUNNER_TEMP/use/result.json"
+
+  # Only from main: started by hand on another branch, the job would push that branch's numbers.
+  use-store:
+    needs: use
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.use.outputs.measured == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the numbers to the use-numbers branch
+    steps:
+      # main's report code, and the branch that keeps the numbers next to it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: use-numbers
+          path: out
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: use
+          path: ${{ runner.temp }}/use
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.10"
+          enable-cache: false
+      - name: Add the numbers and rebuild the README
+        run: uv run --no-project --python 3.13 python scripts/measure-use.py store "$RUNNER_TEMP/use/result.json" out
+      # Checkout keeps no credentials, so the push gets the token here.
+      - name: Push the numbers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        working-directory: out
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add the CPU and memory numbers of run $GITHUB_RUN_ID"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" HEAD:use-numbers
