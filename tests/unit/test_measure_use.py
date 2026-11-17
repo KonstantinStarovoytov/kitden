@@ -274,3 +274,9 @@ def test_the_nights_table_shows_the_last_14_newest_first_with_notes(tmp_path):
     days = [line[2:12] for line in text.splitlines() if line.startswith("| 2026-12-")]
     assert days[0] == "2026-12-16" and days[-1] == "2026-12-03" and len(days) == 14
     assert "| Not compared: the samples differ. |" in text
+
+
+def test_the_development_page_says_how_it_measures():
+    text = " ".join((ROOT / "docs/development.md").read_text().split())
+    assert "## CPU and memory" in text and "uses no Kitden code" in text
+    assert "The measurement changes alone" in text and "`use-numbers`" in text

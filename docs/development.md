@@ -122,6 +122,65 @@ Measured 2026-10-24 (Apple M4 Max, macOS 26.6.2):
 - Node, `map.test.mjs`, on the code as it is today, 3 runs: layout median 0.03 to 0.04 ms for 20
   servers and 0.11 to 0.12 ms for the large sample.
 
+## CPU and memory
+
+`scripts/measure-use.py` measures how much CPU and memory a `kitden` command uses. It starts
+it as a child process and uses no Kitden code, so it can measure any release since 0.3.0. It
+needs psutil, which is not a project dependency: run it with
+`uv run --no-project --python 3.13 --with psutil==7.2.2`.
+
+One run of the page scenario, on a sandbox home: start `kitden demo --no-browser --size large`,
+wait until its first scan is done, wait 30 s, call `/api/items` 1,000 times, stop it with
+SIGTERM. It notes:
+
+- **peak memory**: the largest memory of the process (`ru_maxrss`);
+- **CPU to ready**: CPU seconds (user and system) until the page says it is ready;
+- **idle CPU**: CPU seconds used in the 30 s with nothing to do;
+- **memory growth**: the memory after the last call minus the memory after the first 200;
+- time to ready, which is not compared: it ran from 0.9 to 9.4 s for the same code on one Mac.
+
+The numbers are taken the same way for every version, so they can be compared:
+
+- Versions compared run in one job on one machine, in turn, and each round starts one version
+  later (A B, B A, A B …), so none always runs first. Same script and Python. Each gets one warm-up run, thrown away, then the same number of runs.
+- Each number is a median, with the lowest and highest run. Every run is kept.
+- Each result keeps the installed packages of each version, the size of its sample (items and
+  bytes of `/api/items`), the order of every round, and the machine: runner image, system, CPU
+  model, cores, Python and psutil. When A's and B's samples differ, they are not compared, and
+  the result says why.
+- `SERIES` at the top of the script holds one number per scenario. A scenario's number is
+  raised with any change to what or how it measures. Numbers of two series are never
+  compared, and a new page series needs a new backfill. The measurement is
+  `scripts/measure-use.py`, `.github/workflows/use.yml` and
+  `tests/fixtures/fake_mcp/echo_server.py`: a pull request that changes any of them may not
+  change `src/kitden/`, or the check "The measurement changes alone" fails.
+
+Run it on this machine (it makes its own sandbox homes):
+
+```bash
+S=$(mktemp -d)
+uv venv -q --python 3.13 "$S/a" && uv pip install -q --python "$S/a/bin/python" kitden==0.9.2
+uv build --wheel --out-dir "$S/dist"
+uv venv -q --python 3.13 "$S/b" && uv pip install -q --python "$S/b/bin/python" "$S"/dist/*.whl
+uv run --no-project --python 3.13 --with psutil==7.2.2 python scripts/measure-use.py run \
+  --out "$S/night.json" --runs 2 0.9.2="$S/a/bin/kitden" "main@$(git rev-parse --short HEAD)=$S/b/bin/kitden"
+uv run --no-project python scripts/measure-use.py check "$S/night.json"
+```
+
+A run takes about 45 s. macOS takes memory back from an idle process, so the memory numbers
+that count come from Linux.
+
+Every night `.github/workflows/use.yml` measures the newest release (A) and `main` (B), 5 runs
+each, and keeps the numbers on the branch `use-numbers`: `nights/<date>.json`,
+`releases/<version>.json`, a README with tables, and `chart.json`, which the desk page draws
+as two charts, CPU to ready and peak memory by release. A warning means that B's median
+peak memory is more than 15% over A's, or its CPU to ready more than 25%: a `::warning::` line
+and a line in the job summary; the job stays green. A broken limit turns the job red. The
+limits are `PAGE_LIMITS` at the top of the script; `None` means off, as it is until they are
+set from the first 7 nights. To change a limit, change the constant in a pull request of its
+own and say which nights it comes from. Started by hand with a list of versions, the workflow
+measures those releases instead (a backfill), each with the dependencies of its release day.
+
 ## Check before a release
 
 Tests now do most of these checks; the table says which test does each. The ones against the
