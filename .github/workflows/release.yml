@@ -34,6 +34,21 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The CPU and memory numbers compare only if a change to how they are measured comes
+      # alone (docs/development.md, CPU and memory). The measurement is the script, its
+      # workflow and the echo server of the gateway scenario. On a pull request, HEAD is
+      # GitHub's merge of it into main, so HEAD^1 is main. Pushes to main and tags skip it:
+      # main takes pull requests only. A moved file shows both its names (--no-renames).
+      - name: The measurement changes alone
+        if: github.event_name == 'pull_request' && runner.os == 'Linux'
+        run: |
+          git fetch --no-tags --quiet --depth=2 origin "$GITHUB_SHA"
+          names="$(git diff --no-renames --name-only HEAD^1 HEAD)"
+          if grep -qxF -e scripts/measure-use.py -e .github/workflows/use.yml -e tests/fixtures/fake_mcp/echo_server.py <<< "$names" \
+            && grep -q '^src/kitden/' <<< "$names"; then
+            echo "::error::This pull request changes the CPU and memory measurement and src/kitden/. Split it in two."
+            exit 1
+          fi
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.10.10"

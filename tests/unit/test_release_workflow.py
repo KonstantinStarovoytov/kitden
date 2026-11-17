@@ -188,3 +188,18 @@ def test_scenes_use_no_secrets_and_pin_every_action_by_sha():
     assert uses
     for use in uses:
         assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", use), use
+
+
+def test_a_pull_request_may_not_change_the_measurement_and_kitden_together():
+    build = _jobs()["build"]
+    name = "      - name: The measurement changes alone\n"
+    step = build.split(name)[1].split("\n      - ")[0]
+    assert "if: github.event_name == 'pull_request' && runner.os == 'Linux'" in step
+    assert 'git fetch --no-tags --quiet --depth=2 origin "$GITHUB_SHA"' in step
+    assert "git diff --no-renames --name-only HEAD^1 HEAD" in step
+    measurement = (
+        "scripts/measure-use.py|.github/workflows/use.yml|tests/fixtures/fake_mcp/echo_server.py"
+    )
+    assert f"grep -qxF -e {measurement.replace('|', ' -e ')}" in step
+    assert "grep -q '^src/kitden/'" in step
+    assert "exit 1" in step
