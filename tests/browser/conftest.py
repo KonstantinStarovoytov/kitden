@@ -119,18 +119,28 @@ async def fake_upgrade(install, on_step, version):
     return Outcome("updated", LATEST, [])
 
 
+NO_SERVER = "The sample starts no MCP server; use the demo fixture to move one into the gateway."
+
+
+async def no_proxy():
+    """`load_proxy` on the sample: reading a server's tools would start its own command (npx,
+    uvx), which the network guard cannot see. The move is refused with this message."""
+    raise ValueError(NO_SERVER)
+
+
 @pytest.fixture
 def sample(tmp_path, monkeypatch, fake_keychain):
     """The medium sample, served as `kitden open` serves a real home, not in demo mode: search,
     sources, Details of a found item and the update all work. Everything that would leave the
     sample is a stand-in (tests/offline.py, the demo's adapters and runner, the fake Keychain),
-    and the network guard is on: a test that tries to connect outside this computer fails.
-    Left real: a move into the gateway starts the server to read its tools; that flow uses demo."""
+    and the network guard is on: a test that tries to connect outside this computer from this
+    process fails. A move into the gateway is refused (no_proxy): use demo for that flow."""
     guard = guarded_lookups(monkeypatch)
     next(guard)
     for module, name, value in STAND_INS:
         monkeypatch.setattr(module, name, value)
     monkeypatch.setattr(web, "default_adapters", demo_adapters)
+    monkeypatch.setattr(web, "load_proxy", no_proxy)
     home = build_demo_home(tmp_path / "sample", "medium")
     options = {
         "run": DemoRunner(home),
@@ -147,9 +157,11 @@ def sample(tmp_path, monkeypatch, fake_keychain):
     made = cli._page(create_app, demo_build(home), home, START, **options)
     assert made is not None, f"no free port from {START}"
     app, port, _, url = made
-    with serving(app, port):
-        yield Demo(home=home, url=url)
-    next(guard, None)  # fails the test when it tried to connect outside
+    try:
+        with serving(app, port):
+            yield Demo(home=home, url=url)
+    finally:
+        next(guard, None)  # fails the test when it tried to connect outside
 
 
 @contextlib.contextmanager
