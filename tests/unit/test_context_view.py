@@ -1265,3 +1265,15 @@ def test_a_description_past_the_client_cap_has_its_tail_grey(home):
     codex_chat(home, [f"- beta: {long.strip()[:1021]}... (file: {path})"])
     [row] = [s for s in view(home)["codex"]["skills"] if s["name"] == "beta"]
     assert row["seen"] == 1021
+
+
+def test_a_skill_added_during_the_chat_got_its_whole_description_past_the_cap(home):
+    # Claude Code sends a skill added mid-chat whole, even past 1,536 characters.
+    long = ("word " * 400).strip()
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    skill(home / ".claude/skills", "late", long)
+    first = list_entry(["alpha"], "- alpha: Does alpha.")
+    late = list_entry(["late"], f"- late: {long}", isInitial=False)
+    write_chat(home, "p", "chat", [first, late, assistant("claude-opus-5-5")], 100)
+    [row] = [s for s in view(home)["claude_code"]["skills"] if s["name"] == "late"]
+    assert row["seen"] is None
