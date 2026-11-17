@@ -18,7 +18,7 @@ and Codex, with no account (`.github/workflows/nightly.yml`, job `clients`);
 vendors' own installers. Tests marked `signed_in` need a signed-in client. Tests can build a
 sample home with `kitden.demo.build_demo_home(root, size)`.
 
-Browser tests (`tests/browser/`) open the page on the demo sample in a real Chromium and press
+Browser tests (`tests/browser/`) open the page on the demo sample in a real browser and press
 its buttons: preview, Apply and Undo, the bar that asks for a new preview when the settings
 changed under one, and a drag onto the gateway on the Gateway map. An error in the browser
 console fails them, so they catch a break of the page's Content-Security-Policy. Playwright is
@@ -26,8 +26,15 @@ not a project dependency, so these tests are not in the default run. Run them wi
 
 ```bash
 uv run --with playwright==1.64.1 python -m playwright install chromium
-uv run --with playwright==1.64.1 pytest -m browser -q
+uv run --with playwright==1.64.1 python -m pytest -m browser -q
 ```
+
+Use `python -m pytest`, not `pytest`: `uv run --with` can start the project's own pytest,
+which has no Playwright, and then every browser test skips. The tests run in Playwright's
+Chromium. `KITDEN_BROWSER=firefox` or `KITDEN_BROWSER=webkit` runs them in that engine
+(install it first, as above, with `firefox` or `webkit`), and
+`KITDEN_BROWSER_CHANNEL=chrome` in the Google Chrome installed on the computer. Another
+value stops the run. One engine per run, so a test's name is the same in every engine.
 
 Built with Python 3.13+, uv, Starlette and the official MCP SDK. The page is plain ES modules
 and one CSS file under `src/kitden/web/static/`, with a strict Content-Security-Policy: no
@@ -58,6 +65,8 @@ The normal run leaves it out. It runs only in the nightly run's last step
 (`uv run pytest -q --set-aside=only`), which never fails the job. Delete the line to take the
 test back. The desk shows how many tests are set aside. To run a set-aside test by hand, add
 `--set-aside=run`; without it pytest leaves the test out and runs nothing.
+A browser test that is set aside runs nowhere at night: that step leaves browser tests out.
+Open an issue to bring it back when you set one aside.
 Contract tests are never listed there: fix them, or mark them `signed_in` when they need an
 account.
 
@@ -291,7 +300,8 @@ Once a day the tests also run on the newest versions of the dependencies
 Every night the tests also run on four systems and two Pythons
 (`.github/workflows/nightly.yml`): macOS on ARM and on Intel, Ubuntu on x64 and on ARM, each
 with Python 3.13 and 3.14. The `browser` job of the same workflow runs the browser tests in
-Chromium on Ubuntu.
+Chromium on Ubuntu. The `engines` job runs them again in Google Chrome and Firefox on Ubuntu
+and in WebKit on macOS.
 When a job of either scheduled run is red, the desk in kitden-sdlc opens a `ci-failure` issue
 for it, rewrites it each day and closes it when the job is green again.
 `README.md` is also the PyPI page. [README media](readme-media.md) says how its pictures are
