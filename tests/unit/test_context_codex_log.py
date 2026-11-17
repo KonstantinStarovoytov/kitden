@@ -17,12 +17,13 @@ LIST = (
 )
 
 
-def meta(folder="/work/a", version="0.163.0-alpha.11", source="user"):
+def meta(folder="/work/a", version="0.163.0-alpha.11", source="user", run="vscode"):
     payload = {
         "timestamp": "2026-11-08T08:00:00Z",
         "cwd": folder,
         "thread_source": source,
         "cli_version": version,
+        "source": run,
     }
     return {"type": "session_meta", "payload": payload}
 
@@ -166,6 +167,19 @@ def test_skips_threads_not_started_by_a_person_and_zst_files(tmp_path):
     zst.write_bytes(b"\x28\xb5\x2f\xfd not json")
     os.utime(zst, (300, 300))
     assert last_codex_list(tmp_path, None).list.skills[0] == ("a", "Mine.")
+
+
+def test_a_chat_handed_over_from_chatgpt_counts(tmp_path):
+    write_log(tmp_path, "old", [meta(), skills(at="2026-11-01T09:00:00Z")], 100)
+    handoff = [meta(source="chatgpt_handoff"), skills(LIST.replace("Does A.", "New."))]
+    write_log(tmp_path, "handoff", handoff, 200)
+    assert last_codex_list(tmp_path, None).list.skills[0] == ("a", "New.")
+
+
+def test_a_codex_exec_run_is_not_a_chat(tmp_path):
+    write_log(tmp_path, "chat", [meta(), skills(at="2026-11-01T09:00:00Z")], 100)
+    write_log(tmp_path, "exec", [meta(run="exec"), skills(LIST.replace("Does A.", "Run."))], 200)
+    assert last_codex_list(tmp_path, None).list.skills[0] == ("a", "Does A.")
 
 
 def test_the_date_is_the_list_entry_not_the_file(tmp_path):

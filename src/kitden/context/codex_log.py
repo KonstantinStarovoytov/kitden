@@ -19,6 +19,10 @@ ENTRY = re.compile(r"^- (?P<name>.+?): (?P<desc>.*?) ?\(file: (?P<path>[^)]*)\)$
 # A roots line names the folder an alias stands for; a skill's `file:` path may start with that
 # alias (`r2/<skill>/SKILL.md`). checked 2026-11-09 (real Codex list, cli 0.163.0-alpha.11)
 ROOT = re.compile(r"^- `(?P<alias>[^`]+)` = `(?P<folder>[^`]+)`$")
+# A person's chat: `user`, or `chatgpt_handoff` for a chat handed over from ChatGPT.
+# `codex exec` runs are marked `user` too, but their `source` is `exec`: scripts, not a chat.
+# checked 2026-11-17 (real logs, Codex work desktop, cli 0.169.0-alpha.11.1)
+CHAT = {"user", "chatgpt_handoff"}
 
 
 @dataclass(frozen=True)
@@ -74,7 +78,7 @@ def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
     `session_meta`, `turn_context` lines and lines with a list are parsed.
 
     # checked 2026-11-09 (real logs, Codex app, cli 0.163.0-alpha.11): session_meta payload
-    # fields timestamp, cwd, thread_source (`user` for a person's chat), cli_version;
+    # fields timestamp, cwd, thread_source (see CHAT), source, cli_version;
     # turn_context payload field model; the list is the `<skills_instructions>` text in a
     # response_item message with role `developer`; a line has a top-level timestamp.
     """
@@ -94,7 +98,7 @@ def _read_log(path: Path, folder: str | None) -> CodexSent | Unreadable | None:
                 payload = entry.get("payload") if isinstance(entry, dict) else None
                 if not isinstance(payload, dict) or entry.get("type") != "session_meta":
                     continue
-                if payload.get("thread_source") != "user":
+                if payload.get("thread_source") not in CHAT or payload.get("source") == "exec":
                     return None
                 if folder is not None and payload.get("cwd") != folder:
                     return None
