@@ -71,9 +71,9 @@ account.
 
 ## Browser flows
 
-Each main feature of the page has one browser test that does it as a user does, on a
-sandbox sample, with no network and no real client. Each starts from a fresh page and
-needs no other test. In product order:
+Each main feature of the page gets a browser test (or a few) that does it as a user does, on
+a sandbox sample, with no network and no real client. Each starts from a fresh page and
+needs no other test. The table lists those written so far, in product order:
 
 | # | Flow | Test in `tests/browser/` |
 | --- | --- | --- |
@@ -84,8 +84,9 @@ needs no other test. In product order:
 | 9 | Remove a server's direct entry: preview, Apply, gone on disk | `test_remove_server.py` |
 
 Also: a preview writes nothing, Apply and Undo (`test_flows.py`), and the bar that asks
-for a new preview when the settings changed under one (`test_preview_drift.py`). A new
-flow passes 10 runs in a row in every engine you have before its pull request.
+for a new preview when the settings changed under one (`test_preview_drift.py`). Before its
+pull request, a new flow passes 10 runs in a row in every engine you have, then the whole
+browser set passes once in each engine.
 
 ## Commands
 
