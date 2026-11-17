@@ -230,4 +230,45 @@ jobs:
       - name: Playwright imports
         run: uv run --with playwright==1.64.1 python -c "import playwright"
       - name: The browser tests
-        run: uv run --with playwright==1.64.1 pytest -m browser -q
+        run: uv run --with playwright==1.64.1 python -m pytest -m browser -q
+
+  # The browser tests again, in Google Chrome, Firefox and WebKit, one engine a run
+  # (tests/browser/engines.py). No `name:` on purpose: kitden-sdlc reads the runs as
+  # `engines (<leg>)`, one part.
+  engines:
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [chrome, firefox, webkit]
+    runs-on: ${{ matrix.leg == 'webkit' && 'macos-latest' || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      KITDEN_BROWSER: ${{ matrix.leg == 'chrome' && 'chromium' || matrix.leg }}
+      KITDEN_BROWSER_CHANNEL: ${{ matrix.leg == 'chrome' && 'chrome' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.10"
+      - run: uv sync --locked
+      # The runner image has Google Chrome; Playwright drives it as it is.
+      - name: Google Chrome
+        if: matrix.leg == 'chrome'
+        run: google-chrome --version
+      - name: Install Firefox
+        if: matrix.leg == 'firefox'
+        timeout-minutes: 5
+        run: uv run --with playwright==1.64.1 playwright install --with-deps firefox
+      - name: Install WebKit
+        if: matrix.leg == 'webkit'
+        timeout-minutes: 5
+        run: uv run --with playwright==1.64.1 playwright install webkit
+      # Without Playwright the tests skip and the night looks green: stop here instead.
+      - name: Playwright imports
+        run: uv run --with playwright==1.64.1 python -c "import playwright"
+      - name: The browser tests
+        run: uv run --with playwright==1.64.1 python -m pytest -m browser -q
