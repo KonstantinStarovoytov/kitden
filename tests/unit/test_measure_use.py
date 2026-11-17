@@ -120,7 +120,7 @@ def test_a_broken_limit_fails_the_check_and_a_warning_does_not(monkeypatch, tmp_
     assert measure_use.check(night) == 1
     error = "::error::main@1 page peak memory (MB): 80.0 (79.0–81.0), median over 70.0."
     assert error in capsys.readouterr().out
-    assert summary.read_text().count("- ") == 3
+    assert len(summary.read_text().splitlines()) == 3
 
 
 def test_the_cutoff_is_an_hour_after_the_first_upload():
@@ -134,5 +134,6 @@ def test_the_cutoff_is_an_hour_after_the_first_upload():
 def test_the_script_imports_nothing_of_kitden_and_needs_psutil_only_to_measure():
     text = (ROOT / "scripts/measure-use.py").read_text()
     assert "import kitden" not in text and "from kitden" not in text
-    assert "\nimport psutil" not in text  # psutil is imported inside the measuring functions
+    # psutil is imported inside the measuring functions, never at the top.
+    assert "\nimport psutil" not in text and "\nfrom psutil" not in text
     assert measure_use.SERIES["page"] == 1

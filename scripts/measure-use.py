@@ -12,9 +12,10 @@ A night gives two: the newest release (A), then this commit (B). `--backfill` ta
 releases and compares nothing. Every version gets one warm-up run, thrown away, then `--runs`
 runs, in turn, each round starting one version later (A B, B A, A B ...).
 
-Standard library only, plus psutil for `run` (`uv run --with psutil==7.2.2`). It imports nothing
-of Kitden: it must run against old releases. Never run it on the real home folder: every run
-gets a sandbox HOME and temp folder of its own.
+Standard library only, plus psutil for `run`
+(`uv run --no-project --python 3.13 --with psutil==7.2.2`). It imports nothing of Kitden: it
+must run against old releases. Never run it on the real home folder: every run gets a sandbox
+HOME and temp folder of its own.
 """
 
 import os
