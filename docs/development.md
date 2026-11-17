@@ -142,7 +142,8 @@ SIGTERM. It notes:
 The numbers are taken the same way for every version, so they can be compared:
 
 - Versions compared run in one job on one machine, in turn, and each round starts one version
-  later (A B, B A, A B …), so none always runs first. Same script and Python. Each gets one warm-up run, thrown away, then the same number of runs.
+  later (A B, B A, A B …), so none always runs first. Same script and Python. Each gets one
+  warm-up run, thrown away, then the same number of runs.
 - Each number is a median, with the lowest and highest run. Every run is kept.
 - Each result keeps the installed packages of each version, the size of its sample (items and
   bytes of `/api/items`), the order of every round, and the machine: runner image, system, CPU
@@ -167,8 +168,9 @@ uv run --no-project --python 3.13 --with psutil==7.2.2 python scripts/measure-us
 uv run --no-project python scripts/measure-use.py check "$S/night.json"
 ```
 
-A run takes about 45 s. macOS takes memory back from an idle process, so the memory numbers
-that count come from Linux.
+One page run takes about 45 s; this command makes six (a warm-up and 2 runs for each
+version), so about 5 minutes. macOS takes memory back from an idle process, so the memory
+numbers that count come from Linux.
 
 Every night `.github/workflows/use.yml` measures the newest release (A) and `main` (B), 5 runs
 each, and keeps the numbers on the branch `use-numbers`: `nights/<date>.json`,
