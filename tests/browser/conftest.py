@@ -1,5 +1,6 @@
-"""The page on the demo sample, in a real Chromium. Playwright is not a project dependency:
-these tests run with `uv run --with playwright==1.64.1 pytest -m browser -q`."""
+"""The page on the demo sample, in a real browser. Playwright is not a project dependency:
+these tests run with `uv run --with playwright==1.64.1 python -m pytest -m browser -q`.
+KITDEN_BROWSER and KITDEN_BROWSER_CHANNEL pick the browser (tests/browser/engines.py)."""
 
 import os
 import re
@@ -18,6 +19,7 @@ import uvicorn  # noqa: E402
 from kitden import cli  # noqa: E402
 from kitden.demo import build_demo_home, demo_build  # noqa: E402
 from kitden.web.app import create_app  # noqa: E402
+from tests.browser.engines import engine_choice  # noqa: E402
 
 START = 47950  # the first port tried; the page takes the first free one from here
 
@@ -36,15 +38,22 @@ class Demo:
 
 @pytest.fixture(scope="session")
 def browser(tmp_path_factory):
-    """One Chromium for all the tests. It starts before any test moves HOME to the sandbox, so
-    Playwright finds the browser it installed; the browser itself gets a sandbox HOME and no
-    XDG_* folders, so it writes nothing of this computer's."""
+    """One browser for all the tests, the one engine_choice picks; a name it does not know
+    stops the run. It starts before any test moves HOME to the sandbox, so Playwright finds
+    the browser it installed; the browser itself gets a sandbox HOME and no XDG_* folders,
+    so it writes nothing of this computer's."""
     browser_home = tmp_path_factory.mktemp("browser-home")
     env = {key: value for key, value in os.environ.items() if not key.startswith("XDG_")}
+    try:
+        engine, channel = engine_choice(os.environ)
+    except ValueError as error:
+        pytest.exit(str(error), returncode=pytest.ExitCode.USAGE_ERROR)
     with sync_api.sync_playwright() as playwright:
-        chromium = playwright.chromium.launch(env={**env, "HOME": str(browser_home)})
-        yield chromium
-        chromium.close()
+        launched = getattr(playwright, engine).launch(
+            env={**env, "HOME": str(browser_home)}, channel=channel
+        )
+        yield launched
+        launched.close()
 
 
 @pytest.fixture

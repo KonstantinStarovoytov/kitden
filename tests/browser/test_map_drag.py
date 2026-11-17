@@ -59,7 +59,9 @@ def test_a_server_dragged_onto_the_gateway_is_moved_and_undo_from_the_toast_move
         return [f.read_bytes() if f.exists() else None for f in files]
 
     before = now()
-    page.goto(f"{demo.url}#gateway?view=map")
+    # The hash, not goto: goto would reload the page while its first reads run, and WebKit
+    # reports those cancelled reads as page errors.
+    page.evaluate("location.hash = '#gateway?view=map'")
     drag_onto_the_gateway(page, SERVER)
     dock = page.locator("#dock")
     expect(dock).to_contain_text(SERVER)
