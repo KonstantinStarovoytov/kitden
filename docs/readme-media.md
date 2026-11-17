@@ -51,8 +51,9 @@ uv run --with playwright==1.64.1 python scripts/record_readme.py
 `ffmpeg` and `img2webp` (from libwebp) on the PATH.
 Each picture starts the real page on a fresh copy of the sample from
 `scripts/readme_demo.py`, in a temporary folder; `context` uses the demo's own sample.
-Stand-ins keep it local: a fake Keychain, fake client commands, canned tool lists and catalog
-answers, and no access checks. Nothing goes online, and nothing
+Stand-ins keep it local (`tests/offline.py`, which the browser tests share): a fake Keychain,
+fake client commands, canned tool lists and catalog answers, and no access checks. Nothing
+goes online, and nothing
 of the real home folder is read or written. `scripts/record_scenes.py` plays each scene and
 takes it.
 

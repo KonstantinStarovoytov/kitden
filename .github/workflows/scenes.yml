@@ -18,6 +18,7 @@ on:
       - scripts/record_scenes.py
       - scripts/readme_demo.py
       - tests/conftest.py
+      - tests/offline.py
 
 permissions: {}
 
