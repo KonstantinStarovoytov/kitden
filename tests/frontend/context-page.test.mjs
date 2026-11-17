@@ -610,3 +610,26 @@ test('a cut pill says how much of its description was sent', async () => {
   assert.equal(text(short[0]), 'b342 of 570');
   assert.equal(short[0].children[1].getAttribute('title'), '342 of 570 characters sent');
 });
+
+test('Details shows the description, the part the agent did not get in grey', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const cut = skill('gamma', 12, 1, { description: 'Makes plans. Long tail.', seen: 12 });
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills.slice(0, 2), cut] }, CODEX, CURSOR));
+  await fire(pillOf('gamma'), 'click');
+  const [box] = byClass(drawer, 'ctx-desc');
+  assert.match(text(box), /^DescriptionMakes plans\. Long tail\./);
+  assert.deepEqual(byClass(box, 'ctx-cut').map(text), [' Long tail.']);
+  assert.match(text(box), /Grey: the part the agent did not get\.$/);
+});
+
+test('Details shows a description the agent got whole with nothing grey', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const whole = skill('gamma', 12, 0, { description: 'Makes plans.', seen: null });
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills.slice(0, 2), whole] }, CODEX, CURSOR));
+  await fire(pillOf('gamma'), 'click');
+  const [box] = byClass(drawer, 'ctx-desc');
+  assert.equal(text(box), 'DescriptionMakes plans.');
+  assert.deepEqual(byClass(box, 'ctx-cut'), []);
+});

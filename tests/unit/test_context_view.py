@@ -1216,3 +1216,36 @@ def test_codex_estimate_that_removes_every_description_says_so():
         "Estimate: On a 1K window, Codex would remove every description. "
         "The agent would see only the names."
     )
+
+
+# The description in a skill's Details
+
+
+def test_a_skill_gives_its_description_and_how_much_of_it_the_agent_saw(home):
+    # `seen`: how many characters of the description the agent got; None when it got all of it.
+    paths = codex_home(home, window=272_000)
+    codex_chat(
+        home,
+        [
+            f"- alpha: {CODEX_A[:20]} (file: {paths['alpha']})",
+            f"- beta: (file: {paths['beta']})",
+            f"- gamma: {CODEX_C} (file: {paths['gamma']})",
+        ],
+    )
+    rows = {s["name"]: (s["description"], s["seen"]) for s in view(home)["codex"]["skills"]}
+    assert rows == {"alpha": (CODEX_A, 20), "beta": (CODEX_B, 0), "gamma": (CODEX_C, None)}
+
+
+def test_a_name_only_claude_skill_saw_none_of_its_description(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    skill(home / ".claude/skills", "beta", "Does beta.")
+    claude_chat(home, {"alpha": "Does alpha.", "beta": None})
+    rows = {s["name"]: (s["description"], s["seen"]) for s in view(home)["claude_code"]["skills"]}
+    assert rows["alpha"] == ("Does alpha.", None)
+    assert rows["beta"] == ("Does beta.", 0)
+
+
+def test_a_skill_with_no_chat_gives_its_description_and_no_seen(home):
+    skill(home / ".cursor/skills", "free", "Picks itself.")
+    [row] = view(home)["cursor"]["skills"]
+    assert (row["description"], row["seen"]) == ("Picks itself.", None)

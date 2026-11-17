@@ -157,11 +157,12 @@ function cardButton({ label, run, body, note = null, primary = false, node: own 
 // waits behind one More button, `after` is a quiet node under them), and the evidence folded last
 // (`technical`, a node from technical(rows)). At most one action is `primary`. Card builders return
 // this plain object, so a test reads its fields without a page.
-export function detailsCard({ kind, title, id = null, tile = null, facts = [], why = null, list = null, actions = [], more = [], after = null, technical: evidence = null }) {
+export function detailsCard({ kind, title, id = null, tile = null, facts = [], why = null, list = null, text = null, actions = [], more = [], after = null, technical: evidence = null }) {
   const body = el("div", "body");
   if (facts.length) body.append(factsBlock(facts));
   if (list) body.append(list);
   if (why) body.append(typeof why === "string" ? el("p", "why", why) : why);
+  if (text) body.append(text);
   const footer = el("footer", "stack");
   footer.append(...actions.map(cardButton));
   if (more.length) footer.append(...moreNodes(more.map(cardButton)));

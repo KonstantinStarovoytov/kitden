@@ -192,6 +192,8 @@ def _skill(
     side: int | None,
     note: str | None,
     built_in: bool = False,
+    description: str | None = None,
+    seen: int | None = None,
 ) -> dict:
     # Claude Code's skillOverrides does not touch a plugin's skills (spec "Switches per client").
     plugin = client == "claude_code" and item is not None and from_plugin(item)
@@ -209,7 +211,18 @@ def _skill(
         "state": _state(item),
         "switch": list(switch),
         "note": note,
+        "description": description,
+        "seen": seen,
     }
+
+
+def _seen(full: str | None, sent: str | None, side: int | None) -> int | None:
+    """How many characters of the description the agent got, for a skill not sent whole
+    (side 1): 0 for a name only or a skill left out. None when it got all of it or Kitden has
+    no file. The sent text's length, not a match with the file: quotes may be written apart."""
+    if full is None or side != 1:
+        return None
+    return min(len(sent or ""), len(full))
 
 
 def _source(item: Item | None, built_in: bool) -> str | None:
@@ -231,9 +244,10 @@ def _disk_card(client: str, items: list[Item], message: str, how: list[str]) -> 
         note = words.NOTE_ONLY_ASKED if state in ASKED else None
         if from_plugin(item):
             note = words.NOTE_PLUGIN
-        size = len(_description(item.source.path) or "")
+        text = _description(item.source.path)
+        side = int(state == "name-only")
         skills.append(
-            _skill(client, _name(client, item), item, size, int(state == "name-only"), note)
+            _skill(client, _name(client, item), item, len(text or ""), side, note, description=text)
         )
     sides = [words.SKILLS_FOUND, words.CONTEXT_SIDES[client][1]]
     return _card(client, message=message, sides=sides, skills=skills, how=how)
@@ -639,13 +653,17 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         side = 0 if r.sent is not None else 1
         size = len(r.full) if r.full is not None else len(r.sent or "")
         note = _claude_note(r, states[r.name], side, size, explained, can_free)
-        skills.append(_skill(client, r.name, r.item, size, side, note, r.built_in))
+        text, seen = r.full if r.full is not None else r.sent, _seen(r.full, r.sent, side)
+        skills.append(_skill(client, r.name, r.item, size, side, note, r.built_in, text, seen))
     listed = {r.name for r in rows}
     for item in items:
         if _name(client, item) not in listed:
             extra = _Row(_name(client, item), None, item, _description(item.source.path))
             note = _claude_note(extra, _state(item), None, 0)
-            skills.append(_skill(client, extra.name, item, len(extra.full or ""), None, note))
+            size = len(extra.full or "")
+            skills.append(
+                _skill(client, extra.name, item, size, None, note, description=extra.full)
+            )
 
     version = f" {found.version}" if found.version else ""
     surface = f" {found.surface}" if found.surface else ""
@@ -967,10 +985,14 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
         if r.moved:  # first, whatever the other note: the size read may not be the chat's
             note = f"{words.NOTE_NEWER} {note}" if note else words.NOTE_NEWER
         size = len(r.full) if r.full is not None else len(r.sent or "")
-        skills.append(_skill(client, r.name, r.item, size, side, note))
+        text, seen = r.full if r.full is not None else r.sent, _seen(r.full, r.sent, side)
+        skills.append(_skill(client, r.name, r.item, size, side, note, description=text, seen=seen))
     for item in extras:
-        size = len(_description(item.source.path) or "")
-        skills.append(_skill(client, item.name, item, size, None, words.NOTE_NOT_LISTED))
+        text = _description(item.source.path)
+        note = words.NOTE_NOT_LISTED
+        skills.append(
+            _skill(client, item.name, item, len(text or ""), None, note, description=text)
+        )
 
     version = f" {sent_list.version}" if sent_list.version else ""
     if checked:
@@ -1014,8 +1036,10 @@ def _cursor(inventory, folder: str | None) -> dict:
     skills = []
     for item in items:
         asked = item.skill_state == "only-asked"
-        size = len(_description(item.source.path) or "")
+        text = _description(item.source.path)
         note = words.NOTE_ONLY_ASKED if asked else None
-        skills.append(_skill(client, item.name, item, size, int(asked), note))
+        skills.append(
+            _skill(client, item.name, item, len(text or ""), int(asked), note, description=text)
+        )
     message = words.CURSOR_CANNOT_SEE if items else words.NOTHING_TO_FIT
     return _card(client, message=message, skills=skills, how=list(words.HOW_CURSOR))

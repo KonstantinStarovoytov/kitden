@@ -365,7 +365,8 @@ function openSkill(client, name) {
   const facts = [];
   if (skill.size) facts.push({ label: "Size", value: `${fmt(skill.size)} characters` });
   if (skill.source) facts.push({ label: "Source", value: skill.source });
-  const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list: skill.switch.length ? switchFor(card, skill) : null, why: skill.note });
+  const list = skill.switch.length ? switchFor(card, skill) : null;
+  const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: skill.note, text: describe(skill) });
   openPanel(content);
   panelState.current = { type: "context-skill", client, name };
   keepFrom(() => openSkill(client, name), content);
@@ -375,6 +376,22 @@ function openSkill(client, name) {
     markAll();
   });
   markAll();
+}
+
+// The skill's description from its file, the part the agent did not get in grey (`seen`: how
+// many characters it got; null when it got all of it). None when Kitden could not read it.
+function describe(skill) {
+  const words = skill.description;
+  if (!words) return null;
+  const box = el("section", "ctx-desc");
+  box.setAttribute("aria-label", "Description");
+  const shown = el("p", "ctx-desc-text");
+  const cut = skill.seen != null && skill.seen < words.length;
+  shown.append(el("span", "", cut ? words.slice(0, skill.seen) : words));
+  if (cut) shown.append(el("span", "ctx-cut", words.slice(skill.seen)));
+  box.append(el("p", "ctx-desc-head", "Description"), shown);
+  if (cut) box.append(el("p", "ctx-desc-note", "Grey: the part the agent did not get."));
+  return box;
 }
 
 // The row a state of this skill adds: for all projects, or for a project's own skill in its
