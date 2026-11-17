@@ -1,7 +1,7 @@
-# What: every night, measures the CPU and memory of the newest release and of main, in turn on
-# one runner, and keeps the numbers on the `use-numbers` branch. By hand, it can measure a list
-# of old releases instead, then this commit last; the charts are redrawn from that run alone,
-# so list every release.
+# What: every night, measures the CPU and memory of the newest release and of main, the page
+# and the gateway, in turn on one runner, and keeps the numbers on the `use-numbers` branch. By
+# hand, it can measure a list of old releases instead, then this commit last; the charts are
+# redrawn from that run alone, so list every release.
 # Why: a slow leak or a busy loop would ship unseen, because no test measures CPU or memory and
 # no number was kept from one version to the next.
 #
@@ -92,6 +92,11 @@ jobs:
             uv pip install --python "$envs/main/bin/python" --exclude-newer "$at" "$RUNNER_TEMP"/dist/*.whl
             echo "main@${GITHUB_SHA::7}=$envs/main/bin/kitden" >> "$RUNNER_TEMP/versions.txt"
           fi
+      # The gateway's echo servers need the `mcp` of the lock file: the checkout's own venv
+      # runs them, for A and for B. A backfill measures the page only.
+      - name: The checkout's venv for the echo servers
+        if: steps.pypi.outputs.ok == 'true'
+        run: if [ -z "$VERSIONS" ]; then uv sync --locked; fi
       - name: Measure
         id: measure
         if: steps.pypi.outputs.ok == 'true'
@@ -100,7 +105,11 @@ jobs:
         run: |
           set -eu
           mapfile -t versions < "$RUNNER_TEMP/versions.txt"
-          if [ -z "$VERSIONS" ]; then set -- ; else set -- --backfill; fi
+          if [ -z "$VERSIONS" ]; then
+            set -- --gateway "$GITHUB_WORKSPACE/.venv/bin/python"
+          else
+            set -- --backfill
+          fi
           uv run --no-project --python 3.13 --with "$PSUTIL" python scripts/measure-use.py run \
             --out "$RUNNER_TEMP/use/result.json" --run-id "$RUN_ID" "$@" "${versions[@]}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

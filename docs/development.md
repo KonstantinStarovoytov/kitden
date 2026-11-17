@@ -148,6 +148,15 @@ SIGTERM. It notes:
 - **memory growth**: the memory after the last call minus the memory after the first 200;
 - time to ready, which is not compared: it ran from 0.9 to 9.4 s for the same code on one Mac.
 
+Nights also run the gateway scenario, after all the page's rounds. Its sandbox home has a
+`gateway.json` with three test echo servers (`tests/fixtures/fake_mcp/echo_server.py`), run by
+the checkout's own `.venv/bin/python`, which has `mcp`. One run starts `kitden mcp`, sends
+`initialize` and `tools/list` (ready), waits 30 s, sends `tools/list` 1,000 times, then closes
+its input. It notes CPU to ready, idle CPU, CPU of the calls, memory growth and time to ready,
+of all four processes; on Linux the CPU of a server that ended between two readings counts
+too. A backfill measures the page only. The gateway's limits are `GATEWAY_LIMITS`, off like
+the page's, and it has its own series number.
+
 The numbers are taken the same way for every version, so they can be compared:
 
 - Versions compared run in one job on one machine, in turn, and each round starts one version
@@ -155,9 +164,10 @@ The numbers are taken the same way for every version, so they can be compared:
   warm-up run, thrown away, then the same number of runs.
 - Each number is a median, with the lowest and highest run. Every run is kept.
 - Each result keeps the installed packages of each version, the size of its sample (items and
-  bytes of `/api/items`), the order of every round, and the machine: runner image, system, CPU
-  model, cores, Python and psutil. When A's and B's samples differ, or a version's sample
-  changed between its runs, they are not compared, and the result says why.
+  bytes of `/api/items`), the order of every round (the gateway's in `gateway_rounds`), and
+  the machine: runner image, system, CPU model, cores, Python and psutil. When A's and B's
+  samples differ, or a version's sample changed between its runs, they are not compared, and
+  the result says why.
 - `SERIES` at the top of the script holds one number per scenario. A scenario's number is
   raised with any change to what or how it measures. Numbers of two series are never
   compared, and a new page series needs a new backfill. The measurement is
@@ -179,8 +189,11 @@ uv run --no-project python scripts/measure-use.py check "$S/night.json"
 ```
 
 One page run takes about 45 s; this command makes six (a warm-up and 2 runs for each
-version), so about 5 minutes. macOS takes memory back from an idle process, so the memory
-numbers that count come from Linux.
+version), so about 5 minutes. To measure the gateway too, run `uv sync` and add
+`--gateway "$PWD/.venv/bin/python"`; with `--runs 1` that took 4.5 minutes on a Mac. macOS
+takes memory back from an idle process, so the memory numbers that count come from Linux.
+On GitHub a night should take about 20 runner minutes, and a backfill of 13 releases about 60
+minutes plus the installs; these are estimates until the first runs there.
 
 Every night `.github/workflows/use.yml` measures the newest release (A) and `main` (B), 5 runs
 each, and keeps the numbers on the branch `use-numbers`: `nights/<date>.json`,

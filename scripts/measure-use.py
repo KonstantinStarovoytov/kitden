@@ -1,7 +1,7 @@
 """Measure the CPU and memory a `kitden` command uses, from outside, so any release since 0.3.0
 can be measured the same way (docs/development.md, CPU and memory).
 
-    run --out FILE [--runs 5] [--backfill] [--run-id ID] LABEL=KITDEN ...
+    run --out FILE [--runs 5] [--backfill] [--run-id ID] [--gateway PYTHON] LABEL=KITDEN ...
     check FILE          print the warnings; exit 1 when a limit is broken
     store FILE DATA     put FILE into the data folder (nights/, releases/, chart.json),
                         rebuild DATA/README.md
@@ -11,7 +11,9 @@ can be measured the same way (docs/development.md, CPU and memory).
 LABEL is a release version (`0.9.2`) or `main@<commit>`; KITDEN is the `kitden` of a plain venv.
 A night gives two: the newest release (A), then this commit (B). `--backfill` takes any number of
 releases and compares nothing. Every version gets one warm-up run, thrown away, then `--runs`
-runs, in turn, each round starting one version later (A B, B A, A B ...).
+runs, in turn, each round starting one version later (A B, B A, A B ...). `--gateway PYTHON`
+adds the gateway scenario, with the test echo servers run by PYTHON (the checkout's own, which
+has `mcp`); its rounds come after all the page's.
 
 Standard library only, plus psutil for `run`
 (`uv run --no-project --python 3.13 --with psutil==7.2.2`). It imports nothing of Kitden: it
@@ -40,7 +42,7 @@ from pathlib import Path
 # One series number per scenario. Raise a scenario's number with any change to what or how it
 # is measured. Numbers of two series are never compared or drawn together; a new page series
 # needs a new backfill.
-SERIES = {"page": 1}
+SERIES = {"page": 1, "gateway": 1}
 IDLE_SECONDS = 30
 CALLS = 1000
 EVERY = 100  # read the memory every this many calls
@@ -58,16 +60,20 @@ PAGE_LIMITS: dict[str, float | None] = {
     "idle_cpu_s": None,
     "growth_mb": None,
 }
+GATEWAY_LIMITS: dict[str, float | None] = {"idle_cpu_s": None, "growth_mb": None}
 PAGE_METRICS = ("peak_mb", "cpu_ready_s", "idle_cpu_s", "growth_mb", "ready_s")
+GATEWAY_METRICS = ("cpu_ready_s", "idle_cpu_s", "calls_cpu_s", "growth_mb", "ready_s")
 NAMES = {
     "peak_mb": "peak memory (MB)",
     "cpu_ready_s": "CPU to ready (s)",
     "idle_cpu_s": "idle CPU in 30 s (s)",
     "growth_mb": "memory growth over the calls (MB)",
+    "calls_cpu_s": "CPU of the calls (s)",
     "ready_s": "time to ready (s), not compared",
 }
 CHARTED = ("peak_mb", "cpu_ready_s")  # chart.json: the desk page's two charts, by release
 NIGHTS_SHOWN = 14
+ECHO = Path(__file__).resolve().parents[1] / "tests/fixtures/fake_mcp/echo_server.py"
 LINK = re.compile(r"Open: (http://127\.0\.0\.1:(\d+)/\?token=(\S+))")
 
 
@@ -151,10 +157,15 @@ def broken_limits(result: dict) -> list[str]:
         return []
     b = result["versions"][-1]
     broken = []
-    for name, limit in PAGE_LIMITS.items():
-        value = b["page"]["summary"][name]
-        if limit is not None and value["median"] > limit:
-            broken.append(f"{b['label']} page {NAMES[name]}: {_cell(value)}, median over {limit}.")
+    for scenario, limits in (("page", PAGE_LIMITS), ("gateway", GATEWAY_LIMITS)):
+        for name, limit in limits.items():
+            if limit is None or scenario not in b:
+                continue
+            value = b[scenario]["summary"][name]
+            if value["median"] > limit:
+                broken.append(
+                    f"{b['label']} {scenario} {NAMES[name]}: {_cell(value)}, median over {limit}."
+                )
     return broken
 
 
@@ -182,7 +193,8 @@ def check(result: dict) -> int:
 def release_file(result: dict, version: dict) -> dict:
     # On a backfill the release files are the record, so they keep how the runs were done.
     keys = ("series", "kind", "run_id", "date", "time", "warm", "warmup_runs", "runs_each")
-    return {**{k: result[k] for k in (*keys, "rounds", "env")}, "version": version}
+    gateway = {"gateway_rounds": result["gateway_rounds"]} if "gateway_rounds" in result else {}
+    return {**{k: result[k] for k in (*keys, "rounds", "env")}, **gateway, "version": version}
 
 
 def _plain(text: str, pattern: str, what: str) -> None:
@@ -305,17 +317,23 @@ def readme(data: Path) -> str:
         "A is the newest release, B is `main` that night, measured in turn in the same job.",
         "",
         "| Night | A | B | Peak A | Peak B | CPU to ready A | CPU to ready B "
-        "| Idle CPU B | Growth B | Notes |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| Idle CPU B | Growth B | Gateway idle CPU B | Gateway growth B | Notes |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
+    # Gateway cells only of the newest gateway series.
+    gateway_series = max((f["series"].get("gateway", 0) for f in nights), default=0)
     for f in nights[-NIGHTS_SHOWN:][::-1]:
         a, b = f["versions"]
         sa, sb = a["page"]["summary"], b["page"]["summary"]
+        same = f["series"].get("gateway") == gateway_series
+        gate = b.get("gateway", {}).get("summary") if same else None
         notes = " ".join(f["warnings"] + f["notes"]) or "—"
         out.append(
             f"| {f['date']} | {a['label']} | {b['label']} | {_cell(sa['peak_mb'])} "
             f"| {_cell(sb['peak_mb'])} | {_cell(sa['cpu_ready_s'])} | {_cell(sb['cpu_ready_s'])} "
-            f"| {_cell(sb['idle_cpu_s'])} | {_cell(sb['growth_mb'])} | {notes} |"
+            f"| {_cell(sb['idle_cpu_s'])} | {_cell(sb['growth_mb'])} "
+            f"| {_cell(gate['idle_cpu_s']) if gate else '—'} "
+            f"| {_cell(gate['growth_mb']) if gate else '—'} | {notes} |"
         )
     return "\n".join(out) + "\n"
 
@@ -342,7 +360,12 @@ def _rss_mb(proc) -> float:
     return round(total / MB, 3)
 
 
-def _cpu(proc) -> float:
+def _cpu(proc, exited: bool = False) -> float:
+    """CPU seconds (user and system) of the process and its live descendants. With exited=True
+    (the gateway), also of descendants that ended and were collected by their parent in the
+    tree, so a server that ends between two readings is not lost: Linux counts them in
+    children_user and children_system; macOS reports 0 there, so it loses them. The page keeps
+    the plain sum it was measured with in its series 1 (its demo starts no child)."""
     import psutil
 
     total = 0.0
@@ -350,6 +373,9 @@ def _cpu(proc) -> float:
         with contextlib.suppress(psutil.Error):
             times = p.cpu_times()
             total += times.user + times.system
+            if exited:
+                total += getattr(times, "children_user", 0.0)
+                total += getattr(times, "children_system", 0.0)
     return total
 
 
@@ -363,12 +389,13 @@ def _sandbox(root: Path) -> dict:
     return {**env, "HOME": str(root / "home"), "TMPDIR": str(root / "tmp")}
 
 
-def _stop(child: subprocess.Popen) -> int:
-    """SIGTERM, then collect the child with wait4; SIGKILL after STOP_SECONDS. Then SIGKILL
-    what is left of its process group, so nothing it started outlives the run. Returns its
-    ru_maxrss."""
-    with contextlib.suppress(ProcessLookupError):
-        os.killpg(child.pid, signal.SIGTERM)
+def _stop(child: subprocess.Popen, term: bool = True) -> int:
+    """SIGTERM (or, with term=False, only wait for the child to end by itself), then collect
+    it with wait4; SIGKILL after STOP_SECONDS. Then SIGKILL what is left of its process group,
+    so nothing it started outlives the run. Returns its ru_maxrss."""
+    if term:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(child.pid, signal.SIGTERM)
     deadline = time.monotonic() + STOP_SECONDS
     while time.monotonic() < deadline:
         pid, status, usage = os.wait4(child.pid, os.WNOHANG)
@@ -469,6 +496,106 @@ def page_run(kitden: Path, root: Path) -> dict:
     }
 
 
+def _data_dir(home: Path) -> Path:
+    if platform.system() == "Darwin":
+        return home / "Library/Application Support/kitden"
+    return home / ".local/share/kitden"
+
+
+def gateway_run(kitden: Path, root: Path, python: Path) -> dict:
+    """One run of the gateway scenario: `kitden mcp` with three echo servers, spoken to by hand
+    (docs/development.md, CPU and memory)."""
+    import psutil
+
+    env = _sandbox(root)
+    home = root / "home"
+    servers = {name: {"command": str(python), "args": [str(ECHO), name]} for name in "abc"}
+    _data_dir(home).mkdir(parents=True)
+    (_data_dir(home) / "gateway.json").write_text(json.dumps({"servers": servers, "rules": {}}))
+    start = time.monotonic()
+    child = subprocess.Popen(  # noqa: S603 - the kitden under test, fixed arguments
+        [str(kitden), "mcp", "--home", str(home)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        env=env,
+        cwd=home,
+        start_new_session=True,
+    )
+    stdin, stdout = child.stdin, child.stdout
+    assert stdin is not None and stdout is not None
+    sent = [0]
+    seen: list = []  # the tree, last read: the echo servers are ended with it
+
+    def give_up(_signal: int, _frame: object) -> None:
+        raise TimeoutError("kitden mcp stopped answering")
+
+    def call(method: str, params: dict | None = None) -> dict:
+        sent[0] += 1
+        message = {"jsonrpc": "2.0", "id": sent[0], "method": method, "params": params or {}}
+        stdin.write(json.dumps(message) + "\n")
+        stdin.flush()
+        while True:
+            line = stdout.readline()
+            if not line:
+                raise RuntimeError("kitden mcp closed its output")
+            answer = json.loads(line)
+            if answer.get("id") == sent[0]:
+                return answer
+
+    # A gateway that stops answering must not hang the job: an alarm in this process.
+    signal.signal(signal.SIGALRM, give_up)
+    signal.alarm(GIVE_UP_SECONDS + IDLE_SECONDS)
+    try:
+        proc = psutil.Process(child.pid)
+        call(
+            "initialize",
+            {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "clientInfo": {"name": "measure-use", "version": str(SERIES["gateway"])},
+            },
+        )
+        stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
+        stdin.flush()
+        tools = call("tools/list")["result"]["tools"]
+        ready, cpu_ready = time.monotonic() - start, _cpu(proc, exited=True)
+        seen = _tree(proc)
+        before = _cpu(proc, exited=True)
+        time.sleep(IDLE_SECONDS)
+        idle = _cpu(proc, exited=True) - before
+        readings, before = [], _cpu(proc, exited=True)
+        for number in range(1, CALLS + 1):
+            call("tools/list")
+            if number % EVERY == 0:
+                readings.append(_rss_mb(proc))
+        calls = _cpu(proc, exited=True) - before
+        seen = _tree(proc)
+        processes = len(seen)
+    finally:
+        signal.alarm(0)
+        with contextlib.suppress(OSError):
+            stdin.close()
+        _stop(child, term=False)  # a closed input ends kitden mcp
+        # The mcp client starts each server in a session of its own, out of reach of the group
+        # kill in _stop: end any server that kitden mcp left.
+        for p in seen[1:]:
+            with contextlib.suppress(psutil.Error):
+                p.kill()
+    return {
+        "ready_s": round(ready, 3),
+        "cpu_ready_s": round(cpu_ready, 3),
+        "idle_cpu_s": round(idle, 3),
+        "calls_cpu_s": round(calls, 3),
+        "memory_mb": readings,
+        "growth_mb": growth(readings),
+        "tools": len(tools),
+        "processes": processes,
+        "exit": child.returncode,
+    }
+
+
 def packages(kitden: Path) -> dict:
     """The Python and every installed package of the venv that holds this `kitden`."""
     code = (
@@ -538,22 +665,29 @@ def measure(args: argparse.Namespace) -> dict:
         raise SystemExit("A night measures two versions: the newest release, then this commit.")
     now = datetime.now(UTC)
     # Round 0 is the warm-up, thrown away. Each round starts one version later. The order is
-    # fixed here and kept in the result, so the result shows the order that ran.
+    # fixed here and kept in the result, so the result shows the order that ran. The gateway's
+    # rounds come after all the page's, so the page is measured the same way with or without.
     rounds = [[v["label"] for v in in_order(versions, r)] for r in range(WARMUP + args.runs)]
+    scenarios = ["page", "gateway"] if args.gateway else ["page"]
     by_label = {v["label"]: v for v in versions}
     root = Path(tempfile.mkdtemp(prefix="measure-use-")).resolve()
-    page: dict[str, list] = {v["label"]: [] for v in versions}
+    kept: dict[str, dict[str, list]] = {s: {v["label"]: [] for v in versions} for s in scenarios}
     try:
-        for round_, labels in enumerate(rounds):
-            for label in labels:
-                one = page_run(by_label[label]["path"], root)
-                print(f"page {round_} {label}: {json.dumps(one)}", file=sys.stderr)
-                if round_ >= WARMUP:
-                    page[label].append(one)
+        for scenario in scenarios:
+            for round_, labels in enumerate(rounds):
+                for label in labels:
+                    kitden = by_label[label]["path"]
+                    if scenario == "page":
+                        one = page_run(kitden, root)
+                    else:
+                        one = gateway_run(kitden, root, Path(args.gateway))
+                    print(f"{scenario} {round_} {label}: {json.dumps(one)}", file=sys.stderr)
+                    if round_ >= WARMUP:
+                        kept[scenario][label].append(one)
     finally:
         shutil.rmtree(root, ignore_errors=True)
     for v in versions:
-        runs = page[v["label"]]
+        runs = kept["page"][v["label"]]
         samples = {json.dumps(run["sample"]) for run in runs}
         v["page"] = {
             # The sample of the first run; "varies" when the runs did not all see the same one.
@@ -561,9 +695,12 @@ def measure(args: argparse.Namespace) -> dict:
             "summary": summary(runs, PAGE_METRICS),
             "runs": runs,
         }
+        if args.gateway:
+            runs = kept["gateway"][v["label"]]
+            v["gateway"] = {"summary": summary(runs, GATEWAY_METRICS), "runs": runs}
         v["path"] = str(v["path"])
     result = {
-        "series": {"page": SERIES["page"]},
+        "series": {s: SERIES[s] for s in scenarios},
         "kind": "backfill" if args.backfill else "night",
         "run_id": args.run_id,
         "date": now.date().isoformat(),
@@ -572,6 +709,7 @@ def measure(args: argparse.Namespace) -> dict:
         "warmup_runs": WARMUP,
         "runs_each": args.runs,
         "rounds": rounds,
+        **({"gateway_rounds": rounds} if args.gateway else {}),
         "env": environment(),
         "versions": versions,
         "warnings": [],
@@ -590,6 +728,7 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--runs", type=int, default=5)
     run.add_argument("--backfill", action="store_true")
     run.add_argument("--run-id", default="local")
+    run.add_argument("--gateway", metavar="PYTHON")
     run.add_argument("versions", nargs="+", metavar="LABEL=KITDEN")
     modes.add_parser("check").add_argument("file", type=Path)
     put = modes.add_parser("store")

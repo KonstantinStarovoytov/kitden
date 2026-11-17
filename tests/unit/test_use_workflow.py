@@ -55,9 +55,15 @@ def test_no_pypi_records_nothing_and_stays_green():
     pypi = _step(job, "PyPI answers")
     assert "::warning::PyPI could not be reached, so nothing was measured tonight." in pypi
     assert 'echo "ok=false" >> "$GITHUB_OUTPUT"' in pypi and "exit 1" not in pypi
-    assert job.count("if: steps.pypi.outputs.ok == 'true'") == 4
+    assert job.count("if: steps.pypi.outputs.ok == 'true'") == 5
     # use-store runs only when there is a file to store: not without PyPI, not after a crash.
     assert "measured: ${{ steps.measure.outcome == 'success' }}" in job
+
+
+def test_nights_measure_the_gateway_with_the_checkouts_python_and_backfills_do_not():
+    job = _jobs()["use"]
+    assert 'if [ -z "$VERSIONS" ]; then uv sync --locked; fi' in job
+    assert 'set -- --gateway "$GITHUB_WORKSPACE/.venv/bin/python"' in _step(job, "Measure")
 
 
 def test_the_numbers_are_uploaded_before_the_limits_are_checked():

@@ -145,6 +145,32 @@ def test_a_broken_limit_fails_the_check_and_a_warning_does_not(monkeypatch, tmp_
     assert len(summary.read_text().splitlines()) == 3
 
 
+def test_a_gateway_limit_counts_only_when_the_night_has_the_gateway(monkeypatch):
+    b = version("main@1")
+    night = result("night", [version("0.9.2"), b])
+    monkeypatch.setitem(measure_use.GATEWAY_LIMITS, "idle_cpu_s", 0.3)
+    assert measure_use.broken_limits(night) == []
+    b["gateway"] = {"summary": {"idle_cpu_s": {"median": 0.5, "low": 0.4, "high": 0.6}}}
+    assert measure_use.broken_limits(night) == [
+        "main@1 gateway idle CPU in 30 s (s): 0.5 (0.4–0.6), median over 0.3."
+    ]
+
+
+def test_the_gateway_has_its_own_series_and_the_readme_shows_only_its_newest(tmp_path):
+    # Adding the gateway left the page series alone.
+    assert measure_use.SERIES == {"page": 1, "gateway": 1}
+    cell = {"median": 0.2, "low": 0.1, "high": 0.3}
+    gate = {"summary": {"idle_cpu_s": cell, "growth_mb": cell}}
+    for day, label, gateway_series in (("20", "main@1", 1), ("21", "main@2", 2)):
+        night = result("night", [version("0.9.2"), {**version(label), "gateway": gate}])
+        night["date"], night["series"]["gateway"] = f"2026-11-{day}", gateway_series
+        measure_use.store(night, tmp_path)
+    text = (tmp_path / "README.md").read_text()
+    rows = {line.split(" | ")[2]: line for line in text.splitlines() if line.startswith("| 2026-")}
+    assert rows["main@2"].count("0.2 (0.1–0.3)") == 2
+    assert "0.2 (0.1–0.3)" not in rows["main@1"]  # an older gateway series: not shown
+
+
 def test_the_cutoff_is_an_hour_after_the_first_upload():
     files = [
         {"upload_time_iso_8601": "2026-11-14T17:20:44.100000Z"},
@@ -166,6 +192,7 @@ def test_a_night_writes_its_file_and_a_missing_release_file_only(tmp_path):
     measure_use.store(first, tmp_path)
     kept = json.loads((tmp_path / "releases/0.9.2.json").read_text())
     assert kept["kind"] == "night" and kept["version"]["label"] == "0.9.2"
+    assert "gateway_rounds" not in kept
     second = result("night", [version("0.9.2", peak=70.0), version("main@2")], date="2026-11-21")
     measure_use.store(second, tmp_path)
     assert sorted(p.name for p in (tmp_path / "nights").iterdir()) == [
@@ -348,7 +375,7 @@ def _stand_ins(monkeypatch):
             calls.append((scenario, str(kitden), *rest))
             n = float(len(calls))
             return {
-                **dict.fromkeys(measure_use.PAGE_METRICS, n),
+                **dict.fromkeys(measure_use.PAGE_METRICS + measure_use.GATEWAY_METRICS, n),
                 "sample": {"items": 1, "bytes": 2},
                 "exit": 0,
             }
@@ -360,6 +387,7 @@ def _stand_ins(monkeypatch):
     )
     monkeypatch.setattr(measure_use, "environment", lambda: {"cpu": "stand-in"})
     monkeypatch.setattr(measure_use, "page_run", one_run("page"))
+    monkeypatch.setattr(measure_use, "gateway_run", one_run("gateway"))
     return calls
 
 
@@ -380,6 +408,30 @@ def test_a_night_measures_in_turn_and_throws_the_warm_up_away(monkeypatch, tmp_p
     a, b = got["versions"]
     assert [run["ready_s"] for run in a["page"]["runs"]] == [4.0, 5.0]
     assert [run["ready_s"] for run in b["page"]["runs"]] == [3.0, 6.0]
+    # Without --gateway: the page only, and a result shaped as before.
+    assert got["series"] == {"page": 1} and "gateway_rounds" not in got
+    assert "gateway" not in a and "gateway" not in b
+
+
+def test_the_gateways_rounds_come_after_all_the_pages(monkeypatch, tmp_path):
+    calls = _stand_ins(monkeypatch)
+    got = _measured(
+        tmp_path, "--gateway", "/e/python", "0.9.2=/e/a/bin/kitden", "main@1=/e/b/bin/kitden"
+    )
+    rounds = [["0.9.2", "main@1"], ["main@1", "0.9.2"], ["0.9.2", "main@1"]]
+    assert got["rounds"] == got["gateway_rounds"] == rounds
+    assert got["series"] == {"page": 1, "gateway": 1}
+    path = {"0.9.2": "/e/a/bin/kitden", "main@1": "/e/b/bin/kitden"}
+    page = [("page", path[label]) for labels in rounds for label in labels]
+    echo = Path("/e/python")
+    gateway = [("gateway", path[label], echo) for labels in rounds for label in labels]
+    assert calls == page + gateway
+    # Calls 7 and 8 are the gateway's warm-up; then B is 9, A is 10, A is 11, B is 12.
+    a, b = got["versions"]
+    assert [run["ready_s"] for run in a["page"]["runs"]] == [4.0, 5.0]
+    assert [run["ready_s"] for run in a["gateway"]["runs"]] == [10.0, 11.0]
+    assert [run["ready_s"] for run in b["gateway"]["runs"]] == [9.0, 12.0]
+    assert b["gateway"]["summary"]["calls_cpu_s"] == {"median": 10.5, "low": 9.0, "high": 12.0}
 
 
 def test_a_backfill_measures_every_version_the_same_number_of_times(monkeypatch, tmp_path):
