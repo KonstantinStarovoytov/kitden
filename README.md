@@ -16,6 +16,13 @@ It changes nothing until you press Apply, and every change can be undone.</p>
   <a href="https://mcprush.com/to/kitden-mcp?ref=badge"><img src="https://mcprush.com/badge/kitden-mcp/score.svg" alt="Kitden MCP on mcprush"></a>
 </p>
 
+<p align="center">
+  <a href="https://konstantinstarovoytov.github.io/kitden-sdlc/desk/"><img src="https://img.shields.io/badge/Open_the_desk-C85835?style=for-the-badge" alt="Open the desk"></a>
+</p>
+
+<p align="center">Reviews, tests and releases for Kitden run from
+<a href="https://github.com/KonstantinStarovoytov/kitden-sdlc">kitden-sdlc</a>.</p>
+
 ### See whether your skills fit
 
 Every chat starts with the list of your skills, and that list has a small budget: 1% of the
