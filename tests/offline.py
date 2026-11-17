@@ -126,7 +126,7 @@ def canned_access(url: str, headers: dict) -> str:
 def canned_download(url: str) -> bytes:
     """A catalog's answer from CATALOG; any other address is refused."""
     if url not in CATALOG:
-        raise OSError("The README sample stays offline.")
+        raise OSError("The sample stays offline.")
     answer = CATALOG[url]
     return (answer if isinstance(answer, str) else json.dumps(answer)).encode()
 
