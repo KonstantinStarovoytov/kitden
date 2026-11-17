@@ -11,6 +11,8 @@ pytestmark = pytest.mark.browser
 # The medium sample's last Claude Code chat (tests/unit/test_demo_home.py): 4 of 20 skills
 # showed only a name.
 NAME_ONLY = ["brandkit", "release-notes", "shared-style", "planning"]
+# Its last Codex chat had room for all four of Codex's own skills.
+CODEX = ["api-style", "code-review", "docker-expert", "langfuse"]
 
 
 def test_context_shows_the_last_chat_and_the_skills_that_were_cut(page, demo):
@@ -27,6 +29,12 @@ def test_context_shows_the_last_chat_and_the_skills_that_were_cut(page, demo):
     expect(pills).to_have_count(len(NAME_ONLY))
     for name in NAME_ONLY:
         expect(side.get_by_role("button", name=re.compile(rf"^{name} [\d,]+$"))).to_be_visible()
-    # Codex: every skill fits.
-    main.get_by_role("group", name="Client").get_by_role("button", name="Codex").click()
+    # Codex: every skill fits, all four of its own under "Full description".
+    codex = main.get_by_role("group", name="Client").get_by_role("button", name="Codex")
+    codex.click()
+    expect(codex).to_have_attribute("aria-pressed", "true")
+    full = main.locator("section").filter(has=page.get_by_role("heading", name="Full description"))
+    expect(full.get_by_role("button")).to_have_count(len(CODEX))
+    for name in CODEX:
+        expect(full.get_by_role("button", name=re.compile(rf"^{name} [\d,]+$"))).to_be_visible()
     expect(main.get_by_text("showed only a name")).to_have_count(0)
