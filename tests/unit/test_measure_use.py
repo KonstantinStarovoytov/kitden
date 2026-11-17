@@ -177,6 +177,18 @@ def test_store_refuses_a_date_or_label_that_is_no_plain_file_name(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+def test_two_versions_with_one_label_are_refused_before_anything_runs(tmp_path, monkeypatch):
+    def no_process(*args, **kwargs):
+        raise AssertionError("nothing may run")
+
+    monkeypatch.setattr(measure_use.subprocess, "run", no_process)
+    monkeypatch.setattr(measure_use.subprocess, "Popen", no_process)
+    out = tmp_path / "night.json"
+    with pytest.raises(SystemExit, match="own label"):
+        measure_use.main(["run", "--out", str(out), "0.9.2=/a/kitden", "0.9.2=/b/kitden"])
+    assert not out.exists()
+
+
 def test_store_refuses_a_kind_that_is_no_night_or_backfill(tmp_path):
     with pytest.raises(SystemExit, match="kind"):
         measure_use.store(result("nightly", [version("0.9.2"), version("main@1")]), tmp_path)

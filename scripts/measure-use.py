@@ -506,6 +506,9 @@ def environment() -> dict:
 
 
 def measure(args: argparse.Namespace) -> dict:
+    labels = [label_of(text)[0] for text in args.versions]
+    if len(set(labels)) != len(labels):
+        raise SystemExit("Each version needs its own label.")
     versions = []
     for text in args.versions:
         label, commit, kitden = label_of(text)
