@@ -39,7 +39,8 @@ the part the agent did not get in grey. There you can also
 switch it to **On**, **Name only** (Claude Code) or **Off** where the client
 allows it; built-in skills, Claude Code plugin skills and Cursor have no switch. The change goes through preview,
 **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
-did not fit.
+did not fit. `kitden show context`, which the plugin's `context` skill runs, also prints each
+skill's description, so your agent sees it too.
 
 ## Add from the catalogs
 
