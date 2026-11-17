@@ -39,6 +39,11 @@ def test_the_registry_entry_matches_the_package():
     assert package["identifier"] == _project()["name"]
     assert package["transport"] == {"type": "stdio"}
     assert package["packageArguments"] == [{"type": "positional", "value": "mcp"}]
+    # The icon is the plugin's, served from main; the file must stay where the link points.
+    (icon,) = registry["icons"]
+    raw = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/"
+    assert icon["src"].startswith(raw)
+    assert (ROOT / icon["src"].removeprefix(raw)).is_file()
     glama = json.loads((ROOT / "glama.json").read_text())
     assert glama["maintainers"] == ["KonstantinStarovoytov"]
 
