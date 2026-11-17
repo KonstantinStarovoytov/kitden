@@ -34,8 +34,9 @@ window, or for a change you are about to make, show only while Kitden's rule reb
 list. Claude Code's log does not say the window, so Kitden names it only when one window alone
 gives that list. Cursor gets no verdict, because Kitden cannot see what Cursor sends. Skills
 whose descriptions are sent go from grey to orange with the length of their description, so the
-few that take most of the list stand out. In a skill's
-**Details**, switch it to **On**, **Name only** (Claude Code) or **Off** where the client
+few that take most of the list stand out. A skill's **Details** shows its description, with
+the part the agent did not get in grey. There you can also
+switch it to **On**, **Name only** (Claude Code) or **Off** where the client
 allows it; built-in skills, Claude Code plugin skills and Cursor have no switch. The change goes through preview,
 **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
 did not fit.

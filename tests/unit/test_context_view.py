@@ -10,7 +10,7 @@ import pytest
 from kitden.context.rules import CodexSkill, codex_rule
 from kitden.context.tables import CLAUDE_ALWAYS_FULL
 from kitden.system import claude_desktop_dir
-from kitden.views.context_view import _codex_estimate, context_view
+from kitden.views.context_view import _codex_cap, _codex_estimate, _seen, context_view
 from kitden.views.inventory import build_inventory
 from kitden.views.overview import overview
 from tests.unit.test_context_claude_log import assistant, list_entry, write_chat
@@ -1216,3 +1216,95 @@ def test_codex_estimate_that_removes_every_description_says_so():
         "Estimate: On a 1K window, Codex would remove every description. "
         "The agent would see only the names."
     )
+
+
+# The description in a skill's Details
+
+
+def test_a_skill_gives_its_description_and_how_much_of_it_the_agent_saw(home):
+    # `seen`: how many characters of the description the agent got; None when it got all of it.
+    paths = codex_home(home, window=272_000)
+    codex_chat(
+        home,
+        [
+            f"- alpha: {CODEX_A[:20]} (file: {paths['alpha']})",
+            f"- beta: (file: {paths['beta']})",
+            f"- gamma: {CODEX_C} (file: {paths['gamma']})",
+        ],
+    )
+    rows = {s["name"]: (s["description"], s["seen"]) for s in view(home)["codex"]["skills"]}
+    assert rows == {"alpha": (CODEX_A, 20), "beta": (CODEX_B, 0), "gamma": (CODEX_C, None)}
+
+
+def test_a_name_only_claude_skill_saw_none_of_its_description(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    skill(home / ".claude/skills", "beta", "Does beta.")
+    claude_chat(home, {"alpha": "Does alpha.", "beta": None})
+    rows = {s["name"]: (s["description"], s["seen"]) for s in view(home)["claude_code"]["skills"]}
+    assert rows["alpha"] == ("Does alpha.", None)
+    assert rows["beta"] == ("Does beta.", 0)
+
+
+def test_a_skill_with_no_chat_gives_its_description_and_no_seen(home):
+    skill(home / ".cursor/skills", "free", "Picks itself.")
+    [row] = view(home)["cursor"]["skills"]
+    assert (row["description"], row["seen"]) == ("Picks itself.", None)
+
+
+def test_a_description_past_the_client_cap_has_its_tail_grey(home):
+    # Claude Code keeps 1,536 characters of a description; Codex 1,021 and `...`.
+    long = "word " * 400  # 2,000 characters
+    skill(home / ".claude/skills", "alpha", long.strip())
+    claude_chat(home, {"alpha": long.strip()[:1536]})
+    [row] = [s for s in view(home)["claude_code"]["skills"] if s["name"] == "alpha"]
+    assert row["seen"] == 1536
+
+    folder = home / ".agents/skills"
+    path = str(skill(folder, "beta", long.strip()).resolve())
+    write_json(home / ".codex/models_cache.json", {"models": []})
+    codex_chat(home, [f"- beta: {long.strip()[:1021]}... (file: {path})"])
+    [row] = [s for s in view(home)["codex"]["skills"] if s["name"] == "beta"]
+    assert row["seen"] == 1021
+
+
+def test_a_skill_added_during_the_chat_got_its_whole_description_past_the_cap(home):
+    # Claude Code sends a skill added mid-chat whole, even past 1,536 characters.
+    long = ("word " * 400).strip()
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    skill(home / ".claude/skills", "late", long)
+    first = list_entry(["alpha"], "- alpha: Does alpha.")
+    late = list_entry(["late"], f"- late: {long}", isInitial=False)
+    write_chat(home, "p", "chat", [first, late, assistant("claude-opus-5-5")], 100)
+    [row] = [s for s in view(home)["claude_code"]["skills"] if s["name"] == "late"]
+    assert row["seen"] is None
+
+
+def test_a_codex_description_of_up_to_1024_characters_is_sent_whole(home):
+    # Codex cuts to 1,021 characters and `...` only a description longer than 1,024.
+    text = ("word " * 205)[:1023]
+    path = str(skill(home / ".agents/skills", "alpha", text).resolve())
+    write_json(home / ".codex/models_cache.json", {"models": []})
+    codex_chat(home, [f"- alpha: {text} (file: {path})"])
+    [row] = view(home)["codex"]["skills"]
+    assert (len(row["description"]), row["seen"]) == (1023, None)
+
+
+@pytest.mark.parametrize(
+    ("full", "sent", "side", "cap", "seen"),
+    [
+        (None, "x", 1, 10, None),  # no file: nothing to compare
+        ("abcdef", "abcdef", 0, 10, None),  # sent whole
+        ("abcdef", "abcdef", 0, 4, 4),  # past the client's cap
+        ("abcdef", "abcdef", 0, None, None),  # no cap: added during the chat
+        ("abcdef", "abc", 1, 10, 3),  # cut short
+        ("abcdef", "", 1, 10, 0),  # name only
+        ("abcdef", None, 1, 10, 0),  # left out
+        ("abcdef", "abcdefgh", 1, 10, None),  # a longer sent text is not a cut
+    ],
+)
+def test_seen_in_every_case(full, sent, side, cap, seen):
+    assert _seen(full, sent, side, cap) == seen
+
+
+def test_the_codex_cap_starts_past_1024_characters():
+    assert (_codex_cap(None), _codex_cap("x" * 1024), _codex_cap("x" * 1025)) == (None, None, 1021)
