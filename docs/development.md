@@ -18,9 +18,8 @@ and Codex, with no account (`.github/workflows/nightly.yml`, job `clients`);
 vendors' own installers. Tests marked `signed_in` need a signed-in client. Tests can build a
 sample home with `kitden.demo.build_demo_home(root, size)`.
 
-Browser tests (`tests/browser/`) open the page on the demo sample in a real browser and press
-its buttons: preview, Apply and Undo, the bar that asks for a new preview when the settings
-changed under one, and a drag onto the gateway on the Gateway map. An error in the browser
+Browser tests (`tests/browser/`) open the page on the demo sample in a real browser and do
+each main feature as a user does ([Browser flows](#browser-flows)). An error in the browser
 console fails them, so they catch a break of the page's Content-Security-Policy. Playwright is
 not a project dependency, so these tests are not in the default run. Run them with:
 
@@ -69,6 +68,24 @@ A browser test that is set aside runs nowhere at night: that step leaves browser
 Open an issue to bring it back when you set one aside.
 Contract tests are never listed there: fix them, or mark them `signed_in` when they need an
 account.
+
+## Browser flows
+
+Each main feature of the page has one browser test that does it as a user does, on a
+sandbox sample, with no network and no real client. Each starts from a fresh page and
+needs no other test. In product order:
+
+| # | Flow | Test in `tests/browser/` |
+| --- | --- | --- |
+| 1 | The page opens; Overview shows the setup | `test_flows.py` |
+| 2 | Context: what the last chat loaded and what was cut | `test_context.py` |
+| 7 | Set up the gateway on a home that has none | `test_gateway_setup.py` |
+| 8 | Move servers into the gateway: drag one, "Move all N…" | `test_map_drag.py`, `test_move_all.py` |
+| 9 | Remove a server's direct entry: preview, Apply, gone on disk | `test_remove_server.py` |
+
+Also: a preview writes nothing, Apply and Undo (`test_flows.py`), and the bar that asks
+for a new preview when the settings changed under one (`test_preview_drift.py`). A new
+flow passes 10 runs in a row in every engine you have before its pull request.
 
 ## Commands
 

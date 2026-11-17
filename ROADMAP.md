@@ -19,6 +19,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **The page is tested in Chrome, Firefox and WebKit:** every night the browser tests run
   in Google Chrome and Firefox on Ubuntu and in WebKit on macOS as well as in Chromium, so a
   page bug in one browser shows within a day (#129).
+- **Browser tests for each main feature:** Context, setting up the gateway, Move all and
+  removing a server's own entry are now done in a real browser every night, as a user does
+  them.
 - **Only the Kitden gateway:** Kitden no longer works with outside gateways (Obot, MetaMCP or
   one added by its address). Adding one, connecting clients to it, switching between them and
   moving servers into one are gone. Kitden deletes their saved list when it starts; a client
