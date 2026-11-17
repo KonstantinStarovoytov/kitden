@@ -177,6 +177,12 @@ def test_store_refuses_a_date_or_label_that_is_no_plain_file_name(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+def test_store_refuses_a_kind_that_is_no_night_or_backfill(tmp_path):
+    with pytest.raises(SystemExit, match="kind"):
+        measure_use.store(result("nightly", [version("0.9.2"), version("main@1")]), tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_the_readme_has_both_tables_and_no_chart(tmp_path):
     old = result(
         "backfill", [version("0.3.0", peak=50.0), version("0.4.0")], run_id="1", date="2026-11-18"

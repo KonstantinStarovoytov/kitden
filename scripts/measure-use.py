@@ -3,7 +3,8 @@ can be measured the same way (docs/development.md, CPU and memory).
 
     run --out FILE [--runs 5] [--backfill] [--run-id ID] LABEL=KITDEN ...
     check FILE          print the warnings; exit 1 when a limit is broken
-    store FILE DATA     put FILE into the data folder (nights/, releases/), rebuild DATA/README.md
+    store FILE DATA     put FILE into the data folder (nights/, releases/, chart.json),
+                        rebuild DATA/README.md
     report DATA         rebuild DATA/README.md only
     cutoff VERSION PYPI_JSON   the --exclude-newer time for a release: its upload + 1 hour
 
@@ -18,12 +19,22 @@ must run against old releases. Never run it on the real home folder: every run g
 HOME and temp folder of its own.
 """
 
+import argparse
+import contextlib
+import http.client
 import json
 import os
+import platform
 import re
+import selectors
+import shutil
+import signal
 import statistics
+import subprocess
 import sys
-from datetime import datetime, timedelta
+import tempfile
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 # One series number per scenario. Raise a scenario's number with any change to what or how it
@@ -179,6 +190,7 @@ def _plain(text: str, pattern: str, what: str) -> None:
 def store(result: dict, data: Path) -> list[Path]:
     """Write a result into the data folder. A night: nights/<date>.json, and A's release file
     when it is missing. A backfill: every release file, overwritten."""
+    _plain(result["kind"], r"night|backfill", "kind")
     night = result["kind"] == "night"
     # A night's release is A; on a backfill, this commit is no release: it goes only into the chart.
     releases = (
@@ -304,7 +316,295 @@ def readme(data: Path) -> str:
     return "\n".join(out) + "\n"
 
 
+# --- Measuring (run against real releases; see docs/development.md) ---
+
+
+def _tree(proc) -> list:
+    import psutil
+
+    try:
+        return [proc, *proc.children(recursive=True)]
+    except psutil.Error:
+        return [proc]
+
+
+def _rss_mb(proc) -> float:
+    import psutil
+
+    total = 0
+    for p in _tree(proc):
+        with contextlib.suppress(psutil.Error):
+            total += p.memory_info().rss
+    return round(total / MB, 3)
+
+
+def _cpu(proc) -> float:
+    import psutil
+
+    total = 0.0
+    for p in _tree(proc):
+        with contextlib.suppress(psutil.Error):
+            times = p.cpu_times()
+            total += times.user + times.system
+    return total
+
+
+def _sandbox(root: Path) -> dict:
+    """A fresh HOME and temp folder, at the same paths every run, so every run's sample has
+    paths of the same length."""
+    for name in ("home", "tmp"):
+        shutil.rmtree(root / name, ignore_errors=True)
+        (root / name).mkdir(parents=True)
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("KITDEN_", "XDG_"))}
+    return {**env, "HOME": str(root / "home"), "TMPDIR": str(root / "tmp")}
+
+
+def _stop(child: subprocess.Popen) -> int:
+    """SIGTERM, then collect the child with wait4; SIGKILL after STOP_SECONDS. Returns its
+    ru_maxrss."""
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(child.pid, signal.SIGTERM)
+    deadline = time.monotonic() + STOP_SECONDS
+    while time.monotonic() < deadline:
+        pid, status, usage = os.wait4(child.pid, os.WNOHANG)
+        if pid:
+            child.returncode = os.waitstatus_to_exitcode(status)
+            return usage.ru_maxrss
+        time.sleep(0.05)
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(child.pid, signal.SIGKILL)
+    _, status, usage = os.wait4(child.pid, 0)
+    child.returncode = os.waitstatus_to_exitcode(status)
+    return usage.ru_maxrss
+
+
+def page_run(kitden: Path, root: Path) -> dict:
+    """One run of the page scenario (docs/development.md, CPU and memory)."""
+    import psutil
+
+    start = time.monotonic()
+    child = subprocess.Popen(  # noqa: S603 - the kitden under test, fixed arguments
+        [str(kitden), "demo", "--no-browser", "--size", "large"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        env=_sandbox(root),
+        cwd=root / "home",
+        start_new_session=True,
+    )
+    proc = psutil.Process(child.pid)
+    assert child.stdout is not None
+    try:
+        # A release that never prints its link must not hang the job.
+        with selectors.DefaultSelector() as waiting:
+            waiting.register(child.stdout, selectors.EVENT_READ)
+            if not waiting.select(GIVE_UP_SECONDS):
+                raise RuntimeError("kitden demo printed no link")
+        found = LINK.search(child.stdout.readline())
+        if not found:
+            raise RuntimeError("kitden demo printed no link")
+        port, token = int(found[2]), found[3]
+        # The link is printed before the port listens.
+        while True:
+            try:
+                conn = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+                conn.request("GET", f"/?token={token}")
+                answer = conn.getresponse()
+                answer.read()
+                break
+            except ConnectionRefusedError:
+                if time.monotonic() - start > GIVE_UP_SECONDS:
+                    raise
+                time.sleep(0.02)
+        cookie = {"Cookie": answer.getheader("set-cookie", "").split(";")[0]}
+
+        def get(path: str) -> bytes:
+            conn.request("GET", path, headers=cookie)
+            reply = conn.getresponse()
+            body = reply.read()
+            if reply.status != 200:
+                raise RuntimeError(f"{path} answered {reply.status}")
+            return body
+
+        cpu_ready = ready = None
+        while True:
+            progress = json.loads(get("/api/progress"))
+            if progress["ready"] and ready is None:
+                ready, cpu_ready = time.monotonic() - start, _cpu(proc)
+            if progress["ready"] and all(step["done"] for step in progress["steps"]):
+                break
+            if time.monotonic() - start > GIVE_UP_SECONDS:
+                raise RuntimeError("the first scan did not end")
+            time.sleep(0.1)
+        before = _cpu(proc)
+        time.sleep(IDLE_SECONDS)
+        idle = _cpu(proc) - before
+        conn.close()  # the server drops a connection left idle this long
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+        readings, body = [], b""
+        for call in range(1, CALLS + 1):
+            body = get("/api/items")
+            if call % EVERY == 0:
+                readings.append(_rss_mb(proc))
+        conn.close()
+    finally:
+        maxrss = _stop(child)
+    assert ready is not None and cpu_ready is not None
+    return {
+        "ready_s": round(ready, 3),
+        "cpu_ready_s": round(cpu_ready, 3),
+        "idle_cpu_s": round(idle, 3),
+        "memory_mb": readings,
+        "growth_mb": growth(readings),
+        "peak_mb": peak_mb(maxrss, platform.system()),
+        "sample": {"items": len(json.loads(body)), "bytes": len(body)},
+        "exit": child.returncode,
+    }
+
+
+def packages(kitden: Path) -> dict:
+    """The Python and every installed package of the venv that holds this `kitden`."""
+    code = (
+        "import importlib.metadata as m, json, platform; print(json.dumps({'python': "
+        "platform.python_version(), 'packages': sorted(f\"{d.metadata['Name']}=="
+        '{d.version}" for d in m.distributions())}))'
+    )
+    found = subprocess.run(  # noqa: S603 - the venv's own Python, fixed code
+        [str(kitden.with_name("python")), "-I", "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(found.stdout)
+
+
+def _cpu_model() -> str:
+    if platform.system() == "Darwin":
+        found = subprocess.run(
+            ["/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True
+        )
+        return found.stdout.strip() or "unknown"
+    for line in Path("/proc/cpuinfo").read_text().splitlines():
+        if line.startswith("model name"):
+            return line.split(":", 1)[1].strip()
+    return "unknown"
+
+
+def environment() -> dict:
+    import psutil
+
+    return {
+        # GitHub's runners name their image in these two variables.
+        "runner_image": os.environ.get("ImageOS", "local"),  # noqa: SIM112
+        "image_version": os.environ.get("ImageVersion", "local"),  # noqa: SIM112
+        "system": platform.platform(),
+        "cpu": _cpu_model(),
+        "cores": os.cpu_count(),
+        "python": platform.python_version(),
+        "psutil": psutil.__version__,
+    }
+
+
+def measure(args: argparse.Namespace) -> dict:
+    versions = []
+    for text in args.versions:
+        label, commit, kitden = label_of(text)
+        installed = packages(kitden)
+        own = next((p for p in installed["packages"] if p.lower().startswith("kitden==")), None)
+        if own is None:
+            raise SystemExit(f"{kitden} is not in a venv that has kitden installed.")
+        versions.append(
+            {
+                "label": label,
+                "commit": commit,
+                "kitden": own.split("==", 1)[1],
+                "path": kitden,
+                **installed,
+            }
+        )
+    if args.backfill and any(v["commit"] for v in versions[:-1]):
+        raise SystemExit("A backfill measures releases, then at most this commit, last.")
+    if not args.backfill and len(versions) != 2:
+        raise SystemExit("A night measures two versions: the newest release, then this commit.")
+    now = datetime.now(UTC)
+    # Round 0 is the warm-up, thrown away. Each round starts one version later. The order is
+    # fixed here and kept in the result, so the result shows the order that ran.
+    rounds = [[v["label"] for v in in_order(versions, r)] for r in range(WARMUP + args.runs)]
+    by_label = {v["label"]: v for v in versions}
+    root = Path(tempfile.mkdtemp(prefix="measure-use-")).resolve()
+    page: dict[str, list] = {v["label"]: [] for v in versions}
+    try:
+        for round_, labels in enumerate(rounds):
+            for label in labels:
+                one = page_run(by_label[label]["path"], root)
+                print(f"page {round_} {label}: {json.dumps(one)}", file=sys.stderr)
+                if round_ >= WARMUP:
+                    page[label].append(one)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+    for v in versions:
+        runs = page[v["label"]]
+        samples = {json.dumps(run["sample"]) for run in runs}
+        v["page"] = {
+            # The sample of the first run; "varies" when the runs did not all see the same one.
+            "sample": {**runs[0]["sample"], "varies": len(samples) > 1},
+            "summary": summary(runs, PAGE_METRICS),
+            "runs": runs,
+        }
+        v["path"] = str(v["path"])
+    result = {
+        "series": {"page": SERIES["page"]},
+        "kind": "backfill" if args.backfill else "night",
+        "run_id": args.run_id,
+        "date": now.date().isoformat(),
+        "time": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "warm": True,
+        "warmup_runs": WARMUP,
+        "runs_each": args.runs,
+        "rounds": rounds,
+        "env": environment(),
+        "versions": versions,
+        "warnings": [],
+        "notes": [],
+    }
+    if not args.backfill:
+        result["warnings"], result["notes"] = compare(*versions)
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
+    modes = parser.add_subparsers(dest="mode", required=True)
+    run = modes.add_parser("run")
+    run.add_argument("--out", type=Path, required=True)
+    run.add_argument("--runs", type=int, default=5)
+    run.add_argument("--backfill", action="store_true")
+    run.add_argument("--run-id", default="local")
+    run.add_argument("versions", nargs="+", metavar="LABEL=KITDEN")
+    modes.add_parser("check").add_argument("file", type=Path)
+    put = modes.add_parser("store")
+    put.add_argument("file", type=Path)
+    put.add_argument("data", type=Path)
+    modes.add_parser("report").add_argument("data", type=Path)
+    when = modes.add_parser("cutoff")
+    when.add_argument("version")
+    when.add_argument("pypi", type=Path)
+    args = parser.parse_args(argv)
+    if args.mode == "run":
+        result = measure(args)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps(result, indent=1) + "\n")
+        return 0
+    if args.mode == "check":
+        return check(json.loads(args.file.read_text()))
+    if args.mode == "store":
+        for path in store(json.loads(args.file.read_text()), args.data):
+            print(path)
+        return 0
+    if args.mode == "report":
+        (args.data / "README.md").write_text(readme(args.data))
+        return 0
+    print(cutoff(json.loads(args.pypi.read_text())["releases"][args.version]))
     return 0
 
 
