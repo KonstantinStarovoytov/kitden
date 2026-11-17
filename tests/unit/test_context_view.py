@@ -1249,3 +1249,19 @@ def test_a_skill_with_no_chat_gives_its_description_and_no_seen(home):
     skill(home / ".cursor/skills", "free", "Picks itself.")
     [row] = view(home)["cursor"]["skills"]
     assert (row["description"], row["seen"]) == ("Picks itself.", None)
+
+
+def test_a_description_past_the_client_cap_has_its_tail_grey(home):
+    # Claude Code keeps 1,536 characters of a description; Codex 1,021 and `...`.
+    long = "word " * 400  # 2,000 characters
+    skill(home / ".claude/skills", "alpha", long.strip())
+    claude_chat(home, {"alpha": long.strip()[:1536]})
+    [row] = [s for s in view(home)["claude_code"]["skills"] if s["name"] == "alpha"]
+    assert row["seen"] == 1536
+
+    folder = home / ".agents/skills"
+    path = str(skill(folder, "beta", long.strip()).resolve())
+    write_json(home / ".codex/models_cache.json", {"models": []})
+    codex_chat(home, [f"- beta: {long.strip()[:1021]}... (file: {path})"])
+    [row] = [s for s in view(home)["codex"]["skills"] if s["name"] == "beta"]
+    assert row["seen"] == 1021

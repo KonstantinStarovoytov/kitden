@@ -216,13 +216,15 @@ def _skill(
     }
 
 
-def _seen(full: str | None, sent: str | None, side: int | None) -> int | None:
-    """How many characters of the description the agent got, for a skill not sent whole
-    (side 1): 0 for a name only or a skill left out. None when it got all of it or Kitden has
-    no file. The sent text's length, not a match with the file: quotes may be written apart."""
-    if full is None or side != 1:
+def _seen(full: str | None, sent: str | None, side: int | None, cap: int) -> int | None:
+    """How many characters of the description the agent got: at most `cap`, the most the
+    client keeps of one. A skill not sent whole (side 1) got the sent text's length: 0 for a
+    name only or a skill left out. The length, not a match with the file: quotes may be written
+    apart. None when it got all of it or Kitden has no file."""
+    if full is None:
         return None
-    return min(len(sent or ""), len(full))
+    got = min(len(sent or "") if side == 1 else len(full), cap)
+    return None if got >= len(full) else got
 
 
 def _source(item: Item | None, built_in: bool) -> str | None:
@@ -653,7 +655,10 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
         side = 0 if r.sent is not None else 1
         size = len(r.full) if r.full is not None else len(r.sent or "")
         note = _claude_note(r, states[r.name], side, size, explained, can_free)
-        text, seen = r.full if r.full is not None else r.sent, _seen(r.full, r.sent, side)
+        text, seen = (
+            r.full if r.full is not None else r.sent,
+            _seen(r.full, r.sent, side, CLAUDE_DESCRIPTION_CAP),
+        )
         skills.append(_skill(client, r.name, r.item, size, side, note, r.built_in, text, seen))
     listed = {r.name for r in rows}
     for item in items:
@@ -985,7 +990,10 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict
         if r.moved:  # first, whatever the other note: the size read may not be the chat's
             note = f"{words.NOTE_NEWER} {note}" if note else words.NOTE_NEWER
         size = len(r.full) if r.full is not None else len(r.sent or "")
-        text, seen = r.full if r.full is not None else r.sent, _seen(r.full, r.sent, side)
+        text, seen = (
+            r.full if r.full is not None else r.sent,
+            _seen(r.full, r.sent, side, CODEX_DESCRIPTION_CAP - 3),
+        )
         skills.append(_skill(client, r.name, r.item, size, side, note, description=text, seen=seen))
     for item in extras:
         text = _description(item.source.path)

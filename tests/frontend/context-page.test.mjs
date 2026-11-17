@@ -633,3 +633,13 @@ test('Details shows a description the agent got whole with nothing grey', async 
   assert.equal(text(box), 'DescriptionMakes plans.');
   assert.deepEqual(byClass(box, 'ctx-cut'), []);
 });
+
+test('Details counts characters as Python does, so an emoji does not move the grey part', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const cut = skill('gamma', 4, 1, { description: '😀abc', seen: 2 });
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills.slice(0, 2), cut] }, CODEX, CURSOR));
+  await fire(pillOf('gamma'), 'click');
+  const [box] = byClass(drawer, 'ctx-desc');
+  assert.deepEqual(byClass(box, 'ctx-cut').map(text), ['bc']);
+});

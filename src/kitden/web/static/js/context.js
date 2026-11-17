@@ -381,14 +381,15 @@ function openSkill(client, name) {
 // The skill's description from its file, the part the agent did not get in grey (`seen`: how
 // many characters it got; null when it got all of it). None when Kitden could not read it.
 function describe(skill) {
-  const words = skill.description;
-  if (!words) return null;
+  if (!skill.description) return null;
+  // By code point, as the server counts: an emoji is one character, not two.
+  const chars = Array.from(skill.description);
   const box = el("section", "ctx-desc");
   box.setAttribute("aria-label", "Description");
   const shown = el("p", "ctx-desc-text");
-  const cut = skill.seen != null && skill.seen < words.length;
-  shown.append(el("span", "", cut ? words.slice(0, skill.seen) : words));
-  if (cut) shown.append(el("span", "ctx-cut", words.slice(skill.seen)));
+  const cut = skill.seen != null && skill.seen < chars.length;
+  shown.append(el("span", "", (cut ? chars.slice(0, skill.seen) : chars).join("")));
+  if (cut) shown.append(el("span", "ctx-cut", chars.slice(skill.seen).join("")));
   box.append(el("p", "ctx-desc-head", "Description"), shown);
   if (cut) box.append(el("p", "ctx-desc-note", "Grey: the part the agent did not get."));
   return box;
