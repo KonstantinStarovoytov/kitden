@@ -230,7 +230,7 @@ jobs:
       - name: Playwright imports
         run: uv run --with playwright==1.64.1 python -c "import playwright"
       - name: The browser tests
-        run: uv run --with playwright==1.64.1 pytest -m browser -q
+        run: uv run --with playwright==1.64.1 python -m pytest -m browser -q
 
   # The browser tests again, in Google Chrome, Firefox and WebKit, one engine a run
   # (tests/browser/engines.py). No `name:` on purpose: kitden-sdlc reads the runs as
