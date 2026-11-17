@@ -147,3 +147,12 @@ def turn_off(page, plugin: str) -> None:
     """The plugin's Details, "Turn off for all projects…": the plugin's own switch, which adds
     its change to the preview."""
     details_of(page, plugin).get_by_role("button", name="Turn off for all projects…").click()
+
+
+def open_outside(page, server: str, client: str):
+    """The Gateway as a list, the row of `server` outside the gateway in `client`: its Details.
+    The list, not the map: the map pages long groups into stacks that slide as they open."""
+    page.evaluate("location.hash = '#gateway?view=list'")
+    row = page.get_by_role("row", name=re.compile(rf"^{re.escape(server)} {re.escape(client)} "))
+    row.get_by_role("gridcell").first.click()
+    return page.get_by_role("complementary", name="Details")
