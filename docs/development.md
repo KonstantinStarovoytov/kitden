@@ -18,9 +18,8 @@ and Codex, with no account (`.github/workflows/nightly.yml`, job `clients`);
 vendors' own installers. Tests marked `signed_in` need a signed-in client. Tests can build a
 sample home with `kitden.demo.build_demo_home(root, size)`.
 
-Browser tests (`tests/browser/`) open the page on the demo sample in a real browser and press
-its buttons: preview, Apply and Undo, the bar that asks for a new preview when the settings
-changed under one, and a drag onto the gateway on the Gateway map. An error in the browser
+Browser tests (`tests/browser/`) open the page on the demo sample in a real browser and do
+each main feature as a user does ([Browser flows](#browser-flows)). An error in the browser
 console fails them, so they catch a break of the page's Content-Security-Policy. Playwright is
 not a project dependency, so these tests are not in the default run. Run them with:
 
@@ -69,6 +68,29 @@ A browser test that is set aside runs nowhere at night: that step leaves browser
 Open an issue to bring it back when you set one aside.
 Contract tests are never listed there: fix them, or mark them `signed_in` when they need an
 account.
+
+## Browser flows
+
+Each main feature of the page gets a browser test (or a few) that does it as a user does, on
+a sandbox sample, with no network and no real client. Each starts from a fresh page and
+needs no other test. The table lists those written so far, in product order:
+
+| # | Flow | Test in `tests/browser/` |
+| --- | --- | --- |
+| 1 | The page opens; Overview shows the setup | `test_flows.py` |
+| 3 | Search the catalogs, "Show N more", open an item's details | `test_catalog_search.py` |
+| 4 | Add a GitHub source; it is listed | `test_add_source.py` |
+| 5 | Add a skill from the catalog to Claude Code; remove it | `test_catalog_skill.py` |
+
+Flows 3 to 5 use the `sample` fixture: the demo's sample, not in demo mode, with the
+stand-ins of `tests/offline.py` and the network guard on, so a test that tries to go online
+from the test process fails; the guard cannot see an MCP server's own program, so the sample
+starts none and refuses a move into the gateway.
+
+Also: a preview writes nothing, Apply and Undo (`test_flows.py`), and the bar that asks
+for a new preview when the settings changed under one (`test_preview_drift.py`). Before its
+pull request, a new flow passes 10 runs in a row in every engine you have, then the whole
+browser set passes once in each engine.
 
 ## Commands
 
