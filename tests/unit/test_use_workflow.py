@@ -79,6 +79,8 @@ def test_use_store_runs_only_mains_report_code_and_pushes_only_from_main():
         assert word not in job, word
     assert 'measure-use.py store "$RUNNER_TEMP/use/result.json" out' in job
     assert "HEAD:use-numbers" in job and "GH_TOKEN: ${{ github.token }}" in job
+    # A re-run that stores the same files has nothing to commit: stop green.
+    assert 'git diff --cached --quiet && { echo "Nothing new to store."; exit 0; }' in job
 
 
 def test_every_action_is_pinned_by_a_full_commit_with_its_tag():

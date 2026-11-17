@@ -151,5 +151,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          git diff --cached --quiet && { echo "Nothing new to store."; exit 0; }
           git commit -m "Add the CPU and memory numbers of run $GITHUB_RUN_ID"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" HEAD:use-numbers
