@@ -13,6 +13,8 @@ nothing from it.
   the skill list and keeps none of it. The page, `kitden show context` and `kitden scan` all do
   this check; `kitden scan` prints one line about each skill list in your terminal and nothing else
   from the chats.
+- A skill's description, from its `SKILL.md`. The page shows it in the skill's Details, and
+  `kitden show context` prints it (see "The plugin and your agent"). Kitden keeps none of it.
 - Versions and plugin lists, from the clients' own commands.
 
 ## What stays on your computer
@@ -39,8 +41,10 @@ nothing from it.
 
 The plugin's skills ask your agent to run `kitden show`. The answer goes into the chat, so your
 agent and the company behind it see it, under their own privacy terms. Secret values, such as
-tokens in a server's settings, are replaced with `[secret]` first. `kitden show` changes nothing
-and does not go online.
+tokens in a server's settings, are replaced with `[secret]` first. The one exception is
+`kitden show context`: it prints each skill's description as written in its `SKILL.md`, and
+Kitden does not replace anything in it. Keep secrets out of a skill's description. `kitden show`
+changes nothing and does not go online.
 
 ## Questions
 
