@@ -7,7 +7,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
-### Not yet released
+### 0.10.0
 
 - **The page is tested in Chrome, Firefox and WebKit:** every night the browser tests run
   in Google Chrome and Firefox on Ubuntu and in WebKit on macOS as well as in Chromium, so a
