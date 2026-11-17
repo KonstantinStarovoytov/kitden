@@ -18,6 +18,7 @@ must run against old releases. Never run it on the real home folder: every run g
 HOME and temp folder of its own.
 """
 
+import json
 import os
 import re
 import statistics
@@ -162,6 +163,145 @@ def check(result: dict) -> int:
             for text in result["warnings"] + result["notes"] + broken:
                 out.write(f"- {text}\n")
     return 1 if broken else 0
+
+
+def release_file(result: dict, version: dict) -> dict:
+    head = {k: result[k] for k in ("series", "kind", "run_id", "date", "time", "warm", "env")}
+    return {**head, "runs_each": result["runs_each"], "version": version}
+
+
+def _plain(text: str, pattern: str, what: str) -> None:
+    """A value that becomes a file name in the data folder, in a job that holds a write token."""
+    if not re.fullmatch(pattern, text):
+        raise SystemExit(f"store: refused the {what} {text!r}: it must match {pattern}.")
+
+
+def store(result: dict, data: Path) -> list[Path]:
+    """Write a result into the data folder. A night: nights/<date>.json, and A's release file
+    when it is missing. A backfill: every release file, overwritten."""
+    night = result["kind"] == "night"
+    # A night's release is A; on a backfill, this commit is no release: it goes only into the chart.
+    releases = (
+        result["versions"][:1] if night else [v for v in result["versions"] if not v["commit"]]
+    )
+    _plain(result["date"], r"[0-9]{4}-[0-9]{2}-[0-9]{2}", "date")
+    for version in releases:
+        _plain(version["label"], r"[0-9A-Za-z.-]+", "release label")
+    written = []
+
+    def write(path: Path, value: dict) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value, indent=1) + "\n")
+        written.append(path)
+
+    if night:
+        write(data / "nights" / f"{result['date']}.json", result)
+        a = releases[0]
+        path = data / "releases" / f"{a['label']}.json"
+        if not path.exists():
+            write(path, release_file(result, a))
+    else:
+        for version in releases:
+            write(data / "releases" / f"{version['label']}.json", release_file(result, version))
+        write(data / "chart.json", chart(result))
+    (data / "README.md").write_text(readme(data))
+    written.append(data / "README.md")
+    return written
+
+
+def _key(version: str) -> tuple:
+    return tuple(int(part) for part in re.findall(r"\d+", version))
+
+
+def _read(folder: Path) -> list[dict]:
+    return [json.loads(p.read_text()) for p in sorted(folder.glob("*.json"))]
+
+
+def chart(result: dict) -> dict:
+    """What the desk page draws (kitden-sdlc reads chart.json), from one backfill run only: one
+    machine, one day (B0 rule 8). Its releases by version, then this commit as "main"."""
+    releases = sorted(
+        (v for v in result["versions"] if not v["commit"]), key=lambda v: _key(v["label"])
+    )
+    commits = [v for v in result["versions"] if v["commit"]]
+    return {
+        "series": result["series"]["page"],
+        "run_id": result["run_id"],
+        "date": result["date"],
+        "cpu": result["env"]["cpu"],
+        "runs": result["runs_each"],
+        "points": [
+            {
+                "label": "main" if v["commit"] else v["label"],
+                "commit": v["commit"],
+                **{name: v["page"]["summary"][name] for name in CHARTED},
+            }
+            for v in releases + commits
+        ],
+    }
+
+
+def readme(data: Path) -> str:
+    """The data branch's README: the releases and the last nights of main, as tables. Only
+    the newest series is shown. The charts are on the desk page (chart.json)."""
+    nights, releases = _read(data / "nights"), _read(data / "releases")
+    series = max((f["series"]["page"] for f in nights + releases), default=SERIES["page"])
+    nights = sorted((f for f in nights if f["series"]["page"] == series), key=lambda f: f["date"])
+    releases = sorted(
+        (f for f in releases if f["series"]["page"] == series),
+        key=lambda f: _key(f["version"]["label"]),
+    )
+    out = [
+        "# CPU and memory of Kitden",
+        "",
+        "Written by `.github/workflows/use.yml` on `main`; how it measures is in "
+        "`docs/development.md` (CPU and memory). Each cell is the median, then the lowest and "
+        f"highest run. Page series {series}: numbers of another series are not shown.",
+        "",
+        "## Releases",
+        "",
+        "A backfill installs each release with the dependencies of its release day; a night "
+        "installs the newest release with that night's newest dependencies. CPU seconds depend "
+        "on the CPU, so compare rows of one CPU model.",
+        "",
+        "| Version | Peak memory (MB) | CPU to ready (s) | Idle CPU in 30 s (s) "
+        "| Growth (MB) | Sample (items, bytes) | CPU | Measured |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for f in releases:
+        page = f["version"]["page"]
+        s = page["summary"]
+        out.append(
+            f"| {f['version']['label']} | {_cell(s['peak_mb'])} | {_cell(s['cpu_ready_s'])} "
+            f"| {_cell(s['idle_cpu_s'])} | {_cell(s['growth_mb'])} "
+            f"| {page['sample']['items']}, {page['sample']['bytes']} | {f['env']['cpu']} "
+            f"| {f['kind']} {f['date']} |"
+        )
+    out += [
+        "",
+        "Charts of peak memory and CPU to ready by release: "
+        "https://konstantinstarovoytov.github.io/kitden-sdlc/desk/#use",
+    ]
+    out += [
+        "",
+        f"## The last {NIGHTS_SHOWN} nights",
+        "",
+        "A is the newest release, B is `main` that night, measured in turn in the same job.",
+        "",
+        "| Night | A | B | Peak A | Peak B | CPU to ready A | CPU to ready B "
+        "| Idle CPU B | Growth B | Notes |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for f in nights[-NIGHTS_SHOWN:][::-1]:
+        a, b = f["versions"]
+        sa, sb = a["page"]["summary"], b["page"]["summary"]
+        notes = " ".join(f["warnings"] + f["notes"]) or "—"
+        out.append(
+            f"| {f['date']} | {a['label']} | {b['label']} | {_cell(sa['peak_mb'])} "
+            f"| {_cell(sb['peak_mb'])} | {_cell(sa['cpu_ready_s'])} | {_cell(sb['cpu_ready_s'])} "
+            f"| {_cell(sb['idle_cpu_s'])} | {_cell(sb['growth_mb'])} | {notes} |"
+        )
+    return "\n".join(out) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
