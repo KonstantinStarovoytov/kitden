@@ -364,7 +364,8 @@ def _sandbox(root: Path) -> dict:
 
 
 def _stop(child: subprocess.Popen) -> int:
-    """SIGTERM, then collect the child with wait4; SIGKILL after STOP_SECONDS. Returns its
+    """SIGTERM, then collect the child with wait4; SIGKILL after STOP_SECONDS. Then SIGKILL
+    what is left of its process group, so nothing it started outlives the run. Returns its
     ru_maxrss."""
     with contextlib.suppress(ProcessLookupError):
         os.killpg(child.pid, signal.SIGTERM)
@@ -372,13 +373,15 @@ def _stop(child: subprocess.Popen) -> int:
     while time.monotonic() < deadline:
         pid, status, usage = os.wait4(child.pid, os.WNOHANG)
         if pid:
-            child.returncode = os.waitstatus_to_exitcode(status)
-            return usage.ru_maxrss
+            break
         time.sleep(0.05)
-    with contextlib.suppress(ProcessLookupError):
-        os.killpg(child.pid, signal.SIGKILL)
-    _, status, usage = os.wait4(child.pid, 0)
+    else:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(child.pid, signal.SIGKILL)
+        _, status, usage = os.wait4(child.pid, 0)
     child.returncode = os.waitstatus_to_exitcode(status)
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(child.pid, signal.SIGKILL)
     return usage.ru_maxrss
 
 

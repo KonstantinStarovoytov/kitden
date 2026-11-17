@@ -1,8 +1,14 @@
 """The CPU and memory script's pure parts: medians, growth, comparing, limits, the data folder
-and its README. The measuring itself is proven by a recorded run (docs/development.md)."""
+and its README; the measuring loop with stand-ins for the runs, and the stop of a run. The
+measuring itself is proven by a recorded run (docs/development.md)."""
 
+import contextlib
 import importlib.util
 import json
+import os
+import signal
+import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -298,3 +304,93 @@ def test_the_development_page_says_how_it_measures():
     text = " ".join((ROOT / "docs/development.md").read_text().split())
     assert "## CPU and memory" in text and "uses no Kitden code" in text
     assert "The measurement changes alone" in text and "`use-numbers`" in text
+
+
+def _alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def test_a_stopped_run_leaves_nothing_of_its_process_group():
+    # A grandchild in the child's group that ignores SIGTERM must not outlive the run.
+    child = subprocess.Popen(
+        ["/bin/sh", "-c", "(trap '' TERM; echo trapped; exec sleep 60) & echo $!; wait"],
+        stdout=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    assert child.stdout is not None
+    # Its pid and "trapped" (SIGTERM is ignored from now on), in either order.
+    lines = {child.stdout.readline().strip(), child.stdout.readline().strip()}
+    assert "trapped" in lines
+    grandchild = int((lines - {"trapped"}).pop())
+    child.stdout.close()
+    try:
+        measure_use._stop(child)
+        deadline = time.monotonic() + 5
+        while _alive(grandchild) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert not _alive(grandchild)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(grandchild, signal.SIGKILL)
+
+
+def _stand_ins(monkeypatch):
+    """Stand-ins for the runs and the venvs: each run returns its call number in every metric."""
+    calls = []
+
+    def one_run(scenario):
+        def run(kitden, root, *rest):
+            calls.append((scenario, str(kitden), *rest))
+            n = float(len(calls))
+            return {
+                **dict.fromkeys(measure_use.PAGE_METRICS, n),
+                "sample": {"items": 1, "bytes": 2},
+                "exit": 0,
+            }
+
+        return run
+
+    monkeypatch.setattr(
+        measure_use, "packages", lambda kitden: {"python": "3.13", "packages": ["kitden==1"]}
+    )
+    monkeypatch.setattr(measure_use, "environment", lambda: {"cpu": "stand-in"})
+    monkeypatch.setattr(measure_use, "page_run", one_run("page"))
+    return calls
+
+
+def _measured(tmp_path, *args):
+    out = tmp_path / "result.json"
+    assert measure_use.main(["run", "--out", str(out), "--runs", "2", *args]) == 0
+    return json.loads(out.read_text())
+
+
+def test_a_night_measures_in_turn_and_throws_the_warm_up_away(monkeypatch, tmp_path):
+    calls = _stand_ins(monkeypatch)
+    got = _measured(tmp_path, "0.9.2=/e/a/bin/kitden", "main@1=/e/b/bin/kitden")
+    rounds = [["0.9.2", "main@1"], ["main@1", "0.9.2"], ["0.9.2", "main@1"]]
+    assert got["rounds"] == rounds
+    path = {"0.9.2": "/e/a/bin/kitden", "main@1": "/e/b/bin/kitden"}
+    assert calls == [("page", path[label]) for labels in rounds for label in labels]
+    # Calls 1 and 2 are the warm-up; then B is 3, A is 4, A is 5, B is 6.
+    a, b = got["versions"]
+    assert [run["ready_s"] for run in a["page"]["runs"]] == [4.0, 5.0]
+    assert [run["ready_s"] for run in b["page"]["runs"]] == [3.0, 6.0]
+
+
+def test_a_backfill_measures_every_version_the_same_number_of_times(monkeypatch, tmp_path):
+    calls = _stand_ins(monkeypatch)
+    got = _measured(
+        tmp_path, "--backfill", "0.3.0=/e/a/kitden", "0.4.0=/e/b/kitden", "main@c=/e/c/kitden"
+    )
+    rounds = [["0.3.0", "0.4.0", "main@c"], ["0.4.0", "main@c", "0.3.0"]]
+    rounds.append(["main@c", "0.3.0", "0.4.0"])
+    assert got["rounds"] == rounds
+    path = {"0.3.0": "/e/a/kitden", "0.4.0": "/e/b/kitden", "main@c": "/e/c/kitden"}
+    assert calls == [("page", path[label]) for labels in rounds for label in labels]
+    runs = {v["label"]: [run["ready_s"] for run in v["page"]["runs"]] for v in got["versions"]}
+    assert runs == {"0.3.0": [6.0, 8.0], "0.4.0": [4.0, 9.0], "main@c": [5.0, 7.0]}
