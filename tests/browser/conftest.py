@@ -57,9 +57,17 @@ def browser(tmp_path_factory):
 
 
 @pytest.fixture
-def demo(tmp_path):
-    """The medium sample under tmp_path, served as `kitden demo` serves it, until the test ends."""
-    home = build_demo_home(tmp_path / "demo", "medium")
+def demo_size() -> str:
+    """The size of the demo sample. A test module that needs another size overrides this
+    fixture: `@pytest.fixture` `def demo_size(): return "small"`."""
+    return "medium"
+
+
+@pytest.fixture
+def demo(tmp_path, demo_size):
+    """The sample of `demo_size` under tmp_path, served as `kitden demo` serves it, until the
+    test ends."""
+    home = build_demo_home(tmp_path / "demo", demo_size)
     made = cli._page(create_app, demo_build(home), home, START, demo=True)
     assert made is not None, f"no free port from {START}"
     app, port, _, url = made
