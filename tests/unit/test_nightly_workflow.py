@@ -169,5 +169,11 @@ def test_only_the_intel_mac_gets_twice_the_start_budgets():
     ]
     assert "KITDEN_START_BUDGET_SCALE" not in job.replace(lines[run + 2], "")
     # The pull request and release checks run on no Intel Mac and keep the budgets as they are.
-    assert "macos-15-intel" not in RELEASE and "KITDEN_START_BUDGET_SCALE" not in RELEASE
-    assert "\n      - run: uv run python scripts/measure-start.py\n" in RELEASE
+    build = RELEASE.split("\n  build:\n", 1)[1].split("\n  # On a tag, the start-up time", 1)[0]
+    assert "macos-15-intel" not in build and "KITDEN_START_BUDGET_SCALE" not in build
+    assert "\n      - run: uv run python scripts/measure-start.py\n" in build
+    # Only a tag measures the release on the Intel Mac and Linux on ARM, with the same budgets.
+    startup = RELEASE.split("\n  startup:\n", 1)[1].split("\n\n", 1)[0]
+    assert "if: startsWith(github.ref, 'refs/tags/v')" in startup
+    assert "os: [macos-15-intel, ubuntu-24.04-arm]" in startup
+    assert lines[run + 2].strip() in startup

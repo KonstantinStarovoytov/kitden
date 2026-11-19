@@ -141,6 +141,30 @@ jobs:
           name: dist
           path: dist/
 
+  # On a tag, the start-up time on the two systems the build job does not run on, for the
+  # desk page's trend in kitden-sdlc, which reads it from the log. It blocks nothing.
+  startup:
+    if: startsWith(github.ref, 'refs/tags/v')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15-intel, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.10.10"
+          enable-cache: false
+      - run: uv sync --locked
+      # The Intel Mac is slower and gets twice the budgets, as in nightly.yml.
+      - run: uv run python scripts/measure-start.py
+        env:
+          KITDEN_START_BUDGET_SCALE: ${{ matrix.os == 'macos-15-intel' && '2' || '1' }}
+
   # Trusted Publishing: PyPI trusts this repository, workflow and environment; no token is stored.
   publish:
     if: startsWith(github.ref, 'refs/tags/')
