@@ -97,7 +97,8 @@ def test_browser_runs_the_page_in_chromium():
     assert "uv run --with playwright==1.64.1 python -m pytest -m browser -q" in job
     # Without Playwright the browser tests skip and the night looks green: stop first.
     assert 'uv run --with playwright==1.64.1 python -c "import playwright"' in job
-    assert "timeout-minutes: 5" in _step(job, "Install Chromium")
+    # A slow Ubuntu mirror needs minutes for the system libraries (a night in 2026-11).
+    assert "timeout-minutes: 20" in job and "timeout-minutes: 10" in _step(job, "Install Chromium")
     # The header's Why speaks for this job too.
     assert "nobody presses every button of the page before a release" in " ".join(TEXT.split())
 
@@ -106,7 +107,7 @@ def test_engines_runs_the_browser_tests_in_chrome_firefox_and_webkit():
     job = _jobs()["engines"]
     assert "leg: [chrome, firefox, webkit]" in job and "fail-fast: false" in job
     assert "runs-on: ${{ matrix.leg == 'webkit' && 'macos-latest' || 'ubuntu-latest' }}" in job
-    assert "timeout-minutes: 15" in job and "contents: read" in job
+    assert "timeout-minutes: 20" in job and "contents: read" in job
     # The engine comes from the environment (tests/browser/engines.py), never a pytest
     # parameter, so the test ids are the same in every leg.
     assert "KITDEN_BROWSER: ${{ matrix.leg == 'chrome' && 'chromium' || matrix.leg }}" in job
@@ -114,7 +115,7 @@ def test_engines_runs_the_browser_tests_in_chrome_firefox_and_webkit():
     assert "if: matrix.leg == 'chrome'" in _step(job, "Google Chrome")
     assert "google-chrome --version" in _step(job, "Google Chrome")
     firefox, webkit = _step(job, "Install Firefox"), _step(job, "Install WebKit")
-    assert "playwright install --with-deps firefox" in firefox and "timeout-minutes: 5" in firefox
+    assert "playwright install --with-deps firefox" in firefox and "timeout-minutes: 10" in firefox
     assert "playwright install webkit" in webkit and "--with-deps" not in webkit
     # Without Playwright the tests skip and the night looks green: stop first.
     assert 'uv run --with playwright==1.64.1 python -c "import playwright"' in job
