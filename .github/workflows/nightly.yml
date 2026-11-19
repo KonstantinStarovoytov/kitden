@@ -209,7 +209,7 @@ jobs:
   # The page on the demo sample, in a real Chromium (tests/browser).
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -223,8 +223,9 @@ jobs:
       # Playwright is not a project dependency: these steps add it for this run only, at the
       # version the tests were written for, and fetch its Chromium with the system libraries.
       - name: Install Chromium
-        # When the Ubuntu mirrors or the download are down, fail in minutes.
-        timeout-minutes: 5
+        # The system libraries come from the Ubuntu mirrors: seconds on a good night, minutes
+        # on a slow one. When the mirrors or the download are down, still fail in minutes.
+        timeout-minutes: 10
         run: uv run --with playwright==1.64.1 playwright install --with-deps chromium
       # Without Playwright the tests skip and the night looks green: stop here instead.
       - name: Playwright imports
@@ -241,7 +242,7 @@ jobs:
       matrix:
         leg: [chrome, firefox, webkit]
     runs-on: ${{ matrix.leg == 'webkit' && 'macos-latest' || 'ubuntu-latest' }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
     env:
@@ -261,7 +262,8 @@ jobs:
         run: google-chrome --version
       - name: Install Firefox
         if: matrix.leg == 'firefox'
-        timeout-minutes: 5
+        # About 55 MB from the Ubuntu mirrors: 20 s on 2026-11-18, over 5 min on 2026-11-19.
+        timeout-minutes: 10
         run: uv run --with playwright==1.64.1 playwright install --with-deps firefox
       - name: Install WebKit
         if: matrix.leg == 'webkit'
