@@ -6,6 +6,13 @@ user can see or set (a route, a command, a setting, a page element, a dependency
 [issue](https://github.com/KonstantinStarovoytov/kitden/issues) first, so the maintainer can
 agree to it. The [roadmap](ROADMAP.md) shows current plans.
 
+## Pick your first issue
+
+Browse the [open good first issues](https://github.com/KonstantinStarovoytov/kitden/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22).
+For a code change, check the assignee, comments and linked pull requests. If the issue is
+free, comment “I’ll take this” and start. If it asks for a test report or steps to reproduce
+a bug, post your results directly. Several people can help with the same report.
+
 ## Set up
 
 Use macOS or Linux, [uv](https://docs.astral.sh/uv/) and Node.js for the frontend tests.
@@ -49,6 +56,8 @@ In the same pull request:
     fails, "Nothing was changed" now says which client refused it (#25).
   ```
 
+  You can fill in the pull request number after you open it.
+
 - If what the user sees changes, update [the guide](docs/guide.md).
 
 ## Check your work
@@ -66,6 +75,9 @@ node --test tests/frontend/*.test.mjs
 For a UI change, also check both themes and reduced motion on the sample setup.
 
 ## Open a pull request
+
+The maintainer reviews pull requests from forks. If you need help, mention
+`@KonstantinStarovoytov` in a comment on your pull request.
 
 The pull request form has a short checklist; tick each item or say why it does not apply.
 Explain the problem, what changes for the user and how you checked it. Link the related
