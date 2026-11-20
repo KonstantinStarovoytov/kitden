@@ -23,6 +23,8 @@ It changes nothing until you press Apply, and every change can be undone.</p>
 <p align="center">Reviews, tests and releases for Kitden run from
 <a href="https://github.com/KonstantinStarovoytov/kitden-sdlc">kitden-sdlc</a>.</p>
 
+Want to help? [Pick a good first issue](https://github.com/KonstantinStarovoytov/kitden/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22).
+
 ### See whether your skills fit
 
 Every chat starts with the list of your skills, and that list has a small budget: 1% of the
