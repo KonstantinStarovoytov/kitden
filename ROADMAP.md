@@ -7,6 +7,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **Browser tests for the main features:** Context, setting up the gateway, Move all and
+  removing a server's own entry are now done in a real browser every night, as a user does
+  them (#145).
+
 ### 0.10.1
 
 - **A skill's description in Context:** a skill's Details shows its description, with the part

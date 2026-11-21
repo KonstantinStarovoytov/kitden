@@ -57,9 +57,17 @@ def browser(tmp_path_factory):
 
 
 @pytest.fixture
-def demo(tmp_path):
-    """The medium sample under tmp_path, served as `kitden demo` serves it, until the test ends."""
-    home = build_demo_home(tmp_path / "demo", "medium")
+def demo_size() -> str:
+    """The size of the demo sample. A test module that needs another size overrides this
+    fixture: `@pytest.fixture` `def demo_size(): return "small"`."""
+    return "medium"
+
+
+@pytest.fixture
+def demo(tmp_path, demo_size):
+    """The sample of `demo_size` under tmp_path, served as `kitden demo` serves it, until the
+    test ends."""
+    home = build_demo_home(tmp_path / "demo", demo_size)
     made = cli._page(create_app, demo_build(home), home, START, demo=True)
     assert made is not None, f"no free port from {START}"
     app, port, _, url = made
@@ -139,3 +147,12 @@ def turn_off(page, plugin: str) -> None:
     """The plugin's Details, "Turn off for all projects…": the plugin's own switch, which adds
     its change to the preview."""
     details_of(page, plugin).get_by_role("button", name="Turn off for all projects…").click()
+
+
+def open_outside(page, server: str, client: str):
+    """The Gateway as a list, the row of `server` outside the gateway in `client`: its Details.
+    The list, not the map: the map pages long groups into stacks that slide as they open."""
+    page.evaluate("location.hash = '#gateway?view=list'")
+    row = page.get_by_role("row", name=re.compile(rf"^{re.escape(server)} {re.escape(client)} "))
+    row.get_by_role("gridcell").first.click()
+    return page.get_by_role("complementary", name="Details")
