@@ -179,8 +179,8 @@ The numbers are taken the same way for every version, so they can be compared:
 - Each number is a median, with the lowest and highest run. Every run is kept.
 - Each result keeps the installed packages of each version, the size of its sample (items and
   bytes of `/api/items`), the order of every round, and the machine: runner image, system, CPU
-  model, cores, Python and psutil. When A's and B's samples differ, they are not compared, and
-  the result says why.
+  model, cores, Python and psutil. When A's and B's samples differ, or a version's sample
+  changed between its runs, they are not compared, and the result says why.
 - `SERIES` at the top of the script holds one number per scenario. A scenario's number is
   raised with any change to what or how it measures. Numbers of two series are never
   compared, and a new page series needs a new backfill. The measurement is
@@ -214,7 +214,9 @@ and a line in the job summary; the job stays green. A broken limit turns the job
 limits are `PAGE_LIMITS` at the top of the script; `None` means off, as it is until they are
 set from the first 7 nights. To change a limit, change the constant in a pull request of its
 own and say which nights it comes from. Started by hand with a list of versions, the workflow
-measures those releases instead (a backfill), each with the dependencies of its release day.
+measures those releases instead (a backfill), each with the dependencies of its release day,
+and this commit last; the charts are redrawn from that run alone, so list every release.
+A second run on the same UTC date (by hand, or a rerun) replaces that date's night file.
 
 ## Check before a release
 
