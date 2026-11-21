@@ -191,7 +191,8 @@ and a line in the job summary; the job stays green. A broken limit turns the job
 limits are `PAGE_LIMITS` at the top of the script; `None` means off, as it is until they are
 set from the first 7 nights. To change a limit, change the constant in a pull request of its
 own and say which nights it comes from. Started by hand with a list of versions, the workflow
-measures those releases instead (a backfill), each with the dependencies of its release day.
+measures those releases instead (a backfill), each with the dependencies of its release day,
+and this commit last; the charts are redrawn from that run alone, so list every release.
 A second run on the same UTC date (by hand, or a rerun) replaces that date's night file.
 
 ## Check before a release

@@ -1,6 +1,7 @@
 # What: every night, measures the CPU and memory of the newest release and of main, in turn on
 # one runner, and keeps the numbers on the `use-numbers` branch. By hand, it can measure a list
-# of old releases instead.
+# of old releases instead, then this commit last; the charts are redrawn from that run alone,
+# so list every release.
 # Why: a slow leak or a busy loop would ship unseen, because no test measures CPU or memory and
 # no number was kept from one version to the next.
 #
@@ -16,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       versions:
-        description: "Releases to measure instead of the newest and main, e.g. 0.3.0 0.4.0 (a backfill)"
+        description: "Releases to measure instead of the newest and main, e.g. 0.3.0 0.4.0 (a backfill). This commit is measured last and the charts are redrawn from this run alone, so list every release"
         required: false
         default: ""
 
@@ -82,6 +83,8 @@ jobs:
               uv pip install --python "$envs/$v/bin/python" --exclude-newer "$at" "kitden==$v"
               echo "$v=$envs/$v/bin/kitden" >> "$RUNNER_TEMP/versions.txt"
             done
+            # Only spaces in the input: no release, and the charts would keep only main.
+            [ -s "$RUNNER_TEMP/versions.txt" ] || { echo "::error::No release to measure: list versions like 0.3.0 0.4.0"; exit 1; }
             # This commit too, last, in the same rounds: the chart's main point (B0 rule 8).
             at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             uv build --wheel --out-dir "$RUNNER_TEMP/dist"

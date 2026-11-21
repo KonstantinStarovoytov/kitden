@@ -45,6 +45,8 @@ def test_use_measures_with_a_read_only_token_in_fresh_plain_venvs():
     # The dispatch input reaches the shell only through env, and only as a version.
     assert "VERSIONS: ${{ inputs.versions }}" in job and "${{ inputs.versions }}" not in install
     assert 'case "$v" in *[!0-9.]*|"")' in install
+    # A backfill with no release (only spaces) stops before it measures.
+    assert '[ -s "$RUNNER_TEMP/versions.txt" ] || { echo "::error::No release to measure' in install
     assert '--with "$PSUTIL"' in _step(job, "Measure") and "PSUTIL: psutil==7.2.2" in job
 
 
