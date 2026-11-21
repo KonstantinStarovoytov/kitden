@@ -131,10 +131,11 @@ async def no_proxy():
 @pytest.fixture
 def sample(tmp_path, monkeypatch, fake_keychain):
     """The medium sample, served as `kitden open` serves a real home, not in demo mode: search,
-    sources, Details of a found item and the update all work. Everything that would leave the
-    sample is a stand-in (tests/offline.py, the demo's adapters and runner, the fake Keychain),
-    and the network guard is on: a test that tries to connect outside this computer from this
-    process fails. A move into the gateway is refused (no_proxy): use demo for that flow."""
+    sources, Details of a found item and the update's check and its question work. Everything
+    that would leave the sample is a stand-in (tests/offline.py, the demo's adapters and runner,
+    the fake Keychain), and the network guard is on: a test that tries to connect outside this
+    computer from this process fails. A move into the gateway is refused (no_proxy): use demo
+    for that flow."""
     guard = guarded_lookups(monkeypatch)
     next(guard)
     for module, name, value in STAND_INS:
@@ -151,7 +152,7 @@ def sample(tmp_path, monkeypatch, fake_keychain):
         "fetch": lambda url: json.dumps({"info": {"version": LATEST}}).encode(),
         "upgrade": fake_upgrade,
         "install": Install("uv", home / ".local/bin/kitden", ("uv", "tool", "upgrade", "kitden")),
-        # Flow 13 gives it a stand-in that starts the new version's page (Task 23).
+        # Flow 13 gives it a stand-in that starts the new version's page.
         "start_page": lambda launcher, value: None,
     }
     made = cli._page(create_app, demo_build(home), home, START, **options)
