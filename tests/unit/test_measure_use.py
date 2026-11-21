@@ -425,6 +425,7 @@ def test_a_night_measures_in_turn_and_throws_the_warm_up_away(monkeypatch, tmp_p
     assert [run["ready_s"] for run in b["page"]["runs"]] == [3.0, 6.0]
     # Without --gateway: the page only, and a result shaped as before.
     assert got["series"] == {"page": 1} and "gateway_rounds" not in got
+    assert "gateway_python" not in got
     assert "gateway" not in a and "gateway" not in b
 
 
@@ -436,6 +437,8 @@ def test_the_gateways_rounds_come_after_all_the_pages(monkeypatch, tmp_path):
     rounds = [["0.9.2", "main@1"], ["main@1", "0.9.2"], ["0.9.2", "main@1"]]
     assert got["rounds"] == got["gateway_rounds"] == rounds
     assert got["series"] == {"page": 1, "gateway": 1}
+    # The echo servers' Python and packages are kept.
+    assert got["gateway_python"] == {"python": "3.13", "packages": ["kitden==1"]}
     path = {"0.9.2": "/e/a/bin/kitden", "main@1": "/e/b/bin/kitden"}
     page = [("page", path[label]) for labels in rounds for label in labels]
     echo = Path("/e/python")

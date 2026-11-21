@@ -152,10 +152,13 @@ Nights also run the gateway scenario, after all the page's rounds. Its sandbox h
 `gateway.json` with three test echo servers (`tests/fixtures/fake_mcp/echo_server.py`), run by
 the checkout's own `.venv/bin/python`, which has `mcp`. One run starts `kitden mcp`, sends
 `initialize` and `tools/list` (ready), waits 30 s, sends `tools/list` 1,000 times, then closes
-its input. It notes CPU to ready, idle CPU, CPU of the calls, memory growth and time to ready,
-of all four processes; on Linux the CPU of a server that ended between two readings counts
-too. A backfill measures the page only. The gateway's limits are `GATEWAY_LIMITS`, off like
-the page's, and it has its own series number.
+its input. The gateway learns the servers' tools at the first `tools/list` and keeps them, so
+the 1,000 calls measure `kitden mcp` answering from its own list. It notes CPU to ready, idle
+CPU, CPU of the calls, memory growth and time to ready, of all four processes; on Linux the
+CPU of a server that ended between two readings counts too. A run where not all three servers
+started fails. The result keeps the echo servers' Python and packages (`gateway_python`). A
+backfill measures the page only. The gateway's limits are `GATEWAY_LIMITS`, off like the
+page's, and it has its own series number.
 
 The numbers are taken the same way for every version, so they can be compared:
 

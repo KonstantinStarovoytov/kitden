@@ -193,7 +193,7 @@ def check(result: dict) -> int:
 def release_file(result: dict, version: dict) -> dict:
     # On a backfill the release files are the record, so they keep how the runs were done.
     keys = ("series", "kind", "run_id", "date", "time", "warm", "warmup_runs", "runs_each")
-    gateway = {"gateway_rounds": result["gateway_rounds"]} if "gateway_rounds" in result else {}
+    gateway = {k: result[k] for k in ("gateway_rounds", "gateway_python") if k in result}
     return {**{k: result[k] for k in (*keys, "rounds", "env")}, **gateway, "version": version}
 
 
@@ -284,7 +284,8 @@ def readme(data: Path) -> str:
         "",
         "Written by `.github/workflows/use.yml` on `main`; how it measures is in "
         "`docs/development.md` (CPU and memory). Each cell is the median, then the lowest and "
-        f"highest run. Page series {series}: numbers of another series are not shown.",
+        f"highest run. Page series {series}: numbers of another series are not shown. "
+        "The gateway columns show the newest gateway series.",
         "",
         "## Releases",
         "",
@@ -509,9 +510,9 @@ def gateway_run(kitden: Path, root: Path, python: Path) -> dict:
 
     env = _sandbox(root)
     home = root / "home"
-    servers = {name: {"command": str(python), "args": [str(ECHO), name]} for name in "abc"}
+    config = {name: {"command": str(python), "args": [str(ECHO), name]} for name in "abc"}
     _data_dir(home).mkdir(parents=True)
-    (_data_dir(home) / "gateway.json").write_text(json.dumps({"servers": servers, "rules": {}}))
+    (_data_dir(home) / "gateway.json").write_text(json.dumps({"servers": config, "rules": {}}))
     start = time.monotonic()
     child = subprocess.Popen(  # noqa: S603 - the kitden under test, fixed arguments
         [str(kitden), "mcp", "--home", str(home)],
@@ -581,6 +582,12 @@ def gateway_run(kitden: Path, root: Path, python: Path) -> dict:
                 readings.append(_rss_mb(proc))
         calls = _cpu(proc, exited=True) - before
         processes = len(look(proc))
+        # kitden mcp leaves out a server that failed to start and still answers with its own
+        # tools: such a run measured less, so it fails.
+        if processes != 1 + len(config):
+            raise RuntimeError(
+                f"the echo servers did not start: {processes - 1} of {len(config)} running"
+            )
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old)
@@ -672,6 +679,8 @@ def measure(args: argparse.Namespace) -> dict:
                 **installed,
             }
         )
+    # The Python and packages that run the echo servers, the same for every version.
+    gateway_python = packages(Path(args.gateway)) if args.gateway else None
     if args.backfill and any(v["commit"] for v in versions[:-1]):
         raise SystemExit("A backfill measures releases, then at most this commit, last.")
     if not args.backfill and len(versions) != 2:
@@ -723,6 +732,7 @@ def measure(args: argparse.Namespace) -> dict:
         "runs_each": args.runs,
         "rounds": rounds,
         **({"gateway_rounds": rounds} if args.gateway else {}),
+        **({"gateway_python": gateway_python} if args.gateway else {}),
         "env": environment(),
         "versions": versions,
         "warnings": [],
