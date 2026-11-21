@@ -125,6 +125,7 @@ Update later from the page, or with `uv tool upgrade kitden` or `brew upgrade ki
 [Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) ·
 [Releases](https://github.com/KonstantinStarovoytov/kitden/releases) ·
 [Issues](https://github.com/KonstantinStarovoytov/kitden/issues) ·
+[AI review policy](AI_POLICY.md) ·
 [Contributing](https://github.com/KonstantinStarovoytov/kitden/blob/main/CONTRIBUTING.md) ·
 [Apache-2.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE)
 <!-- mcp-name: io.github.KonstantinStarovoytov/kitden -->

@@ -27,3 +27,11 @@ from a person; the bot never edits, labels or closes it. The maintainer marks a 
 that reports a problem `confirmed` (real, open until fixed) or `false-alarm`; wait for
 `confirmed` before you work on it. The pinned issue "Kitden desk" shows what the automation
 did and what waits for the maintainer. A script writes it, not an AI model.
+
+## Planned fork reviews
+
+Fork support is [designed, not enabled](https://github.com/KonstantinStarovoytov/kitden-sdlc/blob/main/docs/fork-review-design.md).
+It will keep both reviewers and one advisory comment, with exact revision checks and isolated
+source access. A maintainer will admit each fork revision before model credits are spent.
+Security tests and a before/after quality comparison must pass first. Current forks still
+need a human review; retrying the existing workflow does not enable AI review.
