@@ -1,0 +1,233 @@
+{
+ "series": 1,
+ "run_id": "44899864052",
+ "date": "2026-11-21",
+ "cpu": "AMD EPYC 7763 64-Core Processor",
+ "runs": 5,
+ "points": [
+  {
+   "label": "0.3.0",
+   "commit": null,
+   "peak_mb": {
+    "median": 45.437,
+    "low": 45.261,
+    "high": 45.634
+   },
+   "cpu_ready_s": {
+    "median": 0.39,
+    "low": 0.39,
+    "high": 0.39
+   }
+  },
+  {
+   "label": "0.4.0",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.465,
+    "low": 46.354,
+    "high": 46.649
+   },
+   "cpu_ready_s": {
+    "median": 0.39,
+    "low": 0.39,
+    "high": 0.4
+   }
+  },
+  {
+   "label": "0.5.0",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.129,
+    "low": 45.982,
+    "high": 46.313
+   },
+   "cpu_ready_s": {
+    "median": 0.39,
+    "low": 0.39,
+    "high": 0.39
+   }
+  },
+  {
+   "label": "0.6.0",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.285,
+    "low": 46.129,
+    "high": 46.584
+   },
+   "cpu_ready_s": {
+    "median": 0.39,
+    "low": 0.38,
+    "high": 0.4
+   }
+  },
+  {
+   "label": "0.6.1",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.375,
+    "low": 46.215,
+    "high": 46.395
+   },
+   "cpu_ready_s": {
+    "median": 0.39,
+    "low": 0.39,
+    "high": 0.39
+   }
+  },
+  {
+   "label": "0.6.5",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.502,
+    "low": 46.285,
+    "high": 46.567
+   },
+   "cpu_ready_s": {
+    "median": 0.39,
+    "low": 0.38,
+    "high": 0.42
+   }
+  },
+  {
+   "label": "0.7.0",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.875,
+    "low": 46.801,
+    "high": 47.051
+   },
+   "cpu_ready_s": {
+    "median": 0.44,
+    "low": 0.44,
+    "high": 0.48
+   }
+  },
+  {
+   "label": "0.7.1",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.932,
+    "low": 46.834,
+    "high": 47.067
+   },
+   "cpu_ready_s": {
+    "median": 0.44,
+    "low": 0.44,
+    "high": 0.44
+   }
+  },
+  {
+   "label": "0.7.2",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.883,
+    "low": 46.723,
+    "high": 47.165
+   },
+   "cpu_ready_s": {
+    "median": 0.44,
+    "low": 0.44,
+    "high": 0.48
+   }
+  },
+  {
+   "label": "0.8.0",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.957,
+    "low": 46.797,
+    "high": 47.01
+   },
+   "cpu_ready_s": {
+    "median": 0.45,
+    "low": 0.45,
+    "high": 0.45
+   }
+  },
+  {
+   "label": "0.9.0",
+   "commit": null,
+   "peak_mb": {
+    "median": 47.088,
+    "low": 46.981,
+    "high": 47.231
+   },
+   "cpu_ready_s": {
+    "median": 0.44,
+    "low": 0.44,
+    "high": 0.45
+   }
+  },
+  {
+   "label": "0.9.1",
+   "commit": null,
+   "peak_mb": {
+    "median": 47.047,
+    "low": 47.006,
+    "high": 47.268
+   },
+   "cpu_ready_s": {
+    "median": 0.45,
+    "low": 0.44,
+    "high": 0.46
+   }
+  },
+  {
+   "label": "0.9.2",
+   "commit": null,
+   "peak_mb": {
+    "median": 47.022,
+    "low": 46.94,
+    "high": 47.411
+   },
+   "cpu_ready_s": {
+    "median": 0.45,
+    "low": 0.44,
+    "high": 0.46
+   }
+  },
+  {
+   "label": "0.10.0",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.993,
+    "low": 46.78,
+    "high": 47.12
+   },
+   "cpu_ready_s": {
+    "median": 0.44,
+    "low": 0.44,
+    "high": 0.45
+   }
+  },
+  {
+   "label": "0.10.1",
+   "commit": null,
+   "peak_mb": {
+    "median": 46.862,
+    "low": 46.715,
+    "high": 47.088
+   },
+   "cpu_ready_s": {
+    "median": 0.45,
+    "low": 0.44,
+    "high": 0.46
+   }
+  },
+  {
+   "label": "main",
+   "commit": "e7e5e31",
+   "peak_mb": {
+    "median": 47.022,
+    "low": 46.871,
+    "high": 47.161
+   },
+   "cpu_ready_s": {
+    "median": 0.45,
+    "low": 0.44,
+    "high": 0.45
+   }
+  }
+ ]
+}
