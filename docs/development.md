@@ -19,7 +19,7 @@ vendors' own installers. Tests marked `signed_in` need a signed-in client. Tests
 sample home with `kitden.demo.build_demo_home(root, size)`.
 
 Browser tests (`tests/browser/`) open the page on the demo sample in a real browser and do
-each main feature as a user does ([Browser flows](#browser-flows)). An error in the browser
+its main features as a user does ([Browser flows](#browser-flows)). An error in the browser
 console fails them, so they catch a break of the page's Content-Security-Policy. Playwright is
 not a project dependency, so these tests are not in the default run. Run them with:
 
