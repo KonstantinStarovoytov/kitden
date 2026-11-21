@@ -11,7 +11,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **Browser tests for the main features:** Context, setting up the gateway, Move all and
   removing a server's own entry are now done in a real browser every night, as a user does
-  them.
+  them (#145).
 
 ### 0.10.1
 
