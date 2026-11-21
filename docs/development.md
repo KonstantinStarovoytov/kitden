@@ -19,7 +19,7 @@ vendors' own installers. Tests marked `signed_in` need a signed-in client. Tests
 sample home with `kitden.demo.build_demo_home(root, size)`.
 
 Browser tests (`tests/browser/`) open the page on the demo sample in a real browser and do
-each main feature as a user does ([Browser flows](#browser-flows)). An error in the browser
+its main features as a user does ([Browser flows](#browser-flows)). An error in the browser
 console fails them, so they catch a break of the page's Content-Security-Policy. Playwright is
 not a project dependency, so these tests are not in the default run. Run them with:
 
@@ -78,10 +78,13 @@ needs no other test. The table lists those written so far, in product order:
 | # | Flow | Test in `tests/browser/` |
 | --- | --- | --- |
 | 1 | The page opens; Overview shows the setup | `test_flows.py` |
+| 2 | Context: what the last chat loaded and what was cut | `test_context.py` |
 | 3 | Search the catalogs, "Show N more", open an item's details | `test_catalog_search.py` |
 | 4 | Add a GitHub source; it is listed | `test_add_source.py` |
 | 5 | Add a skill from the catalog to Claude Code; remove it | `test_catalog_skill.py` |
-| 8 | Move servers into the gateway: drag one | `test_map_drag.py` |
+| 7 | Set up the gateway on a home that has none | `test_gateway_setup.py` |
+| 8 | Move servers into the gateway: drag one, "Move all N…" | `test_map_drag.py`, `test_move_all.py` |
+| 9 | Remove a server's direct entry: preview, Apply, gone on disk | `test_remove_server.py` |
 
 Flows 3 to 5 use the `sample` fixture: the demo's sample, not in demo mode, with the
 stand-ins of `tests/offline.py` and the network guard on, so a test that tries to go online
@@ -171,6 +174,18 @@ SIGTERM. It notes:
 - **memory growth**: the memory after the last call minus the memory after the first 200;
 - time to ready, which is not compared: it ran from 0.9 to 9.4 s for the same code on one Mac.
 
+Nights also run the gateway scenario, after all the page's rounds. Its sandbox home has a
+`gateway.json` with three test echo servers (`tests/fixtures/fake_mcp/echo_server.py`), run by
+the checkout's own `.venv/bin/python`, which has `mcp`. One run starts `kitden mcp`, sends
+`initialize` and `tools/list` (ready), waits 30 s, sends `tools/list` 1,000 times, then closes
+its input. The gateway learns the servers' tools at the first `tools/list` and keeps them, so
+the 1,000 calls measure `kitden mcp` answering from its own list. It notes CPU to ready, idle
+CPU, CPU of the calls, memory growth and time to ready, of all four processes; on Linux the
+CPU of a server that ended between two readings counts too. A run where not all three servers
+started fails. The result keeps the echo servers' Python and packages (`gateway_python`). A
+backfill measures the page only. The gateway's limits are `GATEWAY_LIMITS`, off like the
+page's, and it has its own series number.
+
 The numbers are taken the same way for every version, so they can be compared:
 
 - Versions compared run in one job on one machine, in turn, and each round starts one version
@@ -178,9 +193,10 @@ The numbers are taken the same way for every version, so they can be compared:
   warm-up run, thrown away, then the same number of runs.
 - Each number is a median, with the lowest and highest run. Every run is kept.
 - Each result keeps the installed packages of each version, the size of its sample (items and
-  bytes of `/api/items`), the order of every round, and the machine: runner image, system, CPU
-  model, cores, Python and psutil. When A's and B's samples differ, or a version's sample
-  changed between its runs, they are not compared, and the result says why.
+  bytes of `/api/items`), the order of every round (the gateway's in `gateway_rounds`), and
+  the machine: runner image, system, CPU model, cores, Python and psutil. When A's and B's
+  samples differ, or a version's sample changed between its runs, they are not compared, and
+  the result says why.
 - `SERIES` at the top of the script holds one number per scenario. A scenario's number is
   raised with any change to what or how it measures. Numbers of two series are never
   compared, and a new page series needs a new backfill. The measurement is
@@ -202,8 +218,11 @@ uv run --no-project python scripts/measure-use.py check "$S/night.json"
 ```
 
 One page run takes about 45 s; this command makes six (a warm-up and 2 runs for each
-version), so about 5 minutes. macOS takes memory back from an idle process, so the memory
-numbers that count come from Linux.
+version), so about 5 minutes. To measure the gateway too, run `uv sync` and add
+`--gateway "$PWD/.venv/bin/python"`; with `--runs 1` that took 4.5 minutes on a Mac. macOS
+takes memory back from an idle process, so the memory numbers that count come from Linux.
+On GitHub a night should take about 20 runner minutes, and a backfill of 13 releases about 60
+minutes plus the installs; these are estimates until the first runs there.
 
 Every night `.github/workflows/use.yml` measures the newest release (A) and `main` (B), 5 runs
 each, and keeps the numbers on the branch `use-numbers`: `nights/<date>.json`,
