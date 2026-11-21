@@ -9,7 +9,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
-- **Browser tests for each main feature:** searching the catalogs, adding a GitHub source and
+- **Browser tests for the main features:** searching the catalogs, adding a GitHub source and
   adding a catalog skill are now done in a real browser every night, as a user does them.
 
 ### 0.10.1
