@@ -44,6 +44,7 @@ def test_a_skill_from_the_catalog_is_added_to_claude_code_and_removed(sample_pag
     row.get_by_role("gridcell").first.click()
     details = page.get_by_role("complementary", name="Details")
     details.get_by_role("button", name="Remove from Claude Code…").click()
+    expect(dock).to_contain_text(f"Remove {SKILL} from Claude Code")
     dock.get_by_role("button", name="Apply").click()
     wait_until(lambda: not skill_file.parent.exists(), 15)
     expect(row).to_have_count(0)
