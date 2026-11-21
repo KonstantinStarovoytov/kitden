@@ -37,4 +37,8 @@ def test_context_shows_the_last_chat_and_the_skills_that_were_cut(page, demo):
     expect(full.get_by_role("button")).to_have_count(len(CODEX))
     for name in CODEX:
         expect(full.get_by_role("button", name=re.compile(rf"^{name} [\d,]+$"))).to_be_visible()
-    expect(main.get_by_text("showed only a name")).to_have_count(0)
+    # Codex's own words: its last chat's window says all four were sent in full, none cut short.
+    window = main.get_by_role("button", name=re.compile(r" window Last chat"), pressed=True)
+    expect(window).to_contain_text(f"All {len(CODEX)} sent in full")
+    cut = main.locator("section").filter(has=page.get_by_role("heading", name="Cut short"))
+    expect(cut.get_by_role("button")).to_have_count(0)

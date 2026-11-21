@@ -2,6 +2,7 @@
 keyboard, and the entry is gone from the file."""
 
 import json
+import re
 
 import pytest
 from playwright.sync_api import expect
@@ -29,5 +30,8 @@ def test_a_removed_direct_entry_is_gone_from_claude_codes_file(page, demo):
     page.keyboard.press("Enter")
     expect(page.get_by_role("button", name="Undo")).to_be_visible()
     wait_until(lambda: SERVER not in json.loads(claude.read_text())["mcpServers"])
+    # The page shows it gone too.
+    row = page.get_by_role("row", name=re.compile(rf"^{re.escape(SERVER)} Claude Code "))
+    expect(row).to_have_count(0)
     # The other servers stay.
     assert "github" in json.loads(claude.read_text())["mcpServers"]
