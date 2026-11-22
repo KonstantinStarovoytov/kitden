@@ -9,7 +9,8 @@
 uvx --python 3.13 kitden scan
 ```
 
-Needs [uv](https://docs.astral.sh/uv/getting-started/installation/). The scan reads your
+Needs [uv](https://docs.astral.sh/uv/getting-started/installation/). Or with Homebrew:
+`brew install konstantinstarovoytov/tap/kitden`, then `kitden scan`. The scan reads your
 agents' settings and changes none of them.
 
 <p align="center">One local page for their MCP servers, plugins, skills and instruction files.<br>
