@@ -70,6 +70,10 @@ An agent that calls a tool that is off, by a switch, a project rule or strict mo
 "<name> is turned off in Kitden."
 A server that must start in its own folder starts there in the gateway, so it also works in
 Cursor, which has no such setting.
+A server's secrets, in its env, headers or arguments such as `--api-key=…`, go to the macOS
+Keychain or the Linux keyring; the gateway's settings keep a reference. If a server moved in by
+an earlier Kitden still has one in plain text, its **Details** offer **Move secrets to the
+Keychain…**.
 
 ## Review a change. Apply it. Undo it.
 
