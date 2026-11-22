@@ -4,7 +4,7 @@ For Claude Code and Codex. Six skills, so an agent can tell you what your coding
 and whether your skills fit in the context.
 
 The plugin has no MCP server and nothing that runs by itself: no hooks and no commands. Its
-skills run the command `kitden show`, which only reads.
+skills run the command `kitden show`, which changes none of your settings.
 
 The plugin does not hold the program. It needs [Kitden](https://pypi.org/project/kitden/) 0.7.2
 or later on this computer. When Kitden is missing, the agent asks before it installs anything.
@@ -50,8 +50,12 @@ chat files, the skills the Claude app gives Claude Code, from the app's own fold
 model list (`models_cache.json`), for the size of its context window. It uses them to size the
 skill list and keeps none of it. It also reads each skill's description from its `SKILL.md`, and
 `kitden show context` prints it. To learn versions and plugins it may run the clients' own
-commands, such as `claude --version` and `codex plugin list`. It changes nothing and does not
-go online. Secret values, such as tokens in a server's settings, are replaced with `[secret]`.
+commands, such as `claude --version` and `codex plugin list`. The first run can wait up to
+15 s for Codex and says so on stderr. The answer (each plugin's id and whether it is on) is kept
+in one file in Kitden's own data folder, so a run within the next hour, while Codex's
+`config.toml` is unchanged, does not wait. It changes no client settings and does not go
+online. Secret values, such as tokens in a server's settings,
+are replaced with `[secret]`.
 A skill's description is printed as written, so keep secrets out of it. There is no account and
 no telemetry.
 

@@ -9,6 +9,15 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **`kitden scan` says when it waits for Codex, and does not wait twice:** while Codex lists
+  its plugins (up to 15 seconds) the terminal says so, and a repeat run within an hour,
+  with an unchanged `config.toml`, reuses the stored answer (#155).
+- **The README's first screen shows how to try Kitden:** the command `uvx --python 3.13 kitden
+  scan` sits right under the tagline, with a line saying it only reads. The desk button and
+  the contributor links moved down to "Help build Kitden" (#154).
+- **The scan names the skills that did not fit:** `kitden scan` lists the skills your last chat
+  sent by name only or cut, names the warnings, counts the notes and ends with `kitden open`
+  (#156).
 - **Secrets in a server's arguments go to the Keychain:** a value like `--api-key=…` or
   `NAME_API_KEY=…` in a moved server's command no longer stays in `gateway.json` as plain text;
   a server moved in earlier gets **Move secrets to the Keychain…** (#157).

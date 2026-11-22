@@ -7,7 +7,7 @@ Every chat starts with a list of the user's skills. When the list is over the cl
 some skills show only a name, or drop out, and the agent may not use them. Kitden reads what the
 client sent in the last chat.
 
-1. In the project's folder run `kitden show context`. It only reads and prints JSON, one card
+1. In the project's folder run `kitden show context`. It changes no settings and prints JSON, one card
    for each client. If `kitden` is not found or the command fails as unknown, follow the kitden `install` skill.
 2. Use the card of the client the user asks about; by default the one you run in.
 3. Give the answer in the card's own words: each window's `say`, then the names in `over`, the

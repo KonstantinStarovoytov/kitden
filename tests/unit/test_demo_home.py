@@ -241,7 +241,8 @@ def test_the_medium_sample_has_a_last_chat_in_claude_code_and_codex(tmp_path):
     # Claude Code's own skills fill a 200K window's list: most of the user's show only a name.
     assert claude["fact"]["folder"] == str(home / "work/atlas")
     assert [w["title"] for w in claude["windows"]] == ["200K window", "1M window"]
-    assert claude["windows"][0]["result"]["misfit"] == {"kind": "name", "n": 4}
+    misfit = claude["windows"][0]["result"]["misfit"]
+    assert (misfit["kind"], misfit["n"], len(misfit["names"])) == ("name", 4, 4)
     assert claude["windows"][1]["result"]["misfit"] is None
     assert len(claude["skills"]) == 20
     assert sorted(s["name"] for s in claude["skills"] if s["side"] == 1) == [

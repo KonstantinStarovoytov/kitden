@@ -92,3 +92,28 @@ def test_show_says_when_the_client_is_unknown(home, capsys):
     assert code == 2
     assert out.out == ""
     assert "Unknown or missing client: nope" in out.err
+
+
+def test_show_says_it_asks_codex_and_a_second_run_does_not(home, capsys, monkeypatch):
+    import subprocess
+
+    import kitden.clients.codex as codex
+
+    runs = []
+
+    def codex_list(command, **kwargs):
+        runs.append(command)
+        return subprocess.CompletedProcess(command, 0, '{"installed": []}', "")
+
+    monkeypatch.setattr(codex, "version_command", lambda client: ["codex", "--version"])
+    monkeypatch.setattr(codex.subprocess, "run", codex_list)
+    monkeypatch.setattr("kitden.clients.version_cache.cached_version", lambda h, c: "0.163.0")
+    notes = []
+    for _ in range(2):
+        monkeypatch.setattr(codex, "_LIST_CACHE", {})  # a new process each time
+        code, out = show(capsys, home, "projects")
+        assert code == 0
+        json.loads(out.out)  # stdout stays valid JSON
+        notes.append(out.err)
+    assert len(runs) == 1
+    assert notes == ["Asking Codex which plugins are on (up to 15 s)…\n", ""]
