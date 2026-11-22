@@ -10,6 +10,9 @@ from kitden.clients import version_cache
 from kitden.clients.version_cache import VERSIONS_FILE, cached_version
 from kitden.context.rules import codex_rule
 from kitden.gateways import data_dir
+from kitden.model import ItemKind
+from kitden.system import claude_desktop_dir
+from kitden.views import words
 from tests.conftest import fake_client_command, make_home, write_cursor_fixture_state
 from tests.unit.test_context_view import (
     CODEX_A,
@@ -126,6 +129,10 @@ def test_scan_says_which_skills_the_last_chat_cut(bare, capsys):
     assert claude < codex < next(i for i, line in enumerate(lines) if line.startswith("Codex:"))
     assert _after(lines, said) == [ELSEWHERE, "    gamma, delta"]
     assert lines[-1] == "To fix: kitden open"
+    # The count beside it says why the two numbers can differ, in one line of the terminal.
+    counted = "  Skills: 4 found; a chat has one project's, plus ones Claude Code adds"
+    assert lines[lines.index(said) - 1] == counted
+    assert len(counted.replace("4", "999")) <= 80
 
 
 def test_scan_names_the_first_few_skills_and_counts_the_rest(bare, capsys):
@@ -227,6 +234,7 @@ def test_scan_in_a_folder_with_no_chat_shows_the_last_chat_and_its_folder(
 def test_scan_with_no_chat_anywhere_says_there_is_none(bare, capsys):
     skill(bare / ".claude/skills", "alpha", "Does alpha.")
     lines = _summary(bare, capsys)
+    assert "  Skills: 1" in lines  # no chat's number beside it, so nothing to explain
     assert (
         "  Skill list: No Claude Code chat yet. Open one chat, and Kitden will show what "
         "Claude Code sent." in lines
@@ -268,12 +276,37 @@ def test_scan_reads_the_servers_kitden_holds_as_show_does(bare, capsys):
     hold_github(bare)
     lines = _summary(bare, capsys)
     cursor = lines.index("Cursor: found (unknown version)")
-    assert "  mcp_server: 3" in lines[cursor:]  # kitden, github, and github through Kitden
+    assert "  MCP servers: 3" in lines[cursor:]  # kitden, github, and github through Kitden
     assert main(["show", "findings", "--home", str(bare)]) == 0
     shown = json.loads(capsys.readouterr().out)["findings"]
     assert lines[-3] == f"{len(shown)} notes: kitden show findings"
     # The held copy replaces the direct one in Cursor's view: one server, no warning.
     assert not [f for f in shown if f["severity"] == "warning"]
+
+
+def test_scan_counts_each_kind_in_plain_words(home, capsys):
+    lines = _summary(home, capsys)
+    claude = lines.index("Claude Code: found (unknown version)")
+    assert lines[claude + 1 : claude + 7] == [
+        "  Hooks: 1",
+        "  Instruction files: 5",
+        "  Marketplaces: 1",
+        "  MCP servers: 4",
+        "  Plugins: 3",
+        "  Skills: 4",
+    ]
+    assert set(words.SCAN_KINDS) == {str(kind) for kind in ItemKind}
+
+
+def test_scan_puts_the_desktop_code_tab_under_claude_code(home, capsys):
+    (claude_desktop_dir(home) / "claude-code/2.1.330").mkdir(parents=True)
+    lines = _summary(home, capsys)
+    clients = [line.split(":")[0] for line in lines if ": found (" in line]
+    assert clients == ["Claude Code", "Codex", "Cursor"]
+    # Its own servers, after everything Claude Code loads: the Code tab loads that too.
+    assert lines[lines.index("Codex: found (unknown version)") - 1] == (
+        "  Only in the Claude Desktop app (Code tab, 2.1.330): MCP servers: 1"
+    )
 
 
 def test_scan_ends_by_saying_the_settings_were_not_changed(bare, capsys):
@@ -298,26 +331,47 @@ def _finding(severity, client="codex", items=("a",), text="It is so."):
     }
 
 
-def test_findings_line_counts_the_notes():
-    assert cli._findings_line([_finding("info")], {}) == "1 note: kitden show findings"
+def test_findings_lines_count_the_notes():
+    assert cli._findings_lines([_finding("info")], {}) == ["1 note: kitden show findings"]
     notes = [_finding("info")] * 61
-    assert cli._findings_line(notes, {}) == "61 notes: kitden show findings"
-    assert cli._findings_line([], {}) is None
+    assert cli._findings_lines(notes, {}) == ["61 notes: kitden show findings"]
+    assert cli._findings_lines([], {}) == []
 
 
-def test_findings_line_with_warnings_only_still_says_where_to_look():
-    line = cli._findings_line([_finding("warning")], {})
-    assert line == "1 warning: It is so. See: kitden show findings"
+def test_findings_lines_with_warnings_only_still_say_where_to_look():
+    lines = cli._findings_lines([_finding("warning")], {})
+    assert lines == ["1 warning: It is so. See: kitden show findings"]
 
 
-def test_findings_line_names_the_first_few_warnings_and_fits_80_columns():
+def test_findings_lines_name_the_first_few_warnings_and_fit_80_columns():
     warnings = [_finding("warning", text=f"Warning number {n} is here") for n in range(1, 6)]
-    line = cli._findings_line(warnings + [_finding("info")] * 2, {})
-    assert line == (
-        "5 warnings: Warning number 1 is here; Warning number 2 is here; Warning number 3 "
-        "is here +2 more. 2 notes: kitden show findings"
-    )
-    assert cli._wrap(line, "", "  ") == [
+    assert cli._findings_lines(warnings + [_finding("info")] * 2, {}) == [
         "5 warnings: Warning number 1 is here; Warning number 2 is here; Warning number 3",
         "  is here +2 more. 2 notes: kitden show findings",
+    ]
+
+
+# A line never breaks inside "+N more" or inside a command to copy
+
+
+def test_findings_lines_keep_the_command_whole():
+    warning = _finding("warning", text="Cursor loads plugin 'superpowers' twice.")
+    assert cli._findings_lines([warning] + [_finding("info")] * 61, {}) == [
+        "1 warning: Cursor loads plugin 'superpowers' twice. 61 notes:",
+        "  kitden show findings",
+    ]
+
+
+def test_the_count_of_more_stays_on_one_line():
+    names = ["imagegen", "openai-docs", "Pixel Art Animator", "Pixel Art Exporter", "animate"]
+    said = cli._first_few(names + ["other"] * 26, cli.FEW_NAMES, ", ")
+    assert cli._wrap(said, "    ", "    ") == [
+        "    imagegen, openai-docs, Pixel Art Animator, Pixel Art Exporter, animate",
+        "    +26 more",
+    ]
+    texts = ("Warning one is here", "Warning two is here too", "Warning three is")
+    warnings = [_finding("warning", text=text) for text in texts]
+    assert cli._findings_lines(warnings * 2, {}) == [
+        "6 warnings: Warning one is here; Warning two is here too; Warning three is",
+        "  +3 more. See: kitden show findings",
     ]

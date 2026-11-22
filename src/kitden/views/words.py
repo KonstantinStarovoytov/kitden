@@ -381,15 +381,34 @@ HOW_UNREADABLE = (
 )
 HOW_NO_SKILLS = "Kitden looks in the same folders and plugins as {client}."
 
-# `kitden scan`, after the clients: the skills the last chat cut, the findings, and where to go
-# next. Lines wrap at 80 columns.
+# `kitden scan`: each kind a client has and how many, in the order the scan prints them. Skills
+# come last, so the skill list follows their count.
+SCAN_KINDS = {
+    "hook": "Hooks",
+    "instructions": "Instruction files",
+    "marketplace": "Marketplaces",
+    "mcp_server": "MCP servers",
+    "plugin": "Plugins",
+    "skill": "Skills",
+}
+# After "Skills: " when the next line counts the skills of the last chat. The two numbers differ:
+# this one counts every skill Kitden finds for the client, on or off, in the user's folders and
+# in each project; the chat's list is the client's own, for one project, with skills Kitden
+# does not count (built into the client, or from the Claude app or a Codex plugin).
+SCAN_SKILLS = "{n} found; a chat has one project's, plus ones {client} adds"
+# The Claude Desktop Code tab, under Claude Code: it loads what Claude Code loads, and the MCP
+# servers of the Claude Desktop app's own settings file.
+SCAN_DESKTOP = "Only in the Claude Desktop app (Code tab, {version}): MCP servers: {n}"
+# After the clients: the skills the last chat cut, the findings, and where to go next. Lines
+# wrap at 80 columns; "+N more" and a command to copy stay on one line.
 SCAN_MORE = "+{n} more"
 # Under the skill list when the last chat was in another folder than the one scanned.
 SCAN_CHAT_FOLDER = "That chat was in {folder}."
 SCAN_LOADS = "{client} loads {kind} '{name}' {times}"
 SCAN_WARNINGS = "{n} {warnings}: {said}."
-SCAN_NOTES = "{n} {notes}: kitden show findings"
-SCAN_SEE = "See: kitden show findings"
+SCAN_NOTES = "{n} {notes}: {command}"
+SCAN_SEE = "See: {command}"
+SCAN_FINDINGS = "kitden show findings"
 SCAN_READ_ONLY = "Your agents' settings were not changed: scan only reads them."
 SCAN_FIX = "To fix: kitden open"
 SCAN_OPEN = "To see or change it: kitden open"

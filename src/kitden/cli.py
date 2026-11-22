@@ -19,7 +19,7 @@ from pathlib import Path
 
 from kitden import __version__, page, system
 from kitden.clients.version_cache import refresh_versions
-from kitden.model import CLIENTS
+from kitden.model import CLIENTS, Client
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
 HOST = page.HOST
@@ -297,16 +297,24 @@ def _print_summary(
     home: Path,
 ) -> None:
     from kitden.views import words
+    from kitden.views.effective import column_of
 
     counts = Counter((i.client, str(i.kind)) for i in inventory.items)
     misfits = False
     for client in inventory.clients:
-        version = client.version or "unknown version"
-        print(f"{client.display_name}: {client.status} ({version})")
-        for (owner, kind), count in sorted(counts.items()):
-            if owner == client.id:
-                print(f"  {kind}: {count}")
-        fit = _skill_list(cards.get(client.id))
+        if column_of(client.id) != client.id:
+            continue  # the Desktop Code tab: a line under Claude Code
+        print(f"{client.display_name}: {client.status} ({_version(client)})")
+        card = cards.get(client.id)
+        for kind, label in words.SCAN_KINDS.items():
+            count = counts[(client.id, kind)]
+            if not count:
+                continue
+            said = str(count)
+            if kind == "skill" and card and card["windows"]:  # a chat's own count follows
+                said = words.SCAN_SKILLS.format(n=count, client=client.display_name)
+            print(f"  {label}: {said}")
+        fit = _skill_list(card)
         if fit:
             say, names, folder = fit
             print(f"  Skill list: {say}")
@@ -315,15 +323,22 @@ def _print_summary(
             if names:
                 misfits = True
                 print(*_wrap(_first_few(names, FEW_NAMES, ", "), "    ", "    "), sep="\n")
+        for tab in inventory.clients:
+            if tab.id != client.id and column_of(tab.id) == client.id:
+                servers = counts[(tab.id, "mcp_server")]
+                print(f"  {words.SCAN_DESKTOP.format(version=_version(tab), n=servers)}")
     for problem in inventory.problems:
         print(f"Could not read {problem.path or problem.owner_client}: {problem.unknown_reason}")
-    line = _findings_line(findings, {i.id: i for i in inventory.items})
-    if line:
-        print(*_wrap(line, "", "  "), sep="\n")
+    for line in _findings_lines(findings, {i.id: i for i in inventory.items}):
+        print(line)
     warned = any(f["severity"] == "warning" for f in findings)
     print(words.SCAN_READ_ONLY)
     fix = misfits or warned or inventory.problems
     print(words.SCAN_FIX if fix else words.SCAN_OPEN)
+
+
+def _version(client: Client) -> str:
+    return client.version or "unknown version"
 
 
 def _skill_list(card: dict | None) -> tuple[str, list[str], str | None] | None:
@@ -356,7 +371,7 @@ def _first_few(said: list[str], few: int, joiner: str) -> str:
 
     shown = joiner.join(said[:few])
     rest = len(said) - few
-    return f"{shown} {words.SCAN_MORE.format(n=rest)}" if rest > 0 else shown
+    return f"{shown} {_whole(words.SCAN_MORE.format(n=rest))}" if rest > 0 else shown
 
 
 def _warning(finding: dict, by_id: dict) -> str:
@@ -378,12 +393,14 @@ def _warning(finding: dict, by_id: dict) -> str:
     )
 
 
-def _findings_line(findings: list[dict], by_id: dict) -> str | None:
-    """One line: the first warnings in words, then how many notes, and where to read them."""
+def _findings_lines(findings: list[dict], by_id: dict) -> list[str]:
+    """The first warnings in words, then how many notes, and where to read them: one sentence,
+    in lines of at most 80 columns. No lines when there are no findings."""
     from kitden.views import words
 
     warnings = [_warning(f, by_id) for f in findings if f["severity"] == "warning"]
     notes = len(findings) - len(warnings)
+    command = _whole(words.SCAN_FINDINGS)
     parts = []
     if warnings:
         said = _first_few(warnings, FEW_WARNINGS, "; ")
@@ -391,15 +408,26 @@ def _findings_line(findings: list[dict], by_id: dict) -> str | None:
         parts.append(words.SCAN_WARNINGS.format(n=len(warnings), warnings=word, said=said))
     if notes:
         word = "note" if notes == 1 else "notes"
-        parts.append(words.SCAN_NOTES.format(n=notes, notes=word))
+        parts.append(words.SCAN_NOTES.format(n=notes, notes=word, command=command))
     elif warnings:
-        parts.append(words.SCAN_SEE)
-    return " ".join(parts) or None
+        parts.append(words.SCAN_SEE.format(command=command))
+    return _wrap(" ".join(parts), "", "  ")
+
+
+# A space that no line may end at: `_wrap` breaks only at plain spaces, then prints this one as
+# a plain space.
+TIED = "\u00a0"
+
+
+def _whole(text: str) -> str:
+    """`text` as one piece that `_wrap` keeps on one line: "+5 more", or a command to copy."""
+    return text.replace(" ", TIED)
 
 
 def _wrap(text: str, first: str, rest: str) -> list[str]:
-    """`text` in lines of at most 80 columns. Names keep their hyphens."""
-    return textwrap.wrap(
+    """`text` in lines of at most 80 columns. Names keep their hyphens, and a piece made with
+    `_whole` is never split."""
+    lines = textwrap.wrap(
         text,
         80,
         initial_indent=first,
@@ -407,6 +435,7 @@ def _wrap(text: str, first: str, rest: str) -> list[str]:
         break_long_words=False,
         break_on_hyphens=False,
     )
+    return [line.replace(TIED, " ") for line in lines]
 
 
 def _scan(args: argparse.Namespace) -> int:
