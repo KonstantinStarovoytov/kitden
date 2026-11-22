@@ -7,6 +7,14 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **A description that a plugin update changed is not counted as cut:** when a Codex plugin was
+  updated after your last chat and a skill's description changed with it, Kitden compared what
+  the chat sent with the new text and said it was cut, such as "31 of 61 cut to 139–338
+  characters" for 30 real cuts at 334–338. It now leaves that skill out of the count and says
+  it cannot tell for it, and the check against Codex's rule passes again.
+
 ### 0.10.3
 
 - **A server's access is clearer in the gateway:** Add access… shows once, offers Sign in only

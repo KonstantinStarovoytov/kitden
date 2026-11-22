@@ -222,12 +222,18 @@ CODEX_NAMES = (
 )
 # A Codex list whose skill files Kitden cannot all find: no full or cut verdict.
 CODEX_SENT_UNKNOWN = (
-    "In your last chat{when}, Codex sent {n} {skills}. Kitden cannot find all {their} files, so "
-    "it cannot tell if any were cut."
+    "In your last chat{when}, Codex sent {n} {skills}. A file is gone or was changed after the "
+    "chat, so Kitden cannot tell if any were cut."
 )
 # After CODEX_CUT, when Kitden cannot find the files of some other skills in the list.
-CODEX_ONE_UNKNOWN = "Kitden cannot find the file of 1 more, so it cannot tell if it was cut."
-CODEX_MORE_UNKNOWN = "Kitden cannot find the files of {n} more, so it cannot tell if they were cut."
+CODEX_ONE_UNKNOWN = (
+    "For 1 more, the file is gone or was changed after the chat, so Kitden cannot tell if it "
+    "was cut."
+)
+CODEX_MORE_UNKNOWN = (
+    "For {n} more, the files are gone or were changed after the chat, so Kitden cannot tell if "
+    "they were cut."
+)
 ROOM_LEFT = "Estimate: about {left} {unit} left before the limit."
 # The short result on a card's face.
 CLAUDE_SHORT_ALL = "All {n} sent"
@@ -306,6 +312,10 @@ NOTE_CODEX_LONG = "Codex sends only the first 1,024 characters of a description.
 NOTE_NOT_LISTED = "It was not in the list of your last chat."
 NOTE_NO_FILE = "Kitden cannot find its file, so it cannot tell if it was cut."
 NOTE_NEWER = "Its plugin was updated after the chat; Kitden reads the new version."
+NOTE_CHANGED = (
+    "Its plugin was updated after the chat and its description changed, so Kitden cannot tell "
+    "if it was cut."
+)
 # "How this is counted".
 # "{version}", "{when}" and "{surface}" each start with a space, or are "" when the log does not
 # say.
