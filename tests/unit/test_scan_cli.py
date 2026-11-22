@@ -25,6 +25,7 @@ from tests.unit.test_context_view import (
     rule_skills,
     skill,
     window_for,
+    write_json,
 )
 from tests.unit.test_findings import KITDEN, add_entry, hold_github
 
@@ -96,6 +97,10 @@ def _summary(home, capsys) -> list[str]:
     return capsys.readouterr().out.splitlines()
 
 
+# The tests run outside any project, so the scan names the folder of the chat it read.
+ELSEWHERE = "    That chat was in /work/a."
+
+
 def _after(lines: list[str], line: str) -> list[str]:
     """The lines that follow `line`, up to the next one that is not indented further."""
     start = lines.index(line) + 1
@@ -119,7 +124,7 @@ def test_scan_says_which_skills_the_last_chat_cut(bare, capsys):
     )
     claude, codex = lines.index("Claude Code: found (unknown version)"), lines.index(said)
     assert claude < codex < next(i for i, line in enumerate(lines) if line.startswith("Codex:"))
-    assert _after(lines, said) == ["    gamma, delta"]
+    assert _after(lines, said) == [ELSEWHERE, "    gamma, delta"]
     assert lines[-1] == "To fix: kitden open"
 
 
@@ -130,6 +135,7 @@ def test_scan_names_the_first_few_skills_and_counts_the_rest(bare, capsys):
     said = next(line for line in lines if line.startswith("  Skill list:"))
     assert said.startswith("  Skill list: In your last chat on Nov 6, 9 of 10 skills showed")
     assert _after(lines, said) == [
+        ELSEWHERE,
         "    plugin-dev:skill-number-1, plugin-dev:skill-number-2,",
         "    plugin-dev:skill-number-3, plugin-dev:skill-number-4,",
         "    plugin-dev:skill-number-5 +4 more",
@@ -143,7 +149,7 @@ def test_scan_does_not_list_skills_set_to_name_only(bare, capsys):
     lines = _summary(bare, capsys)
     said = next(line for line in lines if line.startswith("  Skill list:"))
     assert said.endswith("1 more showed only a name, as you chose.")
-    assert _after(lines, said) == ["    gamma"]
+    assert _after(lines, said) == [ELSEWHERE, "    gamma"]
 
 
 def test_scan_lists_nothing_when_every_name_only_skill_was_chosen(bare, capsys):
@@ -155,7 +161,7 @@ def test_scan_lists_nothing_when_every_name_only_skill_was_chosen(bare, capsys):
         "  Skill list: In your last chat on Nov 6, all 4 skills were sent; 2 showed only a name, "
         "as you chose."
     )
-    assert _after(lines, said) == []
+    assert _after(lines, said) == [ELSEWHERE]
     assert lines[-1] == "To see or change it: kitden open"
 
 
@@ -175,7 +181,7 @@ def test_scan_names_the_codex_skills_whose_description_was_cut(bare, capsys):
     lines = _summary(bare, capsys)
     said = next(line for line in lines if line.startswith("  Skill list: In your last chat on Oct"))
     assert "2 of 3 descriptions were cut" in said
-    assert _after(lines, said) == ["    alpha, beta"]
+    assert _after(lines, said) == [ELSEWHERE, "    alpha, beta"]
 
 
 def test_scan_names_the_codex_skills_left_out(bare, capsys):
@@ -190,7 +196,41 @@ def test_scan_names_the_codex_skills_left_out(bare, capsys):
     )
     lines = _summary(bare, capsys)
     said = next(line for line in lines if "left 1 of 3 skills out" in line)
-    assert _after(lines, said) == ["    gamma"]
+    assert _after(lines, said) == [ELSEWHERE, "    gamma"]
+
+
+def test_scan_in_a_folder_with_no_chat_shows_the_last_chat_and_its_folder(
+    bare, capsys, monkeypatch
+):
+    here, there = bare / "work/here", bare / "work/there"
+    here.mkdir(parents=True)
+    there.mkdir(parents=True)
+    write_json(bare / ".claude.json", {"projects": {str(here): {}, str(there): {}}})
+    skill(bare / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(bare, {"alpha": "Does alpha."}, folder=str(there))
+    monkeypatch.chdir(here)
+    lines = _summary(bare, capsys)
+    said = next(line for line in lines if line.startswith("  Skill list: In your last chat"))
+    assert _after(lines, said) == ["    That chat was in ~/work/there."]
+    monkeypatch.chdir(there)
+    lines = _summary(bare, capsys)
+    said = next(line for line in lines if line.startswith("  Skill list: In your last chat"))
+    assert _after(lines, said) == []
+    # The page and `kitden show context` still answer for the project itself.
+    assert main(["show", "context", "--home", str(bare), "--project", str(here)]) == 0
+    cards = {c["client"]: c for c in json.loads(capsys.readouterr().out)["clients"]}
+    assert cards["claude_code"]["message"] == (
+        "No Claude Code chat yet. Open one chat, and Kitden will show what Claude Code sent."
+    )
+
+
+def test_scan_with_no_chat_anywhere_says_there_is_none(bare, capsys):
+    skill(bare / ".claude/skills", "alpha", "Does alpha.")
+    lines = _summary(bare, capsys)
+    assert (
+        "  Skill list: No Claude Code chat yet. Open one chat, and Kitden will show what "
+        "Claude Code sent." in lines
+    )
 
 
 def test_scan_says_so_when_it_cannot_tell(bare, capsys):

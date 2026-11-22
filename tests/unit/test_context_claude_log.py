@@ -141,6 +141,18 @@ def test_a_picked_folder_reads_only_its_own_chats(tmp_path):
     assert last_claude_list(tmp_path, "/work/none") is None
 
 
+def test_a_chat_that_moved_to_another_folder_keeps_the_picked_folders_list(tmp_path):
+    # The Claude app can change a chat's folder; the chat then sends a list from there too.
+    here = list_entry(["a"], "- a: Here.", folder="/work/a", at="2026-11-21T11:00:00Z")
+    there = list_entry(["a"], "- a: There.", folder="/work/b", at="2026-11-22T12:00:00Z")
+    older = list_entry(["a"], "- a: Older.", folder="/work/a", at="2026-11-19T10:00:00Z")
+    write_chat(tmp_path, "p", "moved", [here, assistant(), there], stamp("2026-11-22T12:00:00Z"))
+    write_chat(tmp_path, "p", "older", [older], stamp("2026-11-19T10:00:00Z"))
+    assert last_claude_list(tmp_path, "/work/a").skills == (("a", "Here."),)
+    assert last_claude_list(tmp_path, "/work/b").skills == (("a", "There."),)
+    assert last_claude_list(tmp_path, None).skills == (("a", "There."),)
+
+
 def test_no_chats_at_all_is_none(tmp_path):
     assert last_claude_list(tmp_path, None) is None
 

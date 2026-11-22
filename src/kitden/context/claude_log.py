@@ -87,12 +87,12 @@ def _known_shape(attachment: dict) -> bool:
     )
 
 
-def _skipped(entry: dict, folder: str | None) -> bool:
-    """Not a person's chat (a sidechain, claude -p, the Agent SDK), or not the picked folder."""
+def _not_a_person(entry: dict) -> bool:
+    """A sidechain, claude -p or the Agent SDK: not a person's chat."""
     entrypoint = entry.get("entrypoint")
-    if entry.get("isSidechain") or (isinstance(entrypoint, str) and entrypoint.startswith("sdk")):
-        return True
-    return folder is not None and entry.get("cwd") != folder
+    return bool(entry.get("isSidechain")) or (
+        isinstance(entrypoint, str) and entrypoint.startswith("sdk")
+    )
 
 
 def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
@@ -121,8 +121,12 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                 attachment = entry.get("attachment") if isinstance(entry, dict) else None
                 if not isinstance(attachment, dict) or attachment.get("type") != "skill_listing":
                     continue
-                if _skipped(entry, folder):
+                if _not_a_person(entry):
                     return None
+                # checked 2026-11-22 (real logs, Claude app 2.1.325): one chat can send lists
+                # from more than one folder when its folder changes. Keep the picked folder's.
+                if folder is not None and entry.get("cwd") != folder:
+                    continue
                 entrypoint = entry.get("entrypoint")
                 version = entry.get("version")
                 version = version if isinstance(version, str) else ""
