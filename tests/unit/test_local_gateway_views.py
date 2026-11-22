@@ -742,14 +742,27 @@ def test_one_server_that_breaks_does_not_stop_the_others(home, monkeypatch):
     assert sorted(t["name"] for t in load_tools(home)["second"]) == ECHO_TOOLS
 
 
-def test_a_refresh_keeps_what_each_server_says_it_does(home):
-    hold(
-        home,
-        {
-            "first": echo("--about", "Echoes text.\nTwo lines.\n\nFor the model only."),
-            "second": echo(),
-        },
-    )
+# A server that says what it does in its instructions. Its own small file: echo_server.py is
+# part of the CPU and memory measurement, which a code change must not touch.
+ABOUT_SERVER = """
+from mcp.server.mcpserver import MCPServer
+
+server = MCPServer("about", instructions="Echoes text.\\nTwo lines.\\n\\nFor the model only.")
+
+
+@server.tool(description="Answer with the text.")
+def echo(text: str) -> str:
+    return text
+
+
+server.run()
+"""
+
+
+def test_a_refresh_keeps_what_each_server_says_it_does(home, tmp_path):
+    script = tmp_path / "about_server.py"
+    script.write_text(ABOUT_SERVER)
+    hold(home, {"first": {"command": sys.executable, "args": [str(script)]}, "second": echo()})
     asyncio.run(refresh_tools(home))
     assert load_about(home) == {"first": "Echoes text. Two lines."}
 
