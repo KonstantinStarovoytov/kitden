@@ -93,8 +93,12 @@ list in two small files in Kitden's own data folder. If Codex has to be asked, i
 stderr and waits up to 15 seconds. A run within the next hour, with unchanged Codex settings,
 does not wait; after an hour Kitden asks again, because a plugin switched in Codex on another
 computer does not change your settings file. It prints what each agent loads and, for Claude
-Code and Codex, whether the skill list fit in that chat. When Kitden cannot tell (Cursor, or no chat yet), the
-line says why. `kitden scan --json` prints everything the page shows.
+Code and Codex, whether the skill list fit in that chat, with the names of the skills that did
+not fit. Skills you set to Name only are not listed. When Kitden cannot tell (Cursor, or no chat
+yet), the line says why. Then one line names the warnings and counts the notes; `kitden show
+findings` prints them all. The last line says where to fix them: `kitden open`. Before Kitden is
+installed, run these with `uvx --python 3.13` in front. `kitden scan --json` prints everything
+the page shows.
 
 ## Try the sample
 
