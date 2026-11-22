@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **The README's first screen shows how to try Kitden:** the command `uvx --python 3.13 kitden
+  scan` sits right under the tagline, with a line saying it only reads. The desk button and
+  the contributor links moved down to "Help build Kitden" (#154).
 - **The scan names the skills that did not fit:** `kitden scan` lists the skills your last chat
   sent by name only or cut, names the warnings, counts the notes and ends with `kitden open`
   (#156).
