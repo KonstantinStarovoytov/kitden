@@ -51,7 +51,7 @@ const NOT_KNOWN = "Not known";
 const HINT_TAGS = { reads: "Read", writes: "Write", "may write": "May write" };
 
 // The hint line under the dock on the map (gateway-notes 8); the List has none.
-const MAP_HINT = "Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click tools in Details to pick several";
+const MAP_HINT = "Click anything for its Details · drag a server onto a client · point at a link and press × to remove it";
 
 // What an arrival with a selection (Back, Forward or a link) opens, once: a server the Kitden
 // gateway holds (`held`, and `tool` for one of its tools), a server outside it by its name (its
@@ -92,7 +92,7 @@ export function renderGateway(main, { again = false } = {}) {
   if (!again) onMap.view = null;
   const head = el("div", "page-head");
   head.append(el("h1", null, "Gateway"));
-  const lede = el("p", "lede", "Connect your agents. Shape what they can use.");
+  const lede = el("p", "lede", "One place for your MCP servers. Turn a server or a tool on or off for every agent.");
   main.append(head, lede);
   const view = current("gateway");
   if (!view) {

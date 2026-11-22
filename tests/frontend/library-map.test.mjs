@@ -170,7 +170,7 @@ test('the head has the tabs, the lede, the scope bar and Map | List', () => {
   assert.deepEqual(actions.children.map((n) => n.className), ['btn add', 'seg']);
   const seg = actions.children.at(-1);
   assert.deepEqual(seg.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Map', 'true'], ['List', 'false']]);
-  assert.equal(lede.textContent, 'Follow the source. Connect only what you need.');
+  assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
   assert.equal(tabs.className, 'seg sm map-tabs');
   assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Plugins and skills', 'true'], ['Instructions', 'false']]);
   assert.ok(texts(scope).includes('Shared setup · project overrides stay separate'));
@@ -199,7 +199,7 @@ test('List keeps the head and the tabs, and draws no map', () => {
   const [head, lede, tabs] = main.children;
   assert.equal(head.children[0].textContent, 'Library');
   assert.equal(head.children.at(-1).children.at(-1).children.find((n) => n.textContent === 'List').getAttribute('aria-pressed'), 'true');
-  assert.equal(lede.textContent, 'Follow the source. Connect only what you need.');
+  assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
   assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.textContent), ['Plugins and skills', 'Instructions']);
   assert.equal(map(), null);
   assert.equal(hintLine.children.at(-1).textContent, 'One row per item, one column per client. Right opens a plugin, Enter opens Details.');

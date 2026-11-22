@@ -17,7 +17,7 @@ import { busy, current, currentError, projectPath, render, retry, setState, stat
 import { say } from "./toast.js";
 import { addToTray, inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray } from "./tray.js";
 
-export const LEDE = "Follow the source. Connect only what you need.";
+export const LEDE = "The plugins, skills and instruction files your agents load, and where each comes from.";
 const MAP_HINT = "Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details";
 // The map's columns at the mockup's x (0, 250, 500) and sizes (library-notes §2.1): a client
 // 150×54, a plugin card 180×60 (a skill or hook row 34 high), an inside item 200×34. What a plugin
