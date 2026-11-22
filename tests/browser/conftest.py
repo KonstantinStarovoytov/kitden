@@ -144,14 +144,30 @@ async def no_proxy():
     raise ValueError(NO_SERVER)
 
 
+class Switch:
+    """An ASGI app that hands each request to `target`. The sample serves through it, so the
+    update's fake start_page can put the new version's page on the same port with no moment
+    when the port refuses: a refused read is a console error, and fails the test."""
+
+    def __init__(self, target) -> None:
+        self.target = target
+
+    async def __call__(self, scope, receive, send) -> None:
+        await self.target(scope, receive, send)
+
+
 @pytest.fixture
 def sample(tmp_path, monkeypatch, fake_keychain):
     """The medium sample, served as `kitden open` serves a real home, not in demo mode: search,
-    sources, Details of a found item and the update's check and its question work. Everything
-    that would leave the sample is a stand-in (tests/offline.py, the demo's adapters and runner,
-    the fake Keychain), and the network guard is on: a test that tries to connect outside this
-    computer from this process fails. A move into the gateway is refused (no_proxy): use demo
-    for that flow."""
+    sources, Details of a found item and the update work. Everything that would leave the
+    sample is a stand-in (tests/offline.py, the demo's adapters and runner, the fake Keychain),
+    and the network guard is on: a test that tries to connect outside this computer from this
+    process fails. A move into the gateway is refused (no_proxy): use demo for that flow.
+
+    The update's fake start_page does in this process what a real update does with a new
+    process: it starts a second page on the same port, token and session, ends the first
+    page's event stream and sends every later request to the second page. Only then does
+    Kitden's version read LATEST."""
     guard = guarded_lookups(monkeypatch)
     next(guard)
     for module, name, value in STAND_INS:
@@ -159,6 +175,36 @@ def sample(tmp_path, monkeypatch, fake_keychain):
     monkeypatch.setattr(web, "default_adapters", demo_adapters)
     monkeypatch.setattr(web, "load_proxy", no_proxy)
     home = build_demo_home(tmp_path / "sample", "medium")
+    handed_over: list[asyncio.Task] = []  # holds the hand-over task while it runs
+
+    def start_page(launcher, value: str) -> None:
+        port, token, session = value.split(":")
+        # The new page as `kitden serve --take-over` makes it: _page with the old page's port,
+        # token and session. Its port check would refuse the port the switch still serves.
+        with monkeypatch.context() as patch:
+            patch.setattr(cli, "pick_port", lambda start, tries=20: int(port))
+            made = cli._page(
+                create_app,
+                demo_build(home),
+                home,
+                START,
+                port=int(port),
+                token=token,
+                session=session,
+                **options,
+            )
+        assert made is not None
+        handed_over.append(asyncio.ensure_future(hand_over(made[0])))
+
+    async def hand_over(new) -> None:
+        # The loop cancels this task when the server stops; that ends the new page's lifespan.
+        async with new.router.lifespan_context(new):
+            old = switch.target
+            old.state.events.close()
+            switch.target = new
+            monkeypatch.setattr(web, "__version__", LATEST)
+            await asyncio.Event().wait()
+
     options = {
         "run": DemoRunner(home),
         "setup_command": lambda: demo_command(home),
@@ -168,14 +214,14 @@ def sample(tmp_path, monkeypatch, fake_keychain):
         "fetch": lambda url: json.dumps({"info": {"version": LATEST}}).encode(),
         "upgrade": fake_upgrade,
         "install": Install("uv", home / ".local/bin/kitden", ("uv", "tool", "upgrade", "kitden")),
-        # Flow 13 gives it a stand-in that starts the new version's page.
-        "start_page": lambda launcher, value: None,
+        "start_page": start_page,
     }
     made = cli._page(create_app, demo_build(home), home, START, **options)
     assert made is not None, f"no free port from {START}"
     app, port, _, url = made
+    switch = Switch(app)
     try:
-        with serving(app, port):
+        with serving(switch, port):
             yield Demo(home=home, url=url)
     finally:
         next(guard, None)  # fails the test when it tried to connect outside
