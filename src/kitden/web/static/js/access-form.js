@@ -1,7 +1,7 @@
 // The one form that asks for what a server needs before it can join the preview (Part 3a of the
 // 2026-11-01 design): one field per value the server declares, labelled with its own words. A
-// plain token is the token alone; Kitden adds "Bearer ". The header or variable name shows only
-// under Details. The catalog details, the map and the dock all use it.
+// plain token is the token alone; Kitden adds "Bearer ". A header or variable of its own shows
+// its name under its field. The catalog details, the map and the dock all use it.
 import { busyWhile, button, el, icon, secretsWord } from "./dom.js";
 import { closePanel, header, openPanel } from "./panel.js";
 import { animateTo, D, glide, shake } from "./motion.js";
@@ -69,6 +69,10 @@ export function accessForm(waits, onCheck) {
     input.autocomplete = "off";
     input.placeholder = field.prefix ? "Paste token" : "Enter value";
     label.append(el("span", null, field.label), input);
+    // A header or variable of its own shows its name under the server's words; a plain token
+    // (Bearer) is the token alone.
+    const sent = field.field === "env" ? `Set as ${field.name}` : `Sent as the ${field.name} header`;
+    if (!field.prefix && field.label !== field.name) label.append(el("small", "muted", sent));
     if (field.later) label.append(el("small", "muted", "Checked when the gateway starts it"));
     inputs.push({ field, input });
     return label;
@@ -79,15 +83,12 @@ export function accessForm(waits, onCheck) {
     more.append(...optional.map(fieldNode));
     rows.append(more);
   }
-  const names = el("details", "access-names");
-  names.append(el("summary", null, "Details"));
-  for (const { name, field } of waits.fields) names.append(el("p", "muted", field === "env" ? `Set as ${name}` : `Sent as the ${name} header`));
   const { why, done, refused, worked } = statusLines();
   // With only optional values (a remote that may take a token), the form previews without one.
   const label = required.length ? "Add token" : "Preview";
   const submit = el("button", "btn primary", label);
   submit.type = "submit";
-  form.append(rows, why, done, el("p", "muted", `Saved in your ${secretsWord()} on Apply.`), names, submit);
+  form.append(rows, why, done, el("p", "muted", `Saved in your ${secretsWord()} on Apply.`), submit);
 
   // The values typed, as the change's params ({ headers?, env? }), or null while a required one
   // is empty. A pasted "Bearer …" keeps one prefix.
@@ -288,12 +289,12 @@ export function newAccess(server, way, name, value) {
 
 // The ways to give a server access: a remote server takes a token, a header of its own or a
 // browser sign-in (only one that offers it); a local one a variable. `hint` says where the value
-// comes from; `say`, how it is sent, waits under Details.
+// comes from (and, for a token, the one thing about how it is sent that is not plain).
 const WAYS = {
-  token: { label: "Token", fields: [], hint: "The server's docs or your account page there give it.", say: "Sent as the Authorization header, with \"Bearer\" in front." },
-  header: { label: "Header", fields: ["Header name", "X-API-Key"], hint: "The server's docs name the header and say where to get its value.", say: "Sent as this header on every request." },
-  "sign-in": { label: "Sign in", fields: null, hint: "Opens the server's own sign-in page in your browser.", say: "The sign-in is kept in your Keychain and refreshed by the gateway." },
-  variable: { label: "Variable", fields: ["Variable name", "API_KEY"], hint: "The server's docs name the variable and say where to get its value.", say: "Set as this variable when the gateway starts the server." },
+  token: { label: "Token", add: "Add token", fields: [], hint: "The server's docs or your account page there give it. Kitden adds \"Bearer\" in front." },
+  header: { label: "Header", add: "Add header", fields: ["Header name", "X-API-Key"], hint: "The server's docs name the header and say where to get its value." },
+  "sign-in": { label: "Sign in", fields: null, hint: "Opens the server's own sign-in page in your browser." },
+  variable: { label: "Variable", add: "Add variable", fields: ["Variable name", "API_KEY"], hint: "The server's docs name the variable and say where to get its value." },
 };
 
 // What a remote server answered when asked with no value (/api/gateway/access-kind), in words;
@@ -320,12 +321,9 @@ export function addAccess(server, { remote = true, back = null, need = null } = 
   kindSay.hidden = true;
   const fields = el("div", "access-fields");
   const hint = el("p", "muted");
-  // How the value is sent: technical, so under Details.
-  const say = el("p", "muted");
-  const how = el("details", "access-names");
-  how.append(el("summary", null, "Details"), say);
   const saved = el("p", "muted", `Saved in your ${secretsWord()} on Apply.`);
-  const submit = el("button", "btn primary", "Preview");
+  // Says what it adds, as the catalog's "Add token": the change then waits for Apply.
+  const submit = el("button", "btn primary", "");
   submit.type = "submit";
   const { why, done, refused, worked } = statusLines();
   let name = null;
@@ -335,11 +333,11 @@ export function addAccess(server, { remote = true, back = null, need = null } = 
     const ask = WAYS[way];
     const turn = ++drawn;
     const needed = way === needWay;
-    say.textContent = ask.say;
     hint.textContent = needed && need.label && need.label !== need.name ? need.label : ask.hint;
     name = value = null;
     fields.replaceChildren();
     submit.hidden = ask.fields === null;
+    if (ask.add) submit.textContent = ask.add;
     why.hidden = done.hidden = true;
     // The Sign in form says where it is saved itself, and its hint goes above its button.
     saved.hidden = hint.hidden = ask.fields === null;
@@ -379,7 +377,7 @@ export function addAccess(server, { remote = true, back = null, need = null } = 
   };
   ways.forEach(choose);
   if (ways.length > 1) form.append(pick);
-  form.append(kindSay, fields, hint, why, done, saved, how, submit);
+  form.append(kindSay, fields, hint, why, done, saved, submit);
   draw();
   form.addEventListener("input", () => { why.hidden = true; });
   form.addEventListener("submit", (event) => {
@@ -405,7 +403,7 @@ export function addAccess(server, { remote = true, back = null, need = null } = 
       }
       worked("Works");
       closeSoon({ node: form });
-    }).finally(() => { submit.textContent = "Preview"; });
+    }).finally(() => { submit.textContent = WAYS[way].add; });
     busyWhile(submit, check).catch(() => {});
   });
   openForm("Add access", server, remote ? "What the server asks for. Nothing changes until Apply." : "A variable with a secret. Nothing changes until Apply.", form, back);

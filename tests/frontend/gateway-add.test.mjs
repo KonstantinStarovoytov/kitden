@@ -619,11 +619,15 @@ test('one Authorization field: only the token is asked', () => {
   assert.equal(input.type, 'password');
   const label = input.parentNode;
   assert.equal(text(label).includes('Access token'), true);
-  // The header name shows only inside the Details fold.
-  const details = inside(form.node).filter((n) => n.tagName === 'DETAILS');
-  const outside = inside(form.node).filter((n) => n.textContent.includes('Authorization') && !details.some((d) => d.contains(n)));
-  assert.deepEqual(outside, []);
-  assert.equal(details.some((d) => text(d).includes('Sent as the Authorization header')), true);
+  // A plain token is the token alone: no header name, and no Details fold.
+  assert.deepEqual(inside(form.node).filter((n) => n.textContent.includes('Authorization')), []);
+  assert.deepEqual(inside(form.node).filter((n) => n.tagName === 'DETAILS'), []);
+});
+
+test('a header of its own shows its name under the server\'s words', () => {
+  const key = { field: 'headers', name: 'X-Docs-Key', label: 'Your Docs key.', prefix: '' };
+  const form = accessForm({ server: 'docs', kind: 'token', fields: [key] }, () => {});
+  assert.equal(text(inputsOf(form)[0].parentNode).includes('Sent as the X-Docs-Key header'), true);
 });
 
 test('strips a pasted Bearer and trims', () => {
