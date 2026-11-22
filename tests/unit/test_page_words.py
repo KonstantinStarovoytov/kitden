@@ -89,8 +89,9 @@ def test_details_float_beside_the_page_without_a_scrim():
     assert "requestAnimationFrame(placeFloat)" in shell
 
 
-def test_rail_counts_only_attention_and_changes():
-    assert 'id="nav-attention"' in INDEX and 'id="nav-changes"' in INDEX
+def test_rail_counts_only_attention():
+    assert 'id="nav-attention"' in INDEX and "nav-changes" not in INDEX
+    assert "nav-changes" not in script("app.js")
     assert "nav-items" not in INDEX and "nav-around" not in INDEX
     assert "around" not in script("app.js")
 
@@ -105,11 +106,11 @@ def test_overview_has_no_pills_bar_or_recent_changes():
 def test_overview_says_your_setup_connected():
     overview = script("overview.js")
     for words in (
-        '"Your setup, connected."',
+        'const TITLE = "Overview";',
         "Hover a card to see it on the map · a button adds a preview · click Kitden gateway or "
         "Library to open it",
-        '"Everything looks fine: "',
-        '"thing needs" : "things need"} your attention. Everything else looks fine: `',
+        '"Nothing needs your attention"',
+        '"thing needs" : "things need"} your attention`',
         '"Needs attention"',
         '"Can improve"',
         '"Your setup"',
@@ -985,7 +986,7 @@ def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
 def test_overview_notes_are_sentences_with_an_info_icon():
     text = script("overview.js")
     assert 'node.append(icon("info", 13), el("span", null, noteSentence(group)));' in text
-    assert "`${group.name} ${joinWords(group.notes)}.`" in text
+    assert "`${group.name} ${joinWords(group.notes.map((words) => words.one))}.`" in text
     assert "(nothing to fix)" in text and "`Hide ${plural(count" in text
     assert "shortPaths" not in text and "flag(" not in text
     assert '.ov-fold[aria-expanded="true"] svg { rotate: 90deg; }' in CSS
@@ -2068,7 +2069,8 @@ def test_needs_review_is_an_amber_ring_with_a_small_dot():
 
 def test_overview_notes_say_same_name_another_source():
     text = script("overview.js")
-    assert 'same_name_other_source: "has the same name as an entry from another source"' in text
+    assert 'one: "has the same name as an entry from another source"' in text
+    assert 'many: "have the same name as an entry from another source"' in text
 
 
 def test_the_gateway_opens_and_keeps_the_selected_server():

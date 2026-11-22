@@ -314,6 +314,9 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .hint-dock { z-index: 22; }
 .hint-line { position: absolute; left: 0; right: 0; bottom: 14px; margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; }
 .hint-line svg { flex: none; }
+/* A strip under the hint's words that fades from clear to the page colour, so page text that scrolls
+   under the hint never shows through them. It takes no room and no clicks. */
+.hint-band:has(> #hint:not([hidden]))::before { content: ""; position: absolute; left: -22px; right: -22px; bottom: 0; height: 52px; background: linear-gradient(to bottom, transparent, var(--canvas) 55%); pointer-events: none; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }
 
 /* Controls */
@@ -515,6 +518,9 @@ input:focus-visible + .chk { outline: 2px solid var(--focus); outline-offset: 2p
    the right. A card's line is quiet; its button is primary only in Needs attention. A card that
    leaves is out of reach while it goes (overview.js leave). */
 .ov-grid { display: grid; grid-template-columns: minmax(0, 690px) minmax(0, 480px); gap: 40px; margin-top: 2px; align-items: start; }
+/* Two columns need the cards (330 px), the gap (40) and the whole map (470) beside each other: 840 px,
+   plus the rail (148), the frame (32) and the page padding (44). Under 1064 px it is one column. */
+@media (max-width: 1063px) { .ov-grid { grid-template-columns: minmax(0, 1fr); } }
 .ov-group[hidden] { display: none; }
 .ov-cap { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--ink-2); font-size: 11px; font-weight: 600; letter-spacing: 0; }
 .ov-main > * + .ov-group:not([hidden]) { margin-top: 14px; }
@@ -541,6 +547,10 @@ input:focus-visible + .chk { outline: 2px solid var(--focus); outline-offset: 2p
 .ov-note { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 2px; border-bottom: 1px solid var(--wire-soft); color: var(--ink-3); font-size: 12px; cursor: pointer; }
 .ov-note svg { flex: none; }
 .ov-note:hover { color: var(--ink-2); }
+/* A row for several items: its chevron turns like the notes fold's; its items sit under it, set in. */
+.ov-note-group svg { transition: rotate 280ms var(--calm); }
+.ov-note-group[aria-expanded="true"] svg { rotate: 90deg; }
+.ov-note-items { padding-left: 23px; }
 .ov-note:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .ov-setup div.map { margin: 4px 0 0 -6px; }
 .ov-foot { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; color: var(--ink-3); font-size: 11px; }
@@ -1379,7 +1389,6 @@ html.map-entrance::view-transition-new(page) { animation: none; }
   .update-spot { display: flex; align-items: center; gap: 4px 8px; padding: 0; border: 0; }
   .update-pop { left: auto; right: 0; bottom: auto; top: calc(100% + 8px); transform-origin: top right; }
   .appearance { min-width: 24px; justify-content: center; }
-  .ov-grid { grid-template-columns: 1fr; }
   .conn { grid-template-columns: 1fr; }
   /* Narrow: a Changes row keeps its time, title, state and Undo; its client tiles go, and it may grow. */
   .tl .row { grid-template-columns: minmax(44px, max-content) minmax(0, 1fr) auto auto; height: auto; min-height: 46px; padding-block: 6px; }

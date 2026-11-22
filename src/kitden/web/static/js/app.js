@@ -81,13 +81,10 @@ function renderPlace() {
   drawTray(tray, { toastStays: true });
 }
 
-// Rail counters and the Where list follow the data.
+// The Overview's count in the rail and the Where list follow the data.
 function renderShell() {
   const overview = current("overview");
   rollTo($("#nav-attention"), overview && overview.counts.attention ? overview.counts.attention : "");
-  // Changes still in effect, the ones Undo can take back.
-  const changes = (data.changes || []).filter((e) => e.state === "verified").length;
-  rollTo($("#nav-changes"), changes || "");
   // The time of the last reload where every read worked, and a note when the latest one failed.
   const { lastGoodRead, lastReadFailed } = freshness;
   const time = lastGoodRead ? new Date(lastGoodRead).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "…";

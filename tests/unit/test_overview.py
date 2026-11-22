@@ -10,13 +10,13 @@ from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.clients import version_cache
 from kitden.context.rules import codex_rule
 from kitden.demo import build_demo_home
-from kitden.model import FindingType
+from kitden.model import Finding, FindingType, Severity
 from kitden.views.context_view import context_view
 from kitden.views.findings import find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.views.load_map import load_map
-from kitden.views.overview import overview
+from kitden.views.overview import FOLD_FROM, note_count, overview
 from tests.conftest import cursor_db, make_home, write_cursor_fixture_state
 from tests.unit.test_context_view import (
     CODEX_A,
@@ -53,7 +53,8 @@ def test_attention_cards_and_the_notes_count(home):
     data = overview(build_inventory(home), None)
     assert [c["name"] for c in _cards(data, "attention")] == ["docker-expert", "superpowers"]
     assert data["counts"]["attention"] == 2
-    assert data["notes"] == 14  # 14 names with notes (each note here is about another name)
+    # 14 names have notes; those with the same words fold into one row each (FOLD_FROM or more).
+    assert data["notes"] == 4
 
 
 def test_no_card_shows_a_file_path(home, tmp_path):
@@ -231,9 +232,9 @@ def test_duplicate_cards_are_in_name_order_then_client_order():
     ]
 
 
-def test_notes_count_items_not_findings(tmp_path):
+def test_notes_count_rows_not_findings(tmp_path):
     home = build_demo_home(tmp_path, "medium")  # 16 notes about 14 names: docs has three
-    assert overview(build_inventory(home), None)["notes"] == 14
+    assert overview(build_inventory(home), None)["notes"] == 5
 
 
 def test_the_notes_count_is_the_rows_the_page_draws(home):
@@ -242,7 +243,36 @@ def test_the_notes_count_is_the_rows_the_page_draws(home):
         findings = page.get("/api/findings").json()
     names = {n for f in findings if f["severity"] == "info" for n in f["names"]}
     assert any(f["type"] == "bypasses_gateway" for f in findings)
-    assert count == len(names)
+    assert count <= len(names)
+
+
+def _note(kind, *names):
+    return Finding(kind, Severity.INFO, ("i",), "x", names=names)
+
+
+def test_note_count_folds_repeats():
+    # The same example as tests/frontend/overview.test.mjs ("items with the same words fold"):
+    # five items that load from another client are one row, three with an unreadable state are
+    # three rows, and "docs" with two notes is one row. Five rows in all.
+    findings = [_note(FindingType.CROSS_LOADED, n) for n in "abcde"]
+    findings += [_note(FindingType.UNKNOWN_STATE, n) for n in ("u1", "u2", "u3")]
+    findings += [
+        _note(FindingType.SAME_NAME_OTHER_SOURCE, "docs"),
+        _note(FindingType.BYPASSES_GATEWAY, "docs"),
+    ]
+    assert FOLD_FROM == 4
+    assert note_count(findings) == 5
+    # Exactly four fold; three stay single.
+    assert note_count(findings[:4]) == 1
+    assert note_count(findings[:3]) == 3
+    # Items with two notes in the same order fold too; the same notes in another order do not.
+    both = [
+        _note(kind, name)
+        for name in "wxyz"
+        for kind in (FindingType.CROSS_LOADED, FindingType.BYPASSES_GATEWAY)
+    ]
+    assert note_count(both) == 1
+    assert note_count(both[:-2] + both[-1:] + both[-2:-1]) == 4
 
 
 # Cards with one action, and the "Your setup" map (Phase 7, Task 1) -------------------------
