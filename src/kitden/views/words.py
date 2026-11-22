@@ -6,6 +6,11 @@ def join_words(words: list[str]) -> str:
     return " and ".join([", ".join(words[:-1]), words[-1]] if len(words) > 1 else words)
 
 
+# The Instructions map: found clients that read no instruction file in the scope shown.
+NO_FILE_ALL = "{names} {loads} no instruction file in every project."
+NO_FILE_HERE = "{names} {loads} no instruction file in this project."
+PICK_PROJECT = "Pick a project to see its own files."
+
 # A cell's state, as the Library, Details and the After chips say it.
 STATE_WORDS: dict[str, str] = {
     "on": "On",

@@ -22,13 +22,11 @@ from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Enabled, Item, Ite
 from kitden.views.catalog import catalog, installed_inside, plugin_folders
 from kitden.views.effective import in_project
 from kitden.views.load_map import Row, load_map, row_key
-from kitden.views.setup_server import kitden_on, setup_server_state
 from kitden.views.skills import skill_catalog
 from kitden.views.words import ORIGIN_WORDS, STATE_WORDS
 
-# A client's words, from its `kitden` entry, as on the Gateway.
-CONNECTED = "Connected"
-NOT_CONNECTED = "Not connected"
+# A found client that loads nothing in the view shown.
+NOTHING_LOADED = "Nothing loaded"
 STORE = "store"
 # Plugins whose id names no marketplace (a Cursor plugin whose name is not stored locally).
 OTHER = {"key": "other", "name": "Other plugins", "icon": "puzzle", "kind": "other"}
@@ -49,26 +47,51 @@ def cursor_imports(adapters, found: list[str]) -> bool:
     return bool(cursor and cursor.imports_claude_plugins() and "claude_code" in found)
 
 
-def map_clients(inventory, cursor_imports: bool) -> list[dict]:
-    """Each client and its state: not installed, not read, Cursor getting Claude Code's plugins,
-    or whether its `kitden` entry is on."""
+def map_clients(inventory, cursor_imports: bool, loads: dict[str, str | None]) -> list[dict]:
+    """Each client and its state on a Library map: not installed, not read, or what it loads there.
+    `loads` has, per client, the words for what it loads in the view shown ("5 plugins · 62
+    skills", "2 files") and None when it loads nothing there. A found client that loads
+    something is `on`; one that loads nothing is `off`, except Cursor when it takes Claude Code's
+    plugins: it says "Via Claude Code". The word "Connected" is the Gateway's and means the
+    Kitden gateway entry is on; no Library map uses it."""
     status = {c.id: c.status for c in inventory.clients}
-    setup = {e["client"]: e for e in setup_server_state(inventory)}
     out = []
     for client in CLIENTS:
-        read, entry = status.get(client), setup[client]
+        read, mine = status.get(client), loads.get(client)
         if read is ClientStatus.UNREADABLE:
             state, words = "unreadable", STATE_WORDS["unread"]
         elif read is not ClientStatus.FOUND:
             state, words = "missing", STATE_WORDS["missing"]
+        elif mine:
+            state, words = "on", mine
         elif client == "cursor" and cursor_imports:
             state, words = "via", STATE_WORDS["via"]
-        elif kitden_on(entry):
-            state, words = "on", CONNECTED
         else:
-            state = "off"
-            words = STATE_WORDS["off"] if entry["enabled"] is False else NOT_CONNECTED
+            state, words = "off", NOTHING_LOADED
         out.append({"id": client, "name": CLIENT_WORDS[client], "state": state, "words": words})
+    return out
+
+
+def plugin_skill_words(groups: list[dict]) -> dict[str, str | None]:
+    """Per client, what it loads of the plugins and skills in `groups` ("5 plugins · 62 skills");
+    None where it loads none. An item another client's folder brings in counts, since the client
+    loads it."""
+    found: dict[str, dict[str, int]] = {c: {"plugin": 0, "skill": 0} for c in CLIENTS}
+    for group in groups:
+        for item in group["items"]:
+            if item["kind"] not in ("plugin", "skill"):
+                continue
+            for client, state in item["by"].items():
+                if state == "on":
+                    found[client][item["kind"]] += 1
+    out: dict[str, str | None] = {}
+    for client, n in found.items():
+        parts = [
+            f"{n[kind]} {kind}{'' if n[kind] == 1 else 's'}"
+            for kind in ("plugin", "skill")
+            if n[kind]
+        ]
+        out[client] = " · ".join(parts) or None
     return out
 
 
@@ -427,8 +450,9 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     rest = [groups[g["key"]] for g in (OTHER, SKILLS, SETTINGS, PROJECT) if g["key"] in groups]
     for group in [*markets, *rest]:
         group["items"].sort(key=lambda i: i["name"].lower())
+    shown = [*markets, *rest]
     return {
-        "clients": map_clients(inventory, imports),
-        "groups": [*markets, *rest],
+        "clients": map_clients(inventory, imports, plugin_skill_words(shown)),
+        "groups": shown,
         "skill_rules": _skill_rules(inventory, adapters, found),
     }

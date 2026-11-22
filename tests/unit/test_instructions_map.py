@@ -234,3 +234,48 @@ def test_commands_and_agents_are_a_group_of_their_own(home):
     assert "deploy" not in {f["name"] for f in _map(home)["groups"][-1]["files"]}
     assert all("kind" not in f for g in answer["groups"][:2] for f in g["files"])
     assert _files(answer)["all", "CLAUDE.md"]["names"] == ["CLAUDE.md"]
+
+
+def test_a_client_with_no_instruction_file_in_the_scope_says_why(home):
+    # All projects: Claude Code has CLAUDE.md and Codex AGENTS.md; Cursor has no file in every project.
+    answer = _map(home)
+    reading = {c for g in answer["groups"] for f in g["files"] for c in f["by"]}
+    assert "cursor" not in reading
+    assert answer["note"] == (
+        "Cursor loads no instruction file in every project. Pick a project to see its own files."
+    )
+    words = {c["id"]: c["words"] for c in answer["clients"]}
+    assert (words["claude_code"], words["codex"], words["cursor"]) == (
+        "3 files",
+        "1 file",
+        "Nothing loaded",
+    )
+
+    # A project picked: the sentence is about that project.
+    website = _map(home, str(home / "work/website"))
+    assert website["note"] == "Cursor loads no instruction file in this project."
+
+
+def test_the_no_file_sentence_names_every_client_without_one(home):
+    adapters = {a.id: a for a in default_adapters(home, quick=True)}
+    inventory = build_inventory(home, list(adapters.values()), [])
+    inventory.items[:] = [i for i in inventory.items if i.client == "codex"]
+    answer = instructions_map(inventory, adapters, None)
+    assert answer["note"] == (
+        "Claude Code and Cursor load no instruction file in every project. "
+        "Pick a project to see its own files."
+    )
+    # With a project picked there is no second sentence.
+    picked = instructions_map(inventory, adapters, str(home / "work/website"))
+    assert picked["note"] == "Claude Code and Cursor load no instruction file in this project."
+    # Every found client has a file: no sentence.
+    assert instructions_map(*_full(home))["note"] is None
+
+
+def _full(home):
+    """An inventory where each found client has one file in every project."""
+    adapters = {a.id: a for a in default_adapters(home, quick=True)}
+    inventory = build_inventory(home, list(adapters.values()), [])
+    _write(home / ".cursor/rules/a.mdc", "---\n---\nBe brief.\n")
+    inventory = build_inventory(home, list(adapters.values()), [])
+    return inventory, adapters, None
