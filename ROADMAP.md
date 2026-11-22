@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-11-17
+Last updated: 2026-11-22
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -13,7 +13,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   removing a server's own entry, searching the catalogs, adding a GitHub source, adding a
   catalog skill, adding and removing plugins, adding a server with a `${VAR}` header to Cursor
   and Codex, Apply all and Redo are now done in a real browser every night, as a user does
-  them (#145, #146).
+  them (#145, #146, #148).
 
 ### 0.10.1
 
