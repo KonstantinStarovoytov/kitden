@@ -3,9 +3,10 @@ the ring shows the steps, and the page reloads on the new version and says so.
 
 What this cannot test: the real hand-over to a new process (KITDEN_TAKE_OVER, the page lock,
 uv or Homebrew). The sample's fake start_page starts the new page in this process, on the same
-port, token and session (tests/browser/conftest.py). The unit tests
-(tests/unit/test_api_update.py) and the release check keep the rest. Each step's words are not
-checked: the fake steps pass faster than the page asks."""
+port, token and session (tests/browser/conftest.py). Unit tests keep the rest: the update
+steps in tests/unit/test_api_update.py, the take-over in tests/unit/test_cli.py and the page
+lock in tests/unit/test_page.py. Each step's words are not checked: the fake steps pass faster
+than the page asks."""
 
 import json
 
