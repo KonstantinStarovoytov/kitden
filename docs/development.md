@@ -419,6 +419,9 @@ Chromium on Ubuntu. The `engines` job runs them again in Google Chrome and Firef
 and in WebKit on macOS.
 When a job of either scheduled run is red, the desk in kitden-sdlc opens a `ci-failure` issue
 for it, rewrites it each day and closes it when the job is green again.
+Once a week and after each push to `main`, OpenSSF Scorecard rates how the repository is kept
+safe (`.github/workflows/scorecard.yml`): its findings go to the Security tab and its score to
+scorecard.dev.
 `README.md` is also the PyPI page. [README media](readme-media.md) says how its pictures are
 made, how their addresses work on GitHub and PyPI, and what to check before promoting a release.
 
