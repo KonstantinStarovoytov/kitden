@@ -178,7 +178,7 @@ test('a tray change draws the Gateway map again in place: no new page, no entran
 test('the map gives the hint line its words, and the List hides it', () => {
   const heard = () => (hintLine.hidden ? '' : hintLine.children.at(-1).textContent);
   freshMap();
-  assert.equal(heard(), 'Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click tools in Details to pick several');
+  assert.equal(heard(), 'Click anything for its Details · drag a server onto a client · point at a link and press × to remove it');
   state.mode = 'list';
   main.replaceChildren();
   renderGateway(main);
@@ -1726,7 +1726,7 @@ test('Shift- or Cmd-click picks and unpicks one server and opens no Details; Esc
   settle();
   assert.equal(pick.ids.size, 0);
 });
-const MAP_HINT_WORDS = 'Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click tools in Details to pick several';
+const MAP_HINT_WORDS = 'Click anything for its Details · drag a server onto a client · point at a link and press × to remove it';
 
 test('a Shift-click on empty map keeps the pick, and a key press after it opens Details as usual', async (t) => {
   hearDocument(t);

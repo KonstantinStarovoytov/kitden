@@ -2091,7 +2091,8 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
         '"Remove direct entry…"',
         "Move all ${",
         "Set up in",
-        '"Connect your agents. Shape what they can use."',
+        '"One place for your MCP servers. Turn a server or a tool on or off for every agent."',
+
         "The gateway controls only the servers in it. "
         "Direct entries and terminal tools are outside it.",
     ):
@@ -2566,9 +2567,8 @@ def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
     gateway = script("gateway.js")
     # The map names how to use it, as the mockup does (gateway-notes 8); the List has none.
     assert (
-        '"Point at a link and press × to remove it · click anything for its Details · several '
-        "changes wait in preview, then Apply all · drag a server onto a client · ⌘ or Ctrl-click "
-        'tools in Details to pick several"'
+        '"Click anything for its Details · drag a server onto a client · point at a link and '
+        'press × to remove it"'
     ) in gateway
     assert 'setHint(mode === "map" ? mapHint() : "", mode === "map" ? hintActs() : []);' in gateway
     # While servers are picked, or the band left some out, the hint counts them (gateway-pick.js).
@@ -2600,7 +2600,7 @@ def test_gateway_forms_say_in_preview_while_their_row_waits():
 def test_the_library_map_words_and_looks():
     text = script("library-map.js")
     for words in (
-        '"Follow the source. Connect only what you need."',
+        '"The plugins, skills and instruction files your agents load, and where each comes from."',
         '"Point at a link and press × to remove it · drag a plugin onto a client to add it there '
         '· + adds it for all projects · click anything for its Details"',
         '[["plugins", "Plugins and skills"], ["instructions", "Instructions"]]',
