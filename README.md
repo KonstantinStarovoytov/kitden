@@ -5,6 +5,13 @@
 
 <p align="center"><strong>See what Claude Code, Codex and Cursor actually load, and which skills got cut.</strong></p>
 
+```bash
+uvx --python 3.13 kitden scan
+```
+
+Needs [uv](https://docs.astral.sh/uv/getting-started/installation/). The scan only reads your
+settings and changes nothing.
+
 <p align="center">One local page for their MCP servers, plugins, skills and instruction files.<br>
 It changes nothing until you press Apply, and every change can be undone.</p>
 
@@ -15,15 +22,6 @@ It changes nothing until you press Apply, and every change can be undone.</p>
   <a href="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden"><img src="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden/badges/score.svg" alt="Kitden on Glama"></a>
   <a href="https://mcprush.com/to/kitden-mcp?ref=badge"><img src="https://mcprush.com/badge/kitden-mcp/score.svg" alt="Kitden MCP on mcprush"></a>
 </p>
-
-<p align="center">
-  <a href="https://konstantinstarovoytov.github.io/kitden-sdlc/desk/"><img src="https://img.shields.io/badge/Open_the_desk-C85835?style=for-the-badge" alt="Open the desk"></a>
-</p>
-
-<p align="center">Reviews, tests and releases for Kitden run from
-<a href="https://github.com/KonstantinStarovoytov/kitden-sdlc">kitden-sdlc</a>.</p>
-
-Want to help? [Pick a good first issue](https://github.com/KonstantinStarovoytov/kitden/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22).
 
 ### See whether your skills fit
 
@@ -98,14 +96,8 @@ Needs **macOS or Linux**, [uv](https://docs.astral.sh/uv/getting-started/install
 least one of **Claude Code, Codex or Cursor**. On Linux, install `libsecret-tools` (Debian,
 Ubuntu) or `libsecret` (Fedora, Arch) so Kitden can keep server secrets in your keyring.
 
-See what your agents load and whether your skills fit, without installing. It changes none of
-their settings:
-
-```bash
-uvx --python 3.13 kitden scan
-```
-
-Or try the page on a sample. Your own settings are not read or changed:
+The scan at the top of this page needs no install. To try the page on a sample instead, with
+your own settings not read or changed:
 
 <!-- Release checklist: docs/readme-media.md -->
 ```bash
@@ -120,6 +112,17 @@ uv tool install --python 3.13 kitden && kitden
 
 Or with Homebrew: `brew install konstantinstarovoytov/tap/kitden`, then `kitden`.
 Update later from the page, or with `uv tool upgrade kitden` or `brew upgrade kitden`.
+
+## Help build Kitden
+
+<p align="center">
+  <a href="https://konstantinstarovoytov.github.io/kitden-sdlc/desk/"><img src="https://img.shields.io/badge/Open_the_desk-C85835?style=for-the-badge" alt="Open the desk"></a>
+</p>
+
+<p align="center">Reviews, tests and releases for Kitden run from
+<a href="https://github.com/KonstantinStarovoytov/kitden-sdlc">kitden-sdlc</a>.</p>
+
+Want to help? [Pick a good first issue](https://github.com/KonstantinStarovoytov/kitden/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22).
 
 [Guide](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md) ·
 [Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) ·
