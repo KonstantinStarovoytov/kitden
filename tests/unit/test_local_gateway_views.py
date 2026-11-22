@@ -26,6 +26,7 @@ from kitden.local_gateway.settings import (
     load_catalog_notes,
     load_settings,
     load_tools,
+    missing_value,
     same_entry,
     save_about,
     save_catalog_note,
@@ -1265,6 +1266,17 @@ def test_a_key_the_catalog_requires_shows_as_needed_with_the_catalogs_words(home
         assert (
             page.get("/api/gateway/tools?server=docs").json()["about"] == "The server's own words."
         )
+
+
+def test_a_sign_in_or_any_case_gives_the_header_the_catalog_requires():
+    token = {"field": "headers", "name": "Authorization", "label": "Token", "prefix": "Bearer "}
+    note = {"fields": [token]}
+    assert missing_value(note, {"url": DOCS_URL}) == token
+    assert missing_value(note, {"url": DOCS_URL, "sign_in": {"keychain": "docs/sign-in"}}) is None
+    assert missing_value(note, {"url": DOCS_URL, "headers": {"authorization": "x"}}) is None
+    # A sign-in gives Authorization, not a key of the server's own.
+    signed = {"url": DOCS_URL, "sign_in": {"keychain": "docs/sign-in"}}
+    assert missing_value({"fields": [NEEDS_KEY]}, signed) == NEEDS_KEY
 
 
 def test_same_entry_reads_past_a_package_version():

@@ -186,11 +186,20 @@ def catalog_note(notes: dict[str, dict], server: str, entry: dict) -> dict | Non
 
 def missing_value(note: dict | None, entry: dict) -> dict | None:
     """The first value the catalog says the server requires that its entry does not have: a
-    header or an env variable ({field, name, label, prefix}), or None."""
+    header or an env variable ({field, name, label, prefix}), or None. A header name matches in
+    any case, as HTTP reads it, and a browser sign-in gives the Authorization header."""
     for field in (note or {}).get("fields") or []:
         if not isinstance(field, dict) or field.get("field") not in ("headers", "env"):
             continue
-        if field.get("name") not in (entry.get(field["field"]) or {}):
+        name = str(field.get("name", ""))
+        have = entry.get(field["field"]) or {}
+        if field["field"] == "headers":
+            given = {str(key).lower() for key in have}
+            if entry.get("sign_in"):
+                given.add("authorization")
+            if name.lower() not in given:
+                return field
+        elif name not in have:
             return field
     return None
 
