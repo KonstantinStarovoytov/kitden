@@ -310,6 +310,12 @@ function pillFor(card, skill, states, after, heat, result) {
   if (heat.has(skill.name)) node.style.setProperty("--heat", heat.get(skill.name));
   node.dataset.focus = `skill:${card.client}:${skill.name}`;
   node.append(el("span", null, skill.shown));
+  // Built into Claude Code: no file, so no Library item and no switch. Said on the pill.
+  if (skill.built_in) {
+    node.classList.add("builtin");
+    node.setAttribute("title", `${skill.source || "Built into Claude Code"}. Kitden cannot turn it off.`);
+    node.append(el("i", "ctx-tag", "built-in"));
+  }
   const kept = result && result.kept ? result.kept[skill.name] : undefined;
   if (skill.size && kept !== undefined) {
     const part = `${fmt(kept)} of ${fmt(skill.size)}`;
