@@ -220,3 +220,133 @@ def test_the_home_folder_as_a_codex_project_keeps_its_agents_md(tmp_path, no_ver
     scan = CodexAdapter(home, read_version=no_version).scan()
     in_home = {i[4] for i in _instructions(scan) if i[3] == str(home)}
     assert in_home == {str(home / "AGENTS.md"), str(home / "AGENTS.override.md")}
+
+
+# `kitden scan` and `kitden show` are new processes each time. The plugin list is kept on disk,
+# so a repeat run does not wait for Codex again.
+LISTING = {"installed": [{"pluginId": "gmail@openai-curated-remote", "enabled": False}]}
+
+
+def _ask_codex(monkeypatch, outcome):
+    """Fake `codex plugin list --json`. `outcome` is the stdout text, or an exception to raise.
+    Returns the list of commands that were run."""
+    import json
+    import subprocess
+
+    import kitden.clients.codex as codex
+
+    runs: list[list[str]] = []
+
+    def run(command, **kwargs):
+        runs.append(command)
+        if isinstance(outcome, Exception):
+            raise outcome
+        text, code = outcome if isinstance(outcome, tuple) else (json.dumps(outcome), 0)
+        return subprocess.CompletedProcess(command, code, text, "")
+
+    monkeypatch.setattr(codex, "version_command", lambda client: ["codex", "--version"])
+    monkeypatch.setattr(codex.subprocess, "run", run)
+    return runs
+
+
+def _new_run(monkeypatch):
+    """What a second `kitden scan` starts with: nothing in memory."""
+    import kitden.clients.codex as codex
+
+    monkeypatch.setattr(codex, "_LIST_CACHE", {})
+
+
+def _gmail(adapter):
+    return next(i for i in adapter.scan().items if i.name == "gmail@openai-curated-remote")
+
+
+def test_a_second_run_does_not_ask_codex_again(tmp_path, monkeypatch, capsys):
+    runs = _ask_codex(monkeypatch, LISTING)
+    home = make_home(tmp_path, FIXTURE)
+    assert str(_gmail(CodexAdapter(home, read_version=lambda: "0.163.0")).enabled) == "off"
+    assert capsys.readouterr().err == "Asking Codex which plugins are on (up to 15 s)…\n"
+    _new_run(monkeypatch)
+    second = _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert str(second.enabled) == "off"
+    assert len(runs) == 1
+    assert capsys.readouterr() == ("", "")  # nothing to wait for, nothing to say
+
+
+def test_a_changed_config_asks_codex_again(tmp_path, monkeypatch):
+    runs = _ask_codex(monkeypatch, LISTING)
+    home = make_home(tmp_path, FIXTURE)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    config = home / ".codex/config.toml"
+    config.write_text(config.read_text() + "\n# the app wrote this\n")
+    _new_run(monkeypatch)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert len(runs) == 2
+
+
+def test_a_timeout_is_not_kept_as_an_answer(tmp_path, monkeypatch, capsys):
+    import subprocess
+
+    from kitden.gateways import data_dir
+
+    runs = _ask_codex(monkeypatch, subprocess.TimeoutExpired(["codex"], 15))
+    home = make_home(tmp_path, FIXTURE)
+    assert str(_gmail(CodexAdapter(home, read_version=lambda: "0.163.0")).enabled) == "unknown"
+    assert "Asking Codex" in capsys.readouterr().err
+    assert not list(data_dir(home).glob("codex-plugins*"))
+    _new_run(monkeypatch)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert len(runs) == 2  # the next run asks again
+
+
+def test_a_failed_call_is_not_kept_as_an_answer(tmp_path, monkeypatch):
+    from kitden.gateways import data_dir
+
+    runs = _ask_codex(monkeypatch, ("not signed in", 1))
+    home = make_home(tmp_path, FIXTURE)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert not list(data_dir(home).glob("codex-plugins*"))
+    _new_run(monkeypatch)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert len(runs) == 2
+
+
+def test_only_the_plugin_ids_and_their_state_are_kept_on_disk(tmp_path, monkeypatch):
+    import json
+
+    from kitden.gateways import data_dir
+
+    listing = {
+        "installed": [{**LISTING["installed"][0], "token": "SENTINEL_SECRET", "marketplace": "m"}],
+        "available": [{"pluginId": "other@x", "authUrl": "SENTINEL_SECRET"}],
+        "account": {"email": "SENTINEL_SECRET"},
+    }
+    _ask_codex(monkeypatch, listing)
+    home = make_home(tmp_path, FIXTURE)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    (stored,) = data_dir(home).glob("codex-plugins*")
+    assert "SENTINEL_SECRET" not in stored.read_text()
+    assert json.loads(stored.read_text())["installed"] == LISTING["installed"]
+    assert stored.stat().st_mode & 0o077 == 0  # only its owner can read it
+
+
+def test_a_quick_scan_reads_the_stored_answer(tmp_path, monkeypatch):
+    runs = _ask_codex(monkeypatch, LISTING)
+    home = make_home(tmp_path, FIXTURE)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    _new_run(monkeypatch)
+    quick = CodexAdapter(home, read_version=lambda: "0.163.0", quick=True)
+    assert str(_gmail(quick).enabled) == "off"
+    assert quick.skipped is False and len(runs) == 1
+
+
+def test_a_broken_stored_file_is_asked_for_again(tmp_path, monkeypatch):
+    from kitden.gateways import data_dir
+
+    runs = _ask_codex(monkeypatch, LISTING)
+    home = make_home(tmp_path, FIXTURE)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    (stored,) = data_dir(home).glob("codex-plugins*")
+    stored.write_text("{ not json")
+    _new_run(monkeypatch)
+    assert str(_gmail(CodexAdapter(home, read_version=lambda: "0.163.0")).enabled) == "off"
+    assert len(runs) == 2

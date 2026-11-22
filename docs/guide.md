@@ -88,8 +88,9 @@ uvx --python 3.13 kitden scan
 
 Kitden is not installed and no page opens. `scan` reads your agents' settings and, for the
 folder you run it in, what they sent in your last chat. It changes none of them. It asks each
-agent for its version, and Codex for its plugin list, and keeps the versions in one file in
-Kitden's own data folder. It prints what each agent loads and, for Claude Code and Codex,
+agent for its version, and Codex for its plugin list, and keeps the versions and the plugin
+list in two small files in Kitden's own data folder. If Codex has to be asked, it says so on
+stderr and waits up to 15 seconds; a second run with unchanged Codex settings does not wait. It prints what each agent loads and, for Claude Code and Codex,
 whether the skill list fit in that chat. When Kitden cannot tell (Cursor, or no chat yet), the
 line says why. `kitden scan --json` prints everything the page shows.
 

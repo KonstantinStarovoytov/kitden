@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **`kitden scan` says when it waits for Codex, and does not wait twice:** while Codex lists
+  its plugins (up to 15 seconds) the terminal says so, and a repeat run with an unchanged
+  `config.toml` reuses the stored answer (#151).
 - **Browser tests for the main features:** Context, setting up the gateway, Move all,
   removing a server's own entry, searching the catalogs, adding a GitHub source, adding a
   catalog skill, adding and removing plugins, adding a server with a `${VAR}` header to Cursor

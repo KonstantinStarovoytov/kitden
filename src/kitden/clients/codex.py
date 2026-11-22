@@ -7,6 +7,7 @@ comments). Spike S4: the running app keeps outside edits.
 import json
 import os
 import subprocess  # runs the codex command without a shell
+import sys
 import threading
 from collections.abc import Callable
 from dataclasses import replace
@@ -14,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from kitden.changes import toml_edit
+from kitden.changes.atomic import write_atomic
 from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
 from kitden.clients.base import (
     PLUGIN_REMOVE,
@@ -39,6 +41,7 @@ from kitden.clients.base import (
     visible_folders,
 )
 from kitden.clients.versions import version_command
+from kitden.gateways import data_dir, private_data_dir
 from kitden.local_gateway.settings import as_dict
 from kitden.model import (
     Client,
@@ -62,12 +65,37 @@ REMOTE_HINT = "On/off is stored in your ChatGPT account. Change it in Codex: Plu
 BUILT_IN_FOLDERS = (".codex/.tmp", ".cache/codex-runtimes")
 LIST_TIMEOUT_SECONDS = 15
 # `codex plugin list --json` results, reused until config.toml changes (the app rewrites it on
-# every plugin toggle, spike S4).
+# every plugin toggle, spike S4). The same answer is kept in a file in Kitden's data folder, so
+# the next `kitden scan` does not wait for Codex again.
+PLUGIN_LIST_FILE = "codex-plugins.json"
 _LIST_CACHE: dict[tuple, dict] = {}
 # Lists being asked for in the background, so a second quick scan does not ask again.
 _FILLING: set[tuple] = set()
 _FILL_LOCK = threading.Lock()
 REMOTE_INSTALL_RECORD = ".codex-remote-plugin-install.json"
+
+
+def _is_plugin_state(entry: Any) -> bool:
+    return (
+        isinstance(entry, dict)
+        and isinstance(entry.get("pluginId"), str)
+        and isinstance(entry.get("enabled"), bool)
+    )
+
+
+def _plugin_states_only(listing: Any) -> dict | None:
+    """`{"installed": [{"pluginId", "enabled"}]}`: the part of `codex plugin list --json` that
+    Kitden reads. None when the answer has no `installed` list."""
+    installed = as_dict(listing).get("installed")
+    if not isinstance(installed, list):
+        return None
+    return {
+        "installed": [
+            {"pluginId": p["pluginId"], "enabled": bool(p.get("enabled"))}
+            for p in installed
+            if isinstance(p, dict) and isinstance(p.get("pluginId"), str)
+        ]
+    }
 
 
 def _on(value: Any) -> Enabled:
@@ -131,11 +159,43 @@ class CodexAdapter(ClientAdapter):
         key = self._list_key()
         if key in _LIST_CACHE:
             return _LIST_CACHE[key]
+        if (kept := self._read_kept(key)) is not None:
+            _LIST_CACHE[key] = kept
+            return kept
         if self.quick:
             self.skipped = True
             self._ask_later(command, key)
             return {}
+        print(
+            f"Asking Codex which plugins are on (up to {LIST_TIMEOUT_SECONDS} s)…",
+            file=sys.stderr,
+            flush=True,
+        )
         return self._ask(command, key)
+
+    def _read_kept(self, key: tuple) -> dict | None:
+        """The stored answer when it was made for this config.toml; None otherwise."""
+        try:
+            data = json.loads((data_dir(self.home) / PLUGIN_LIST_FILE).read_text())
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict) or data.get("key") != list(key):
+            return None
+        plugins = data.get("installed")
+        if not isinstance(plugins, list) or not all(_is_plugin_state(p) for p in plugins):
+            return None
+        return {"installed": plugins}
+
+    def _keep(self, key: tuple, listing: dict) -> None:
+        """Store an answer. Only the plugin ids and whether each is on: that is all Kitden reads,
+        and Codex's own output may hold more."""
+        data = {"key": list(key), "installed": listing["installed"]}
+        try:
+            folder = private_data_dir(self.home)
+            written = write_atomic(folder / PLUGIN_LIST_FILE, json.dumps(data, indent=2).encode())
+            written.chmod(0o600)
+        except OSError:
+            pass  # a repeat run asks Codex again; the scan itself is fine
 
     def _ask(self, command: list[str], key: tuple) -> dict:
         env = {**os.environ, "HOME": str(self.home), "CODEX_HOME": str(self.codex_home)}
@@ -147,7 +207,10 @@ class CodexAdapter(ClientAdapter):
             timeout=LIST_TIMEOUT_SECONDS,
             check=False,
         )
-        _LIST_CACHE[key] = json.loads(done.stdout) if done.returncode == 0 else {}
+        listing = _plugin_states_only(json.loads(done.stdout)) if done.returncode == 0 else None
+        _LIST_CACHE[key] = listing or {}
+        if listing is not None:  # a failed or timed out call (it raises above) is never stored
+            self._keep(key, listing)
         return _LIST_CACHE[key]
 
     def _ask_later(self, command: list[str], key: tuple) -> None:
