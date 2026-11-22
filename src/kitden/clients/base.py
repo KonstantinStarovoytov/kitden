@@ -606,6 +606,12 @@ def found_clients(inventory) -> list[str]:
     return [c.id for c in inventory.clients if c.status is ClientStatus.FOUND]
 
 
+def listed_columns(inventory) -> list[str]:
+    """The clients that have a column (CLIENTS) and are not off, found or not, in that order."""
+    off = {c.id for c in inventory.clients if c.status is ClientStatus.OFF}
+    return [c for c in CLIENTS if c not in off]
+
+
 def found_columns(inventory) -> list[str]:
     """The found clients that have a column (CLIENTS), in that order."""
     found = found_clients(inventory)

@@ -20,6 +20,7 @@ from kitden.local_gateway.settings import SETTINGS_FILE
 from kitden.model import (
     CLIENT_WORDS,
     CLIENTS,
+    ClientStatus,
     Finding,
     FindingType,
     ItemKind,
@@ -292,7 +293,7 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
     servers and tools, the Library's plugins and skills, which client reaches which, and how
     many projects have rules of their own (for the gateway, or for a plugin or skill). While
     the gateway settings cannot be read (`unread`) its counts are not known (None)."""
-    clients = [c for c in inventory.clients if c.id in CLIENTS]
+    clients = [c for c in inventory.clients if c.id in CLIENTS and c.status is not ClientStatus.OFF]
     found = found_clients(inventory)
     shown = library_map(inventory, adapters, project)
     items = [i for g in shown["groups"] for i in g["items"]]

@@ -16,6 +16,7 @@ from kitden.clients.base import (
     PLUGIN_REMOVE,
     SKILL_REMOVE,
     found_columns,
+    listed_columns,
 )
 from kitden.clients.claude_code import holds, local_files, rule_file
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Enabled, Item, ItemKind, Scope
@@ -56,7 +57,7 @@ def map_clients(inventory, cursor_imports: bool, loads: dict[str, str | None]) -
     Kitden gateway entry is on; no Library map uses it."""
     status = {c.id: c.status for c in inventory.clients}
     out = []
-    for client in CLIENTS:
+    for client in listed_columns(inventory):
         read, mine = status.get(client), loads.get(client)
         if read is ClientStatus.UNREADABLE:
             state, words = "unreadable", STATE_WORDS["unread"]

@@ -18,8 +18,9 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from kitden import __version__, page, system
+from kitden.clients.choice import clients_on
 from kitden.clients.version_cache import refresh_versions
-from kitden.model import CLIENTS, Client, ClientStatus
+from kitden.model import Client, ClientStatus
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
 HOST = page.HOST
@@ -307,7 +308,7 @@ def _print_summary(
         if column_of(client.id) != client.id:
             continue  # the Desktop Code tab: a line under Claude Code
         status = words.SCAN_STATUS.get(str(client.status), str(client.status))
-        if client.status is ClientStatus.NOT_FOUND:
+        if client.status in (ClientStatus.NOT_FOUND, ClientStatus.OFF):
             print(f"{client.display_name}: {status}")
             continue
         print(f"{client.display_name}: {status} ({_version(client)})")
@@ -446,7 +447,8 @@ def _wrap(text: str, first: str, rest: str) -> list[str]:
 
 def _scan(args: argparse.Namespace) -> int:
     home = _home(args)
-    refresh_versions(home or Path.home(), CLIENTS)  # a one-off scan waits for the versions
+    # A one-off scan waits for the versions, of the clients that are on.
+    refresh_versions(home or Path.home(), clients_on(home or Path.home()))
     if args.json:
         inventory = build_inventory(home)
         json.dump(inventory_dict(inventory), sys.stdout, indent=2)

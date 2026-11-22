@@ -11,7 +11,7 @@ it does not count here.
 import json
 from pathlib import Path
 
-from kitden.clients.base import SETUP_NAME, ClientAdapter, found_clients
+from kitden.clients.base import SETUP_NAME, ClientAdapter, found_clients, listed_columns
 from kitden.model import CLIENT_WORDS, CLIENTS, Enabled, Item, ItemKind, Scope, Step
 
 OLD_NAME = "agentsetup"
@@ -112,7 +112,7 @@ def setup_server_state(inventory) -> list[dict]:
     `moved`: the old entry is the client's own `kitden` entry, whose program is gone."""
     found = found_clients(inventory)
     states = []
-    for client in CLIENTS:
+    for client in listed_columns(inventory):
         if client not in found:
             states.append(
                 {

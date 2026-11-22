@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from kitden.changes.actions import KITDEN_GATEWAY
-from kitden.clients.base import PLUGIN_REMOVE, REMOVE_DIRECT, SKILL_REMOVE
+from kitden.clients.base import PLUGIN_REMOVE, REMOVE_DIRECT, SKILL_REMOVE, listed_columns
 from kitden.model import (
     CLIENT_WORDS,
     CLIENTS,
@@ -325,6 +325,7 @@ def load_map(inventory, project: str | None) -> list[Row]:
 
 def map_dict(inventory, rows: list[Row]) -> dict:
     status = {c.id: str(c.status) for c in inventory.clients}
+    shown = listed_columns(inventory)  # a client that is off has no column
     return {
         "columns": [
             {
@@ -333,7 +334,7 @@ def map_dict(inventory, rows: list[Row]) -> dict:
                 "mark": MARKS[c],
                 "status": status.get(c, "not_found"),
             }
-            for c in CLIENTS
+            for c in shown
         ],
         "rows": [
             {
@@ -343,7 +344,7 @@ def map_dict(inventory, rows: list[Row]) -> dict:
                 "source": r.source,
                 "lookup": r.lookup,
                 "category": r.category,
-                "cells": {c: asdict(cell) for c, cell in r.cells.items()},
+                "cells": {c: asdict(cell) for c, cell in r.cells.items() if c in shown},
                 "flags": r.flags,
             }
             for r in rows

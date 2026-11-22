@@ -96,6 +96,7 @@ class ClientStatus(StrEnum):
     FOUND = "found"
     NOT_FOUND = "not_found"
     UNREADABLE = "unreadable"
+    OFF = "off"  # the user turned it off in Kitden: it is not read at all
 
 
 @dataclass(frozen=True)
