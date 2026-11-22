@@ -79,9 +79,17 @@ needs no other test. The table lists those written so far, in product order:
 | --- | --- | --- |
 | 1 | The page opens; Overview shows the setup | `test_flows.py` |
 | 2 | Context: what the last chat loaded and what was cut | `test_context.py` |
+| 3 | Search the catalogs, "Show N more", open an item's details | `test_catalog_search.py` |
+| 4 | Add a GitHub source; it is listed | `test_add_source.py` |
+| 5 | Add a skill from the catalog to Claude Code; remove it | `test_catalog_skill.py` |
 | 7 | Set up the gateway on a home that has none | `test_gateway_setup.py` |
 | 8 | Move servers into the gateway: drag one, "Move all N…" | `test_map_drag.py`, `test_move_all.py` |
 | 9 | Remove a server's direct entry: preview, Apply, gone on disk | `test_remove_server.py` |
+
+Flows 3 to 5 use the `sample` fixture: the demo's sample, not in demo mode, with the
+stand-ins of `tests/offline.py` and the network guard on, so a test that tries to go online
+from the test process fails. The guard cannot see an MCP server's own program, so the sample
+starts none and refuses a move into the gateway.
 
 Also: a preview writes nothing, Apply and Undo (`test_flows.py`), and the bar that asks
 for a new preview when the settings changed under one (`test_preview_drift.py`). Before its
