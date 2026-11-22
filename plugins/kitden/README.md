@@ -49,7 +49,8 @@ the context check it also reads what the client sent in your last chats, from th
 chat files, the skills the Claude app gives Claude Code, from the app's own folder, and Codex's
 model list (`models_cache.json`), for the size of its context window. It uses them to size the
 skill list and keeps none of it. It also reads each skill's description from its `SKILL.md`, and
-`kitden show context` prints it. To learn versions and plugins it may run the clients' own
+`kitden show context` prints it, together with the names of the skills that did not fit in your
+last chat. To learn versions and plugins it may run the clients' own
 commands, such as `claude --version` and `codex plugin list`. The first run can wait up to
 15 s for Codex and says so on stderr. The answer (each plugin's id and whether it is on) is kept
 in one file in Kitden's own data folder, so a run within the next hour, while Codex's
