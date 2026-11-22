@@ -12,13 +12,14 @@ import os
 from pathlib import Path
 
 from kitden.clients.base import found_columns, is_home
-from kitden.model import CLIENTS, ClientStatus, ItemKind, _hash
+from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, ItemKind, _hash
 from kitden.redact import redact_line
 from kitden.views.effective import client_order
 from kitden.views.explain import PREVIEW_READ, head
 from kitden.views.imports import imports, read_text
-from kitden.views.library_map import cursor_imports, map_clients
+from kitden.views.library_map import map_clients
 from kitden.views.load_map import category
+from kitden.views.words import NO_FILE_ALL, NO_FILE_HERE, PICK_PROJECT, join_words
 
 ALL = {"key": "all", "name": "All projects"}
 PROJECT = "Only this project · {}"
@@ -127,7 +128,6 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
     every file it brings in, nested ones too. An imported file is
     `{id, name, by_files, outside, missing, technical: {path?}}`; a missing one has no path."""
     home = next((a.home for a in adapters.values()), None)
-    imports_plugins = cursor_imports(adapters, found_columns(inventory))
     blocks = _blocks(inventory, project)
     through: set[str] = set()
     if project is not None and home is not None and _reads_agents(inventory, project, home):
@@ -213,8 +213,33 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
         out.append({"key": "project", "name": name, "files": sorted(groups["project"], key=key)})
     if groups[COMMANDS["key"]]:
         out.append({**COMMANDS, "files": sorted(groups[COMMANDS["key"]], key=key)})
+    files = [f for g in out if g["key"] != COMMANDS["key"] for f in g["files"]]
+    loads = {
+        client: _file_words(sum(client in f["by"] for g in out for f in g["files"]))
+        for client in CLIENTS
+    }
     return {
-        "clients": map_clients(inventory, imports_plugins),
+        # Cursor taking Claude Code's plugins says nothing about instruction files.
+        "clients": map_clients(inventory, False, loads),
         "groups": out,
         "imports": list(imported.values()),
+        "note": _no_file_note(found_columns(inventory), files, project),
     }
+
+
+def _file_words(count: int) -> str | None:
+    """What a client reads on this map: "3 files", None for none."""
+    return None if not count else f"{count} file" if count == 1 else f"{count} files"
+
+
+def _no_file_note(found: list[str], files: list[dict], project: str | None) -> str | None:
+    """One quiet sentence when a found client reads no instruction file in the scope shown: with
+    All projects, only the files every project loads are shown; with a project picked, its own
+    too. Commands and agents are not instruction files. None when every found client has one."""
+    reading = {c for f in files for c in f["by"]}
+    none = [CLIENT_WORDS[c] for c in found if c not in reading]
+    if not none:
+        return None
+    sentence = NO_FILE_ALL if project is None else NO_FILE_HERE
+    note = sentence.format(names=join_words(none), loads="loads" if len(none) == 1 else "load")
+    return f"{note} {PICK_PROJECT}" if project is None else note

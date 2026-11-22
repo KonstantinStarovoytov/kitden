@@ -2092,7 +2092,6 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
         "Move all ${",
         "Set up in",
         '"One place for your MCP servers. Turn a server or a tool on or off for every agent."',
-
         "The gateway controls only the servers in it. "
         "Direct entries and terminal tools are outside it.",
     ):

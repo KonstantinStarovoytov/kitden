@@ -140,8 +140,8 @@ const SUPERPOWERS = plugin('p2', 'superpowers', {
 });
 const MEDIUM = {
   clients: [
-    { id: 'claude_code', name: 'Claude Code', state: 'on', words: 'Connected' },
-    { id: 'codex', name: 'Codex', state: 'on', words: 'Connected' },
+    { id: 'claude_code', name: 'Claude Code', state: 'on', words: '1 plugin · 3 skills' },
+    { id: 'codex', name: 'Codex', state: 'on', words: '1 plugin · 2 skills' },
     { id: 'cursor', name: 'Cursor', state: 'via', words: 'Via Claude Code' },
   ],
   groups: [
@@ -385,7 +385,7 @@ test('a hook, a client, a link and a marketplace have their own Details', async 
   const hook = details.hookCard(MEDIUM.groups[2].items[0], c());
   assert.deepEqual([hook.kind, facts(hook), hook.actions], ['Hook', [['State', 'On'], ['Comes from', 'All projects'], ['Source', 'Your settings'], ['Clients', '1 client']], undefined]);
   const client = details.clientCard('claude_code', c());
-  assert.deepEqual([client.kind, client.title, client.id], ['Client', 'Claude Code', 'Connected']);
+  assert.deepEqual([client.kind, client.title, client.id], ['Client', 'Claude Code', '1 plugin · 3 skills']);
   assert.deepEqual(texts(client.list).filter((t) => !t.includes('<')), ['Loads in every project', 'superpowers', 'Plugin · 4 items', 'release-notes', 'Skill', 'PreToolUse: Bash', 'Hook']);
   const model = libraryTree(MEDIUM);
   const byId = new Map(model.blocks.map((b) => [b.id, b]));

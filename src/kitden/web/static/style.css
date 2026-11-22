@@ -378,6 +378,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 /* Under a page head: the shared setup, or a project and how much of it differs. */
 .scope-bar { display: flex; align-items: center; gap: 6px; margin: -6px 0 18px; color: var(--ink-3); font-size: 11px; }
 .scope-bar.project { color: var(--route); }
+/* One quiet sentence right under the scope line (the Instructions map: why a client has no file). */
+.scope-note { margin: -12px 0 18px; font-size: 11px; max-width: 80ch; text-wrap: pretty; }
 .seg { position: relative; display: inline-flex; gap: 2px; padding: 2px; background: var(--inset); border-radius: 7px; border: 1px solid var(--wire); }
 .seg button { position: relative; z-index: 1; padding: 4px 11px; border: 0; background: transparent; border-radius: 5px; color: var(--ink-3); font-size: 12px; cursor: pointer; transition: color var(--t-fast) ease, transform 260ms var(--spring); }
 .seg button:hover { color: var(--ink); }

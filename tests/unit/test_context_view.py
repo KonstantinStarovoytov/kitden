@@ -676,7 +676,9 @@ def test_codex_check_that_never_ran_is_not_called_a_mismatch(home):
     codex_chat(home, [f"- alpha: {CODEX_A} (file: {paths['alpha']})"])
     cx = view(home)["codex"]
     assert cx["checked"] is False
-    assert cx["how"][2].endswith("This time Kitden could not run the check, so it shows no estimate.")
+    assert cx["how"][2].endswith(
+        "This time Kitden could not run the check, so it shows no estimate."
+    )
 
 
 def test_codex_with_no_files_found_gives_no_full_or_cut_verdict(home):

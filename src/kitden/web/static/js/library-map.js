@@ -41,8 +41,8 @@ const INSIDE_KINDS = [
   ["hooks", "Hook", "webhook"], ["mcp_servers", "MCP server", "server"],
 ];
 const ROW_LABELS = { skill: { icon: "sparkles", words: "Skill" }, hook: { icon: "webhook", words: "Hook" } };
-// The clients' lamps: green while it loads through Kitden's facts ("Connected", "Via Claude Code"),
-// none where Kitden could not read it, grey otherwise.
+// The clients' lamps: green while it loads something in this view ("5 plugins · 62 skills", "2
+// files", or "Via Claude Code"), none where Kitden could not read it, grey otherwise.
 const CLIENT_LAMPS = { on: "on", via: "on", unreadable: null };
 // The Map's own tabs. The address keeps the tab as the kind (`kind=instructions`), so Map | List
 // keeps it too; Plugins and skills goes by "plugin".
@@ -480,6 +480,8 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   onMap.tab = tab;
   const had = onMap.selected;
   keepWhatShows(answer, { opens: !fresh && !projectChanged && !swap });
+  // Why a client has no file in the scope shown (the server says it), under the scope line.
+  if (tab === "instructions" && answer.note) main.append(el("p", "muted scope-note", answer.note));
   if (tab === "instructions" && !answer.groups.some((group) => group.files.length)) main.append(el("p", "muted", NO_FILES));
   main.append(onMap.view.box);
   const text = state.q.trim();

@@ -105,8 +105,8 @@ const plugin = (id, name, fields) => ({ id, name, kind: 'plugin', plugin: `${nam
 const own = (id, name, kind, fields) => ({ id, name, kind, by: {}, through: {}, items: {}, here: {}, source: '', technical: {}, ...fields });
 const MEDIUM = {
   clients: [
-    { id: 'claude_code', name: 'Claude Code', state: 'on', words: 'Connected' },
-    { id: 'codex', name: 'Codex', state: 'on', words: 'Connected' },
+    { id: 'claude_code', name: 'Claude Code', state: 'on', words: '1 plugin · 3 skills' },
+    { id: 'codex', name: 'Codex', state: 'on', words: '1 plugin · 2 skills' },
     { id: 'cursor', name: 'Cursor', state: 'via', words: 'Via Claude Code' },
   ],
   groups: [
@@ -1243,6 +1243,30 @@ test('a file card says its meta whole in its title', () => {
     settle();
     assert.equal(node(box, 'block:file:f2').title, 'AGENTS.md · Codex · all projects');
     assert.equal(node(box, 'block:file:c1').title, 'review · Claude Code · command');
+  } finally {
+    done();
+  }
+});
+
+test('the Instructions tab says why a client has no file, under the scope line', () => {
+  const note = 'Cursor loads no instruction file in every project. Pick a project to see its own files.';
+  try {
+    Object.assign(data, { libraryMap: MEDIUM, instructionsMap: { ...INSTR, note }, projects: [] });
+    Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
+    Object.assign(state, { view: 'library', mode: 'map', kind: 'instructions', project: '', q: '', selected: null });
+    main.replaceChildren();
+    renderLibrary(main);
+    settle();
+    const line = walk(main).find((n) => n.classList.contains('scope-note'));
+    assert.equal(line.textContent, note);
+    const kids = main.children;
+    assert.ok(kids[kids.indexOf(line) - 1].classList.contains('scope-bar'), 'right under the scope line');
+    // No sentence: no line. The plugins tab never has one.
+    Object.assign(data, { instructionsMap: { ...INSTR, note: null } });
+    main.replaceChildren();
+    renderLibrary(main);
+    settle();
+    assert.equal(walk(main).filter((n) => n.classList.contains('scope-note')).length, 0);
   } finally {
     done();
   }

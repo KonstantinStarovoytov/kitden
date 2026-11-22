@@ -150,8 +150,8 @@ const none = { skills: [], commands: [], agents: [], hooks: [], mcp_servers: [] 
 const plugin = (id, name, fields) => ({ id, name, kind: 'plugin', plugin: `${name}@demo-market`, by: {}, through: {}, items: {}, here: {}, source: 'demo-market', technical: {}, can: { add: [], off: [] }, ...fields });
 const MAP = {
   clients: [
-    { id: 'claude_code', name: 'Claude Code', state: 'on', words: 'Connected' },
-    { id: 'codex', name: 'Codex', state: 'on', words: 'Connected' },
+    { id: 'claude_code', name: 'Claude Code', state: 'on', words: '1 plugin · 3 skills' },
+    { id: 'codex', name: 'Codex', state: 'on', words: '1 plugin · 2 skills' },
     { id: 'cursor', name: 'Cursor', state: 'via', words: 'Via Claude Code' },
   ],
   groups: [
