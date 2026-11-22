@@ -174,12 +174,18 @@ jobs:
     permissions:
       id-token: write
     steps:
-      # Harden-Runner records where the job connects and which files it changes, and flags
-      # anything unusual. Audit mode: it watches, it blocks nothing yet. Also in release and
-      # autotag, the other Ubuntu jobs that hold a key or can write.
+      # Harden-Runner lets the job reach only the hosts listed, and takes away sudo so a step
+      # cannot turn that off. The lists are what the v0.10.3 release and five autotag runs used
+      # in audit mode; GitHub's own runner hosts are allowed without being listed. Also in
+      # release and autotag, the other Ubuntu jobs that hold a key or can write. A new host a
+      # step needs shows as a blocked call in the job's StepSecurity report.
       - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >
+            releases.astral.sh:443
+            upload.pypi.org:443
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dist
@@ -199,7 +205,12 @@ jobs:
     steps:
       - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            uploads.github.com:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -229,7 +240,12 @@ jobs:
     steps:
       - uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
         with:
-          egress-policy: audit
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            releases.astral.sh:443
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
