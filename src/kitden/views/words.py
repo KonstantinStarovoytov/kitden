@@ -367,3 +367,14 @@ HOW_UNREADABLE = (
     "shows an old result as new."
 )
 HOW_NO_SKILLS = "Kitden looks in the same folders and plugins as {client}."
+
+# `kitden scan`, after the clients: the skills the last chat cut, the findings, and where to go
+# next. Lines wrap at 80 columns.
+SCAN_MORE = "+{n} more"
+SCAN_LOADS = "{client} loads {kind} '{name}' {times}"
+SCAN_WARNINGS = "{n} {warnings}: {said}."
+SCAN_NOTES = "{n} {notes}: kitden show findings"
+SCAN_SEE = "See: kitden show findings"
+SCAN_READ_ONLY = "Your agents' settings were not changed: scan only reads them."
+SCAN_FIX = "To fix: kitden open"
+SCAN_OPEN = "To see or change it: kitden open"

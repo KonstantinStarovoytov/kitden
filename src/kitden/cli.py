@@ -10,6 +10,7 @@ import signal
 import socket
 import sys
 import tempfile
+import textwrap
 import time
 import webbrowser
 from collections import Counter
@@ -288,8 +289,11 @@ def _delete(folder: Path) -> None:
         print(f"The sample folder was not deleted: {folder}", file=sys.stderr)
 
 
-def _print_summary(inventory: Inventory, cards: dict[str, dict]) -> None:
+def _print_summary(inventory: Inventory, cards: dict[str, dict], findings: list[dict]) -> None:
+    from kitden.views import words
+
     counts = Counter((i.client, str(i.kind)) for i in inventory.items)
+    misfits = False
     for client in inventory.clients:
         version = client.version or "unknown version"
         print(f"{client.display_name}: {client.status} ({version})")
@@ -298,20 +302,94 @@ def _print_summary(inventory: Inventory, cards: dict[str, dict]) -> None:
                 print(f"  {kind}: {count}")
         fit = _skill_list(cards.get(client.id))
         if fit:
-            print(f"  Skill list: {fit}")
+            say, names = fit
+            print(f"  Skill list: {say}")
+            if names:
+                misfits = True
+                print(*_wrap(_first_few(names, FEW_NAMES, ", "), "    ", "    "), sep="\n")
     for problem in inventory.problems:
         print(f"Could not read {problem.path or problem.owner_client}: {problem.unknown_reason}")
-    print("Your agents' settings were not changed: scan only reads them.")
+    line = _findings_line(findings, {i.id: i for i in inventory.items})
+    if line:
+        print(*_wrap(line, "", "  "), sep="\n")
+    warned = any(f["severity"] == "warning" for f in findings)
+    print(words.SCAN_READ_ONLY)
+    fix = misfits or warned or inventory.problems
+    print(words.SCAN_FIX if fix else words.SCAN_OPEN)
 
 
-def _skill_list(card: dict | None) -> str | None:
+def _skill_list(card: dict | None) -> tuple[str, list[str]] | None:
     """Whether the client's skill list fit, as its Context card says it: the last chat's
-    result, or else why Kitden cannot tell."""
+    result and the skills that did not fit, or else why Kitden cannot tell."""
     if card is None:
         return None
     if card["windows"]:
-        return card["windows"][0]["result"]["say"]
-    return card["message"]
+        result = card["windows"][0]["result"]
+        return result["say"], (result["misfit"] or {}).get("names", [])
+    return card["message"], []
+
+
+# The skill names and the warnings the scan writes before "+N more".
+FEW_NAMES = 5
+FEW_WARNINGS = 3
+
+
+def _first_few(said: list[str], few: int, joiner: str) -> str:
+    from kitden.views import words
+
+    shown = joiner.join(said[:few])
+    rest = len(said) - few
+    return f"{shown} {words.SCAN_MORE.format(n=rest)}" if rest > 0 else shown
+
+
+def _warning(finding: dict, by_id: dict) -> str:
+    """A warning in words, without the paths its explanation lists."""
+    from kitden.model import CLIENT_WORDS, FindingType
+    from kitden.views import words
+    from kitden.views.findings import base_name
+    from kitden.views.overview import KIND_WORDS
+
+    item = by_id.get(finding["items"][0]) if finding["items"] else None
+    if finding["type"] != FindingType.DUPLICATE_IN_CLIENT or item is None:
+        return finding["explanation"].rstrip(".")
+    n = len(finding["items"])
+    return words.SCAN_LOADS.format(
+        client=CLIENT_WORDS.get(finding["client"], finding["client"]),
+        kind=KIND_WORDS.get(str(item.kind), str(item.kind)),
+        name=base_name(item),
+        times="twice" if n == 2 else f"{n} times",
+    )
+
+
+def _findings_line(findings: list[dict], by_id: dict) -> str | None:
+    """One line: the first warnings in words, then how many notes, and where to read them."""
+    from kitden.views import words
+
+    warnings = [_warning(f, by_id) for f in findings if f["severity"] == "warning"]
+    notes = len(findings) - len(warnings)
+    parts = []
+    if warnings:
+        said = _first_few(warnings, FEW_WARNINGS, "; ")
+        word = "warning" if len(warnings) == 1 else "warnings"
+        parts.append(words.SCAN_WARNINGS.format(n=len(warnings), warnings=word, said=said))
+    if notes:
+        word = "note" if notes == 1 else "notes"
+        parts.append(words.SCAN_NOTES.format(n=notes, notes=word))
+    elif warnings:
+        parts.append(words.SCAN_SEE)
+    return " ".join(parts) or None
+
+
+def _wrap(text: str, first: str, rest: str) -> list[str]:
+    """`text` in lines of at most 80 columns. Names keep their hyphens."""
+    return textwrap.wrap(
+        text,
+        80,
+        initial_indent=first,
+        subsequent_indent=rest,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
 
 
 def _scan(args: argparse.Namespace) -> int:
@@ -326,7 +404,10 @@ def _scan(args: argparse.Namespace) -> int:
 
         # The Context page's cards for the current folder, as `kitden show context` gives them.
         context = answers.context_answer(inventory, home or Path.home(), str(Path.cwd()))
-        _print_summary(inventory, {card["client"]: card for card in context["clients"]})
+        # The findings for the current folder, as `kitden show findings` gives them.
+        findings = answers.findings_answer(inventory, str(Path.cwd()))["findings"]
+        cards = {card["client"]: card for card in context["clients"]}
+        _print_summary(inventory, cards, findings)
     return EXIT_UNREADABLE if inventory.problems else 0
 
 

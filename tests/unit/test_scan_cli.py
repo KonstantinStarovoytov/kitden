@@ -1,14 +1,31 @@
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
+from kitden import cli
 from kitden.cli import main
 from kitden.clients import version_cache
 from kitden.clients.version_cache import VERSIONS_FILE, cached_version
+from kitden.context.rules import codex_rule
 from kitden.gateways import data_dir
 from tests.conftest import fake_client_command, make_home, write_cursor_fixture_state
-from tests.unit.test_context_view import LONG, claude_chat, skill
+from tests.unit.test_context_view import (
+    CODEX_A,
+    CODEX_B,
+    CODEX_C,
+    LONG,
+    a_budget,
+    before_the_chat,
+    chosen_home,
+    claude_chat,
+    codex_chat,
+    codex_home,
+    rule_skills,
+    skill,
+    window_for,
+)
 
 ALL = ("claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
 
@@ -78,6 +95,13 @@ def _summary(home, capsys) -> list[str]:
     return capsys.readouterr().out.splitlines()
 
 
+def _after(lines: list[str], line: str) -> list[str]:
+    """The lines that follow `line`, up to the next one that is not indented further."""
+    start = lines.index(line) + 1
+    end = next((i for i in range(start, len(lines)) if not lines[i].startswith("    ")), len(lines))
+    return lines[start:end]
+
+
 def test_scan_says_which_skills_the_last_chat_cut(bare, capsys):
     for name in ("alpha", "beta", "gamma", "delta"):
         skill(bare / ".claude/skills", name, LONG[:1000])
@@ -94,6 +118,78 @@ def test_scan_says_which_skills_the_last_chat_cut(bare, capsys):
     )
     claude, codex = lines.index("Claude Code: found (unknown version)"), lines.index(said)
     assert claude < codex < next(i for i, line in enumerate(lines) if line.startswith("Codex:"))
+    assert _after(lines, said) == ["    gamma, delta"]
+    assert lines[-1] == "To fix: kitden open"
+
+
+def test_scan_names_the_first_few_skills_and_counts_the_rest(bare, capsys):
+    names = [f"plugin-dev:skill-number-{n}" for n in range(1, 10)]
+    claude_chat(bare, {"alpha": "Does alpha."} | dict.fromkeys(names))
+    lines = _summary(bare, capsys)
+    said = next(line for line in lines if line.startswith("  Skill list:"))
+    assert said.startswith("  Skill list: In your last chat on Nov 6, 9 of 10 skills showed")
+    assert _after(lines, said) == [
+        "    plugin-dev:skill-number-1, plugin-dev:skill-number-2,",
+        "    plugin-dev:skill-number-3, plugin-dev:skill-number-4,",
+        "    plugin-dev:skill-number-5 +4 more",
+    ]
+
+
+def test_scan_does_not_list_skills_set_to_name_only(bare, capsys):
+    chosen_home(bare, {"delta": "name-only"})
+    before_the_chat(bare / ".claude/settings.json")
+    claude_chat(bare, {"alpha": LONG[:1000], "beta": LONG[:1000], "gamma": None, "delta": None})
+    lines = _summary(bare, capsys)
+    said = next(line for line in lines if line.startswith("  Skill list:"))
+    assert said.endswith("1 more showed only a name, as you chose.")
+    assert _after(lines, said) == ["    gamma"]
+
+
+def test_scan_lists_nothing_when_every_name_only_skill_was_chosen(bare, capsys):
+    chosen_home(bare, {"gamma": "name-only", "delta": "name-only"})
+    before_the_chat(bare / ".claude/settings.json")
+    claude_chat(bare, {"alpha": LONG[:1000], "beta": LONG[:1000], "gamma": None, "delta": None})
+    lines = _summary(bare, capsys)
+    said = (
+        "  Skill list: In your last chat on Nov 6, all 4 skills were sent; 2 showed only a name, "
+        "as you chose."
+    )
+    assert _after(lines, said) == []
+    assert lines[-1] == "To see or change it: kitden open"
+
+
+def test_scan_names_the_codex_skills_whose_description_was_cut(bare, capsys):
+    paths = codex_home(bare, window=1)
+    budget = a_budget(paths, lambda fit: fit.cap is not None and fit.cap >= 30)
+    cap = codex_rule(rule_skills(paths), budget).cap
+    codex_home(bare, window=window_for(budget))
+    codex_chat(
+        bare,
+        [
+            f"- alpha: {CODEX_A[:cap]} (file: {paths['alpha']})",
+            f"- beta: {CODEX_B[: cap - 1]} (file: {paths['beta']})",
+            f"- gamma: {CODEX_C} (file: {paths['gamma']})",
+        ],
+    )
+    lines = _summary(bare, capsys)
+    said = next(line for line in lines if line.startswith("  Skill list: In your last chat on Oct"))
+    assert "2 of 3 descriptions were cut" in said
+    assert _after(lines, said) == ["    alpha, beta"]
+
+
+def test_scan_names_the_codex_skills_left_out(bare, capsys):
+    paths = codex_home(bare, window=1)
+    budget = a_budget(paths, lambda fit: fit.sent == {"alpha": 0, "beta": 0, "gamma": None})
+    codex_home(bare, window=window_for(budget))
+    before_the_chat(Path(paths["gamma"]))
+    codex_chat(
+        bare,
+        [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"],
+        at="2026-11-07T12:00:00Z",
+    )
+    lines = _summary(bare, capsys)
+    said = next(line for line in lines if "left 1 of 3 skills out" in line)
+    assert _after(lines, said) == ["    gamma"]
 
 
 def test_scan_says_so_when_it_cannot_tell(bare, capsys):
@@ -110,9 +206,61 @@ def test_scan_says_so_when_it_cannot_tell(bare, capsys):
     assert "  Skill list: There is nothing to fit." in lines  # Codex has no skills
 
 
+def test_scan_names_the_warnings_and_points_to_the_findings(bare, capsys):
+    skill(bare / ".agents/skills", "docker-expert", "Helps with Docker.")
+    skill(bare / ".codex/skills", "docker-expert", "Helps with Docker.")
+    lines = _summary(bare, capsys)
+    # Cursor reads both folders too.
+    assert lines[-4:] == [
+        "2 warnings: Codex loads skill 'docker-expert' twice; Cursor loads skill",
+        "  'docker-expert' twice. 2 notes: kitden show findings",
+        "Your agents' settings were not changed: scan only reads them.",
+        "To fix: kitden open",
+    ]
+
+
 def test_scan_ends_by_saying_the_settings_were_not_changed(bare, capsys):
     before = _snapshot(bare)
-    assert _summary(bare, capsys)[-1] == (
-        "Your agents' settings were not changed: scan only reads them."
-    )
+    assert _summary(bare, capsys)[-2:] == [
+        "Your agents' settings were not changed: scan only reads them.",
+        "To see or change it: kitden open",
+    ]
     assert _snapshot(bare) == before
+
+
+# The findings line, from the answer `kitden show findings` gives
+
+
+def _finding(severity, client="codex", items=("a",), text="It is so."):
+    return {
+        "severity": severity,
+        "type": "x",
+        "client": client,
+        "items": list(items),
+        "explanation": text,
+    }
+
+
+def test_findings_line_counts_the_notes():
+    assert cli._findings_line([_finding("info")], {}) == "1 note: kitden show findings"
+    notes = [_finding("info")] * 61
+    assert cli._findings_line(notes, {}) == "61 notes: kitden show findings"
+    assert cli._findings_line([], {}) is None
+
+
+def test_findings_line_with_warnings_only_still_says_where_to_look():
+    line = cli._findings_line([_finding("warning")], {})
+    assert line == "1 warning: It is so. See: kitden show findings"
+
+
+def test_findings_line_names_the_first_few_warnings_and_fits_80_columns():
+    warnings = [_finding("warning", text=f"Warning number {n} is here") for n in range(1, 6)]
+    line = cli._findings_line(warnings + [_finding("info")] * 2, {})
+    assert line == (
+        "5 warnings: Warning number 1 is here; Warning number 2 is here; Warning number 3 "
+        "is here +2 more. 2 notes: kitden show findings"
+    )
+    assert cli._wrap(line, "", "  ") == [
+        "5 warnings: Warning number 1 is here; Warning number 2 is here; Warning number 3",
+        "  is here +2 more. 2 notes: kitden show findings",
+    ]

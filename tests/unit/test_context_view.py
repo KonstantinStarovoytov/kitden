@@ -145,7 +145,7 @@ def test_claude_too_many_names_the_count(home):
         "The agent may not have used them."
     )
     assert fact["result"]["short"] == "2 of 4 showed only a name"
-    assert fact["result"]["misfit"] == {"kind": "name", "n": 2}
+    assert fact["result"]["misfit"] == {"kind": "name", "n": 2, "names": ["gamma", "delta"]}
     assert fact["result"]["room"] is None
     assert set(fact["result"]["sent"]) == {"alpha", "beta"}
     assert fact["result"]["over"] == {"gamma": 1002, "delta": 1002}
@@ -223,7 +223,7 @@ def test_a_choice_and_a_misfit_are_told_apart(home):
     )
     assert (cc["lamp"], result["misfit"], result["over"]) == (
         "warn",
-        {"kind": "name", "n": 1},
+        {"kind": "name", "n": 1, "names": ["gamma"]},
         {"gamma": 1002},
     )
 
@@ -585,7 +585,7 @@ def test_codex_cut_short(home):
         "characters. The agent saw only their start."
     )
     assert fact["result"]["short"] == "2 of 3 cut short"
-    assert fact["result"]["misfit"] == {"kind": "cut", "n": 2}
+    assert fact["result"]["misfit"] == {"kind": "cut", "n": 2, "names": ["alpha", "beta"]}
     assert set(fact["result"]["over"]) == {"alpha", "beta"}
     assert fact["result"]["kept"] == {"alpha": cap, "beta": cap - 1}  # characters the chat sent
     other = cx["windows"][1]
@@ -622,7 +622,7 @@ def test_codex_left_out(home):
         "of the list. The agent did not see it at all."
     )
     assert fact["result"]["short"] == "1 left out, the rest name only"
-    assert fact["result"]["misfit"] == {"kind": "out", "n": 1}
+    assert fact["result"]["misfit"] == {"kind": "out", "n": 1, "names": ["gamma"]}
     assert "gamma" not in fact["result"]["sent"]
     assert {s["name"]: s["side"] for s in cx["skills"]}["gamma"] == 1
 
@@ -736,7 +736,7 @@ def test_codex_a_known_cut_is_told_when_another_file_is_gone(home):
         "The agent saw only its start. "
         "Kitden cannot find the file of 1 more, so it cannot tell if it was cut."
     )
-    assert fact["misfit"] == {"kind": "cut", "n": 1}
+    assert fact["misfit"] == {"kind": "cut", "n": 1, "names": ["alpha"]}
     assert {s["name"]: s["side"] for s in cx["skills"]}["alpha"] == 1
 
 
@@ -754,7 +754,7 @@ def test_codex_a_skill_written_after_a_names_only_chat_was_not_left_out(home):
     assert fact["say"] == (
         "In your last chat on Nov 7, Codex removed every description. The agent saw only the names."
     )
-    assert fact["misfit"] == {"kind": "cut", "n": 2}
+    assert fact["misfit"] == {"kind": "cut", "n": 2, "names": ["alpha", "beta"]}
     gamma = {s["name"]: s for s in cx["skills"]}["gamma"]
     assert (gamma["side"], gamma["note"]) == (None, "It was not in the list of your last chat.")
 
