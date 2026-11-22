@@ -8,7 +8,7 @@ import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { flipToolPick, onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
 import { findIn, focusAfter, foldable, foldStep, groupsWith, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, newCards, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, wideWidth } from "./map.js";
-import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
+import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, revealMatch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, panelState, projectLabel, review } from "./panel.js";
@@ -1186,6 +1186,8 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   // map again in place as its slot opens or closes.
   placeMoved({ view, model, layout, redraw: drawRows });
   if (later) drawn.then(() => stillSelected({ view, selected }, onMap) && drawAgain());
+  // A search whose matches are all out of sight scrolls to the first one, once.
+  drawn.then(() => onMap.view === view && revealMatch("gateway", view.box, state.q), () => {});
   return drawn;
 }
 
