@@ -89,11 +89,15 @@ needs no other test. The table lists those written so far, in product order:
 | 10 | Add a server to another client; a `${VAR}` header stays a variable | `test_add_server.py` |
 | 11 | Two changes in the tray, "Apply all" | `test_apply_all.py` |
 | 12 | Undo, then "Redo…" from Changes | `test_redo.py` |
+| 13 | Update to a new version | `test_update.py` |
 
-Flows 3 to 5 use the `sample` fixture: the demo's sample, not in demo mode, with the
+Flows 3 to 5 and 13 use the `sample` fixture: the demo's sample, not in demo mode, with the
 stand-ins of `tests/offline.py` and the network guard on, so a test that tries to go online
 from the test process fails. The guard cannot see an MCP server's own program, so the sample
 starts none and refuses a move into the gateway.
+
+Flow 13 starts the new version's page in the same process; the real hand-over to a new
+process is left to the unit tests and the release check.
 
 Also: a preview writes nothing, Apply and Undo (`test_flows.py`), and the bar that asks
 for a new preview when the settings changed under one (`test_preview_drift.py`). Before its
