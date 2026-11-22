@@ -15,6 +15,15 @@ What Kitden does today and what comes next. Ideas and bugs:
   characters" for 30 real cuts at 334–338. It now leaves that skill out of the count and says
   it cannot tell for it, and the check against Codex's rule passes again. The same holds when
   the update only added text to the end of a description.
+- **Page polish from a first walk through the page:** the hint line no longer lies over page
+  text, the Overview is one column when its map does not fit, and its title is "Overview" with a
+  lede that names your clients. Overview notes with the same words fold into one row ("46 items
+  load from another client."). A search on the Library or Gateway map scrolls to its first match.
+  The Changes link shows no count, and a change of several rows reads in the past tense. Context
+  says what a pill's number is, shows a plugin skill's plugin, and drops the sentence about an
+  estimate nobody asked for. The Library says what each client loads, not "Connected", and says
+  why a client has no instruction file. The Library and Gateway ledes say what the page is, and
+  the guide says how to open the page again and when it stops.
 
 ### 0.10.3
 
