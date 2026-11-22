@@ -9,6 +9,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **A server's access is clearer in the gateway:** Add access… shows once, offers Sign in only
+  to a server that has it, keeps Back to Details, and fills in the key a catalog says the
+  server requires, which now shows as "Needs key" on the map, also after Rescan (#PR).
+- **A reload draws the Gateway at once:** it no longer waits for the Overview's slow read of
+  the chat logs, and a change the stopped page could not prepare says Kitden is not running
+  (#PR).
 - **Hooks that `disableAllHooks` turns off show as off:** Claude Code runs no hooks from its
   settings files when `disableAllHooks` is true, but Kitden showed them as on. It now reads the
   flag as Claude Code does, the local file over the project's over yours, so a project that
