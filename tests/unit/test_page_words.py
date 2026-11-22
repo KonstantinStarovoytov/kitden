@@ -1699,7 +1699,8 @@ def test_tool_and_server_details_use_the_owner_words():
         assert words in text, words
     assert "Allowed" not in text and "Blocked" not in text
     # "Sign in" is only the action of a server whose sign-in ended (Part 3b), never a state.
-    assert text.count("Sign in") == _sign_in_actions(text)
+    # (The verb table that puts a stored title in the past has "Sign in to" once.)
+    assert text.count("Sign in") - text.count('["Sign in to"') == _sign_in_actions(text)
     # With All projects a card says "in every project" or "in any project", then each known project
     # that decides otherwise ("Except atlas, where it is on."); never "Other projects follow".
     assert "Other projects follow" not in gw() and '"Read only"' not in gw()
@@ -1766,7 +1767,8 @@ def test_the_server_panel_says_the_mockups_words():
     ):
         assert words in tools, words
     assert "Signed in" not in text
-    assert text.count("Sign in") == _sign_in_actions(text)
+    # (The verb table that puts a stored title in the past has "Sign in to" once.)
+    assert text.count("Sign in") - text.count('["Sign in to"') == _sign_in_actions(text)
     # A server off by the shared rule is never "off in all projects": projects may turn it on.
     assert "is off by the shared rule, so none of its tools are offered.${otherwise}`" in tools
     assert 'off in ${where || "all projects"}' not in tools
@@ -2431,7 +2433,8 @@ def test_the_list_has_the_mockups_columns_and_quiet_read_and_write_words():
     for words in ("Signed in", "Running"):
         assert words not in text, words
     # "Sign in" is only the action of a server whose sign-in ended (Part 3b), never a state.
-    assert text.count("Sign in") == _sign_in_actions(text)
+    # (The verb table that puts a stored title in the past has "Sign in to" once.)
+    assert text.count("Sign in") - text.count('["Sign in to"') == _sign_in_actions(text)
 
 
 def test_the_view_switch_goes_out_in_120_and_comes_in_in_260():
@@ -2829,7 +2832,7 @@ def test_the_instructions_map_words():
         "`${who} · ${FILE_KINDS[file.kind]}`",
         "title: `${file.name} · ${meta}`",
         'const MISSING = { icon: "triangle-alert", words: "Missing" };',
-        "const TAB_FROM = { x: 150, y: 200 };",
+        "const TAB_FROM = { x: 200, y: 200 };",
         '`${who} · ${plural(file.count, "rule", "rules")}`',
         '`${who} · ${plural(pulls, "import", "imports")}`',
         '`${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS_LOWER}`',
@@ -3092,3 +3095,22 @@ def test_hints_follow_one_pattern_and_refusals_are_amber():
 def test_the_add_panels_client_ticks_start_at_one_edge():
     # `.checks` centres its row; in the add panel's column that put each tick at another place.
     assert "align-items: flex-start" in rule(".discovery-inspector .checks")
+
+
+def test_the_overview_is_one_column_where_its_map_does_not_fit_whole():
+    # Cards (330) + gap (40) + the map (470) = 840, plus the rail (148), the frame (32) and the
+    # page padding (44): under 1064 px the whole map no longer fits beside the cards.
+    assert 330 + 40 + 470 + 148 + 32 + 44 == 1064
+    assert (
+        "@media (max-width: 1063px) { .ov-grid { grid-template-columns: minmax(0, 1fr); } }" in CSS
+    )
+    # After the two-column rule, so it wins; the old 900 px rule no longer holds the grid.
+    assert CSS.index(".ov-grid { display: grid;") < CSS.index("@media (max-width: 1063px)")
+    assert ".ov-grid { grid-template-columns: 1fr; }" not in CSS
+
+
+def test_the_hint_line_has_a_strip_that_hides_what_scrolls_under_it():
+    rule = next(line for line in CSS.splitlines() if line.startswith(".hint-band:has("))
+    assert "::before" in rule and "linear-gradient(to bottom, transparent, var(--canvas)" in rule
+    assert "pointer-events: none" in rule and "position: absolute" in rule
+    assert "bottom: 14px" in CSS  # the hint line keeps its place
