@@ -103,3 +103,45 @@ export function drawChip(found) {
   const words = findChip(found) || "";
   if (chip.textContent !== words) chip.textContent = words;
 }
+
+// A search on a map page lights its matches; when none of them is in the visible part of the page,
+// the first one scrolls into view (smooth; at once under reduced motion). It never moves keyboard
+// focus, never scrolls when a match is already in view, and does so once for one search text on one
+// page, not on each draw again. `drawn` is true for a draw that has lit its matches.
+const revealed = { key: "" };
+
+// The part of `node` the person can see: its box cut by every scrolling ancestor's box and by the
+// top bar and the hint strip that lie over the page. Null when nothing of it shows.
+function seenPart(node) {
+  const near = (rect) => ({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom });
+  let seen = near(node.getBoundingClientRect());
+  for (let up = node.parentElement; up && seen; up = up.parentElement) {
+    const style = getComputedStyle(up);
+    if ((style.overflowX === "visible" && style.overflowY === "visible") || up === document.body) continue;
+    const box = up.getBoundingClientRect();
+    seen = cut(seen, { left: box.left, right: box.right, top: box.top, bottom: box.bottom });
+  }
+  const bar = document.querySelector(".topbar");
+  if (seen && bar) seen = cut(seen, { left: -Infinity, right: Infinity, top: bar.getBoundingClientRect().bottom, bottom: Infinity });
+  return seen;
+}
+
+// The part of `a` inside `b`, or null.
+export function cut(a, b) {
+  const part = { left: Math.max(a.left, b.left), right: Math.min(a.right, b.right), top: Math.max(a.top, b.top), bottom: Math.min(a.bottom, b.bottom) };
+  return part.right > part.left && part.bottom > part.top ? part : null;
+}
+
+export function revealMatch(place, box, text) {
+  if (!text) {
+    revealed.key = "";
+    return;
+  }
+  const key = `${place}\n${text}`;
+  if (revealed.key === key || !box || !box.isConnected) return;
+  const lit = [...box.querySelectorAll(".block.found")];
+  if (!lit.length) return;
+  revealed.key = key;
+  if (lit.some((node) => seenPart(node))) return;
+  lit[0].scrollIntoView({ behavior: D(1) ? "smooth" : "auto", block: "center", inline: "nearest" });
+}

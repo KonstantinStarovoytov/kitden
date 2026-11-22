@@ -8,7 +8,7 @@
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
 import { findIn, focusAfter, foldStep, groupsWith, layoutTree, linkKey, litFor, litFrom, newCards, pagesNow, pagesWith, shownFound } from "./map.js";
 import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
-import { drawChip, glidePill } from "./map-page.js";
+import { drawChip, glidePill, revealMatch } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, rise, riseHead } from "./motion.js";
@@ -673,6 +673,8 @@ function drawMap({ motion = "move", lightLater = false, swap = false } = {}) {
   drawChip(chipFound(onMap.found));
   const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: foundOnMap(onMap.found), open: onMap.open, motion });
   if (later) drawn.then(() => onMap.view === view && onMap.selected === selected && drawMap());
+  // A search whose matches are all out of sight scrolls to the first one, once.
+  drawn.then(() => onMap.view === view && revealMatch("library", view.box, state.q), () => {});
   // A block dragged while the map draws again stays with the pointer.
   if (onMap.drag) follow(onMap);
   return drawn;
