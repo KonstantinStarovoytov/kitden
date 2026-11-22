@@ -28,8 +28,9 @@ nothing from it.
   client settings.
 - The answer of `codex plugin list` is kept in `codex-plugins.json` in the same folder, so a
   repeat `kitden scan` does not wait for Codex. It holds only each plugin's id and whether it is
-  on, and it is used again only while Codex's `config.toml` is unchanged. Kitden writes it when
-  the page, `kitden scan` or `kitden show` asks Codex, and only when Codex answered.
+  on, and it is used again only for one hour and only while Codex's `config.toml` is unchanged (a plugin
+  switched in Codex on another computer does not change that file). Kitden writes it when the
+  page, `kitden scan` or `kitden show` asks Codex, and only when Codex answered.
 
 ## When Kitden goes online
 

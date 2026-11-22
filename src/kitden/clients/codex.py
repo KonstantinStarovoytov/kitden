@@ -9,6 +9,7 @@ import os
 import subprocess  # runs the codex command without a shell
 import sys
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -68,6 +69,10 @@ LIST_TIMEOUT_SECONDS = 15
 # every plugin toggle, spike S4). The same answer is kept in a file in Kitden's data folder, so
 # the next `kitden scan` does not wait for Codex again.
 PLUGIN_LIST_FILE = "codex-plugins.json"
+# A remote plugin's on/off is stored in the ChatGPT account (REMOTE_HINT), so a change made in
+# Codex on another computer does not touch this config.toml. A stored answer is therefore used
+# for an hour only: long enough for scans one after another, short enough to stay accurate.
+PLUGIN_LIST_MAX_AGE_SECONDS = 3600
 _LIST_CACHE: dict[tuple, dict] = {}
 # Lists being asked for in the background, so a second quick scan does not ask again.
 _FILLING: set[tuple] = set()
@@ -181,6 +186,11 @@ class CodexAdapter(ClientAdapter):
             return None
         if not isinstance(data, dict) or data.get("key") != list(key):
             return None
+        asked_at = data.get("asked_at")
+        if not isinstance(asked_at, int | float) or isinstance(asked_at, bool):
+            return None
+        if not 0 <= time.time() - asked_at <= PLUGIN_LIST_MAX_AGE_SECONDS:
+            return None  # too old, or written in the future: ask Codex again
         plugins = data.get("installed")
         if not isinstance(plugins, list) or not all(_is_plugin_state(p) for p in plugins):
             return None
@@ -189,7 +199,7 @@ class CodexAdapter(ClientAdapter):
     def _keep(self, key: tuple, listing: dict) -> None:
         """Store an answer. Only the plugin ids and whether each is on: that is all Kitden reads,
         and Codex's own output may hold more."""
-        data = {"key": list(key), "installed": listing["installed"]}
+        data = {"key": list(key), "asked_at": time.time(), "installed": listing["installed"]}
         try:
             folder = private_data_dir(self.home)
             written = write_atomic(folder / PLUGIN_LIST_FILE, json.dumps(data, indent=2).encode())

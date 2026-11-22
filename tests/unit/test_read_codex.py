@@ -350,3 +350,59 @@ def test_a_broken_stored_file_is_asked_for_again(tmp_path, monkeypatch):
     _new_run(monkeypatch)
     assert str(_gmail(CodexAdapter(home, read_version=lambda: "0.163.0")).enabled) == "off"
     assert len(runs) == 2
+
+
+def _age_the_stored_answer(home, seconds):
+    """Make the stored answer look `seconds` old."""
+    import json
+    import time
+
+    from kitden.gateways import data_dir
+
+    stored = data_dir(home) / "codex-plugins.json"
+    data = json.loads(stored.read_text())
+    data["asked_at"] = time.time() - seconds
+    stored.write_text(json.dumps(data))
+
+
+def test_an_answer_just_inside_its_age_is_used(tmp_path, monkeypatch):
+    import kitden.clients.codex as codex
+
+    runs = _ask_codex(monkeypatch, LISTING)
+    home = make_home(tmp_path, FIXTURE)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    _age_the_stored_answer(home, codex.PLUGIN_LIST_MAX_AGE_SECONDS - 60)
+    _new_run(monkeypatch)
+    assert str(_gmail(CodexAdapter(home, read_version=lambda: "0.163.0")).enabled) == "off"
+    assert len(runs) == 1
+
+
+def test_an_answer_past_its_age_is_asked_for_again(tmp_path, monkeypatch):
+    # A remote plugin's on/off lives in the ChatGPT account, so a change made elsewhere does not
+    # touch this config.toml.
+    import kitden.clients.codex as codex
+
+    runs = _ask_codex(monkeypatch, LISTING)
+    home = make_home(tmp_path, FIXTURE)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    _age_the_stored_answer(home, codex.PLUGIN_LIST_MAX_AGE_SECONDS + 60)
+    _new_run(monkeypatch)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert len(runs) == 2
+
+
+def test_an_answer_from_the_future_or_without_a_time_is_asked_for_again(tmp_path, monkeypatch):
+    runs = _ask_codex(monkeypatch, LISTING)
+    home = make_home(tmp_path, FIXTURE)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    _age_the_stored_answer(home, -3600)  # the clock was set back
+    _new_run(monkeypatch)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert len(runs) == 2
+    from kitden.gateways import data_dir
+
+    stored = data_dir(home) / "codex-plugins.json"
+    stored.write_text(stored.read_text().replace("asked_at", "other"))
+    _new_run(monkeypatch)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert len(runs) == 3

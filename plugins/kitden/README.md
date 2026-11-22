@@ -52,7 +52,8 @@ skill list and keeps none of it. It also reads each skill's description from its
 `kitden show context` prints it. To learn versions and plugins it may run the clients' own
 commands, such as `claude --version` and `codex plugin list`. The first run can wait up to
 15 s for Codex and says so on stderr. The answer (each plugin's id and whether it is on) is kept
-in one file in Kitden's own data folder, so the next run does not wait. Apart from that file it
+in one file in Kitden's own data folder, so a run within the next hour, while Codex's
+`config.toml` is unchanged, does not wait. Apart from that file it
 changes nothing and does not go online. Secret values, such as tokens in a server's settings,
 are replaced with `[secret]`.
 A skill's description is printed as written, so keep secrets out of it. There is no account and
