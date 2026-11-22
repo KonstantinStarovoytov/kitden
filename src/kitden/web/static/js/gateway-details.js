@@ -10,7 +10,7 @@ import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { callsText, closePanel, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, loadPanel, moveBody, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toolRows, toolsHead, writingToolsOn } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, FIND_PROJECT, folderName, GATEWAY_NOTE, kitdenClients, kitdenHouse, mark, menuItems, originText, STATE_WORDS, versionsOpen, WRITABLE } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, FIND_PROJECT, folderName, GATEWAY_NOTE, kitdenClients, kitdenHouse, mark, menuItems, originText, shownClients, STATE_WORDS, versionsOpen, WRITABLE } from "./parts.js";
 import { current, data, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, TAKE_OUT, takeOut, tray, trayRow } from "./tray.js";
 
@@ -295,10 +295,10 @@ function toolsWords(servers) {
 // and whether it is connected (" · in preview" in the accent while its change waits in the tray),
 // and its own "Connect…", "Update…" or "Disconnect…" where Kitden can do it (connectAction), else
 // why not (noButtonWords; `clientList`, the scan's clients).
-function clientRows(setup, clientList) {
+export function clientRows(setup, clientList) {
   const { linked } = kitdenClients(setup);
   const list = el("div", "sw-list client-rows");
-  for (const client of WRITABLE) {
+  for (const client of shownClients(clientList)) {
     const on = linked.includes(client);
     const action = connectAction(client, setup);
     const why = action ? null : noButtonWords((setup || []).find((e) => e.client === client), (clientList || []).find((c) => c.id === client));

@@ -5,13 +5,14 @@
 // server builds the rows and cells (views/library.py library_list). A row opens the same Details as
 // the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
 import { getJson, query } from "./api.js";
-import { button, el, focusTreeRow, gridCell, gridKeys, icon, plural, treeRow } from "./dom.js";
+import { showChoice } from "./clients-choice.js";
+import { button, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, plural, treeRow } from "./dom.js";
 import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, pressLibraryAdd, renderLibraryMap, setListOnly } from "./library-map.js";
 import { addHeadButton, headActions, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterOldPage, animate, entrance, glide, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { isPanelOpen, openInfo, panelState, previewButton, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, skeleton, socket, sourceLines, staleNote } from "./parts.js";
+import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, shownClients, skeleton, socket, sourceLines, staleNote } from "./parts.js";
 import { afterShared, arrival, current, currentError, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 // The List's tabs, as on the Map, and what it shows of Plugins and skills.
@@ -506,8 +507,9 @@ export function hiddenLine(columns) {
 // behind Details, as paths and commands do on every page. The Overview leaves out its own link.
 export function noClients({ overview = true } = {}) {
   const box = el("div", "empty");
-  box.append(el("strong", null, "Kitden found no AI coding clients."), el("p", null, "It looks for Claude Code, Codex and Cursor."));
-  box.append(button("Details", showLookFor, "btn"));
+  const names = shownClients(data.clients).map((id) => CLIENT_NAMES[id]);
+  box.append(el("strong", null, "Kitden found no AI coding clients."), el("p", null, `It looks for ${joinWords(names)}.`));
+  box.append(button("Details", showLookFor, "btn"), button("Choose clients…", showChoice, "btn"));
   if (overview) box.append(button("Open Overview", () => go("overview"), "btn"));
   return box;
 }

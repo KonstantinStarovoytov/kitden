@@ -16,6 +16,7 @@ const RULES = [
   [/^Turn (off|on) in some projects…$/, (m) => `You pick the projects. Every other project keeps the shared rule, and new projects follow it too.`],
   [/^Turn (off|on) for all projects…$/, () => "Sets the shared rule. A project with a rule of its own keeps it."],
   [/^Turn (off|on) (.+ )?in (this project|.+)…$/, (m) => `A rule for ${m[3] === "this project" ? "this project" : m[3]} only. The shared rule and other projects stay as they are.`],
+  [/^Choose clients…$/, () => "Pick which clients Kitden reads. A client that is off is not read, and nothing in its own settings changes."],
   [/^Turn it on in (.+)…$/, (m) => `Only ${m[1]} changes. Other clients keep what they have.`],
   [/^Turn strict mode on…$/, () => "Tools without a rule of their own go off, and tools the server adds later start off too."],
   [/^Turn strict mode off…$/, () => "Tools without a rule of their own come back on, and tools the server adds later start on."],

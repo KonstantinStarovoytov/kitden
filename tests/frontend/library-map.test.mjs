@@ -470,6 +470,14 @@ test('the chip counts what lights on the shown page, and says it again when a pa
   state.q = '';
 });
 
+test('a client that is off is not in the answer, so the map draws no block for it', () => {
+  const answer = { ...MEDIUM, clients: MEDIUM.clients.filter((c) => c.id !== 'codex') };
+  answer.groups = MEDIUM.groups.map((g) => ({ ...g, items: g.items.map((i) => ({ ...i, by: Object.fromEntries(Object.entries(i.by).filter(([c]) => c !== 'codex')) })) }));
+  const model = libraryTree(answer);
+  assert.deepEqual(model.blocks.filter((b) => b.kind === 'client').map((b) => b.id), ['client:claude_code', 'client:cursor']);
+  assert.equal(model.links.filter((l) => l.from === 'client:codex').length, 0);
+});
+
 test('a map with no clients, or one Kitden could not read, draws no links from it', () => {
   const none = libraryTree({ ...MEDIUM, clients: [] });
   assert.equal(none.links.filter((l) => l.from.startsWith('client:')).length, 0);
