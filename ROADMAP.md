@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Built-in skills are marked on the Context page:** skills built into Claude Code, such as
+  `dataviz`, are not files, so the Library cannot show or turn them off. Their pills now say
+  built-in, and their Details say Kitden cannot turn them off.
+
 - **Hooks that `disableAllHooks` turns off show as off:** Claude Code runs no hooks from its
   settings files when `disableAllHooks` is true, but Kitden showed them as on. It now reads the
   flag as Claude Code does, the local file over the project's over yours, so a project that
