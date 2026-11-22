@@ -21,6 +21,12 @@ What Kitden does today and what comes next. Ideas and bugs:
   characters" for 30 real cuts at 334–338. It now leaves that skill out of the count and says
   it cannot tell for it, and the check against Codex's rule passes again. The same holds when
   the update only added text to the end of a description.
+- **Choose which clients Kitden reads:** on the Overview, **Choose clients…** under "Your setup"
+  lists Claude Code, Codex and Cursor with a switch each. A client you turn off is not read at
+  all: no scan, no version or plugin command (Codex's 15 s wait is gone), and it leaves the
+  Overview, Library, Gateway and Agents pages, `kitden scan` ("Codex: turned off in Kitden") and
+  `kitden show`. Nothing in the client's own settings changes. Kitden keeps one client on, and an
+  Undo of a past change to an off client says "Turn Codex on to undo this."
 - **Page polish from a first walk through the page:** the hint line no longer lies over page
   text, the Overview is one column when its map does not fit, and its title is "Overview" with a
   lede that names your clients. Overview notes with the same words fold into one row ("46 items
