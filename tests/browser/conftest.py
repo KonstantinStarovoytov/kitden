@@ -229,6 +229,11 @@ def origin(demo) -> str:
     return f"{parts.scheme}://{parts.netloc}"
 
 
+def change_states(page, demo) -> list[str]:
+    """The state of each change Kitden recorded, as /api/changes gives them."""
+    return [change["state"] for change in page.request.get(f"{origin(demo)}/api/changes").json()]
+
+
 def wait_until(check, seconds: float = 5) -> None:
     deadline = time.monotonic() + seconds
     while not check():
