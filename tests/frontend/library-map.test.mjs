@@ -219,7 +219,7 @@ test('the page opens on the map at any size, unless the address says', () => {
 
 test('the map draws clients, captions in source order, plugin cards with n items, skill and hook rows', () => {
   const model = libraryTree(MEDIUM);
-  assert.deepEqual(LIBRARY_COLUMNS.map((c) => [c.id, c.caption, c.w, c.h]), [['clients', 'Clients', 150, 54], ['plugins', 'Plugins and skills', 180, 60], ['inside', 'Inside', 200, 34]]);
+  assert.deepEqual(LIBRARY_COLUMNS.map((c) => [c.id, c.caption, c.w, c.h]), [['clients', 'Clients', 200, 54], ['plugins', 'Plugins and skills', 180, 60], ['inside', 'Inside', 200, 34]]);
   const groups = model.blocks.filter((b) => b.kind === 'group');
   assert.deepEqual(groups.map((g) => [g.name, g.icon]), [['demo-market', 'store'], ['Other plugins', 'puzzle'], ['Your skills', 'user-round'], ['Your settings', 'settings']]);
   const blocks = byId(model);
@@ -245,7 +245,7 @@ test('the map draws clients, captions in source order, plugin cards with n items
   assert.ok(inside.every((b) => !b.lamp && !b.state));
   // At the mockup's x: 0, 250 and 500; a group caption, then its first card under it.
   const layout = layoutTree(open, { open: new Set(['item:p2']), narrow: false });
-  assert.deepEqual(layout.columns.map((c) => c.x), [0, 250, 500]);
+  assert.deepEqual(layout.columns.map((c) => c.x), [0, 300, 550]);
   const at = new Map(layout.blocks.map((b) => [b.id, b]));
   assert.deepEqual(['client:claude_code', 'client:codex', 'client:cursor'].map((id) => at.get(id).y), [140, 212, 284]);
   assert.equal(at.get('group:marketplace:demo-market').y, 37);
@@ -1108,9 +1108,9 @@ test('the Instructions tab draws Clients, Files and Pulls in', () => {
     settle();
     const tabs = main.children.find((n) => n.className === 'seg sm map-tabs');
     assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.getAttribute('aria-pressed')), ['false', 'true']);
-    assert.deepEqual(INSTRUCTION_COLUMNS.map((c) => [c.id, c.caption, c.w, c.h]), [['clients', 'Clients', 150, 54], ['files', 'Files', 190, 54], ['imports', 'Pulls in', 200, 40]]);
+    assert.deepEqual(INSTRUCTION_COLUMNS.map((c) => [c.id, c.caption, c.w, c.h]), [['clients', 'Clients', 200, 54], ['files', 'Files', 190, 54], ['imports', 'Pulls in', 200, 40]]);
     const layout = layoutTree(instructionsTree(INSTR), { narrow: false });
-    assert.deepEqual(layout.columns.map((c) => c.x), [0, 250, 500]);
+    assert.deepEqual(layout.columns.map((c) => c.x), [0, 300, 550]);
     for (const words of ['Clients', 'Files', 'Pulls in', 'All projects', 'Only this project', ' · website', 'CLAUDE.md', 'docs/design.md']) assert.ok(texts(box).includes(words), words);
     // No path on the main page: only file names.
     assert.ok(!texts(main).some((t) => t.includes('/home/')));
@@ -1192,22 +1192,22 @@ test('the tab switch moves clients and swaps the columns', async () => {
     const home = card.style.translate.split(' ')[1];
     pressTab('instructions');
     assert.deepEqual([state.kind, map(), node(box, 'block:client:codex')], ['instructions', box, client]);
-    // What arrives starts small and unseen at x 150, y 200, and grows to its place 15 ms apart.
+    // What arrives starts small and unseen at x 200, y 200, and grows to its place 15 ms apart.
     const files = ['f1', 'f2', 'f3'].map((id) => node(box, `block:file:${id}`));
-    assert.ok(files.every((n) => n.style.translate === '150px 200px' && n.style.transform === 'scale(0.4)' && n.style.opacity === '0'));
-    // What leaves shrinks to x 150 at its own y in 160 ms, with no Tab stop and no leaving look.
+    assert.ok(files.every((n) => n.style.translate === '200px 200px' && n.style.transform === 'scale(0.4)' && n.style.opacity === '0'));
+    // What leaves shrinks to x 200 at its own y in 160 ms, with no Tab stop and no leaving look.
     assert.deepEqual([card.getAttribute('tabindex'), card.className.split(' ').includes('leaving')], ['-1', false]);
     tick(100);
     const seen = files.map((n) => Number(n.style.opacity || 1));
     assert.ok(seen[0] > seen[1] && seen[1] > seen[2], seen.join(' '));
-    // On its way to x 150, at its own y.
+    // On its way to x 200, at its own y.
     const [x, y] = card.style.translate.split(' ');
-    assert.ok(card.parentNode && Number(x.replace('px', '')) > 150 && Number(x.replace('px', '')) < 250 && y === home, card.style.translate);
+    assert.ok(card.parentNode && Number(x.replace('px', '')) > 200 && Number(x.replace('px', '')) < 300 && y === home, card.style.translate);
     tick(70);
     assert.equal(node(box, 'block:item:p2'), null);
     await flush();
     assert.ok(files.every((n) => !n.style.opacity && !n.style.transform));
-    assert.equal(files[0].style.translate.split(' ')[0], '250px');
+    assert.equal(files[0].style.translate.split(' ')[0], '300px');
     assert.equal(client.style.translate, '0px 212px');
     // And back: the plugin is open again.
     pressTab('plugins');

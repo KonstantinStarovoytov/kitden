@@ -381,7 +381,7 @@ OPEN = {"library": open_library, "find": open_find, "context": open_context}
 
 # The part of the page each animation shows, in CSS pixels: x, y, width, height.
 SCENES = (
-    ("library", scene_library, (180, 255, 470, 370)),  # the clients and their plugins, a still
+    ("library", scene_library, (180, 255, 520, 370)),  # the clients and their plugins, a still
     ("find", scene_find, (661, 110, 580, 850)),  # two add panels after a search, a still
     ("context", scene_context, (175, 190, 960, 645)),  # the last chat's skill list, a still
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it

@@ -17,6 +17,7 @@ from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.views.load_map import load_map
 from kitden.views.overview import FOLD_FROM, note_count, overview
+from kitden.views.setup_server import kitden_on, setup_server_state
 from tests.conftest import cursor_db, make_home, write_cursor_fixture_state
 from tests.unit.test_context_view import (
     CODEX_A,
@@ -562,7 +563,9 @@ def test_the_map_counts_servers_tools_plugins_skills_and_own_rules(tmp_path):
     # its kitden entry is on.
     loads = {c for i in items for c, how in i["by"].items() if how == "on"}
     assert {x["client"] for x in data["map"]["links"] if x["to"] == "library"} == loads
-    on = {c["id"] for c in shared["clients"] if c["state"] == "on"}
+    # The Library map's client states say what a client loads, so the gateway links are the
+    # clients whose kitden entry is on (the Gateway's "Connected").
+    on = {e["client"] for e in setup_server_state(inventory) if kitden_on(e)}
     assert {x["client"] for x in data["map"]["links"] if x["to"] == "gateway"} == on
     assert data["counts"] == {
         "attention": len(_cards(data, "attention")),

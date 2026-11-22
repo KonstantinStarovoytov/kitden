@@ -19,11 +19,12 @@ import { addToTray, inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggle
 
 export const LEDE = "The plugins, skills and instruction files your agents load, and where each comes from.";
 const MAP_HINT = "Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details";
-// The map's columns at the mockup's x (0, 250, 500) and sizes (library-notes §2.1): a client
-// 150×54, a plugin card 180×60 (a skill or hook row 34 high), an inside item 200×34. What a plugin
+// The map's columns at x 0, 300 and 550 (the mockup's 0, 250 and 500, with the client column 50
+// wider so "32 plugins · 127 skills" fits) and sizes (library-notes §2.1): a client 200×54, a
+// plugin card 180×60 (a skill or hook row 34 high), an inside item 200×34. What a plugin
 // holds, and the Inside caption, grow out of the plugin as it opens (map-view.js `grows`).
 export const LIBRARY_COLUMNS = [
-  { id: "clients", caption: "Clients", w: 150, h: 54, top: 140, rowGap: 18 },
+  { id: "clients", caption: "Clients", w: 200, h: 54, top: 140, rowGap: 18 },
   { id: "plugins", caption: "Plugins and skills", w: 180, h: 60, colGap: 100, top: 37, rowGap: 4 },
   { id: "inside", caption: "Inside", w: 200, h: 34, colGap: 70, top: 26, rowGap: 8, grows: true },
 ];
@@ -69,7 +70,7 @@ const NO_FILES = "No instruction files here.";
 export const filesGroup = (key) => `group:files:${key}`;
 const MISSING = { icon: "triangle-alert", words: "Missing" };
 // Another tab's blocks grow from here and shrink back to its x (library-notes §6; map-view.js).
-const TAB_FROM = { x: 150, y: 200 };
+const TAB_FROM = { x: 200, y: 200 };
 // What drags onto a client, and what a drop adds there for all projects.
 const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };
 // Why a client cannot take a dragged item, before the drop (decisions, in this order).
