@@ -424,6 +424,22 @@ async function loadSetupServer() {
   markGatewayData();
 }
 
+// On the first load, a place draws as soon as what it shows is read, without waiting for the
+// rest: the Overview's read of the chat logs can take seconds, and the Gateway showed its
+// skeleton all that time. Later reloads draw once, at the end, as before.
+const PLACE_READS = { gateway: ["gateway", "setupServer"] };
+let firstLoad = true;
+
+function drawWhenRead() {
+  let drawn = false;
+  return () => {
+    const needs = PLACE_READS[state.view];
+    if (!firstLoad || drawn || !needs || !needs.every((name) => data[name])) return;
+    drawn = true;
+    renderPlace();
+  };
+}
+
 // Everything the current place shows, after a scan or a change (the Library's map only on the
 // Library). Nothing is read for a project no longer on the list.
 export async function reload() {
@@ -431,8 +447,10 @@ export async function reload() {
   await loadShared();
   const library = state.view === "library";
   if (!library) Object.assign(libraryMapRead, { fresh: false, turn: libraryMapRead.turn + 1, running: null });
-  const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway(), ...(library ? [loadLibraryMap()] : []), ...(state.view === "context" ? [loadContext()] : [])];
-  await Promise.all([...reads, loadSetupServer()]);
+  const early = drawWhenRead();
+  const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway().then(early), ...(library ? [loadLibraryMap()] : []), ...(state.view === "context" ? [loadContext()] : [])];
+  await Promise.all([...reads, loadSetupServer().then(early)]);
+  firstLoad = false;
   // The Library's maps count only while the Library shows: they are not read elsewhere.
   freshness.lastReadFailed = Object.keys(data.errors).some((name) => !LIBRARY_READS.includes(name) || state.view === "library");
   if (!freshness.lastReadFailed) freshness.lastGoodRead = Date.now();
