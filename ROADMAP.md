@@ -12,7 +12,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **`kitden scan` counts in plain words:** it prints `MCP servers: 12` and `Skills: 62` where it
   printed `mcp_server` and `skill`, says on the `Skills` line why that count and the last
   chat's differ, puts the Claude Desktop Code tab on one line under Claude Code, and no longer
-  breaks a line inside `kitden show findings` or "+26 more".
+  breaks a line inside `kitden show findings` or "+26 more". A skill reached twice, through a
+  project's path and a symlink to it, counts once, and a client that is not installed reads
+  "Codex: not found".
 - **A description that a plugin update changed is not counted as cut:** when a Codex plugin was
   updated after your last chat and a skill's description changed with it, Kitden compared what
   the chat sent with the new text and said it was cut, such as "31 of 61 cut to 139–338

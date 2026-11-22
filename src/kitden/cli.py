@@ -19,7 +19,7 @@ from pathlib import Path
 
 from kitden import __version__, page, system
 from kitden.clients.version_cache import refresh_versions
-from kitden.model import CLIENTS, Client
+from kitden.model import CLIENTS, Client, ClientStatus
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
 HOST = page.HOST
@@ -299,12 +299,18 @@ def _print_summary(
     from kitden.views import words
     from kitden.views.effective import column_of
 
-    counts = Counter((i.client, str(i.kind)) for i in inventory.items)
+    # An item reached twice (a project listed by its path and by a symlink to it) counts once.
+    seen = {(i.client, str(i.kind), i.id) for i in inventory.items}
+    counts = Counter((client, kind) for client, kind, _ in seen)
     misfits = False
     for client in inventory.clients:
         if column_of(client.id) != client.id:
             continue  # the Desktop Code tab: a line under Claude Code
-        print(f"{client.display_name}: {client.status} ({_version(client)})")
+        status = words.SCAN_STATUS.get(str(client.status), str(client.status))
+        if client.status is ClientStatus.NOT_FOUND:
+            print(f"{client.display_name}: {status}")
+            continue
+        print(f"{client.display_name}: {status} ({_version(client)})")
         card = cards.get(client.id)
         for kind, label in words.SCAN_KINDS.items():
             count = counts[(client.id, kind)]

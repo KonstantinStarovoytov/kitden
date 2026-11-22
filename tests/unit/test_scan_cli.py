@@ -130,7 +130,7 @@ def test_scan_says_which_skills_the_last_chat_cut(bare, capsys):
     assert _after(lines, said) == [ELSEWHERE, "    gamma, delta"]
     assert lines[-1] == "To fix: kitden open"
     # The count beside it says why the two numbers can differ, in one line of the terminal.
-    counted = "  Skills: 4 found; a chat has one project's, plus ones Claude Code adds"
+    counted = "  Skills: 4 on this computer; a chat lists one project's and Claude Code's own"
     assert lines[lines.index(said) - 1] == counted
     assert len(counted.replace("4", "999")) <= 80
 
@@ -296,6 +296,29 @@ def test_scan_counts_each_kind_in_plain_words(home, capsys):
         "  Skills: 4",
     ]
     assert set(words.SCAN_KINDS) == {str(kind) for kind in ItemKind}
+
+
+def test_scan_counts_an_item_reached_twice_once(home, capsys, monkeypatch):
+    from kitden.views import answers
+
+    read = answers.read_setup
+
+    def twice(root):
+        # As when a project is listed by its path and by a symlink to it.
+        inventory = read(root)
+        inventory.items += [i for i in inventory.items if i.kind is ItemKind.SKILL]
+        return inventory
+
+    monkeypatch.setattr(answers, "read_setup", twice)
+    lines = _summary(home, capsys)
+    assert "  Skills: 4" in lines
+
+
+def test_scan_says_a_client_is_not_found_in_plain_words(tmp_path, capsys):
+    lines = _summary(make_home(tmp_path, "claude_code/2.1.283"), capsys)
+    assert "Codex: not found" in lines
+    assert "Cursor: not found" in lines
+    assert not [line for line in lines if "not_found" in line]
 
 
 def test_scan_puts_the_desktop_code_tab_under_claude_code(home, capsys):
