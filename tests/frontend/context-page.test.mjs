@@ -145,7 +145,7 @@ const CODEX = {
 // Codex when the files of the skills it sent cannot be found: the server cannot tell.
 const UNKNOWN = {
   ...CODEX, lamp: 'none', checked: false,
-  windows: [window('272K window', 'gpt-6-astra', 'Last chat · Oct 29', '58 sent', 'In your last chat on Oct 29, Codex sent 58 skills. Kitden cannot find all their files, so it cannot tell if any were cut.', { budget: 5440 })],
+  windows: [window('272K window', 'gpt-6-astra', 'Last chat · Oct 29', '58 sent', 'In your last chat on Oct 29, Codex sent 58 skills. A file is gone or was changed after the chat, so Kitden cannot tell if any were cut.', { budget: 5440 })],
 };
 const CURSOR = {
   client: 'cursor', lamp: 'none', lede: `${LEDE} Cursor does not publish a limit for this list.`,

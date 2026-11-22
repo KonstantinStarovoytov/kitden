@@ -75,6 +75,14 @@ class _Row:
     added: bool = False  # Claude Code: added during the chat, sent whole outside the limit
     built_in: bool = False  # Claude Code: built in, keeps its description whatever the limit
     moved: bool = False  # Codex: read from its plugin's newer version, the chat's one is gone
+    # Codex: the newer version's description is another text than the chat sent, so the size it
+    # had in the chat is not known.
+    changed: bool = False
+
+    @property
+    def then(self) -> str | None:
+        """The description as it was in the chat: `full`, or None when that is not known."""
+        return None if self.changed else self.full
 
 
 def context_view(
@@ -755,8 +763,25 @@ def _codex_kind(sent: int | None, full: int) -> str:
 def _codex_cuts(rows: list[_Row]) -> list[int]:
     """The lengths sent of the descriptions that were cut, among those whose full text is
     known."""
-    sent = [(len(r.sent), len(r.full)) for r in rows if r.sent is not None and r.full is not None]
+    sent = [(len(r.sent), len(r.then)) for r in rows if r.sent is not None and r.then is not None]
     return [kept for kept, full in sent if _codex_kind(kept, full) == "cut"]
+
+
+def _codex_added(rows: list[_Row]) -> list[_Row]:
+    """Mark the skills read from a newer version whose shorter text in the chat may be the
+    whole old description, with the rest added by the update. Codex cuts every long description
+    at about one length (334-338 on 2026-11-22), so it is a cut only at a length that a skill
+    read from the chat's own file was cut at."""
+    cuts = _codex_cuts([r for r in rows if not r.moved])
+    out = []
+    for r in rows:
+        kept = len(r.sent or "")
+        shorter = r.moved and kept and r.then is not None
+        shorter = shorter and _codex_kind(kept, len(r.then or "")) == "cut"
+        if shorter and not (cuts and min(cuts) <= kept <= max(cuts)):
+            r = replace(r, changed=True)
+        out.append(r)
+    return out
 
 
 def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
@@ -764,6 +789,8 @@ def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
     log's cuts may differ by a few characters (366-370 on 2026-10-30), so the rule's length
     must fall among them."""
     for r in rows:
+        if r.changed:  # the rule ran on the new text: nothing of the chat's to match
+            continue
         logged = None if r.sent is None else len(r.sent)
         full = len(r.full or "")
         if _codex_kind(logged, full) != _codex_kind(fit.sent.get(r.name), full):
@@ -786,8 +813,8 @@ def _codex_fact(
         skill = CodexSkill(r.name, r.full or "", shown.get(r.name, r.path))
         if r.sent is not None:
             sent[r.name] = codex_tokens(codex_line(skill, r.sent))
-        if r.full is not None:
-            whole = codex_tokens(codex_line(skill, codex_catalog(r.full)))
+        if r.then is not None:
+            whole = codex_tokens(codex_line(skill, codex_catalog(r.then)))
             if whole > sent.get(r.name, 0):
                 over[r.name] = whole - sent.get(r.name, 0)
     used = table + sum(sent.values())
@@ -795,7 +822,7 @@ def _codex_fact(
     out = sum(r.sent is None for r in rows)
     cuts = _codex_cuts(rows)
     # Full or cut only for skills whose full size is known; else only what the log shows.
-    unknown = sum(r.sent is not None and r.full is None for r in rows)
+    unknown = sum(r.sent is not None and r.then is None for r in rows)
     skills = _many(n, "skill", "skills")
     if out:
         short = words.CODEX_SHORT_OUT.format(out=out)
@@ -832,8 +859,8 @@ def _codex_fact(
         r.name: len(r.sent)
         for r in rows
         if r.sent is not None
-        and r.full is not None
-        and _codex_kind(len(r.sent), len(r.full)) == "cut"
+        and r.then is not None
+        and _codex_kind(len(r.sent), len(r.then)) == "cut"
     }
     misfit = None
     if out:
@@ -919,7 +946,16 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
         whole, newer = _description(path), None
         if whole is None and path and (newer := _newer_copy(path)):
             whole = _description(newer)
-        rows.append(_Row(name, text, item, whole, path, moved=newer is not None))
+        # checked 2026-11-22 (real log, Codex 0.169.0): an update can change a description. The
+        # chat's text is then not the start of the new one, and the new size says nothing of it.
+        changed = bool(
+            newer
+            and whole is not None
+            and text is not None
+            and not codex_catalog(whole).startswith(text)
+        )
+        rows.append(_Row(name, text, item, whole, path, moved=newer is not None, changed=changed))
+    rows = _codex_added(rows)
     matched = {r.item.id for r in rows if r.item}
     extras = [i for i in items if i.id not in matched]
     # Codex leaves skills out only once it has removed every description: then the user's
@@ -1007,7 +1043,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
     skills = []
     for r in rows:
         logged = None if r.sent is None else len(r.sent)
-        side = None if r.full is None else int(_codex_kind(logged, len(r.full)) != "full")
+        side = None if r.then is None else int(_codex_kind(logged, len(r.then)) != "full")
         note = words.NOTE_NO_FILE if r.full is None else None
         if r.item is not None and r.full is not None:
             note = words.NOTE_CODEX_OFF
@@ -1015,7 +1051,9 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
                 note = f"{words.NOTE_CODEX_LONG} {note}"
         if r.item is not None and from_plugin(r.item):
             note = words.NOTE_PLUGIN
-        if r.moved:  # first, whatever the other note: the size read may not be the chat's
+        if r.changed:
+            note = words.NOTE_CHANGED
+        elif r.moved:  # first, whatever the other note: the size read may not be the chat's
             note = f"{words.NOTE_NEWER} {note}" if note else words.NOTE_NEWER
         size = len(r.full) if r.full is not None else len(r.sent or "")
         text, seen = (
