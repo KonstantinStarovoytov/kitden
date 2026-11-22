@@ -8,7 +8,7 @@ import { button, el, icon, joinWords, plural } from "./dom.js";
 import { loadLibraryFor } from "./library.js";
 import { animateTo, D, rise, riseHead, rollTo, STRIKE } from "./motion.js";
 import { floatsAt, loadPanel, openPanel, panelState, redoChange, redoStands, undoChange } from "./panel.js";
-import { ALL_PROJECTS, backupNote, banner, changeTitle, CLIENT_NAMES, failedWord, kitdenHouse, mark, setHint, skeleton } from "./parts.js";
+import { ALL_PROJECTS, backupNote, banner, changeTitle, CLIENT_NAMES, failedWord, kitdenHouse, mark, pastTitle, setHint, skeleton } from "./parts.js";
 import { data, goTo, libraryChoice, parseSel, retry } from "./store.js";
 import { keyFor } from "./tray.js";
 
@@ -403,7 +403,7 @@ function historyNode(entry) {
 function rowTitles(rows) {
   if (!rows || rows.length < 2) return null;
   const list = el("ul", "p-rows");
-  list.append(...rows.map((row) => el("li", null, row.title)));
+  list.append(...rows.map((row) => el("li", null, pastTitle(row.title))));
   return list;
 }
 

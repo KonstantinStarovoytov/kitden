@@ -355,7 +355,7 @@ test('Details show Project, State, Backup, Takes effect, Clients and History', a
   const history = byClass(drawer, 'p-hist')[0];
   assert.deepEqual(history.children.map((n) => n.dataset.icon || text(n)), [`${time} Preview`, 'arrow-right', `${time} Applied`, 'arrow-right', `${time} Checked`]);
   // Every row of the change is named.
-  assert.deepEqual(byClass(drawer, 'p-rows')[0].children.map(text), ['Allow Push files c1', 'Turn off Code review c1']);
+  assert.deepEqual(byClass(drawer, 'p-rows')[0].children.map(text), ['Allow Push files c1', 'Turned off Code review c1']);
   // The other states, in words that are true for each.
   await fire(row('c2'), 'click');
   assert.deepEqual(facts().slice(0, 4).map(([, v]) => v), ['mcp-gateway', 'Undone', 'Back in place', RESTART]);
