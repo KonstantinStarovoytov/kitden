@@ -7,7 +7,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
-### Not yet released
+### 0.10.2
 
 - **`kitden scan` says when it waits for Codex, and does not wait twice:** while Codex lists
   its plugins (up to 15 seconds) the terminal says so, and a repeat run within an hour,

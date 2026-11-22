@@ -1,3 +1,3 @@
 """See and safely change what AI coding clients load on this computer."""
 
-__version__ = "0.10.1"
+__version__ = "0.10.2"

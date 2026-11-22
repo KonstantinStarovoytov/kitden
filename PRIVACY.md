@@ -11,8 +11,10 @@ nothing from it.
   its model list (`models_cache.json`), for the size of its context window, and the skill files of a
   plugin's newest version when the chat's version was removed by an update. Kitden uses them to size
   the skill list and keeps none of it. The page, `kitden show context` and `kitden scan` all do
-  this check; `kitden scan` prints one line about each skill list in your terminal and nothing else
-  from the chats.
+  this check. `kitden scan` prints in your terminal one line about each skill list, the names of
+  the first five skills that did not fit, and nothing else from the chats. When the folder you run
+  it in has no chat, it reads the client's last chat in any folder and also prints that folder's
+  path.
 - A skill's description, from its `SKILL.md`. The page shows it in the skill's Details, and
   `kitden show context` prints it (see "The plugin and your agent"). Kitden keeps none of it.
 - Versions and plugin lists, from the clients' own commands.
@@ -49,8 +51,9 @@ The plugin's skills ask your agent to run `kitden show`. The answer goes into th
 agent and the company behind it see it, under their own privacy terms. Secret values, such as
 tokens in a server's settings, are replaced with `[secret]` first. The one exception is
 `kitden show context`: it prints each skill's description as written in its `SKILL.md`, and
-Kitden does not replace anything in it. Keep secrets out of a skill's description. `kitden show`
-changes no client settings and does not go online.
+Kitden does not replace anything in it. Keep secrets out of a skill's description. It also prints
+the names of the skills that did not fit in your last chat. `kitden show` changes no client
+settings and does not go online.
 
 ## Questions
 
