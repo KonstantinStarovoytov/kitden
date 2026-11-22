@@ -24,6 +24,8 @@ from kitden.views.words import NO_FILE_ALL, NO_FILE_HERE, PICK_PROJECT, join_wor
 ALL = {"key": "all", "name": "All projects"}
 PROJECT = "Only this project · {}"
 COMMANDS = {"key": "commands", "name": "Commands and agents"}
+# A client block whose only files on the map are commands or agents.
+ONLY_COMMANDS = "Commands and agents only"
 # The categories of instruction items this map shows: files, and commands and agents (their kind).
 KINDS = {"command": "command", "agent": "agent"}
 CURSOR_RULES = ".cursor/rules"
@@ -214,8 +216,11 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
     if groups[COMMANDS["key"]]:
         out.append({**COMMANDS, "files": sorted(groups[COMMANDS["key"]], key=key)})
     files = [f for g in out if g["key"] != COMMANDS["key"] for f in g["files"]]
+    extras = groups[COMMANDS["key"]]
     loads = {
-        client: _file_words(sum(client in f["by"] for g in out for f in g["files"]))
+        client: _file_words(
+            sum(client in f["by"] for f in files), any(client in f["by"] for f in extras)
+        )
         for client in CLIENTS
     }
     return {
@@ -227,9 +232,13 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
     }
 
 
-def _file_words(count: int) -> str | None:
-    """What a client reads on this map: "3 files", None for none."""
-    return None if not count else f"{count} file" if count == 1 else f"{count} files"
+def _file_words(count: int, extras: bool) -> str | None:
+    """What a client reads on this map: its instruction files ("3 files"), as the note under the
+    map counts them; with none of those but a command or an agent, "Commands and agents only";
+    None for nothing."""
+    if count:
+        return f"{count} file" if count == 1 else f"{count} files"
+    return ONLY_COMMANDS if extras else None
 
 
 def _no_file_note(found: list[str], files: list[dict], project: str | None) -> str | None:

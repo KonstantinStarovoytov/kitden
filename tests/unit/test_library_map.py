@@ -134,6 +134,19 @@ def test_one_plugin_or_skill_says_it_in_the_singular(tmp_path):
     }
 
 
+def test_a_client_whose_only_item_is_a_hook_does_not_say_nothing_is_loaded():
+    groups = [
+        {"items": [{"kind": "skill", "by": {"codex": "on"}}]},
+        {"items": [{"kind": "hook", "by": {"claude_code": "on", "codex": "on"}}]},
+        {"items": [{"kind": "hook", "by": {"claude_code": "on", "cursor": "off"}}]},
+    ]
+    assert plugin_skill_words(groups) == {
+        "claude_code": "2 hooks",
+        "codex": "1 skill",
+        "cursor": None,
+    }
+
+
 def test_a_plugin_counts_what_it_holds_and_never_says_n_of_m(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     items = _items(_map(home))

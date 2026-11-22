@@ -73,26 +73,27 @@ def map_clients(inventory, cursor_imports: bool, loads: dict[str, str | None]) -
 
 
 def plugin_skill_words(groups: list[dict]) -> dict[str, str | None]:
-    """Per client, what it loads of the plugins and skills in `groups` ("5 plugins · 62 skills");
-    None where it loads none. An item another client's folder brings in counts, since the client
-    loads it."""
-    found: dict[str, dict[str, int]] = {c: {"plugin": 0, "skill": 0} for c in CLIENTS}
+    """Per client, what it loads of the items in `groups`: its plugins and skills ("5 plugins ·
+    62 skills"); with none of those, its hooks ("1 hook"), so a client whose only item is a hook
+    never says it loads nothing; None where it loads none. An item another client's folder brings
+    in counts, since the client loads it."""
+    kinds = ("plugin", "skill", "hook")
+    found: dict[str, dict[str, int]] = {c: dict.fromkeys(kinds, 0) for c in CLIENTS}
     for group in groups:
         for item in group["items"]:
-            if item["kind"] not in ("plugin", "skill"):
+            if item["kind"] not in kinds:
                 continue
             for client, state in item["by"].items():
                 if state == "on":
                     found[client][item["kind"]] += 1
-    out: dict[str, str | None] = {}
-    for client, n in found.items():
-        parts = [
-            f"{n[kind]} {kind}{'' if n[kind] == 1 else 's'}"
-            for kind in ("plugin", "skill")
-            if n[kind]
-        ]
-        out[client] = " · ".join(parts) or None
-    return out
+
+    def words(n: dict[str, int], shown: tuple[str, ...]) -> str:
+        return " · ".join(f"{n[k]} {k}{'' if n[k] == 1 else 's'}" for k in shown if n[k])
+
+    return {
+        client: words(n, ("plugin", "skill")) or words(n, ("hook",)) or None
+        for client, n in found.items()
+    }
 
 
 def _present(inventory, project: str | None) -> dict[str, list[Item]]:

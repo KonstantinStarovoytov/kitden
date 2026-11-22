@@ -245,8 +245,9 @@ def test_a_client_with_no_instruction_file_in_the_scope_says_why(home):
         "Cursor loads no instruction file in every project. Pick a project to see its own files."
     )
     words = {c["id"]: c["words"] for c in answer["clients"]}
+    # Claude Code's two commands are not instruction files: the block counts what the note counts.
     assert (words["claude_code"], words["codex"], words["cursor"]) == (
-        "3 files",
+        "1 file",
         "1 file",
         "Nothing loaded",
     )
@@ -270,6 +271,24 @@ def test_the_no_file_sentence_names_every_client_without_one(home):
     assert picked["note"] == "Claude Code and Cursor load no instruction file in this project."
     # Every found client has a file: no sentence.
     assert instructions_map(*_full(home))["note"] is None
+
+
+def test_a_client_with_only_commands_does_not_count_them_as_files(home):
+    from kitden.views.load_map import category
+
+    adapters = {a.id: a for a in default_adapters(home, quick=True)}
+    inventory = build_inventory(home, list(adapters.values()), [])
+    # Claude Code keeps its commands and agents and loses its instruction files.
+    inventory.items[:] = [
+        i
+        for i in inventory.items
+        if i.client != "claude_code" or category(i) in ("command", "agent")
+    ]
+    answer = instructions_map(inventory, adapters, None)
+    assert any(g["key"] == "commands" for g in answer["groups"])
+    claude = next(c for c in answer["clients"] if c["id"] == "claude_code")
+    assert (claude["state"], claude["words"]) == ("on", "Commands and agents only")
+    assert answer["note"].startswith("Claude Code and Cursor load no instruction file")
 
 
 def _full(home):
