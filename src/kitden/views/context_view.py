@@ -767,6 +767,23 @@ def _codex_cuts(rows: list[_Row]) -> list[int]:
     return [kept for kept, full in sent if _codex_kind(kept, full) == "cut"]
 
 
+def _codex_added(rows: list[_Row]) -> list[_Row]:
+    """Mark the skills read from a newer version whose shorter text in the chat may be the
+    whole old description, with the rest added by the update. Codex cuts every long description
+    at about one length (334-338 on 2026-11-22), so it is a cut only at a length that a skill
+    read from the chat's own file was cut at."""
+    cuts = _codex_cuts([r for r in rows if not r.moved])
+    out = []
+    for r in rows:
+        kept = len(r.sent or "")
+        shorter = r.moved and kept and r.then is not None
+        shorter = shorter and _codex_kind(kept, len(r.then or "")) == "cut"
+        if shorter and not (cuts and min(cuts) <= kept <= max(cuts)):
+            r = replace(r, changed=True)
+        out.append(r)
+    return out
+
+
 def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
     """The rule leaves out, cuts and keeps the same skills as the log, at the same length: the
     log's cuts may differ by a few characters (366-370 on 2026-10-30), so the rule's length
@@ -938,6 +955,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
             and not codex_catalog(whole).startswith(text)
         )
         rows.append(_Row(name, text, item, whole, path, moved=newer is not None, changed=changed))
+    rows = _codex_added(rows)
     matched = {r.item.id for r in rows if r.item}
     extras = [i for i in items if i.id not in matched]
     # Codex leaves skills out only once it has removed every description: then the user's

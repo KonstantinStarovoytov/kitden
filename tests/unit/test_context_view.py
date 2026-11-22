@@ -860,6 +860,42 @@ def test_a_description_the_update_changed_is_not_counted_as_cut(home):
     assert cx["lamp"] == "none"
 
 
+def _longer_helper(home, new, sent):
+    """A plugin skill read from its newer version, where it says `new`; the chat sent `sent`."""
+    plugin = home / ".codex/plugins/cache/market/tools"
+    skill(plugin / "2.2.2/skills", "helper", new)
+    gone = plugin / "2.2.1/skills/helper/SKILL.md"
+    return f"- tools:helper: {sent} (file: {gone})"
+
+
+def test_text_an_update_added_to_a_description_is_not_a_cut(home):
+    # The new text starts with what the chat sent, as a cut one does. No skill read from the
+    # chat's own file was cut, so this is no cut either.
+    codex_home(home, window=272_000)
+    line = _longer_helper(home, "Helps with things. And with more.", "Helps with things.")
+    codex_chat(home, [line])
+    cx = view(home)["codex"]
+    fact = cx["windows"][0]["result"]
+    assert fact["say"] == f"In your last chat on Oct 30, Codex sent 1 skill. {CHANGED}"
+    assert (fact["misfit"], cx["lamp"]) == (None, "none")
+
+
+def test_a_newer_version_cut_where_the_others_were_cut_is_a_cut(home):
+    paths = codex_home(home, window=272_000)
+    new = "Helps with things of many kinds, large and small, all week."
+    cut = f"- alpha: {CODEX_A[:29]} (file: {paths['alpha']})"
+    codex_chat(home, [cut, _longer_helper(home, new, new[:29])])
+    fact = view(home)["codex"]["windows"][0]["result"]
+    assert fact["say"] == (
+        "In your last chat on Oct 30, 2 of 2 descriptions were cut to 29 characters. "
+        "The agent saw only their start."
+    )
+    # At another length it is not known to be a cut.
+    codex_chat(home, [cut, _longer_helper(home, new, new[:18])])
+    fact = view(home)["codex"]["windows"][0]["result"]
+    assert fact["misfit"] == {"kind": "cut", "n": 1, "names": ["alpha"]}
+
+
 def test_a_changed_description_does_not_fail_the_check_of_the_others(home):
     paths = codex_home(home, window=272_000)
     lines = [f"- {s.name}: {s.description} (file: {s.path})" for s in rule_skills(paths)]
