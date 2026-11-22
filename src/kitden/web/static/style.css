@@ -1329,6 +1329,7 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-pill u { text-decoration: none; font-size: 10px; font-weight: calc(400 + var(--heat, 0) * 200); color: color-mix(in oklab, var(--route) calc(var(--heat, 0) * 100%), var(--ink-4)); font-variant-numeric: tabular-nums; }
 .lo .ctx-pill, .ctx-apart .ctx-pill { background: transparent; color: var(--ink-3); }
 .ctx-pill:hover, .ctx-pill.hot { border-color: var(--ink-3); }
+.ctx-pill .ctx-tag { font-style: normal; font-size: 10px; color: var(--ink-4); }
 .ctx-pill.chg { border-style: dashed; border-color: var(--preview-line); }
 .ctx-pill.back { border-color: var(--preview-line); background: var(--preview-fill); color: var(--ink); }
 .ctx-pill.lost { border-color: var(--lamp-warn); color: var(--ink); }

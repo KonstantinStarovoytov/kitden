@@ -212,6 +212,8 @@ def _skill(
         "item": item.id if item else None,
         "project": Project(project, True).id if project else None,
         "source": _source(item, built_in),
+        # Not a file on this computer: no Library item, no switch.
+        "built_in": built_in,
         "size": size,
         "side": side,
         "state": _state(item),
