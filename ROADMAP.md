@@ -7,7 +7,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
-### Not yet released
+### 0.10.3
 
 - **A server's access is clearer in the gateway:** Add access… shows once, offers Sign in only
   to a server that has it, keeps Back to Details, and fills in the key a catalog says the
