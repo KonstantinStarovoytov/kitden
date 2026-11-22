@@ -7,6 +7,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **Hooks that `disableAllHooks` turns off show as off:** Claude Code runs no hooks from its
+  settings files when `disableAllHooks` is true, but Kitden showed them as on. It now reads the
+  flag as Claude Code does, the local file over the project's over yours, so a project that
+  sets it to false shows its hooks on there (#147).
+
 ### 0.10.2
 
 - **`kitden scan` says when it waits for Codex, and does not wait twice:** while Codex lists

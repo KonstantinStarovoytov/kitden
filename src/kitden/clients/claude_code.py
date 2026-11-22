@@ -201,6 +201,31 @@ def _project_rules(
     return ruled
 
 
+# checked 2026-11-22 (code.claude.com/docs/en/hooks, "Disable or remove hooks"; and
+# code.claude.com/docs/en/settings, "Settings precedence"): `disableAllHooks: true` turns off the
+# hooks of settings files. Claude Code uses the value left after precedence, local over project
+# over user, so `false` in a project's files turns user hooks back on there. Not read here: managed
+# settings (only a managed `disableAllHooks` turns managed hooks off) and `--settings`.
+def _hooks_rule(layers: list[tuple[Scope, dict]]) -> tuple[bool, Scope] | None:
+    """Whether `disableAllHooks` turns hooks off, and the file that decides; None when no file
+    sets it. `layers` run from the least to the most specific file."""
+    rule = None
+    for scope, settings in layers:
+        value = settings.get("disableAllHooks")
+        if isinstance(value, bool):
+            rule = (value, scope)
+    return rule
+
+
+def _apply_hooks_rule(items: list[Item], rule: tuple[bool, Scope] | None) -> list[Item]:
+    """The hooks as `disableAllHooks` leaves them."""
+    if rule is None:
+        return items
+    off, scope = rule
+    enabled = Enabled.OFF if off else Enabled.ON
+    return [replace(i, enabled=enabled, state_scope=scope) for i in items]
+
+
 # checked 2026-10-27 (code.claude.com/docs/en/settings, "Where Claude Code keeps the local file
 # in a git repository"): since v2.1.211, Claude Code started in a subfolder of a git repository
 # reads and writes `.claude/settings.local.json` at the repository root. It still reads a file an
@@ -574,6 +599,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         # MCP servers: user scope, then per-project local scope and project .mcp.json files.
         scan.items += mcp_items(CLIENT, state.get("mcpServers"), state_path, Scope.USER)
         project_skill_rules: dict[str, dict[str, tuple[str, Scope]]] = {}
+        project_hook_rules: dict[str, tuple[bool, Scope]] = {}
         projects = as_dict(state.get("projects"))
         for path, data in projects.items():
             data = as_dict(data)
@@ -586,7 +612,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                 project=path,
                 table=f"projects.{path}.mcpServers",
             )
-            found, rules = self._project_files(
+            found, rules, hooks_rule = self._project_files(
                 read,
                 Path(path),
                 data,
@@ -597,6 +623,8 @@ class ClaudeCodeAdapter(ClientAdapter):
             scan.items += found
             if rules is not None:
                 project_skill_rules[path] = rules
+            if hooks_rule is not None:
+                project_hook_rules[path] = hooks_rule
 
         # Plugins: user settings decide on/off; project settings may override.
         enabled = as_dict(settings.get("enabledPlugins"))
@@ -666,7 +694,16 @@ class ClaudeCodeAdapter(ClientAdapter):
         scan.items += instruction_items(
             CLIENT, _instruction_files(self.home / ".claude"), Scope.USER, CLIENT
         )
-        scan.items += hook_items(CLIENT, settings, settings_path, Scope.USER)
+        user_hooks = _apply_hooks_rule(
+            hook_items(CLIENT, settings, settings_path, Scope.USER),
+            _hooks_rule([(Scope.USER, settings)]),
+        )
+        hook_rules = [
+            (path, Enabled.OFF if off else Enabled.ON, scope, "off" if off else "on")
+            for path, (off, scope) in project_hook_rules.items()
+            if scope is not Scope.USER
+        ]
+        scan.items += [replace(i, project_rules=tuple(hook_rules)) for i in user_hooks]
         marketplaces_path = self.home / ".claude/plugins/known_marketplaces.json"
         for name, entry in as_dict(read.json(marketplaces_path)).items():
             where = marketplace_source(as_dict(entry).get("source"))
@@ -697,8 +734,9 @@ class ClaudeCodeAdapter(ClientAdapter):
         user_settings: dict,
         user_known: bool,
         trusted: bool,
-    ) -> tuple[list[Item], dict[str, tuple[str, Scope]] | None]:
-        """The project's items, and its skill rules (None when a settings file was unreadable)."""
+    ) -> tuple[list[Item], dict[str, tuple[str, Scope]] | None, tuple[bool, Scope] | None]:
+        """The project's items, its skill rules (None when a settings file was unreadable) and
+        its `disableAllHooks` rule (None when no file sets it)."""
         path = str(root)
         items: list[Item] = []
         # When the project is the home folder, its `.claude/settings.json` and skills are the
@@ -750,14 +788,16 @@ class ClaudeCodeAdapter(ClientAdapter):
                     state_scope=scope,
                 )
             )
-        items += hook_items(CLIENT, settings, settings_path, Scope.PROJECT, project=path)
-        rules = _skill_rules(
-            [
-                (Scope.USER, user_settings),
-                (Scope.PROJECT, settings),
-                *((Scope.LOCAL, data) for _, data in locals_),
-            ]
+        layers = [
+            (Scope.USER, user_settings),
+            (Scope.PROJECT, settings),
+            *((Scope.LOCAL, data) for _, data in locals_),
+        ]
+        hooks_rule = _hooks_rule(layers)
+        items += _apply_hooks_rule(
+            hook_items(CLIENT, settings, settings_path, Scope.PROJECT, project=path), hooks_rule
         )
+        rules = _skill_rules(layers)
         read_files = [settings_path, *(p for p, _ in locals_)]
         known = user_known and not any(read.failed(p) for p in read_files)
         if not at_home:
@@ -773,7 +813,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         if not at_home:
             files += _instruction_files(root / ".claude")
         items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
-        return items, (rules if known else None)
+        return items, (rules if known else None), hooks_rule
 
     def _plugin_parts(self, read: Reader, root: Path, enabled: Enabled) -> list[Item]:
         if not root.is_dir():
