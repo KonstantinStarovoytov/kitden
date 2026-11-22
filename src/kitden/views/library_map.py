@@ -323,6 +323,25 @@ def _rule_outside(inventory, adapters, project: str | None) -> bool:
     return target is not None and not _writable(target, adapter.home, inventory)
 
 
+def has_own_rules(inventory, project: str) -> bool:
+    """The project's own settings decide a plugin or skill there: what `here` says in
+    `library_map`, without the catalogs and folders that map reads for Details. The Overview asks
+    this for every known project, so it must stay cheap."""
+    by_id = {i.id: i for i in inventory.items}
+    present = _present(inventory, project)
+    for row in load_map(inventory, project):
+        if row.kind not in (ItemKind.PLUGIN, ItemKind.SKILL):
+            continue
+        items = present.get(row.key, [])
+        own = [i for i in items if row.kind is ItemKind.PLUGIN or i.scope is not Scope.PLUGIN]
+        if not own or _group(row, own, project)["key"] == PROJECT["key"]:
+            continue
+        deciding = _links(row, {i.id for i in own}, by_id, False)[3]
+        if any(_decides_here(i, project) for held in deciding.values() for i in held):
+            return True
+    return False
+
+
 def _marketplace_sources(inventory) -> dict[str, str]:
     """Marketplace name -> where it comes from, as its item says it (a folder, or host/path with
     no credentials)."""

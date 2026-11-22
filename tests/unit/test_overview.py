@@ -506,6 +506,23 @@ def test_unreadable_and_untested_cards_have_no_button(home, monkeypatch):
     assert data["counts"]["attention"] == len(_cards(data, "attention"))
 
 
+def test_the_overview_reads_the_catalogs_once_however_many_projects(tmp_path, monkeypatch):
+    # With 26 projects the Overview took 12 s on a real setup: it built the whole Library map,
+    # catalogs and all, for each project, only to count the projects with rules of their own.
+    from kitden.demo import demo_adapters
+    from kitden.views import library_map as module
+
+    home = build_demo_home(tmp_path, "medium")
+    adapters = {a.id: a for a in demo_adapters(home)}
+    inventory = build_inventory(home, list(adapters.values()), [])
+    assert len(inventory.projects) > 1
+    calls = []
+    real = module.catalog
+    monkeypatch.setattr(module, "catalog", lambda *a, **k: calls.append(1) or real(*a, **k))
+    overview(inventory, None, held=[], adapters=adapters)
+    assert len(calls) == 1
+
+
 def test_the_map_counts_servers_tools_plugins_skills_and_own_rules(tmp_path):
     from kitden.demo import demo_adapters
     from kitden.views.library_map import library_map
