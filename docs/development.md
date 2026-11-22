@@ -433,6 +433,9 @@ made, how their addresses work on GitHub and PyPI, and what to check before prom
   turned off is refused at once; if the file cannot be read, the rules it started with apply. It
   keeps references, not secrets: each non-empty env value or header that would be hidden is a Keychain item
   (service `kitden`, account `<server>/<key>`), and `gateway.json` holds `{"keychain": "<server>/<key>"}`.
+  So is each argument that would be hidden, under the key `args.<n>` (its place in `args`); only
+  the hidden part moves, so `--api-key=<value>` becomes
+  `{"keychain": "<server>/args.<n>", "prefix": "--api-key="}`.
   The gateway reads the items when it starts a server. Kitden calls `/usr/bin/security`; the
   env variables `KITDEN_SECURITY` and `KITDEN_SECRET_TOOL` replace the paths only when Kitden
   runs from a source checkout (tests); a release, installed in site-packages, ignores them. `kitden mcp` finds the project once, at start: the `CLAUDE_PROJECT_DIR` variable, then

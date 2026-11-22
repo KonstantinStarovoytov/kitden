@@ -9,6 +9,8 @@ import re
 from typing import Any
 from urllib.parse import unquote_plus, urlsplit, urlunsplit
 
+from kitden.local_gateway.keychain import is_arg_reference
+
 SECRET = "[secret]"  # noqa: S105 - placeholder text, not a password
 
 # Maps whose values are secrets (env values, header values) in Claude Code, Codex and Cursor.
@@ -74,7 +76,9 @@ class _Redactor:
         out: list[Any] = []
         hide_next = False
         for arg in args:
-            if hide_next and not _is_reference(arg):
+            if is_arg_reference(arg):  # kept in the Keychain: hidden, and not a secret here
+                out.append(f"{arg.get('prefix', '')}{SECRET}")
+            elif hide_next and not _is_reference(arg):
                 out.append(self.secret())
             elif isinstance(arg, str) and (m := _SECRET_FLAG_VALUE.fullmatch(arg)):
                 self.found = True

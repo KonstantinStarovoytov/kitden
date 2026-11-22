@@ -32,6 +32,7 @@ from kitden.local_gateway.keychain import (
     SECRET_FIELDS,
     KeychainError,
     Runner,
+    is_arg_reference,
     resolve_entry,
     run_security,
 )
@@ -51,7 +52,7 @@ from kitden.model import (
     Scope,
     Step,
 )
-from kitden.redact import redact
+from kitden.redact import SECRET, redact
 from kitden.sign_in import GONE, SignIn
 from kitden.sign_in import KEY as SIGN_IN_KEY
 from kitden.views.catalog import known_refusal, market_entry
@@ -1011,7 +1012,12 @@ def local_move_steps(
 
 def secrets_out(name: str, server: dict) -> tuple[dict, list[KeychainItem]]:
     """The entry with each env or header value that `redact` hides replaced by a Keychain
-    reference, and those values as Keychain items. An empty value is no secret: it stays."""
+    reference, and those values as Keychain items. An empty value is no secret: it stays.
+
+    So is each argument `redact` hides, under the key `args.<n>` (its place). Only the part it
+    hides moves: `--api-key=` or `NAME_API_KEY=` stays in the entry as the reference's
+    `prefix`. An argument hidden some other way, such as an address with a password, moves
+    whole."""
     entry = dict(server)
     items = []
     for field in SECRET_FIELDS:
@@ -1025,6 +1031,18 @@ def secrets_out(name: str, server: dict) -> tuple[dict, list[KeychainItem]]:
                 items.append(item)
                 value = item.ref
             entry[field][key] = value
+    args = server.get("args")
+    if isinstance(args, list):
+        entry["args"] = []
+        hidden = redact({"args": args})[0]["args"]  # one for each argument
+        for at, (arg, shown) in enumerate(zip(args, hidden, strict=True)):
+            if isinstance(arg, str) and arg and shown != arg:
+                kept = shown.removesuffix(SECRET)
+                prefix = kept if shown != kept and arg.startswith(kept) else ""
+                item = KeychainItem(name, f"args.{at}", arg[len(prefix) :])
+                items.append(item)
+                arg = {**item.ref, "prefix": prefix} if prefix else item.ref
+            entry["args"].append(arg)
     return entry, items
 
 
@@ -1048,16 +1066,28 @@ def _server_step(
         if values == server:
             return None
         if values is not None:
-            items = [
-                i
-                for i in items
-                if not any(
-                    (old.get(f) or {}).get(i.key) == i.ref
-                    and (values.get(f) or {}).get(i.key) == i.value
-                    for f in SECRET_FIELDS
-                )
-            ]
+            items = [i for i in items if not _kept(old, values, entry, i)]
     return _entry_step(home, name, entry, items)
+
+
+def _kept(old: dict, values: dict, entry: dict, item: KeychainItem) -> bool:
+    """Whether the held entry `old` (its values read from the Keychain: `values`) keeps this
+    item already: the same reference in the same place, with the same value."""
+    if any(
+        (old.get(f) or {}).get(item.key) == item.ref
+        and (values.get(f) or {}).get(item.key) == item.value
+        for f in SECRET_FIELDS
+    ):
+        return True
+    at = item.key.removeprefix("args.")
+    old_args, new_args = old.get("args"), entry.get("args")
+    if not (at.isdigit() and isinstance(old_args, list) and isinstance(new_args, list)):
+        return False
+    place = int(at)
+    if place >= min(len(old_args), len(new_args)) or not is_arg_reference(new_args[place]):
+        return False
+    prefix = new_args[place].get("prefix", "")
+    return old_args[place] == new_args[place] and values["args"][place] == prefix + item.value
 
 
 def _entry_step(home: Path, name: str, entry: dict, items: Sequence[KeychainItem] = ()) -> Step:

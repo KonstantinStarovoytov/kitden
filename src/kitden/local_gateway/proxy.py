@@ -346,7 +346,7 @@ class Upstreams:
         it meanwhile (the item changed), it starts once more with the new tokens.
         """
         try:
-            # Secrets in env and headers are Keychain references until the server starts.
+            # Secrets in env, headers and args are Keychain references until the server starts.
             entry = await anyio.to_thread.run_sync(resolve_entry, self.settings["servers"][server])
         except KeychainError as problem:
             raise UpstreamError(str(problem)) from None

@@ -65,6 +65,27 @@ def test_resolve_entry_replaces_references_and_leaves_plain_values(fake_keychain
     ]
 
 
+def test_resolve_entry_fills_in_the_secret_part_of_arguments(fake_keychain):
+    store("files", "args.1", "SENTINEL_SECRET_TOKEN")
+    store("files", "args.3", "SENTINEL_SECRET_KEY")
+    entry = {
+        "command": "npx",
+        "args": [
+            "--token",
+            {"keychain": "files/args.1"},
+            "-e",
+            {"keychain": "files/args.3", "prefix": "NAME_API_KEY="},
+        ],
+    }
+    assert resolve_entry(entry)["args"] == [
+        "--token",
+        "SENTINEL_SECRET_TOKEN",
+        "-e",
+        "NAME_API_KEY=SENTINEL_SECRET_KEY",
+    ]
+    assert references_in(entry) == [{"keychain": "files/args.1"}, {"keychain": "files/args.3"}]
+
+
 def test_a_plain_entry_never_runs_security():
     def never(args, stdin=None):
         raise AssertionError("security ran")

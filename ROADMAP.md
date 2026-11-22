@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Secrets in a server's arguments go to the Keychain:** a value like `--api-key=…` or
+  `NAME_API_KEY=…` in a moved server's command no longer stays in `gateway.json` as plain text;
+  a server moved in earlier gets **Move secrets to the Keychain…** (#149).
 - **Browser tests for the main features:** Context, setting up the gateway, Move all,
   removing a server's own entry, searching the catalogs, adding a GitHub source, adding a
   catalog skill, adding and removing plugins, adding a server with a `${VAR}` header to Cursor

@@ -311,6 +311,40 @@ def test_a_held_server_with_plain_secrets_says_so_and_can_move_them(home, fake_k
     assert "SENTINEL" not in (data_dir(home) / "changes.log").read_text()
 
 
+def test_plain_secret_arguments_from_an_earlier_version_move_and_undo(home, fake_keychain):
+    # An earlier Kitden copied a secret argument to gateway.json as it was.
+    args = ["files-mcp", "--token=SENTINEL_SECRET_TOKEN", "-e", "NAME_API_KEY=SENTINEL_SECRET_KEY"]
+    hold(home, {"files": {"command": "npx", "args": args}})
+    path = data_dir(home) / SETTINGS_FILE
+    before = path.read_bytes()
+    with page_for(home) as page:
+        servers = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
+        assert servers[0]["plain_secrets"] is True
+        change = _to_keychain(page, "files").json()
+        assert "SENTINEL" not in json.dumps(change)
+        assert change["after"] == [{"note": MOVE_NOTE}]
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified"
+        assert load_settings(home)["servers"]["files"]["args"] == [
+            "files-mcp",
+            {"keychain": "files/args.1", "prefix": "--token="},
+            "-e",
+            {"keychain": "files/args.3", "prefix": "NAME_API_KEY="},
+        ]
+        assert "SENTINEL" not in path.read_text()
+        assert json.loads(fake_keychain.read_text()) == {
+            "kitden files/args.1": "SENTINEL_SECRET_TOKEN",
+            "kitden files/args.3": "SENTINEL_SECRET_KEY",
+        }
+        servers = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
+        assert servers[0]["plain_secrets"] is False
+        undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+        assert undone["state"] == "undone"
+    assert path.read_bytes() == before
+    assert json.loads(fake_keychain.read_text()) == {}
+    assert "SENTINEL" not in (data_dir(home) / "changes.log").read_text()
+
+
 def test_a_secret_too_long_for_the_keychain_stays_in_the_gateway_settings(home, fake_keychain):
     hold(home, {"files": {**FILES, "env": {"FILES_TOKEN": "SENTINEL_" + "x" * 2000}}})
     path = data_dir(home) / SETTINGS_FILE

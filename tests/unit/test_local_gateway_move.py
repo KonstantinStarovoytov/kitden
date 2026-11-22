@@ -669,9 +669,9 @@ def test_a_local_scope_server_is_on_only_in_its_project(home, tmp_path):
     website = str(home / "work/website")
     apply(home, move(home, ("claude_code", "local-db")))
     settings = load_settings(home)
-    assert settings["servers"] == {
-        "local-db": {"command": "uvx", "args": ["mcp-db", "--password", "SENTINEL_SECRET_DB"]}
-    }
+    # The password argument went to the Keychain.
+    args = ["mcp-db", "--password", {"keychain": "local-db/args.2"}]
+    assert settings["servers"] == {"local-db": {"command": "uvx", "args": args}}
     assert settings["rules"] == {
         "global": {"local-db": {"server": "off"}},
         "projects": {website: {"local-db": {"server": "on"}}},
@@ -931,6 +931,7 @@ def test_the_review_says_where_a_server_stays_on_or_off(home):
     assert change["after"][0]["note"] == (
         "Claude Code and Codex will offer the tools of local-db through Kitden. "
         "local-db is on only in its project. aseprite stays off, as it was. "
+        "The token goes to your Keychain; the settings file keeps a reference. "
         "Applies to new sessions."
     )
 
@@ -1162,6 +1163,73 @@ def test_apply_stores_the_items_and_undo_removes_them(home, fake_keychain):
         assert undone["error"] is None
     assert keychain_items(fake_keychain) == {}
     assert client_files(home) == before
+
+
+ARGS = {
+    "type": "stdio",
+    "command": "npx",
+    "args": [
+        "files-mcp",
+        "--token=SENTINEL_SECRET_TOKEN",
+        "-e",
+        "NAME_API_KEY=SENTINEL_SECRET_KEY",
+        "--password",
+        "SENTINEL_SECRET_PASSWORD",
+        "--level=debug",
+    ],
+}
+
+
+def test_a_secret_in_the_arguments_goes_to_the_keychain_with_its_flag_kept(home, fake_keychain):
+    add_claude(home, "files", ARGS)
+    before = client_files(home)
+    with page_for(home) as page:
+        answer = preview(page, home, ("claude_code", "files"))
+        assert answer.status_code == 200, answer.json()
+        assert "SENTINEL" not in answer.text
+        change_id = answer.json()["id"]
+        applied = page.post(f"/api/changes/{change_id}/apply", headers=POST)
+        assert applied.json()["state"] == "verified", applied.json()
+        assert "SENTINEL" not in gateway_file(home).read_text()
+        assert load_settings(home)["servers"]["files"]["args"] == [
+            "files-mcp",
+            {"keychain": "files/args.1", "prefix": "--token="},
+            "-e",
+            {"keychain": "files/args.3", "prefix": "NAME_API_KEY="},
+            "--password",
+            {"keychain": "files/args.5"},
+            "--level=debug",
+        ]
+        assert keychain_items(fake_keychain) == {
+            "kitden files/args.1": "SENTINEL_SECRET_TOKEN",
+            "kitden files/args.3": "SENTINEL_SECRET_KEY",
+            "kitden files/args.5": "SENTINEL_SECRET_PASSWORD",
+        }
+        # The gateway starts the server with the real values.
+        held = load_settings(home)["servers"]["files"]
+        assert keychain.resolve_entry(held)["args"] == ARGS["args"]
+        assert "SENTINEL" not in (data_dir(home) / "changes.log").read_text()
+        assert "SENTINEL" not in page.get("/api/changes").text
+        undone = page.post(f"/api/changes/{change_id}/undo", headers=POST).json()
+        assert undone["state"] == "undone", undone
+    assert keychain_items(fake_keychain) == {}
+    assert client_files(home) == before
+
+
+def held_step(steps):
+    return [s for s in steps if s.client == "kitden" and s.edit.key[0] == "servers"]
+
+
+def test_a_held_server_with_the_same_secret_arguments_writes_no_secret_again(home, fake_keychain):
+    add_claude(home, "files", ARGS)
+    apply(home, move(home, ("claude_code", "files")))
+    add_claude(home, "files", ARGS)
+    assert held_step(move(home, ("claude_code", "files"))) == []
+    # Another plain argument: the entry is written again, its secrets are not.
+    add_claude(home, "files", {**ARGS, "args": [*ARGS["args"][:-1], "--level=info"]})
+    [step] = held_step(move(home, ("claude_code", "files")))
+    assert step.edit.after["args"][-1] == "--level=info"
+    assert step.keychain == []
 
 
 def test_an_item_already_there_is_replaced_and_keeps_the_new_value_on_undo(home, fake_keychain):

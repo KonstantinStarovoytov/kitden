@@ -1,8 +1,10 @@
 """Secrets of moved servers in the macOS Keychain or the Linux keyring.
 
 gateway.json keeps a reference `{"keychain": "<server>/<key>"}` in place of an env or header
-value. The value is a generic password item of the service "kitden" with the account
-"<server>/<key>". The gateway reads it when it starts the server.
+value. A secret argument keeps its readable part: `{"keychain": "<server>/args.<n>", "prefix":
+"--api-key="}` stands for `--api-key=<value>`, where n is the argument's place in `args`. The
+value is a generic password item of the service "kitden" with the account "<server>/<key>".
+The gateway reads it when it starts the server.
 
 Facts about `security` this relies on (from `man security`, checked 2026-10-22):
 - `-i` reads commands from stdin until EOF. Kitden writes an item this way, so the value is
@@ -189,6 +191,17 @@ def is_reference(value: object) -> TypeGuard[dict]:
     )
 
 
+def is_arg_reference(value: object) -> TypeGuard[dict]:
+    """True for an argument kept in the secret store: a reference, with or without the text
+    before the secret (`prefix`)."""
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("keychain"), str)
+        and set(value) <= {"keychain", "prefix"}
+        and isinstance(value.get("prefix", ""), str)
+    )
+
+
 def store(server: str, key: str, value: str, run: Runner = run_security) -> dict:
     """Write the value to the secret store, or update it, and return its reference."""
     account = f"{server}/{key}"
@@ -250,12 +263,16 @@ def delete(ref: dict, run: Runner = run_security) -> None:
 
 
 def references_in(entry: dict) -> list[dict]:
-    """The references among an entry's env values and header values, and its sign-in's."""
+    """The references among an entry's env values, header values and arguments, and its
+    sign-in's."""
     found = [entry["sign_in"]] if is_reference(entry.get("sign_in")) else []
     for field in SECRET_FIELDS:
         values = entry.get(field)
         if isinstance(values, dict):
             found += [value for value in values.values() if is_reference(value)]
+    args = entry.get("args")
+    if isinstance(args, list):
+        found += [{"keychain": arg["keychain"]} for arg in args if is_arg_reference(arg)]
     return found
 
 
@@ -266,7 +283,16 @@ def resolve_entry(entry: dict, run: Runner = run_security) -> dict:
         values = entry.get(field)
         if isinstance(values, dict):
             resolved[field] = {name: _value(value, run) for name, value in values.items()}
+    args = entry.get("args")
+    if isinstance(args, list):
+        resolved["args"] = [_arg(arg, run) for arg in args]
     return resolved
+
+
+def _arg(arg: object, run: Runner) -> object:
+    if not is_arg_reference(arg):
+        return arg
+    return f"{arg.get('prefix', '')}{_value({'keychain': arg['keychain']}, run)}"
 
 
 def _value(value: object, run: Runner) -> object:

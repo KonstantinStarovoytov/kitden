@@ -161,6 +161,21 @@ def test_secret_env_pairs_in_args_are_hidden():
     assert found
 
 
+def test_keychain_references_in_args_show_as_hidden_and_are_no_secret():
+    # gateway.json keeps a moved argument's secret part as a Keychain reference.
+    entry = {
+        "args": [
+            "--token",
+            {"keychain": "files/args.1"},
+            {"keychain": "files/args.2", "prefix": "--api-key="},
+            "plain",
+        ]
+    }
+    redacted, found = redact(entry)
+    assert redacted["args"] == ["--token", SECRET, f"--api-key={SECRET}", "plain"]
+    assert not found
+
+
 def test_tokens_inside_longer_strings_are_hidden():
     jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJlLXZhbHVl"
     redacted, found = redact({"args": [f"CONFIG={jwt}"], "command": f"run --x {GITHUB_LIKE}"})

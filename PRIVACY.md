@@ -20,7 +20,8 @@ nothing from it.
 ## What stays on your computer
 
 - The page runs at `127.0.0.1` behind a private link.
-- Secrets you type or sign in with are kept in the macOS Keychain or the Linux keyring only.
+- Secrets you type or sign in with are kept in the macOS Keychain or the Linux keyring only,
+  and so are the secrets in a moved server's env, headers and arguments.
   The page shows no more than their first and last characters.
 - Backups of changed files stay in Kitden's own data folder.
 - The versions Kitden finds for each client are kept in one small file, `versions.json`, in

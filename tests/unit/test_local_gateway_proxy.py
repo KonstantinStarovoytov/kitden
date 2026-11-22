@@ -990,6 +990,21 @@ async def test_a_reference_is_resolved_before_the_server_starts(home, tmp_path, 
     assert "SENTINEL" not in (data_dir(home) / SETTINGS_FILE).read_text() + log.read_text()
 
 
+async def test_a_secret_argument_is_filled_in_before_the_server_starts(
+    home, tmp_path, fake_keychain
+):
+    keychain.store("echo", "args.2", "SENTINEL_SECRET_ARG")
+    entry = echo("echo")
+    entry["args"].append({"keychain": "echo/args.2", "prefix": "--api-key="})
+    write_settings(home, {"echo": entry})
+    save_tools(home, "echo", [tool("echo"), tool("where")])
+    async with gateway(home) as client:
+        await client.list_tools()
+        where = json.loads(text(await client.call_tool("where", {})))
+    assert where["args"] == ["echo", "--api-key=SENTINEL_SECRET_ARG"]
+    assert "SENTINEL" not in (data_dir(home) / SETTINGS_FILE).read_text()
+
+
 async def test_a_missing_keychain_item_gives_a_plain_sentence(
     home, tmp_path, fake_keychain, capsys
 ):
