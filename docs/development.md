@@ -82,9 +82,13 @@ needs no other test. The table lists those written so far, in product order:
 | 3 | Search the catalogs, "Show N more", open an item's details | `test_catalog_search.py` |
 | 4 | Add a GitHub source; it is listed | `test_add_source.py` |
 | 5 | Add a skill from the catalog to Claude Code; remove it | `test_catalog_skill.py` |
+| 6 | Add a plugin (Apply, then Undo); remove a plugin Claude Code has | `test_plugins.py` |
 | 7 | Set up the gateway on a home that has none | `test_gateway_setup.py` |
 | 8 | Move servers into the gateway: drag one, "Move all N…" | `test_map_drag.py`, `test_move_all.py` |
 | 9 | Remove a server's direct entry: preview, Apply, gone on disk | `test_remove_server.py` |
+| 10 | Add a server to another client; a `${VAR}` header stays a variable | `test_add_server.py` |
+| 11 | Two changes in the tray, "Apply all" | `test_apply_all.py` |
+| 12 | Undo, then "Redo…" from Changes | `test_redo.py` |
 
 Flows 3 to 5 use the `sample` fixture: the demo's sample, not in demo mode, with the
 stand-ins of `tests/offline.py` and the network guard on, so a test that tries to go online
@@ -268,7 +272,7 @@ own session.
 | 8 | Remove a plugin in Claude Code, then in Codex; Undo | test | `tests/contract/test_manage_items.py::test_a_removed_plugin_leaves_the_clients_list_and_undo_brings_it_back`, in both; it reads the client's plugin list, not a new session |
 | 9 | Remove a skill; Undo: its folder is back | test | `tests/unit/test_remove_skill.py::test_removing_a_skill_backs_it_up_and_undo_copies_it_back`; a client loads a skill only from its folder |
 | 10 | "Put back in <client>…" a held server, remove it from the gateway | test | `tests/contract/test_gateway_session.py::test_a_server_put_back_and_removed_from_the_gateway`; it reads `claude mcp get` and an open session's refused call, not a new session reaching the server directly |
-| 11 | "+ Add" a server with a `${VAR}` header into Cursor and Codex; a new session reaches it | signed-in client | By hand until the tester runs it. Tested: Codex lists the added entry with the variable, not its value: `tests/contract/test_manage_items.py::test_a_server_with_a_variable_header_is_listed_by_codex_with_the_variable`. Not tested: Cursor, and a session reaching the server |
+| 11 | "+ Add" a server with a `${VAR}` header into Cursor and Codex; a new session reaches it | signed-in client | By hand until the tester runs it. Tested: Codex lists the added entry with the variable, not its value: `tests/contract/test_manage_items.py::test_a_server_with_a_variable_header_is_listed_by_codex_with_the_variable`. The page's "+ Add to Codex…" writes the variable, not a value: `tests/browser/test_add_server.py::test_a_server_added_to_codex_keeps_its_variable`. Cursor: the Cursor row under the numbered rows. Not tested: a session reaching the server |
 | 12 | "Add to this project…" a skill and a plugin; only that folder has them | test | `tests/contract/test_manage_items.py::test_add_to_this_project_shows_in_that_folder_only` (a Claude Code plugin; it reads the client's plugin list, not a new session); `tests/unit/test_project_add.py::test_a_skill_goes_into_the_project_folder` (the skill goes into that project's folder, shows for that project only, and Undo removes it; a client loads a skill only from its folder) |
 | 13 | "Add missing plugins and skills…", Apply, Undo | test | `tests/contract/test_manage_items.py::test_add_missing_adds_a_plugin_and_a_server_together_and_undo_removes_both` (a plugin and a server into Codex); `tests/unit/test_align.py::test_add_missing_is_one_change_and_undo_takes_it_all_back` (a skill into Codex's project folder and a server into Claude Code, and Undo puts every file back). Not tested: a plugin or a skill added into Claude Code |
 | 14 | Remove a plugin that is off; Undo: back and still off | test | `tests/contract/test_manage_items.py::test_a_removed_off_plugin_comes_back_off`, in Claude Code and Codex; it reads the client's plugin list, not a new session |
@@ -283,6 +287,7 @@ own session.
 | 23 | Settings change under an open preview: "Preview again", Cancel | test | `tests/browser/test_preview_drift.py::test_settings_changed_under_a_preview_ask_for_a_new_one_and_cancel_writes_nothing`; it writes the settings file as Claude Code would, and does not run Claude Code |
 | 24 | Drag a server onto the gateway on the map, Apply, Undo from the toast | test | `tests/browser/test_map_drag.py::test_a_server_dragged_onto_the_gateway_is_moved_and_undo_from_the_toast_moves_it_back`: drag, Apply and Undo. Not tested here: a new session reaching the server through the gateway, which is part of check 3 |
 | — | Linux: 17 to 19 on an Ubuntu desktop | test | The tests of 17 to 19 on Ubuntu x64 and ARM, nightly job `systems`; a keyring that is down: `tests/unit/test_local_gateway_move.py::test_on_linux_a_keyring_that_is_down_refuses_the_review`, a unit test with a stand-in `secret-tool`, not run against Ubuntu's keyring: the move is refused at preview with "Kitden could not reach the keyring." and the files are unchanged |
+| — | Cursor, part of the first hand check for adding: "+ Add to Cursor…" a server with a `${VAR}` header from Claude Code | test | `tests/browser/test_add_server.py::test_a_server_added_to_cursor_keeps_its_variable`: Cursor's entry keeps the variable, as `${env:KITDEN_TEST_TOKEN}`. Not tested: a new chat in Cursor reaching the server, "Add missing plugins and skills…" into Cursor, and Undo |
 
 Two checks stay by hand for good: they are in the Cursor IDE, and Cursor needs its window and
 an account, which no runner has (checked 2026-11-14). Five more, the checks for a signed-in

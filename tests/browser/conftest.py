@@ -104,10 +104,18 @@ def demo_size() -> str:
 
 
 @pytest.fixture
-def demo(tmp_path, demo_size):
+def before_start():
+    """What a test writes into the sample before the page starts: a function of the home
+    folder. A test module that needs it overrides this fixture."""
+    return lambda home: None
+
+
+@pytest.fixture
+def demo(tmp_path, demo_size, before_start):
     """The sample of `demo_size` under tmp_path, served as `kitden demo` serves it, until the
     test ends."""
     home = build_demo_home(tmp_path / "demo", demo_size)
+    before_start(home)
     made = cli._page(create_app, demo_build(home), home, START, demo=True)
     assert made is not None, f"no free port from {START}"
     app, port, _, url = made
@@ -219,6 +227,11 @@ def SETTINGS(demo):
 def origin(demo) -> str:
     parts = urlsplit(demo.url)
     return f"{parts.scheme}://{parts.netloc}"
+
+
+def change_states(page, demo) -> list[str]:
+    """The state of each change Kitden recorded, as /api/changes gives them."""
+    return [change["state"] for change in page.request.get(f"{origin(demo)}/api/changes").json()]
 
 
 def wait_until(check, seconds: float = 5) -> None:
