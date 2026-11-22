@@ -4,7 +4,7 @@ description: Use when the user asks which MCP servers, skills, plugins, hooks or
 ---
 
 Kitden shows what Claude Code, Codex and Cursor load on this computer, where each item comes
-from, and what loads twice. Its command `kitden show` only reads and prints JSON.
+from, and what loads twice. Its command `kitden show` changes no settings and prints JSON.
 
 1. Run it in the project's folder, or add `--project PATH`:
    - `kitden show setup --client CLIENT`: what one client loads (`claude_code`, `codex`,

@@ -425,3 +425,24 @@ def test_a_stored_file_with_a_hard_link_does_not_stop_the_scan(tmp_path, monkeyp
     _new_run(monkeypatch)
     _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
     assert len(runs) == 2
+
+
+def test_a_running_page_asks_codex_again_after_an_hour(tmp_path, monkeypatch):
+    # `kitden serve` keeps the answer in memory; it must not outlive the hour either.
+    import time
+    from types import SimpleNamespace
+
+    import kitden.clients.codex as codex
+
+    runs = _ask_codex(monkeypatch, LISTING)
+    home = make_home(tmp_path, FIXTURE)
+    now = time.time()
+    monkeypatch.setattr(codex, "time", SimpleNamespace(time=lambda: now))
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    for minutes in (30, 59):  # same process, no new run
+        now = time.time() + minutes * 60
+        _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert len(runs) == 1
+    now = time.time() + 61 * 60
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert len(runs) == 2

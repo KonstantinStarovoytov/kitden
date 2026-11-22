@@ -49,7 +49,7 @@ agent and the company behind it see it, under their own privacy terms. Secret va
 tokens in a server's settings, are replaced with `[secret]` first. The one exception is
 `kitden show context`: it prints each skill's description as written in its `SKILL.md`, and
 Kitden does not replace anything in it. Keep secrets out of a skill's description. `kitden show`
-changes nothing and does not go online.
+changes no client settings and does not go online.
 
 ## Questions
 
