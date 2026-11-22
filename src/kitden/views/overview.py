@@ -30,7 +30,7 @@ from kitden.model import (
 from kitden.views.effective import client_order
 from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
-from kitden.views.library_map import library_map
+from kitden.views.library_map import has_own_rules, library_map
 from kitden.views.setup_server import ENABLE_KEYS, kitden_on, setup_server_state
 from kitden.views.words import (
     BACK_BY_APP,
@@ -277,24 +277,14 @@ def _connects(inventory) -> list[dict]:
     return cards
 
 
-def _library_rules(answer: dict) -> bool:
-    """The picked project's own settings decide a plugin or skill there (the Library's `here`)."""
-    return any(
-        any(item["here"].values())
-        for group in answer["groups"]
-        for item in group["items"]
-        if item["kind"] in ("plugin", "skill")
-    )
-
-
-def _ruled_projects(inventory, adapters) -> set[str]:
+def _ruled_projects(inventory) -> set[str]:
     """The known projects whose own settings decide a plugin or skill. Only a project that has
-    an item of its own, or a rule for a user skill, can: the Library map is read for those."""
+    an item of its own, or a rule for a user skill, can."""
     kinds = (ItemKind.PLUGIN, ItemKind.SKILL)
     maybe = {i.project for i in inventory.items if i.kind in kinds and i.project}
     maybe |= {p for i in inventory.items if i.kind in kinds for p, *_ in i.project_rules}
     known = [p.path for p in inventory.projects if p.path in maybe]
-    return {p for p in known if _library_rules(library_map(inventory, adapters, p))}
+    return {p for p in known if has_own_rules(inventory, p)}
 
 
 def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) -> dict:
@@ -313,7 +303,7 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
             links.append({"client": client, "to": "gateway"})
         if any(i["by"].get(client) == "on" for i in items):
             links.append({"client": client, "to": "library"})
-    ruled = _ruled_projects(inventory, adapters) | {
+    ruled = _ruled_projects(inventory) | {
         p.path for p in inventory.projects if p.path in gateway_rules
     }
     return {
