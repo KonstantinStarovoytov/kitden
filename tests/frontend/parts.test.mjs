@@ -44,7 +44,7 @@ globalThis.window = { addEventListener: (type, fn) => { heard[type] = fn; } };
 // or a key sets it itself.
 beforeEach(() => { media.matches = false; heard.pointerdown?.({}); });
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
-const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, menuItems, morphSocket, opens, optionAfter, originText, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, menuItems, morphSocket, opens, optionAfter, originText, pastTitle, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 // details.js builds the switch and loads with the same stand-in.
 const { switchNode } = await import('../../src/kitden/web/static/js/details.js');
@@ -330,6 +330,22 @@ test('the Changes page names a server added to another client', () => {
   assert.equal(changeTitle({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }] }), 'Added github · Codex');
 });
 
+test('a change of several rows reads in the past, like one row does', () => {
+  const steps = [{ client: 'claude_code', name: 'kitden' }];
+  const several = (title) => changeTitle({ action: 'batch', steps, rows: [{ title }, { title: 'x' }] });
+  assert.equal(several('Update Kitden in Claude Code'), 'Updated Kitden in Claude Code and 1 more');
+  assert.equal(several('Move brain-agents into the Kitden gateway for all projects'), 'Moved brain-agents into the Kitden gateway for all projects and 1 more');
+  assert.equal(several('Turn off agent-docs in xnj'), 'Turned off agent-docs in xnj and 1 more');
+  assert.equal(several('Disconnect Codex from Kitden'), 'Disconnected Codex from Kitden and 1 more');
+  assert.equal(several('Connect Cursor to Kitden'), 'Connected Cursor to Kitden and 1 more');
+  assert.equal(several('Sign out of github'), 'Signed out of github and 1 more');
+  // A title already in the past, or one that starts with another word, stays as it is.
+  assert.equal(several('Turned off auth0 for all projects · Codex'), 'Turned off auth0 for all projects · Codex and 1 more');
+  assert.equal(several('Allow Push files'), 'Allow Push files and 1 more');
+  assert.equal(pastTitle('Updates are out'), 'Updates are out');
+  assert.equal(pastTitle(''), '');
+});
+
 test('Add missing on the Changes page names every client it reached', () => {
   const steps = [{ client: 'codex', name: 'github' }, { client: 'codex', name: 'brandkit', reaches: ['codex', 'cursor'] }];
   assert.equal(changeTitle({ action: 'project.align', steps }), 'Added missing items · Codex, Cursor');
@@ -338,8 +354,8 @@ test('Add missing on the Changes page names every client it reached', () => {
 test('a change of several tray rows is titled by its rows', () => {
   const steps = [{ client: 'kitden', name: 'slow' }, { client: 'cursor', name: 'n8n' }, { client: 'kitden', name: 'fast' }];
   const rows = [{ title: 'Turn off slow of echo in website' }, { title: 'Remove n8n from Cursor' }, { title: 'Turn off fast' }];
-  assert.equal(changeTitle({ action: 'batch', steps, rows }), 'Turn off slow of echo in website and 2 more');
-  assert.equal(changeTitle({ action: 'batch', steps, rows: rows.slice(0, 2) }), 'Turn off slow of echo in website and 1 more');
+  assert.equal(changeTitle({ action: 'batch', steps, rows }), 'Turned off slow of echo in website and 2 more');
+  assert.equal(changeTitle({ action: 'batch', steps, rows: rows.slice(0, 2) }), 'Turned off slow of echo in website and 1 more');
   // One row keeps its own kind and today's words.
   assert.equal(changeTitle({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }], rows: rows.slice(0, 1) }), 'Added github · Codex');
 });

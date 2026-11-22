@@ -691,9 +691,25 @@ function moveOutTitle(entry) {
   return `${ACTION_WORDS[entry.action]} · ${entry.steps[0].name} · ${into.join(", ")}`;
 }
 
+// A tray row's title is kept as it was written at Apply, in the imperative ("Turn off auth0 in
+// Codex"). Changes says what was done, so the leading verb goes to the past ("Turned off auth0 in
+// Codex"). The words are the verbs the titles start with (review.js, parts.js); a title that
+// starts with another word (one that is in the past already) stays as it is, so old records read
+// right too and no stored record is changed.
+const PAST = [
+  ["Turn off", "Turned off"], ["Turn on", "Turned on"], ["Sign out of", "Signed out of"], ["Sign in to", "Signed in to"],
+  ["Disconnect", "Disconnected"], ["Connect", "Connected"], ["Update", "Updated"], ["Move", "Moved"], ["Remove", "Removed"],
+  ["Replace", "Replaced"], ["Add", "Added"], ["Use", "Used"], ["Switch", "Switched"], ["Put", "Put"], ["Set", "Set"],
+];
+export function pastTitle(title) {
+  const text = String(title || "");
+  const [then, was] = PAST.find(([now]) => text.startsWith(`${now} `)) || [];
+  return then ? `${was}${text.slice(then.length)}` : text;
+}
+
 export function changeTitle(entry) {
-  // A change of several tray rows: the first row's title and how many more (Details list each).
-  if (entry.rows && entry.rows.length > 1) return `${entry.rows[0].title} and ${entry.rows.length - 1} more`;
+  // A change of several tray rows: the first row's title, in the past, and how many more (Details list each).
+  if (entry.rows && entry.rows.length > 1) return `${pastTitle(entry.rows[0].title)} and ${entry.rows.length - 1} more`;
   // A tool rule names its tool, server, project and new state (the server adds them).
   if (entry.action === "gateway.rule" && entry.rule) return ruleText(entry.rule, entry.rule.project).done;
   // The strict switch: its first step is the server's mode; the others are its tools.
