@@ -23,8 +23,10 @@ from kitden.local_gateway.settings import (
     SETTINGS_FILE,
     allowed_tools,
     load_about,
+    load_catalog_notes,
     load_settings,
     load_tools,
+    same_entry,
     save_about,
     save_catalog_note,
     save_tools,
@@ -1263,3 +1265,41 @@ def test_a_key_the_catalog_requires_shows_as_needed_with_the_catalogs_words(home
         assert (
             page.get("/api/gateway/tools?server=docs").json()["about"] == "The server's own words."
         )
+
+
+def test_same_entry_reads_past_a_package_version():
+    npx = {"command": "npx", "args": ["-y", "@acme/docs@1.2.0"]}
+    assert same_entry({"command": "npx", "args": ["-y", "@acme/docs@1.3.0"]}, npx)
+    assert same_entry({"command": "npx", "args": ["-y", "@acme/docs"]}, npx)
+    assert not same_entry({"command": "npx", "args": ["-y", "@acme/other@1.2.0"]}, npx)
+    uvx = {"command": "uvx", "args": ["docs-mcp==0.4"]}
+    assert same_entry({"command": "uvx", "args": ["docs-mcp==0.5"]}, uvx)
+    assert same_entry({"url": DOCS_URL}, {"url": DOCS_URL})
+    assert not same_entry({"url": DOCS_URL}, {"url": DOCS_URL + "v2"})
+    assert not same_entry(None, {"url": DOCS_URL})
+
+
+def test_rescan_asks_the_registry_what_each_held_server_needs(home, monkeypatch):
+    hold(home, {"docs": {"url": DOCS_URL}})
+    asked = []
+
+    def registry(name):
+        asked.append(name)
+        row = {"kind": "mcp", "description": "Docs, with a key.", "setup": [NEEDS_KEY]}
+        return [
+            {**row, "name": "io.example/docs", "entry": {"url": DOCS_URL}},
+            # Same short name, another address: not this server.
+            {**row, "name": "io.other/docs", "entry": {"url": "https://x.test/"}, "setup": []},
+        ]
+
+    async def no_refresh(home, names=None):
+        return {}
+
+    monkeypatch.setattr("kitden.discovery.registry_lookup", registry)
+    monkeypatch.setattr(page_app, "refresh_tools", no_refresh)  # the server is not asked
+    with page_for(home) as page:
+        page.post("/api/rescan", headers=POST)
+        until(lambda: load_catalog_notes(home).get("docs"))
+        servers = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
+    assert asked == ["docs"]
+    assert next(s for s in servers if s["name"] == "docs")["missing"] == NEEDS_KEY

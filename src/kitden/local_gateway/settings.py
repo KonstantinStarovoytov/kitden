@@ -10,6 +10,7 @@ the next, then the global rule; with no rule a server or a tool is on.
 """
 
 import json
+import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -154,17 +155,33 @@ def save_catalog_note(home: Path, server: str, note: dict) -> bool:
     return True
 
 
+def _unpinned(args: Any) -> list[str]:
+    """A command's arguments without a package version: `pkg@1.2.0` and `pkg==1.2.0` read as
+    `pkg` (a scoped `@scope/pkg` keeps its scope), so a catalog's newer version still matches."""
+    if not isinstance(args, list):
+        return []
+    return [re.sub(r"(?<=.)@[^@/]+$|==[^=]+$", "", str(arg)) for arg in args]
+
+
+def same_entry(given: Any, entry: dict) -> bool:
+    """Whether a catalog's entry is this held entry: the same url, or the same command with the
+    same arguments, whatever package version each pins."""
+    if not isinstance(given, dict):
+        return False
+    if given.get("url"):
+        return given["url"] == entry.get("url")
+    return (
+        bool(given.get("command"))
+        and given.get("command") == entry.get("command")
+        and (_unpinned(given.get("args")) == _unpinned(entry.get("args")))
+    )
+
+
 def catalog_note(notes: dict[str, dict], server: str, entry: dict) -> dict | None:
     """The catalog's note on a held server, only while its entry is the one the catalog gave
-    (same url, or same command and args)."""
+    (same_entry)."""
     note = notes.get(server)
-    given = note.get("entry") if note else None
-    if not isinstance(given, dict):
-        return None
-    if given.get("url"):
-        return note if given["url"] == entry.get("url") else None
-    same = given.get("command") == entry.get("command") and given.get("args") == entry.get("args")
-    return note if given.get("command") and same else None
+    return note if note and same_entry(note.get("entry"), entry) else None
 
 
 def missing_value(note: dict | None, entry: dict) -> dict | None:

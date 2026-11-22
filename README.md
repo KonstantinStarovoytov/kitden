@@ -71,8 +71,8 @@ refused, not just hidden. A token or sign-in is given once and checked before Ap
 - **Apply keeps a backup, and Undo puts it back.** Changes keeps the history of what you
   did. If a file changed since, Kitden stops instead of overwriting it.
 - **Everything stays on your computer.** The page runs at 127.0.0.1 behind a private link. No
-  account, no telemetry. Kitden goes online only for the catalogs you open, the remote
-  servers you add, and a check for a newer Kitden, at most once a day.
+  account, no telemetry. Kitden goes online only for the catalogs you open (also on
+  **Rescan**), the remote servers you add, and a check for a newer Kitden, at most once a day.
 - **Secrets live in the macOS Keychain or your Linux keyring only.** The page shows no more
   than their first and last characters.
 - **Kitden's agent tools only read.** Asking an agent to show your setup changes none of your settings.

@@ -259,6 +259,51 @@ def server_setup(server: dict) -> tuple[dict | None, str | None, list[dict]]:
     return None, refusal, []
 
 
+def registry_rows(query: str) -> list[dict]:
+    """The Official MCP Registry's active servers for a search, as catalog rows with their
+    entry and the values they require. Raises OSError or ValueError when it cannot be read."""
+    variants = list(dict.fromkeys([re.sub(r"[\s_]+", "-", query), query]))
+    records = {}
+    for term in variants:
+        data = read_json(
+            "https://registry.modelcontextprotocol.io/v0.1/servers?"
+            + urlencode({"search": term, "version": "latest", "limit": 100})
+        )
+        for record in data.get("servers", []):
+            records[record["server"]["name"]] = record
+    rows = []
+    for record in records.values():
+        if (
+            record.get("_meta", {})
+            .get("io.modelcontextprotocol.registry/official", {})
+            .get("status")
+            != "active"
+        ):
+            continue
+        server = record["server"]
+        entry, refusal, setup = server_setup(server)
+        rows.append(
+            {
+                "name": server["name"],
+                "kind": "mcp",
+                "version": server.get("version"),
+                "source": "Official MCP Registry",
+                "description": str(server.get("description", ""))[:600],
+                "entry": entry,
+                "refusal": refusal,
+                "setup": setup,
+                "repository": server.get("repository", {}).get("url"),
+            }
+        )
+    return rows
+
+
+def registry_lookup(name: str) -> list[dict]:
+    """The Rescan button's question to the registry about one held server (registry_rows). Its
+    own name, so tests keep it offline without touching catalog search."""
+    return registry_rows(name)
+
+
 def configured_entry(row: dict, params: dict) -> dict:
     """Accept only declared values; secrets remain in preview memory until Apply."""
     entry = copy.deepcopy(row.get("entry"))
@@ -502,39 +547,7 @@ class Discovery:
                 else []
             )
         elif source == "mcp-registry":
-            variants = list(dict.fromkeys([re.sub(r"[\s_]+", "-", query), query]))
-            records = {}
-            for term in variants:
-                data = read_json(
-                    "https://registry.modelcontextprotocol.io/v0.1/servers?"
-                    + urlencode({"search": term, "version": "latest", "limit": 100})
-                )
-                for record in data.get("servers", []):
-                    records[record["server"]["name"]] = record
-            rows = []
-            for record in records.values():
-                if (
-                    record.get("_meta", {})
-                    .get("io.modelcontextprotocol.registry/official", {})
-                    .get("status")
-                    != "active"
-                ):
-                    continue
-                server = record["server"]
-                entry, refusal, setup = server_setup(server)
-                rows.append(
-                    {
-                        "name": server["name"],
-                        "kind": "mcp",
-                        "version": server.get("version"),
-                        "source": "Official MCP Registry",
-                        "description": str(server.get("description", ""))[:600],
-                        "entry": entry,
-                        "refusal": refusal,
-                        "setup": setup,
-                        "repository": server.get("repository", {}).get("url"),
-                    }
-                )
+            rows = registry_rows(query)
         else:
             rows = self.github(source, query, kind)
         rows.sort(key=lambda row: rank(query, row))

@@ -24,6 +24,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from kitden import __version__
+from kitden import discovery as catalogs
 from kitden.changes.actions import (
     CLIENT_DISCONNECT,
     GATEWAY_ACCESS,
@@ -120,6 +121,7 @@ from kitden.local_gateway.settings import (
     missing_value,
     moved_in,
     remove_server_steps,
+    same_entry,
     save_catalog_note,
     save_tools,
     settings_unreadable,
@@ -2021,14 +2023,15 @@ def create_app(
                 offset,
             )
             rows = found["results"]
-            held = set(load_settings(home_dir())["servers"])
+            held = load_settings(home_dir())["servers"]
             learned = False
             for row in rows:
                 item_kind = "mcp_server" if row["kind"] == "mcp" else row["kind"]
                 row["held"] = row["kind"] == "mcp" and short_name(row["name"]) in held
-                if row["held"]:
+                full = discovery.results.get(row["id"]) or {}
+                if row["held"] and same_entry(full.get("entry"), held[short_name(row["name"])]):
                     # The catalog may say more of it now (a description, a key it requires).
-                    learned |= remember_catalog(discovery.results.get(row["id"]) or {})
+                    learned |= remember_catalog(full)
             if learned:
                 events.publish("gateway_tools")  # the map shows what it needs now
                 row["installed"] = sorted(
@@ -2058,11 +2061,48 @@ def create_app(
             return JSONResponse({"commands": [c.__dict__ for c in listed]})
         return _error("No command for this item and action.", 404)
 
+    catalog_checks: set[asyncio.Task] = set()
+
+    async def _check_catalogs() -> None:
+        """Ask the Official MCP Registry about each held server, by its name, and keep what it
+        says of the one with the same entry (same_entry). A server it does not list, or a
+        registry that does not answer, keeps what Kitden knew."""
+        learned = False
+        for name, entry in load_settings(home_dir())["servers"].items():
+            if not isinstance(entry, dict) or len(name) < 3:
+                continue
+            try:
+                rows = await asyncio.to_thread(catalogs.registry_lookup, name)
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+            row = next(
+                (
+                    r
+                    for r in rows
+                    if short_name(r["name"]) == name and same_entry(r["entry"], entry)
+                ),
+                None,
+            )
+            if row is not None:
+                learned |= remember_catalog(row)
+        if learned:
+            events.publish("gateway_tools")  # the map shows what they need now
+
+    def check_catalogs_later() -> None:
+        """The registry check, in the background, one at a time; never in the demo."""
+        if home is None or stand_ins or any(not task.done() for task in catalog_checks):
+            return
+        task = asyncio.ensure_future(_check_catalogs())
+        catalog_checks.add(task)
+        task.add_done_callback(catalog_checks.discard)
+
     async def rescan(request: Request) -> JSONResponse:
-        """The Rescan button: read every client again, then its version and the gateway's tools."""
+        """The Rescan button: read every client again, then its version and the gateway's tools,
+        and what the Official MCP Registry says of the gateway's servers (only on this button)."""
         data = await state.rescan()
         refresh_later()
         read_versions_later()
+        check_catalogs_later()
         return JSONResponse({"items": len(data["items"]), "problems": len(data["problems"])})
 
     async def stream(request: Request) -> StreamingResponse:
