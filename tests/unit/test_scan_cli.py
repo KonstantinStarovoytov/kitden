@@ -26,6 +26,7 @@ from tests.unit.test_context_view import (
     skill,
     window_for,
 )
+from tests.unit.test_findings import KITDEN, add_entry, hold_github
 
 ALL = ("claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
 
@@ -217,6 +218,22 @@ def test_scan_names_the_warnings_and_points_to_the_findings(bare, capsys):
         "Your agents' settings were not changed: scan only reads them.",
         "To fix: kitden open",
     ]
+
+
+def test_scan_reads_the_servers_kitden_holds_as_show_does(bare, capsys):
+    # Cursor uses the Kitden gateway, which holds github; Cursor also has github directly.
+    (bare / ".cursor/mcp.json").write_text(json.dumps({"mcpServers": {}}))
+    for name, entry in (("kitden", KITDEN), ("github", {"command": "npx"})):
+        add_entry(bare, "cursor", name, entry)
+    hold_github(bare)
+    lines = _summary(bare, capsys)
+    cursor = lines.index("Cursor: found (unknown version)")
+    assert "  mcp_server: 3" in lines[cursor:]  # kitden, github, and github through Kitden
+    assert main(["show", "findings", "--home", str(bare)]) == 0
+    shown = json.loads(capsys.readouterr().out)["findings"]
+    assert lines[-3] == f"{len(shown)} notes: kitden show findings"
+    # The held copy replaces the direct one in Cursor's view: one server, no warning.
+    assert not [f for f in shown if f["severity"] == "warning"]
 
 
 def test_scan_ends_by_saying_the_settings_were_not_changed(bare, capsys):

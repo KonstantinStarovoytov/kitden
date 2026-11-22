@@ -395,13 +395,15 @@ def _wrap(text: str, first: str, rest: str) -> list[str]:
 def _scan(args: argparse.Namespace) -> int:
     home = _home(args)
     refresh_versions(home or Path.home(), CLIENTS)  # a one-off scan waits for the versions
-    inventory = build_inventory(home)
     if args.json:
+        inventory = build_inventory(home)
         json.dump(inventory_dict(inventory), sys.stdout, indent=2)
         print()
     else:
         from kitden.views import answers
 
+        # Read as `kitden show` and the page read it: with the servers Kitden holds.
+        inventory = answers.read_setup(home or Path.home())
         # The Context page's cards for the current folder, as `kitden show context` gives them.
         context = answers.context_answer(inventory, home or Path.home(), str(Path.cwd()))
         # The findings for the current folder, as `kitden show findings` gives them.
