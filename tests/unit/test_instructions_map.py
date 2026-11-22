@@ -237,7 +237,7 @@ def test_commands_and_agents_are_a_group_of_their_own(home):
 
 
 def test_a_client_with_no_instruction_file_in_the_scope_says_why(home):
-    # All projects: Claude Code has CLAUDE.md and Codex AGENTS.md; Cursor has no file in every project.
+    # All projects: Claude Code has CLAUDE.md and Codex AGENTS.md; Cursor has no file.
     answer = _map(home)
     reading = {c for g in answer["groups"] for f in g["files"] for c in f["by"]}
     assert "cursor" not in reading
