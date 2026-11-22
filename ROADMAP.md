@@ -26,7 +26,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   all: no scan, no version or plugin command (Codex's 15 s wait is gone), and it leaves the
   Overview, Library, Gateway and Agents pages, `kitden scan` ("Codex: turned off in Kitden") and
   `kitden show`. Nothing in the client's own settings changes. Kitden keeps one client on, and an
-  Undo of a past change to an off client says "Turn Codex on to undo this."
+  Undo of a past change to an off client says "Turn Codex on to undo this."; a preview made
+  before the client was turned off is not applied either.
 - **Page polish from a first walk through the page:** the hint line no longer lies over page
   text, the Overview is one column when its map does not fit, and its title is "Overview" with a
   lede that names your clients. Overview notes with the same words fold into one row ("46 items

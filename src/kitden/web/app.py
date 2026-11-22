@@ -1896,13 +1896,14 @@ def create_app(
         }.get(verb)
         if method is None:
             return _error("Unknown action.", 404)
-        if verb == "undo":
-            # A client that is off is not read and its commands are not run, so its changes wait.
+        if verb in ("apply", "undo"):
+            # A client that is off is not read and its commands are not run, so its changes
+            # wait: an Undo, and a preview made before the client was turned off.
             off = off_clients(home_dir())
             held = [s.client for s in change_engine().changes[change_id].steps if s.client in off]
             if held:
                 names = join_words([CLIENT_WORDS[c] for c in dict.fromkeys(held)])
-                return _error(f"Turn {names} on to undo this.", 422)
+                return _error(f"Turn {names} on to {verb} this.", 422)
         if verb == "apply":
             # The tray sends the titles it shows now; the rows keep them (changes/batch.py).
             retitle(change_engine().changes[change_id], (await _body(request)).get("titles"))

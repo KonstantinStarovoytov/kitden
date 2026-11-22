@@ -40,7 +40,8 @@ client on, so the last switch stays disabled.
 
 Nothing in a client's own settings changes. If the client still has the `kitden` entry, its row
 says so: disconnect it on the Gateway first if you want that gone. A change you made to an off
-client stays in **Changes**, but its Undo waits: it says "Turn Codex on to undo this." Kitden
+client stays in **Changes**, but its Undo waits: it says "Turn Codex on to undo this." A preview
+you had not applied yet waits the same way. Kitden
 keeps your choice in `clients.json` in its data folder, so it holds after a restart. The small
 **−** on a Library List column is another thing: it hides that column in this browser only,
 Kitden still reads the client, and **Show** brings the column back.

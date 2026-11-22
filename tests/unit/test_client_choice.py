@@ -349,6 +349,29 @@ def test_undo_of_a_change_to_an_off_client_waits_until_it_is_on(tmp_path):
         assert config.read_bytes() != removed
 
 
+def test_a_preview_made_before_a_client_was_turned_off_is_not_applied(tmp_path):
+    home = make_home(tmp_path, *ALL)
+    write_cursor_fixture_state(home)
+    app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as c:
+        c.get("/?token=tok")
+        neon = next(
+            i
+            for i in c.get("/api/items?client=cursor&kind=mcp_server").json()
+            if i["name"] == "Neon"
+        )
+        body = {"action": "mcp.remove_direct", "targets": [{"item": neon["id"]}], "params": {}}
+        change = c.post("/api/changes/preview", json=body, headers=POST).json()
+        config = home / ".cursor/mcp.json"
+        before = config.read_bytes()
+
+        assert _post(c, "cursor", False).status_code == 200
+        answer = c.post(f"/api/changes/{change['id']}/apply", headers=POST)
+        assert answer.status_code == 422
+        assert answer.json()["detail"] == "Turn Cursor on to apply this."
+        assert config.read_bytes() == before  # nothing was written
+
+
 # `kitden scan` and `kitden show`
 
 
