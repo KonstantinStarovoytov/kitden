@@ -10,7 +10,7 @@ from starlette.testclient import TestClient
 from kitden import discovery
 from kitden.discovery import Discovery, checked_url, row_key, server_entry
 from kitden.gateways import data_dir
-from kitden.local_gateway.settings import load_settings
+from kitden.local_gateway.settings import load_catalog_notes, load_settings
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home
@@ -739,3 +739,37 @@ def test_github_source_pages_through_every_mcp_file(tmp_path, monkeypatch):
     rest = source.search("acme/servers", "", "mcp", discovery.PAGE)
     assert [r["name"] for r in rest["results"]][-1] == "server-069"
     assert len(reads) == 70, "each file is read once"
+
+
+def test_a_search_keeps_what_the_catalog_says_of_the_held_server_only(tmp_path, monkeypatch):
+    home = make_home(tmp_path, "claude_code/2.1.283")
+    folder = data_dir(home)
+    folder.mkdir(parents=True, exist_ok=True)
+    held = {"servers": {"docs": {"url": "https://docs.example.test/mcp"}}, "rules": {}}
+    (folder / "gateway.json").write_text(json.dumps(held))
+
+    def record(name, url, description):
+        server = {"name": name, "description": description, "remotes": []}
+        server["remotes"].append({"type": "streamable-http", "url": url})
+        return {
+            "_meta": {"io.modelcontextprotocol.registry/official": {"status": "active"}},
+            "server": server,
+        }
+
+    listing = {
+        "servers": [
+            record("io.other/docs", "https://other.example.test/mcp", "Someone else's docs."),
+            record("io.example/docs", "https://docs.example.test/mcp", "Our docs."),
+        ]
+    }
+    monkeypatch.setattr(discovery, "read_json", lambda _: listing)
+    app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
+    with TestClient(app, base_url=ORIGIN) as page:
+        page.get("/?token=tok")
+        rows = page.post(
+            "/api/discovery/search",
+            json={"source": "mcp-registry", "query": "docs", "kind": "mcp"},
+            headers=POST,
+        ).json()["results"]
+    assert all(isinstance(row["installed"], list) for row in rows)
+    assert load_catalog_notes(home)["docs"]["description"] == "Our docs."

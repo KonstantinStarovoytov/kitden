@@ -2032,8 +2032,6 @@ def create_app(
                 if row["held"] and same_entry(full.get("entry"), held[short_name(row["name"])]):
                     # The catalog may say more of it now (a description, a key it requires).
                     learned |= remember_catalog(full)
-            if learned:
-                events.publish("gateway_tools")  # the map shows what it needs now
                 row["installed"] = sorted(
                     {
                         i.client
@@ -2041,6 +2039,8 @@ def create_app(
                         if str(i.kind) == item_kind and i.name == row["name"]
                     }
                 )
+            if learned:
+                events.publish("gateway_tools")  # the map shows what it needs now
             clients = [c["id"] for c in state.data["clients"] if c["status"] == "found"]
             return JSONResponse({"results": rows, "total": found["total"], "clients": clients})
         except ValueError as error:
