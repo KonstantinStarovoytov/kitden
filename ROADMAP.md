@@ -9,11 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
-- **Browser tests for the main features:** Context, setting up the gateway, Move all and
-  removing a server's own entry are now done in a real browser every night, as a user does
-  them (#145).
-- **Browser tests for the main features:** searching the catalogs, adding a GitHub source and
-  adding a catalog skill are now done in a real browser every night, as a user does them (#146).
+- **Browser tests for the main features:** Context, setting up the gateway, Move all,
+  removing a server's own entry, searching the catalogs, adding a GitHub source and adding a
+  catalog skill are now done in a real browser every night, as a user does them (#145, #146).
 
 ### 0.10.1
 
