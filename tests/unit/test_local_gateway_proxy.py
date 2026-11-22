@@ -33,6 +33,7 @@ from kitden.local_gateway.settings import (
     load_refused,
     load_settings,
     load_tools,
+    mark_refused,
     save_tools,
 )
 from kitden.mcp_server import create_server
@@ -911,6 +912,18 @@ async def test_a_remote_that_starts_but_turns_down_a_call_needs_a_token(home):
     assert set(marked) == {"remote"}
     # It answered again, so the note goes.
     assert not fine.is_error and load_refused(home) == {}
+
+
+async def test_a_remote_that_lists_its_tools_again_no_longer_needs_a_token(home):
+    remote = FakeHttpServer("http://127.0.0.1:9/elsewhere")
+    settings = {"servers": {"remote": {"url": f"http://127.0.0.1:{remote.server_port}/mcp"}}}
+    mark_refused(home, "remote", True)
+    try:
+        async with Upstreams(home, settings) as upstreams:
+            await upstreams.list_tools("remote")
+    finally:
+        remote.shutdown()
+    assert load_refused(home) == {}
 
 
 async def test_a_refused_call_beside_one_that_answers_still_says_it_needs_a_token(home):

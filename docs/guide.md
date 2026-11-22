@@ -63,6 +63,10 @@ See [online sources](discovery.md) for formats and limits.
   instead, if it takes one.
 - **Not ready yet:** it waits in the preview; Apply writes the rest. **Details** show each secret
   by name, only its first and last characters, with **Replace** and **Remove**.
+- **A key added later:** when a catalog says a server in the gateway now needs a key it does not
+  have, the map shows **Needs key** and **Add access…** comes with the key's name filled in.
+  Kitden learns this when you add the server from a catalog, find it there again, or press
+  **Rescan** (it then asks the Official MCP Registry about each server by its name).
 
 ## Share a server between your agents
 
@@ -180,8 +184,9 @@ The short version for the plugin and the program is in [Privacy](../PRIVACY.md).
   Secrets you type or sign in with are kept in the macOS Keychain or the Linux keyring only;
   the page never shows more than their first and last characters. Kitden masks secret fields and known token
   formats in its page and logs.
-- Kitden goes online only to reach remote servers, the catalogs you open and the GitHub
-  sources you add. Nothing from a catalog runs during search or download.
+- Kitden goes online only to reach remote servers, the catalogs you open, the GitHub
+  sources you add, and the Official MCP Registry when you press **Rescan**. Nothing from a
+  catalog runs during search or download.
 - Backups stay for 30 days, and the newest 100 changes always keep theirs.
 - Undo of plugin removal installs the plugin again, but does not restore its saved options.
 - Kitden writes to your home folder, its own data folder, known projects and detected client

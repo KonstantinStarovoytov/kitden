@@ -9,6 +9,14 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **A server's access is clearer in the gateway:** Add access… shows once, offers Sign in only
+  to a server that has it, keeps Back to Details, and fills in the key a catalog says the
+  server requires, which now shows as "Needs key" on the map, also after Rescan (#163).
+
+- **A reload draws the Gateway at once:** it no longer waits for the Overview's slow read of
+  the chat logs, and a change the stopped page could not prepare says Kitden is not running
+  (#163).
+
 - **Built-in skills are marked on the Context page:** skills built into Claude Code, such as
   `dataviz`, are not files, so the Library cannot show or turn them off. Their pills now say
   built-in, and their Details say Kitden cannot turn them off (#164).

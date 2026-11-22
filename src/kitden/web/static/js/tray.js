@@ -1,7 +1,7 @@
 // The preview tray: every change waits here, and all its rows are previewed as one change, so
 // Apply all and Undo all write everything or nothing. This module holds the state and talks to
 // the server; the dock draws it.
-import { getJson, postJson } from "./api.js";
+import { getJson, notPrepared, postJson } from "./api.js";
 import { WAITS } from "./dom.js";
 import { CLIENT_ORDER } from "./parts.js";
 import { busy, setBusy, state } from "./store.js";
@@ -213,7 +213,7 @@ async function previewRows(rows) {
   const data = result.data;
   if (result.ok && data && data.id && Array.isArray(data.rows)) return { change: data };
   const detail = data && typeof data.detail === "string" ? data.detail : "";
-  const reason = detail || `Could not prepare this change (${result.status}).`;
+  const reason = detail || notPrepared(result.status);
   if (data && data.needs && data.row) return { reason, row: data.row, needs: data.needs };
   return { reason };
 }

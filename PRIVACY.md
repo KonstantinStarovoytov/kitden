@@ -39,6 +39,9 @@ nothing from it.
 
 - To reach the remote servers you add.
 - To read the catalogs you open and the GitHub sources you add.
+- When you press **Rescan**, to ask the Official MCP Registry about each server in the Kitden
+  gateway: one search per server, which carries the server's name. Kitden keeps what the
+  registry says of it (its description and the keys it requires). Automatic rescans do not ask.
 - To install or update Kitden, after your yes.
 - At most once a day, when the page opens, to ask PyPI (or, for a Homebrew install, the Homebrew
   tap on GitHub) for the latest version number. The request carries the Kitden version;

@@ -22,8 +22,14 @@ from kitden.local_gateway.project import project_chains
 from kitden.local_gateway.settings import (
     SETTINGS_FILE,
     allowed_tools,
+    load_about,
+    load_catalog_notes,
     load_settings,
     load_tools,
+    missing_value,
+    same_entry,
+    save_about,
+    save_catalog_note,
     save_tools,
 )
 from kitden.local_gateway.views import (
@@ -736,6 +742,31 @@ def test_one_server_that_breaks_does_not_stop_the_others(home, monkeypatch):
     assert sorted(t["name"] for t in load_tools(home)["second"]) == ECHO_TOOLS
 
 
+# A server that says what it does in its instructions. Its own small file: echo_server.py is
+# part of the CPU and memory measurement, which a code change must not touch.
+ABOUT_SERVER = """
+from mcp.server.mcpserver import MCPServer
+
+server = MCPServer("about", instructions="Echoes text.\\nTwo lines.\\n\\nFor the model only.")
+
+
+@server.tool(description="Answer with the text.")
+def echo(text: str) -> str:
+    return text
+
+
+server.run()
+"""
+
+
+def test_a_refresh_keeps_what_each_server_says_it_does(home, tmp_path):
+    script = tmp_path / "about_server.py"
+    script.write_text(ABOUT_SERVER)
+    hold(home, {"first": {"command": sys.executable, "args": [str(script)]}, "second": echo()})
+    asyncio.run(refresh_tools(home))
+    assert load_about(home) == {"first": "Echoes text. Two lines."}
+
+
 def test_the_page_hears_when_a_refresh_ends_even_after_a_failure(home, monkeypatch):
     async def fails(*args):
         raise RuntimeError("broken")
@@ -1214,3 +1245,86 @@ def test_tools_view_carries_the_calls(home):
     calls = {"github": {"list_issues": {"count": 3, "last": "2026-10-21T14:02Z"}}}
     tools = tools_view(load_settings(home), load_tools(home), "github", [], calls)["tools"]
     assert [t["calls"] for t in tools] == [calls["github"]["list_issues"], None]
+
+
+DOCS_URL = "https://docs.example.test/mcp/"
+NEEDS_KEY = {
+    "field": "headers",
+    "name": "X-Docs-Key",
+    "label": "Your Docs key, from docs.example.test/keys.",
+    "prefix": "",
+}
+
+
+def test_a_key_the_catalog_requires_shows_as_needed_with_the_catalogs_words(home):
+    hold(home, {"docs": {"url": DOCS_URL}})
+    note = {"entry": {"url": DOCS_URL}, "description": "Docs, with a key.", "fields": [NEEDS_KEY]}
+    save_catalog_note(home, "docs", note)
+    save_about(home, "docs", "The server's own words.")
+
+    def docs(page):
+        servers = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
+        return next(s for s in servers if s["name"] == "docs")
+
+    with page_for(home) as page:
+        server = docs(page)
+        assert (server["needs"], server["missing"]) == ("token", NEEDS_KEY)
+        assert page.get("/api/gateway/tools?server=docs").json()["about"] == "Docs, with a key."
+        # With the key, nothing is missing.
+        hold(home, {"docs": {"url": DOCS_URL, "headers": {"X-Docs-Key": "k"}}})
+        assert "needs" not in docs(page)
+        # Another address under that name: the catalog's note is not about it.
+        hold(home, {"docs": {"url": "https://other.example.test/mcp"}})
+        assert "needs" not in docs(page)
+        assert (
+            page.get("/api/gateway/tools?server=docs").json()["about"] == "The server's own words."
+        )
+
+
+def test_a_sign_in_or_any_case_gives_the_header_the_catalog_requires():
+    token = {"field": "headers", "name": "Authorization", "label": "Token", "prefix": "Bearer "}
+    note = {"fields": [token]}
+    assert missing_value(note, {"url": DOCS_URL}) == token
+    assert missing_value(note, {"url": DOCS_URL, "sign_in": {"keychain": "docs/sign-in"}}) is None
+    assert missing_value(note, {"url": DOCS_URL, "headers": {"authorization": "x"}}) is None
+    # A sign-in gives Authorization, not a key of the server's own.
+    signed = {"url": DOCS_URL, "sign_in": {"keychain": "docs/sign-in"}}
+    assert missing_value({"fields": [NEEDS_KEY]}, signed) == NEEDS_KEY
+
+
+def test_same_entry_reads_past_a_package_version():
+    npx = {"command": "npx", "args": ["-y", "@acme/docs@1.2.0"]}
+    assert same_entry({"command": "npx", "args": ["-y", "@acme/docs@1.3.0"]}, npx)
+    assert same_entry({"command": "npx", "args": ["-y", "@acme/docs"]}, npx)
+    assert not same_entry({"command": "npx", "args": ["-y", "@acme/other@1.2.0"]}, npx)
+    uvx = {"command": "uvx", "args": ["docs-mcp==0.4"]}
+    assert same_entry({"command": "uvx", "args": ["docs-mcp==0.5"]}, uvx)
+    assert same_entry({"url": DOCS_URL}, {"url": DOCS_URL})
+    assert not same_entry({"url": DOCS_URL}, {"url": DOCS_URL + "v2"})
+    assert not same_entry(None, {"url": DOCS_URL})
+
+
+def test_rescan_asks_the_registry_what_each_held_server_needs(home, monkeypatch):
+    hold(home, {"docs": {"url": DOCS_URL}})
+    asked = []
+
+    def registry(name):
+        asked.append(name)
+        row = {"kind": "mcp", "description": "Docs, with a key.", "setup": [NEEDS_KEY]}
+        return [
+            {**row, "name": "io.example/docs", "entry": {"url": DOCS_URL}},
+            # Same short name, another address: not this server.
+            {**row, "name": "io.other/docs", "entry": {"url": "https://x.test/"}, "setup": []},
+        ]
+
+    async def no_refresh(home, names=None):
+        return {}
+
+    monkeypatch.setattr("kitden.discovery.registry_lookup", registry)
+    monkeypatch.setattr(page_app, "refresh_tools", no_refresh)  # the server is not asked
+    with page_for(home) as page:
+        page.post("/api/rescan", headers=POST)
+        until(lambda: load_catalog_notes(home).get("docs"))
+        servers = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
+    assert asked == ["docs"]
+    assert next(s for s in servers if s["name"] == "docs")["missing"] == NEEDS_KEY

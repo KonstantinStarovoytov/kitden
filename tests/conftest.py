@@ -278,6 +278,19 @@ def client_homes(env: Mapping[str, str]) -> list[str | None]:
 
 
 @pytest.fixture(autouse=True)
+def _no_registry_on_rescan(request, monkeypatch):
+    """Rescan asks the Official MCP Registry about each held server; in tests it does not answer,
+    unless a test stands in for it. Contract tests may ask the real one."""
+    if request.node.get_closest_marker("contract"):
+        return
+
+    def offline(name):
+        raise OSError("no registry in tests")
+
+    monkeypatch.setattr("kitden.discovery.registry_lookup", offline)
+
+
+@pytest.fixture(autouse=True)
 def _no_client_commands(request, tmp_path_factory, monkeypatch):
     """No test runs a real client: a test that needs one uses a fake in its tmp folder. Only a
     contract test may find and run a real client, with HOME, CLAUDE_CONFIG_DIR and CODEX_HOME in

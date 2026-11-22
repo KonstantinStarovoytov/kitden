@@ -392,3 +392,24 @@ def test_the_callback_page_does_not_claim_more_than_it_knows(home, fake):
         back = come_back(page, opened)
     assert "Back in Kitden. You can close this tab." in back.text
     assert "Signed in" not in back.text
+
+
+def test_access_kind_offers_sign_in_only_for_a_server_that_has_it(home, fake, monkeypatch):
+    add_claude(home, "signer", {"type": "http", "url": fake.url})
+    opened = Opened()
+    with page_for(home, opened) as page:
+        held_signer(page, home, opened)
+        asked = page.post("/api/gateway/access-kind", json={"server": "signer"}, headers=POST)
+        assert asked.json() == {"kind": "sign-in"}
+        monkeypatch.setattr("kitden.changes.actions.access_needed", lambda url, headers: "open")
+        asked = page.post("/api/gateway/access-kind", json={"server": "signer"}, headers=POST)
+        assert asked.json() == {"kind": "open"}
+
+        def no_answer(url, headers):
+            raise OSError("no answer")
+
+        monkeypatch.setattr("kitden.changes.actions.access_needed", no_answer)
+        asked = page.post("/api/gateway/access-kind", json={"server": "signer"}, headers=POST)
+        assert asked.json() == {"kind": "unknown"}
+        nope = page.post("/api/gateway/access-kind", json={"server": "nope"}, headers=POST)
+        assert nope.status_code == 404

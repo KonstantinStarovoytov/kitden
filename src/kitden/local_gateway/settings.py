@@ -10,6 +10,7 @@ the next, then the global rule; with no rule a server or a tool is on.
 """
 
 import json
+import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,6 +28,11 @@ CALLS_FILE = "gateway-calls.json"
 NAMES_FILE = "gateway-names.json"
 # The remote servers that turned down a call (HTTP 401 or 403), with the time: they need a token.
 REFUSED_FILE = "gateway-refused.json"
+# What each held server says it does, in its own words (its description, else its instructions).
+ABOUT_FILE = "gateway-about.json"
+# What a catalog said of each held server it lists: its entry (url, or command and args), its
+# description and the values it requires. Used only while the held entry is still that one.
+CATALOG_FILE = "gateway-catalog.json"
 CLIENT = "kitden"
 STATES = ("on", "off")
 # A Codex entry's own start time; the move carries it and the gateway waits that long.
@@ -111,6 +117,91 @@ def save_tools(home: Path, server: str, tools: list[dict]) -> None:
         for tool in tools
     ]
     write_atomic(folder / TOOLS_FILE, json.dumps(cache, indent=2).encode())
+
+
+def load_about(home: Path) -> dict[str, str]:
+    """What each held server says it does, as its last tool read found it."""
+    data = read_object(data_dir(home) / ABOUT_FILE)
+    return {server: text for server, text in data.items() if isinstance(text, str)}
+
+
+def save_about(home: Path, server: str, text: str | None) -> None:
+    """Keep what a server says it does; None forgets it. Nothing is written when it is the same.
+    Like the tool cache, no lock: the write is atomic."""
+    about = load_about(home)
+    if about.get(server) == text:
+        return
+    if text:
+        about[server] = text
+    else:
+        about.pop(server, None)
+    write_atomic(private_data_dir(home) / ABOUT_FILE, json.dumps(about, indent=2).encode())
+
+
+def load_catalog_notes(home: Path) -> dict[str, dict]:
+    """What a catalog said of each server, by its name (see CATALOG_FILE)."""
+    data = read_object(data_dir(home) / CATALOG_FILE)
+    return {name: note for name, note in data.items() if isinstance(note, dict)}
+
+
+def save_catalog_note(home: Path, server: str, note: dict) -> bool:
+    """Keep what a catalog says of a server; True when it changed (nothing is written when it is
+    the same). Like the tool cache, no lock: the write is atomic."""
+    notes = load_catalog_notes(home)
+    if notes.get(server) == note:
+        return False
+    notes[server] = note
+    write_atomic(private_data_dir(home) / CATALOG_FILE, json.dumps(notes, indent=2).encode())
+    return True
+
+
+def _unpinned(args: Any) -> list[str]:
+    """A command's arguments without a package version: `pkg@1.2.0` and `pkg==1.2.0` read as
+    `pkg` (a scoped `@scope/pkg` keeps its scope), so a catalog's newer version still matches."""
+    if not isinstance(args, list):
+        return []
+    return [re.sub(r"(?<=.)@[^@/]+$|==[^=]+$", "", str(arg)) for arg in args]
+
+
+def same_entry(given: Any, entry: dict) -> bool:
+    """Whether a catalog's entry is this held entry: the same url, or the same command with the
+    same arguments, whatever package version each pins."""
+    if not isinstance(given, dict):
+        return False
+    if given.get("url"):
+        return given["url"] == entry.get("url")
+    return (
+        bool(given.get("command"))
+        and given.get("command") == entry.get("command")
+        and (_unpinned(given.get("args")) == _unpinned(entry.get("args")))
+    )
+
+
+def catalog_note(notes: dict[str, dict], server: str, entry: dict) -> dict | None:
+    """The catalog's note on a held server, only while its entry is the one the catalog gave
+    (same_entry)."""
+    note = notes.get(server)
+    return note if note and same_entry(note.get("entry"), entry) else None
+
+
+def missing_value(note: dict | None, entry: dict) -> dict | None:
+    """The first value the catalog says the server requires that its entry does not have: a
+    header or an env variable ({field, name, label, prefix}), or None. A header name matches in
+    any case, as HTTP reads it, and a browser sign-in gives the Authorization header."""
+    for field in (note or {}).get("fields") or []:
+        if not isinstance(field, dict) or field.get("field") not in ("headers", "env"):
+            continue
+        name = str(field.get("name", ""))
+        have = entry.get(field["field"]) or {}
+        if field["field"] == "headers":
+            given = {str(key).lower() for key in have}
+            if entry.get("sign_in"):
+                given.add("authorization")
+            if name.lower() not in given:
+                return field
+        elif name not in have:
+            return field
+    return None
 
 
 def load_names(home: Path) -> dict[str, str]:

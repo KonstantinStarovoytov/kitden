@@ -312,14 +312,14 @@ test('an answer with no words and a lost connection both give a reason', async (
   await fresh();
   queue(PREVIEW, { status: 500, json: null });
   assert.equal(await addToTray(add('github')), false);
-  assert.equal(tray.refused.reason, 'Could not prepare this change (500).');
+  assert.equal(tray.refused.reason, 'Could not prepare this change. Try again.');
   globalThis.fetch = () => Promise.reject(new Error('offline'));
   try {
     assert.equal(await quietly(() => addToTray(add('github'))), false);
   } finally {
     globalThis.fetch = standIn;
   }
-  assert.equal(tray.refused.reason, 'Could not prepare this change (0).');
+  assert.equal(tray.refused.reason, 'Kitden is not running. Start it with kitden open, then try again.');
   assert.equal(tray.phase, 'idle');
 });
 

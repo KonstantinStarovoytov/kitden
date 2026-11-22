@@ -1519,8 +1519,6 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .access-why svg { flex: none; color: var(--lamp-warn); }
 .access-works .access-check { color: var(--lamp-on); }
 .access-works .access-check path { stroke-dasharray: 24; }
-.access-names summary { cursor: pointer; color: var(--ink-3); font-size: 12px; }
-.access-names p { margin: 4px 0 0; }
 
 /* Hover words (tips.js): a small popover in the page's own colors (the raised panel, its line
    and the popover shadow, as menus have), one at a time, 400 ms after the pointer rests and at
