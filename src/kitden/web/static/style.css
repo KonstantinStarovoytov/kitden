@@ -316,7 +316,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .hint-line svg { flex: none; }
 /* A strip under the hint's words that fades from clear to the page colour, so page text that scrolls
    under the hint never shows through them. It takes no room and no clicks. */
-.hint-band:has(> #hint:not([hidden]))::before { content: ""; position: absolute; left: -22px; right: -22px; bottom: 0; height: 52px; background: linear-gradient(to bottom, transparent, var(--canvas) 55%); pointer-events: none; }
+.hint-band:has(> #hint:not([hidden]))::before { content: ""; position: absolute; left: -22px; right: -22px; bottom: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--canvas) 40%); pointer-events: none; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }
 
 /* Controls */
