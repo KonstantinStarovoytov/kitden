@@ -13,11 +13,15 @@ pytestmark = pytest.mark.browser
 
 SERVER = "notes"
 HEADER = "Bearer ${KITDEN_TEST_TOKEN}"
+# The variable's value while the page runs (in this process): no client's file may get it.
+TOKEN = "kitden-secret-4f9c2e"
 
 
 @pytest.fixture
-def before_start():
-    """A user-scope server in Claude Code with a `${VAR}` header: the sample has none."""
+def before_start(monkeypatch):
+    """A user-scope server in Claude Code with a `${VAR}` header: the sample has none. The
+    variable is set, so a copy that put in its value would show."""
+    monkeypatch.setenv("KITDEN_TEST_TOKEN", TOKEN)
 
     def add(home):
         path = home / ".claude.json"
@@ -50,6 +54,7 @@ def test_a_server_added_to_cursor_keeps_its_variable(page, demo):
         "url": "https://notes.example.test/mcp",
         "headers": {"Authorization": "Bearer ${env:KITDEN_TEST_TOKEN}"},
     }
+    assert TOKEN not in cursor.read_text()
 
 
 def test_a_server_added_to_codex_keeps_its_variable(page, demo):
@@ -62,3 +67,4 @@ def test_a_server_added_to_codex_keeps_its_variable(page, demo):
         "url": "https://notes.example.test/mcp",
         "bearer_token_env_var": "KITDEN_TEST_TOKEN",
     }
+    assert TOKEN not in codex.read_text()
