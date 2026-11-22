@@ -368,6 +368,19 @@ def test_scan_says_a_client_is_turned_off(tmp_path, capsys):
     assert any(line.startswith("Claude Code: found") for line in lines)
 
 
+def test_an_off_client_keeps_its_place_in_the_list(tmp_path):
+    home = make_home(tmp_path, *ALL)
+    write_cursor_fixture_state(home)
+    set_client(home, "codex", False)
+    listed = [
+        c.id for c in build_inventory(home).clients if c.id in ("claude_code", "codex", "cursor")
+    ]
+    assert listed == ["claude_code", "codex", "cursor"]
+    # Adapters passed in follow the choice too, as the demo's do.
+    passed = build_inventory(home, default_adapters(home), [])
+    assert {c.id: c.status for c in passed.clients}["codex"] is ClientStatus.OFF
+
+
 def test_scan_json_lists_an_off_client_with_status_off(tmp_path, capsys):
     from kitden.cli import main
 

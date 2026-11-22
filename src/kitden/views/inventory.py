@@ -142,9 +142,12 @@ def build_inventory(
     is where to look for the clients' Mac apps; by default the usual folders of `home`'s owner,
     and nowhere when the test passes its own adapters. `quick` does not wait for slow answers:
     they come in the background, and `on_slow_answer` runs when one is in."""
+    root = home
     if adapters is None:
-        adapters = default_adapters(home or Path.home(), quick, on_slow_answer)
-    off = off_clients(home) if home is not None else frozenset()
+        root = home or Path.home()
+        adapters = default_adapters(root, quick, on_slow_answer)
+    # Adapters passed in (the demo's, a test's) follow the choice kept under `home` too.
+    off = off_clients(root) if root is not None else frozenset()
     adapters = [a for a in adapters if a.id not in off]
     if apps is None:
         apps = app_roots(home) if home is not None else []
@@ -187,6 +190,9 @@ def build_inventory(
                 else replace(known, known_by=tuple(dict.fromkeys(known.known_by + found.known_by)))
             )
     inventory.clients += [off_client(c) for c in CLIENTS if c in off]
+    # In the pages' order, an off client in its own place; the Desktop Code tab after Claude Code.
+    place = {c: n for n, c in enumerate(CLIENTS)}
+    inventory.clients.sort(key=lambda c: place.get(c.id, 0.5))
     inventory.projects = sorted(projects.values(), key=lambda p: p.path)
     inventory.partial = any(adapter.skipped for adapter in adapters)
     with contextlib.suppress(Exception):  # only to match copies; never lose the scan

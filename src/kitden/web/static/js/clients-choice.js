@@ -18,7 +18,7 @@ const STATUS_WORDS = { not_found: "Not found on this computer", unreadable: "Cou
 
 // One row per client in client order: its words (the version, "Not found on this computer" or
 // "Off"), whether its switch is on, whether it is the last one on (then the switch cannot turn
-// off), and a quiet line when it still starts the Kitden gateway. `progress`: the first scan's.
+// off), and a quiet line when it uses the Kitden gateway. `progress`: the first scan's.
 export function choiceRows(clients, setup, progress = null) {
   const { linked } = kitdenClients(setup);
   const known = (id) => (clients || []).find((c) => c.id === id);
@@ -27,7 +27,7 @@ export function choiceRows(clients, setup, progress = null) {
     const client = known(id);
     const isOn = client.status !== "off";
     const words = STATUS_WORDS[client.status] || versionWords(client.version, progress, true);
-    const gateway = isOn && linked.includes(id) ? `${CLIENT_NAMES[id]} still starts the Kitden gateway. Disconnect it on the Gateway first if you want that gone.` : null;
+    const gateway = isOn && linked.includes(id) ? `${CLIENT_NAMES[id]} uses the Kitden gateway. Turning it off here does not disconnect it.` : null;
     return { id, name: CLIENT_NAMES[id], words, on: isOn, last: isOn && on.length === 1, gateway };
   });
 }

@@ -91,11 +91,11 @@ test('the card says what the panel is for, and a press turns that client the oth
   assert.deepEqual(pressed.at(-1), ['codex', true]);
 });
 
-test('a client that still starts the Kitden gateway says so before its switch is pressed', () => {
+test('a client that uses the Kitden gateway says so before its switch is pressed', () => {
   const rows = choiceRows(ALL, [entry('claude_code', 'missing'), entry('codex', 'added'), entry('cursor', 'not_installed')]);
-  assert.deepEqual(rows.map((r) => r.gateway), [null, 'Codex still starts the Kitden gateway. Disconnect it on the Gateway first if you want that gone.', null]);
+  assert.deepEqual(rows.map((r) => r.gateway), [null, 'Codex uses the Kitden gateway. Turning it off here does not disconnect it.', null]);
   const card = choiceCard(ALL, [entry('codex', 'added')], () => {});
-  assert.ok(walk(card.list).some((n) => n.textContent.startsWith('Codex still starts the Kitden gateway.')));
+  assert.ok(walk(card.list).some((n) => n.textContent.startsWith('Codex uses the Kitden gateway.')));
   // An entry that is turned off does not start it.
   assert.equal(choiceRows(ALL, [{ ...entry('codex', 'added'), enabled: false }])[1].gateway, null);
 });
