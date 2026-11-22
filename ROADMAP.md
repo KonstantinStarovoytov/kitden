@@ -30,6 +30,11 @@ What Kitden does today and what comes next. Ideas and bugs:
   estimate nobody asked for. The Library says what each client loads, not "Connected", and says
   why a client has no instruction file. The Library and Gateway ledes say what the page is, and
   the guide says how to open the page again and when it stops.
+- **A client block on the Library map agrees with what is under it:** on the Instructions tab
+  it counted commands and agents as files, so a block could say "2 files" above "Claude Code
+  loads no instruction file". It now counts instruction files, and says "Commands and agents
+  only" when those are all a client reads. On the Plugins and skills tab a client whose only
+  item is a hook said "Nothing loaded"; it says "1 hook".
 - **The Overview opens fast with many projects:** to count the projects with rules of their
   own it built the whole Library map for each one, 12 seconds for 26 projects on a real setup.
   It now checks only the rules, about a second there, and draws as soon as its own read
