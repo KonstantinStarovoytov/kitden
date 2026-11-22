@@ -13,6 +13,7 @@ import { current, currentError, loadContext, render, retry, setContextDraft, set
 import { addToTray, CONTEXT_NOTE, inTray, keyFor, onTray, ruleState, takeOut, tray, trayRow } from "./tray.js";
 
 const TITLE = "Do your skills fit?";
+const PILL_NUMBERS = "The number beside a skill is the length of its description, in characters.";
 // The first words of an estimate stand out; a fact from the last chat has none.
 const ESTIMATE = /^(After Apply, estimate:|Estimate:)/;
 
@@ -296,6 +297,9 @@ function sidesFor(card, result, after, estimate, heat) {
     (clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
   }
   const wrap = el("div");
+  // What the number on a pill is: the same for every client (the Codex limit is in tokens, a pill's
+  // number is always the description's characters).
+  if (card.skills.some((s) => s.size)) wrap.append(el("p", "ctx-pillnote", PILL_NUMBERS));
   wrap.append(box);
   if (apart.children.length) wrap.append(apart);
   return wrap;
@@ -309,6 +313,12 @@ function pillFor(card, skill, states, after, heat, result) {
   node.dataset.skill = skill.name;
   if (heat.has(skill.name)) node.style.setProperty("--heat", heat.get(skill.name));
   node.dataset.focus = `skill:${card.client}:${skill.name}`;
+  // A plugin's skill shows its plugin before its name, quieter ("venture:" and "review"); the hover
+  // words and the name a screen reader hears carry both.
+  if (skill.plugin) {
+    node.append(el("span", "ctx-plug", `${skill.plugin}:`));
+    node.setAttribute("title", skill.name);
+  }
   node.append(el("span", null, skill.shown));
   // Built into Claude Code: no file, so no Library item and no switch. Said on the pill.
   if (skill.built_in) {

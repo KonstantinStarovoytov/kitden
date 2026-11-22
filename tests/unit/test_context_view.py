@@ -18,7 +18,6 @@ from tests.unit.test_context_claude_log import assistant, list_entry, write_chat
 from tests.unit.test_context_codex_log import meta, turn, write_log
 from tests.unit.test_context_codex_log import skills as codex_list_entry
 
-NO_CHECK = "Kitden cannot check its estimate against your last chat, so it shows none."
 LONG = "Use it when the task needs a careful plan. " * 30  # 1,290 characters
 
 
@@ -275,7 +274,7 @@ def test_the_check_that_never_ran_is_not_called_a_mismatch(home):
     skill(home / ".claude/skills", "alpha", "Does alpha.")
     claude_chat(home, {"alpha": "Does alpha."}, model="claude-new-9")
     how = view(home)["claude_code"]["how"]
-    assert how[2].endswith("This time Kitden could not run the check.")
+    assert how[2].endswith("This time Kitden could not run the check, so it shows no estimate.")
 
 
 def test_a_check_that_ran_and_differs_says_so(home):
@@ -283,7 +282,7 @@ def test_a_check_that_ran_and_differs_says_so(home):
     skill(home / ".claude/skills", "beta", "Does beta.")
     claude_chat(home, {"alpha": "Does alpha.", "beta": None})
     how = view(home)["claude_code"]["how"]
-    assert how[2].endswith("This time it does not.")
+    assert how[2].endswith("This time it does not, so Kitden shows no estimate.")
 
 
 def test_one_skill_and_a_bad_timestamp_read_plainly(home):
@@ -345,7 +344,7 @@ def test_a_rule_that_does_not_rebuild_the_list_shows_no_estimate(home):
     claude_chat(home, {"alpha": "Does alpha.", "beta": None})
     cc = view(home)["claude_code"]
     assert cc["checked"] is False
-    assert cc["message"] == NO_CHECK
+    assert cc["message"] is None  # the reason is under "How this is counted"
     assert [w["tag"] for w in cc["windows"]] == ["Last chat · Nov 6"]
     assert cc["windows"][0]["result"]["say"].startswith("In your last chat on Nov 6, 1 of 2")
     assert cc["after"] is None
@@ -354,7 +353,7 @@ def test_a_rule_that_does_not_rebuild_the_list_shows_no_estimate(home):
 def test_a_name_only_skill_with_no_file_means_no_check(home):
     claude_chat(home, {"alpha": None})  # no file on disk: its size is not known
     cc = view(home)["claude_code"]
-    assert (cc["checked"], cc["message"]) == (False, NO_CHECK)
+    assert (cc["checked"], cc["message"]) == (False, None)
     assert cc["windows"][0]["result"]["over"] == {}
 
 
@@ -424,7 +423,7 @@ def test_a_model_not_in_the_table_gets_the_fact_and_no_estimate(home):
     skill(home / ".claude/skills", "alpha", "Does alpha.")
     claude_chat(home, {"alpha": "Does alpha."}, model="claude-new-9")
     cc = view(home)["claude_code"]
-    assert (cc["checked"], cc["message"]) == (False, NO_CHECK)
+    assert (cc["checked"], cc["message"]) == (False, None)
     [fact] = cc["windows"]
     assert fact["budget"] is None
     assert fact["result"]["say"] == (
@@ -495,6 +494,9 @@ def test_plugin_skills_have_no_switch_in_claude_code(home):
     claude_chat(home, {"plug:tool": "Does tool.", "own": "Does own.", "dataviz": "Charts."})
     rows = {s["name"]: s for s in view(home)["claude_code"]["skills"]}
     assert rows["plug:tool"]["shown"] == "tool"
+    # The plugin part comes from the model, so the page does not cut names apart.
+    assert rows["plug:tool"]["plugin"] == "plug"
+    assert rows["own"]["plugin"] is None and rows["dataviz"]["plugin"] is None
     assert rows["plug:tool"]["item"] is not None
     assert rows["plug:tool"]["switch"] == []
     assert "plugin" in rows["plug:tool"]["note"]
@@ -674,7 +676,7 @@ def test_codex_check_that_never_ran_is_not_called_a_mismatch(home):
     codex_chat(home, [f"- alpha: {CODEX_A} (file: {paths['alpha']})"])
     cx = view(home)["codex"]
     assert cx["checked"] is False
-    assert cx["how"][2].endswith("This time Kitden could not run the check.")
+    assert cx["how"][2].endswith("This time Kitden could not run the check, so it shows no estimate.")
 
 
 def test_codex_with_no_files_found_gives_no_full_or_cut_verdict(home):
@@ -688,7 +690,7 @@ def test_codex_with_no_files_found_gives_no_full_or_cut_verdict(home):
         at="2026-10-29T12:00:00Z",
     )
     cx = view(home)["codex"]
-    assert (cx["lamp"], cx["checked"], cx["message"]) == ("none", False, NO_CHECK)
+    assert (cx["lamp"], cx["checked"], cx["message"]) == ("none", False, None)
     fact = cx["windows"][0]["result"]
     assert fact["say"] == (
         "In your last chat on Oct 29, Codex sent 2 skills. A file is gone or was changed "
