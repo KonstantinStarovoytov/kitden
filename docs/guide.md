@@ -20,6 +20,12 @@ The Gateway's groups work the same way.
 | **Marketplaces** | Browse their plugins and skills. **+ Add → Add a marketplace…** adds a GitHub source. **Details → More → Commands…** has update and remove commands to copy. |
 | **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. With **All projects** it shows the files loaded in every project, and a quiet line names a client that loads none; pick a project to see its own files. A Claude Code hook that `disableAllHooks` turns off shows as off. Kitden only reads these; edit them in your editor. |
 
+On the map each client's block says what it loads there: its plugins and skills ("5 plugins ·
+62 skills"), or its hooks when a hook is all it has ("1 hook"). On **Instructions** it counts
+the client's instruction files ("3 files"); commands and agents are not counted, and a client
+that has only those says "Commands and agents only". A client with nothing says "Nothing
+loaded".
+
 The preview names the clients and projects affected. Adds on the map go to all projects;
 the List offers a project scope where supported. Start a new client session to load a change.
 
