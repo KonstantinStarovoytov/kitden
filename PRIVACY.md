@@ -26,6 +26,10 @@ nothing from it.
   and so are the secrets in a moved server's env, headers and arguments.
   The page shows no more than their first and last characters.
 - Backups of changed files stay in Kitden's own data folder.
+- What each server in the Kitden gateway says it does, in its own words (its description, else
+  its instructions), is kept in `gateway-about.json` in the same folder. What a catalog or the
+  Official MCP Registry says of a gateway server (its description and the keys it requires) is
+  kept in `gateway-catalog.json`. Only their owner can read them.
 - The versions Kitden finds for each client are kept in one small file, `versions.json`, in
   Kitden's own data folder. The page and `kitden scan` write it. `kitden scan` changes no
   client settings.
@@ -37,7 +41,8 @@ nothing from it.
 
 ## When Kitden goes online
 
-- To reach the remote servers you add.
+- To reach the remote servers you add. In a server's Add access… form, Kitden asks that server,
+  with no value, what access it takes.
 - To read the catalogs you open and the GitHub sources you add.
 - When you press **Rescan**, to ask the Official MCP Registry about each server in the Kitden
   gateway: one search per server, which carries the server's name. Kitden keeps what the
