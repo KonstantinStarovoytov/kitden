@@ -643,3 +643,16 @@ test('Details counts characters as Python does, so an emoji does not move the gr
   const [box] = byClass(drawer, 'ctx-desc');
   assert.deepEqual(byClass(box, 'ctx-cut').map(text), ['bc']);
 });
+
+test('a built-in skill says so on its pill, and that Kitden cannot turn it off', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const dataviz = skill('dataviz', 1436, 0, { item: null, source: 'Built into Claude Code', switch: [], built_in: true });
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills, dataviz] }, CODEX, CURSOR));
+  const pill = pillOf('dataviz');
+  assert.equal(text(pill), 'datavizbuilt-in1,436');
+  assert.equal(pill.classList.contains('builtin'), true);
+  assert.match(pill.getAttribute('title'), /Built into Claude Code\. Kitden cannot turn it off\./);
+  assert.equal(pillOf('alpha').classList.contains('builtin'), false);
+  assert.equal(pillOf('alpha').getAttribute('title'), null);
+});

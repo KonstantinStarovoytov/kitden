@@ -37,7 +37,9 @@ whose descriptions are sent go from grey to orange with the length of their desc
 few that take most of the list stand out. A skill's **Details** shows its description, with
 the part the agent did not get in grey. There you can also
 switch it to **On**, **Name only** (Claude Code) or **Off** where the client
-allows it; built-in skills, Claude Code plugin skills and Cursor have no switch. The change goes through preview,
+allows it; built-in skills, Claude Code plugin skills and Cursor have no switch. A skill built
+into Claude Code, such as `dataviz`, is marked **built-in**: it is not a file, so the Library
+does not list it and Kitden cannot turn it off. The change goes through preview,
 **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
 did not fit. `kitden show context`, which the plugin's `context` skill runs, also prints each
 skill's description, so your agent sees it too.

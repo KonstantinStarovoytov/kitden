@@ -288,7 +288,10 @@ SOURCE_PLUGIN = "Plugin {}"
 SOURCE_PROJECT = "Project {}"
 SOURCE_OWN = "Your skills"
 # One skill's Details line.
-NOTE_BUILT_IN = "Claude Code always sends built-in skills in full."
+NOTE_BUILT_IN = (
+    "Claude Code always sends built-in skills in full. "
+    "Kitden cannot turn them off: they are not files on this computer."
+)
 NOTE_PLUGIN = "A plugin's skill follows its plugin. Turn the plugin off in the Library."
 NOTE_FREES = "Name only frees {n} characters. The agent no longer sees when to use it."
 NOTE_NO_ROOM = "No room for its description."

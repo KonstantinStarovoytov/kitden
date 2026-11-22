@@ -10,6 +10,7 @@ import pytest
 from kitden.context.rules import CodexSkill, codex_rule
 from kitden.context.tables import CLAUDE_ALWAYS_FULL
 from kitden.system import claude_desktop_dir
+from kitden.views import words
 from kitden.views.context_view import _codex_cap, _codex_estimate, _seen, context_view
 from kitden.views.inventory import build_inventory
 from kitden.views.overview import overview
@@ -500,7 +501,11 @@ def test_plugin_skills_have_no_switch_in_claude_code(home):
     assert rows["own"]["switch"] == ["on", "name-only", "off"]
     assert rows["dataviz"]["item"] is None
     assert rows["dataviz"]["switch"] == []
-    assert rows["dataviz"]["note"] == "Claude Code always sends built-in skills in full."
+    assert rows["dataviz"]["note"] == words.NOTE_BUILT_IN
+    assert "cannot turn" in rows["dataviz"]["note"]
+    assert rows["dataviz"]["built_in"] is True
+    assert rows["own"]["built_in"] is False
+    assert rows["plug:tool"]["built_in"] is False
 
 
 def test_a_skill_not_in_the_last_list_is_shown_apart(home):
