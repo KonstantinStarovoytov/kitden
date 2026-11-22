@@ -18,7 +18,7 @@ The Gateway's groups work the same way.
 | --- | --- |
 | **Plugins and skills** | Use **+ Add**, or drag an item onto another client. Turn it on or off, choose its scope, or remove a copy in **Details**, where the client supports it. **Add missing plugins and skills…** fills gaps across clients. |
 | **Marketplaces** | Browse their plugins and skills. **+ Add → Add a marketplace…** adds a GitHub source. **Details → More → Commands…** has update and remove commands to copy. |
-| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. A Claude Code hook that `disableAllHooks` turns off shows as off. Kitden only reads these; edit them in your editor. |
+| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. With **All projects** it shows the files loaded in every project, and a quiet line names a client that loads none; pick a project to see its own files. A Claude Code hook that `disableAllHooks` turns off shows as off. Kitden only reads these; edit them in your editor. |
 
 The preview names the clients and projects affected. Adds on the map go to all projects;
 the List offers a project scope where supported. Start a new client session to load a change.
@@ -165,6 +165,18 @@ brew install konstantinstarovoytov/tap/kitden
 
 To update, use the Update button on the page, or run `brew upgrade kitden`. Homebrew builds
 Kitden and its dependencies from source, which takes a few minutes the first time.
+
+## Open the page again, and how it stops
+
+Closing the tab does not end Kitden. Run `kitden` or `kitden open` to open the same page
+again: if a page is already running for your home folder, Kitden opens that one, and if not,
+it starts one in the background and opens it. A page started that way stops by itself 10
+minutes after its last tab closes, unless a change is still being written. Open it again
+after that and Kitden starts a fresh one.
+
+`kitden serve` runs the page in the terminal instead. It stays until you press **Ctrl+C**;
+closing the tab does not stop it. Only one page runs for a home folder, so `kitden` while
+`kitden serve` runs opens that page.
 
 ## Stop using Kitden
 
