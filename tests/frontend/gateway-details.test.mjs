@@ -583,6 +583,26 @@ test('a held server that turned down a call says so first and offers Add access'
   assert.equal(card.actions[0].label, 'Add access…');
 });
 
+test('a server that needs a token offers Add access once: in its Access block when that shows', () => {
+  const card = held({ ...FILES_HELD, kind: 'remote', needs: 'token' }, { detail: { ...FILES_TOOLS, access: [] } });
+  assert.equal(card.warning, 'files needs a token, or its token is wrong.');
+  assert.equal(card.actions.some((a) => a.label === 'Add access…'), false);
+  assert.equal(buttonsIn(card.list).filter((b) => b.textContent === 'Add access…').length, 1);
+});
+
+test('a key the catalog requires is named, and Add access… comes with it', () => {
+  const missing = { field: 'headers', name: 'X-Docs-Key', label: 'Your Docs key.', prefix: '' };
+  const card = held({ ...FILES_HELD, kind: 'remote', needs: 'token', missing });
+  assert.equal(card.warning, 'files needs X-Docs-Key. Its catalog entry asks for it.');
+  assert.equal(card.actions[0].label, 'Add access…');
+});
+
+test('the server panel says what the server does, before its Access and tools', () => {
+  const card = held(FILES_HELD, { detail: { ...FILES_TOOLS, access: [], about: 'Reads and writes files.' } });
+  assert.equal(card.list.children[0].textContent, 'Reads and writes files.');
+  assert.equal(textOf(held(FILES_HELD).list).includes('Reads and writes'), false);
+});
+
 test('the server panel lists its tools with a switch each and a Whole server row', () => {
   const card = held(FILES_HELD);
   assert.deepEqual([card.kind, card.title, card.id], ['Server', 'files', 'Local · in the Kitden gateway']);

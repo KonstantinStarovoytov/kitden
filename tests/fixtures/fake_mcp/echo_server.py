@@ -29,7 +29,9 @@ def main() -> None:
     if "--hang" in args:
         time.sleep(3600)
 
-    server = MCPServer(name)
+    # `--about TEXT`: the server's instructions, which Kitden shows as what it does.
+    about = args[args.index("--about") + 1] if "--about" in args else None
+    server = MCPServer(name, instructions=about)
 
     @server.tool(description="Answer with the text.")
     def echo(text: str) -> str:

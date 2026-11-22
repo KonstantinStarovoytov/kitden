@@ -250,6 +250,8 @@ class Upstreams:
                     ]
                     cursor = page.next_cursor
                     if not cursor:
+                        # It answered: a refusal noted before no longer holds.
+                        await self._note_refused(server, False)
                         return tools
         except UpstreamError as problem:
             sentence = str(problem)
@@ -260,6 +262,16 @@ class Upstreams:
             sentence = f"{server} did not list its tools."
         _say(sentence)
         raise UpstreamError(sentence)
+
+    def about(self, server: str) -> str | None:
+        """What a started server says it does: its description, else the first paragraph of its
+        instructions. None when it says nothing or has not started."""
+        client = self._clients.get(server)
+        if client is None:
+            return None
+        info = client.server_info
+        text = (info.description if info else None) or (client.instructions or "").split("\n\n")[0]
+        return " ".join(text.split()) or None
 
     async def call(self, server: str, tool: str, arguments: dict[str, Any]) -> CallToolResult:
         """Call one tool. The server's own error answer comes back as it is; when the call

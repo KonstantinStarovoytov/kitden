@@ -61,6 +61,9 @@ See [online sources](discovery.md) for formats and limits.
   instead, if it takes one.
 - **Not ready yet:** it waits in the preview; Apply writes the rest. **Details** show each secret
   by name, only its first and last characters, with **Replace** and **Remove**.
+- **A key added later:** when a catalog says a server in the gateway now needs a key it does not
+  have, the map shows **Needs key** and **Add access…** comes with the key's name filled in.
+  Kitden learns this when you add the server from a catalog or find it there again.
 
 ## Share a server between your agents
 

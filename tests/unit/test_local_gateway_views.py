@@ -22,8 +22,11 @@ from kitden.local_gateway.project import project_chains
 from kitden.local_gateway.settings import (
     SETTINGS_FILE,
     allowed_tools,
+    load_about,
     load_settings,
     load_tools,
+    save_about,
+    save_catalog_note,
     save_tools,
 )
 from kitden.local_gateway.views import (
@@ -736,6 +739,18 @@ def test_one_server_that_breaks_does_not_stop_the_others(home, monkeypatch):
     assert sorted(t["name"] for t in load_tools(home)["second"]) == ECHO_TOOLS
 
 
+def test_a_refresh_keeps_what_each_server_says_it_does(home):
+    hold(
+        home,
+        {
+            "first": echo("--about", "Echoes text.\nTwo lines.\n\nFor the model only."),
+            "second": echo(),
+        },
+    )
+    asyncio.run(refresh_tools(home))
+    assert load_about(home) == {"first": "Echoes text. Two lines."}
+
+
 def test_the_page_hears_when_a_refresh_ends_even_after_a_failure(home, monkeypatch):
     async def fails(*args):
         raise RuntimeError("broken")
@@ -1214,3 +1229,37 @@ def test_tools_view_carries_the_calls(home):
     calls = {"github": {"list_issues": {"count": 3, "last": "2026-10-21T14:02Z"}}}
     tools = tools_view(load_settings(home), load_tools(home), "github", [], calls)["tools"]
     assert [t["calls"] for t in tools] == [calls["github"]["list_issues"], None]
+
+
+DOCS_URL = "https://docs.example.test/mcp/"
+NEEDS_KEY = {
+    "field": "headers",
+    "name": "X-Docs-Key",
+    "label": "Your Docs key, from docs.example.test/keys.",
+    "prefix": "",
+}
+
+
+def test_a_key_the_catalog_requires_shows_as_needed_with_the_catalogs_words(home):
+    hold(home, {"docs": {"url": DOCS_URL}})
+    note = {"entry": {"url": DOCS_URL}, "description": "Docs, with a key.", "fields": [NEEDS_KEY]}
+    save_catalog_note(home, "docs", note)
+    save_about(home, "docs", "The server's own words.")
+
+    def docs(page):
+        servers = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
+        return next(s for s in servers if s["name"] == "docs")
+
+    with page_for(home) as page:
+        server = docs(page)
+        assert (server["needs"], server["missing"]) == ("token", NEEDS_KEY)
+        assert page.get("/api/gateway/tools?server=docs").json()["about"] == "Docs, with a key."
+        # With the key, nothing is missing.
+        hold(home, {"docs": {"url": DOCS_URL, "headers": {"X-Docs-Key": "k"}}})
+        assert "needs" not in docs(page)
+        # Another address under that name: the catalog's note is not about it.
+        hold(home, {"docs": {"url": "https://other.example.test/mcp"}})
+        assert "needs" not in docs(page)
+        assert (
+            page.get("/api/gateway/tools?server=docs").json()["about"] == "The server's own words."
+        )

@@ -37,11 +37,19 @@ function statusLines() {
   return { why, done, refused, worked };
 }
 
-// A panel with a form (its `node`) in its body.
-function openForm(kicker, title, lede, node) {
+// A panel with a form (its `node`) in its body. With `back`, a Back button before the kicker goes
+// back to where the form was opened from (a server's Details).
+function openForm(kicker, title, lede, node, back = null) {
   const body = el("div", "body");
   body.append(node);
-  openPanel([header(kicker, title, lede), body]);
+  const head = header(kicker, title, lede);
+  if (back) {
+    const backButton = button(null, back, "btn ghost small step-back");
+    backButton.setAttribute("aria-label", "Back");
+    backButton.append(icon("arrow-left", 14));
+    head.querySelector(".top").prepend(backButton);
+  }
+  openPanel([head, body]);
 }
 
 // The form for `waits` ({ server, kind, fields, reason }): `onCheck(values)` runs on Add token
@@ -218,12 +226,20 @@ export function openAccess(row, { start = false } = {}) {
 }
 
 // A held server whose sign-in ended (Part 3b): Sign in again in its own panel. Once signed in,
-// a row joins the tray that writes the new sign-in to its Keychain item on Apply. `first`: a
-// server that had no sign-in (Add access…).
-export async function signInAgain(name, { first = false } = {}) {
+// a row joins the tray that writes the new sign-in to its Keychain item on Apply.
+export async function signInAgain(name, { back = null } = {}) {
+  const reason = `${name} needs sign-in again.`;
+  const form = await heldSignIn(name, reason);
+  openForm("Needs sign-in", name, reason, form.node, back);
+  form.start();
+  return form;
+}
+
+// The Sign in form for a held server: a sign-in id from the page, and once signed in a row in the
+// tray that writes it to the server's Keychain item on Apply.
+async function heldSignIn(name, reason) {
   const offered = await postJson("/api/sign-in/offer", { server: name });
   if (!offered.ok) throw new Error(offered.data?.detail || "Kitden could not start sign-in.");
-  const reason = first ? `Sign in to ${name} on its own page in your browser.` : `${name} needs sign-in again.`;
   const waits = { server: name, kind: "sign-in", sign_in: offered.data.id, fields: [], reason };
   const signed = async (id) => {
     const body = { action: "gateway.sign_in", targets: [], params: { server: name, sign_in: id } };
@@ -233,15 +249,13 @@ export async function signInAgain(name, { first = false } = {}) {
     return false;
   };
   const form = signInForm(waits, signed);
-  openForm(first ? "Sign in" : "Needs sign-in", name, reason, form.node);
-  form.start();
   return form;
 }
 
 // Replace… in a held server's Access block: the access form for that one value, in its own
 // panel. Its check is the preview of the change, as when the server was added: a value that
 // works joins the tray (preview, Apply, Undo); a refused one keeps the panel, with the reason.
-export function replaceAccess(server, row) {
+export function replaceAccess(server, row, { back = null } = {}) {
   const local = row.field === "env";
   const field = { field: row.field, name: row.name, label: row.name, prefix: row.name === "Authorization" ? "Bearer " : "", later: local };
   const waits = { server, kind: "token", fields: [field], reason: "" };
@@ -254,7 +268,7 @@ export function replaceAccess(server, row) {
       closeSoon(form);
     } else if (tray.refused) form.refuse(tray.refused.reason);
   });
-  openForm("Replace", server, `A new ${row.name}. The old one stays until Apply.`, form.node);
+  openForm("Replace", server, `A new ${row.name}. The old one stays until Apply.`, form.node, back);
   form.focus();
   return form;
 }
@@ -273,41 +287,68 @@ export function newAccess(server, way, name, value) {
 }
 
 // The ways to give a server access: a remote server takes a token, a header of its own or a
-// browser sign-in; a local one a variable.
+// browser sign-in (only one that offers it); a local one a variable. `hint` says where the value
+// comes from; `say`, how it is sent, waits under Details.
 const WAYS = {
-  token: { label: "Token", fields: [], say: "Sent as the Authorization header, with \"Bearer\" in front." },
-  header: { label: "Header", fields: ["Header name", "X-API-Key"], say: "Sent as this header on every request." },
-  "sign-in": { label: "Sign in", fields: null, say: "Opens the server's own sign-in page in your browser." },
-  variable: { label: "Variable", fields: ["Variable name", "API_KEY"], say: "Set as this variable when the gateway starts the server." },
+  token: { label: "Token", fields: [], hint: "The server's docs or your account page there give it.", say: "Sent as the Authorization header, with \"Bearer\" in front." },
+  header: { label: "Header", fields: ["Header name", "X-API-Key"], hint: "The server's docs name the header and say where to get its value.", say: "Sent as this header on every request." },
+  "sign-in": { label: "Sign in", fields: null, hint: "Opens the server's own sign-in page in your browser.", say: "The sign-in is kept in your Keychain and refreshed by the gateway." },
+  variable: { label: "Variable", fields: ["Variable name", "API_KEY"], hint: "The server's docs name the variable and say where to get its value.", say: "Set as this variable when the gateway starts the server." },
+};
+
+// What a remote server answered when asked with no value (/api/gateway/access-kind), in words;
+// none when it wants a value or did not answer.
+const KIND_SAYS = {
+  open: (name) => `${name} answers without a token or header now. Add one only if its docs ask for it.`,
+  "sign-in-later": (name) => `${name} has a sign-in Kitden cannot use yet. It may take an API key; see its docs.`,
 };
 
 // Add access… in a held server's Access block: one form, a choice of way first (a remote server
-// only). Preview adds a row to the tray; a remote server is asked with the value first, and a
-// server that answers without it says the first call checks it. Sign in opens its own panel.
-export function addAccess(server, { remote = true } = {}) {
-  const ways = remote ? ["token", "header", "sign-in"] : ["variable"];
-  let way = ways[0];
+// only). The server is asked first what it takes: Sign in shows only for one that offers it, and
+// one that needs nothing says so. Preview adds a row to the tray; a remote server is asked with
+// the value first, and a server that answers without it says the first call checks it. Sign in
+// runs in the same form, so another way is one click away when it does not finish.
+export function addAccess(server, { remote = true, back = null, need = null } = {}) {
+  const ways = remote ? ["token", "header"] : ["variable"];
+  // A value the server's catalog entry requires (`need`): its way, its name filled in, and the
+  // catalog's words for where to get it.
+  const needWay = !need ? null : need.field === "env" ? "variable" : need.prefix || need.name.toLowerCase() === "authorization" ? "token" : "header";
+  let way = ways.includes(needWay) ? needWay : ways[0];
   const form = el("form", "form access-form");
   const pick = el("div", "seg sm");
+  const kindSay = el("p", "muted");
+  kindSay.hidden = true;
   const fields = el("div", "access-fields");
+  const hint = el("p", "muted");
   // How the value is sent: technical, so under Details.
   const say = el("p", "muted");
   const how = el("details", "access-names");
   how.append(el("summary", null, "Details"), say);
+  const saved = el("p", "muted", `Saved in your ${secretsWord()} on Apply.`);
   const submit = el("button", "btn primary", "Preview");
   submit.type = "submit";
   const { why, done, refused, worked } = statusLines();
   let name = null;
   let value = null;
+  let drawn = 0;
   const draw = () => {
     const ask = WAYS[way];
+    const turn = ++drawn;
+    const needed = way === needWay;
     say.textContent = ask.say;
+    hint.textContent = needed && need.label && need.label !== need.name ? need.label : ask.hint;
     name = value = null;
     fields.replaceChildren();
     submit.hidden = ask.fields === null;
     why.hidden = done.hidden = true;
+    // The Sign in form says where it is saved itself, and its hint goes above its button.
+    saved.hidden = hint.hidden = ask.fields === null;
     if (ask.fields === null) {
-      fields.append(el("p", "muted", ask.say), button("Sign in", () => signInAgain(server, { first: true }), "btn primary"));
+      heldSignIn(server, ask.hint).then((signIn) => {
+        if (turn === drawn) fields.replaceChildren(el("p", "muted", ask.hint), signIn.node);
+      }).catch((error) => {
+        if (turn === drawn) refused(error.message);
+      });
       return;
     }
     const input = (label, type, placeholder) => {
@@ -319,22 +360,26 @@ export function addAccess(server, { remote = true } = {}) {
       return box;
     };
     if (ask.fields.length) name = input(ask.fields[0], "text", ask.fields[1]);
+    if (name && needed) name.value = need.name;
     value = input(way === "token" ? "Token" : "Value", "password", way === "token" ? "Paste token" : "Enter value");
   };
-  const choices = ways.map((id) => {
+  const choices = [];
+  const choose = (id) => {
     const choice = button(WAYS[id].label, () => {
       way = id;
       for (const other of choices) other.setAttribute("aria-pressed", String(other === choice));
       glide(pick, choice, "access-way", { duration: 280 });
       draw();
-      (name || value)?.focus();
+      (name?.value ? value : name || value)?.focus();
     }, "");
     choice.setAttribute("aria-pressed", String(id === way));
+    choices.push(choice);
+    pick.append(choice);
     return choice;
-  });
-  pick.append(...choices);
+  };
+  ways.forEach(choose);
   if (ways.length > 1) form.append(pick);
-  form.append(fields, why, done, el("p", "muted", `Saved in your ${secretsWord()} on Apply.`), how, submit);
+  form.append(kindSay, fields, hint, why, done, saved, how, submit);
   draw();
   form.addEventListener("input", () => { why.hidden = true; });
   form.addEventListener("submit", (event) => {
@@ -363,7 +408,21 @@ export function addAccess(server, { remote = true } = {}) {
     }).finally(() => { submit.textContent = "Preview"; });
     busyWhile(submit, check).catch(() => {});
   });
-  openForm("Add access", server, remote ? "A token, a header or a sign-in. Nothing changes until Apply." : "A variable with a secret. Nothing changes until Apply.", form);
-  if (ways.length > 1) glide(pick, choices[0], "access-way", { animated: false });
-  (name || value)?.focus();
+  openForm("Add access", server, remote ? "What the server asks for. Nothing changes until Apply." : "A variable with a secret. Nothing changes until Apply.", form, back);
+  if (ways.length > 1) glide(pick, choices[ways.indexOf(way)], "access-way", { animated: false });
+  (name?.value ? value : name || value)?.focus();
+  // What the server takes, asked with no value: Sign in joins the choice only when it offers it.
+  if (remote) {
+    postJson("/api/gateway/access-kind", { server }).then((answer) => {
+      const kind = answer.ok ? answer.data?.kind : null;
+      if (!form.isConnected) return;
+      if (kind === "sign-in") choose("sign-in");
+      // A key its catalog entry requires outweighs a server that answers without it.
+      const words = need ? null : KIND_SAYS[kind];
+      if (words) {
+        kindSay.textContent = words(server);
+        kindSay.hidden = false;
+      }
+    }).catch(() => {});
+  }
 }

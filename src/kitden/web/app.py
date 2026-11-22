@@ -109,13 +109,18 @@ from kitden.gateways import data_dir
 from kitden.local_gateway.project import project_chain, project_chains
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import (
+    catalog_note,
+    load_about,
     load_calls,
+    load_catalog_notes,
     load_refused,
     load_settings,
     load_tools,
     mark_refused,
+    missing_value,
     moved_in,
     remove_server_steps,
+    save_catalog_note,
     save_tools,
     settings_unreadable,
 )
@@ -884,6 +889,24 @@ def create_app(
             return _error("Unknown server.", 404)
         return JSONResponse({"id": signins.offer(str(held["url"]), name)})
 
+    async def gateway_access_kind(request: Request) -> JSONResponse:
+        """What a held remote server takes, asked with no value: "open" (it answers without
+        one), "token", "sign-in" (in the browser) or "sign-in-later"; "unknown" when it does not
+        answer, or in a demo. Add access… offers Sign in only for "sign-in"."""
+        from kitden.changes import actions  # its access_needed, which tests stand in for
+
+        name = str((await _body(request)).get("server", ""))
+        held = load_settings(home)["servers"].get(name) if home is not None else None
+        if not isinstance(held, dict) or not held.get("url"):
+            return _error("Unknown server.", 404)
+        if stand_ins:
+            return JSONResponse({"kind": "unknown"})
+        try:
+            kind = await asyncio.to_thread(actions.access_needed, str(held["url"]), {})
+        except OSError:
+            kind = "unknown"
+        return JSONResponse({"kind": kind})
+
     async def sign_in_done(request: Request) -> HTMLResponse:
         """Where the browser comes back after sign-in. It needs no cookie (the redirect comes
         from another site); only a flow that waits for its `state` takes the code."""
@@ -1178,9 +1201,17 @@ def create_app(
         # A server whose sign-in ended (the last tool read said so) needs the person, and so
         # does one that turned down a call through the gateway: it needs a token.
         refused = load_refused(home)
+        # A server whose catalog entry requires a value its entry lacks needs it too, also when
+        # it answers without it (a key only its tools use).
+        entries, notes = load_settings(home)["servers"], load_catalog_notes(home)
         for server in held:
+            entry = entries.get(server["name"]) or {}
+            missing = missing_value(catalog_note(notes, server["name"], entry), entry)
             if tool_problems.get(server["name"]) == SIGNED_OUT.format(server=server["name"]):
                 server["needs"] = "sign-in"
+            elif missing:
+                server["needs"] = "token"
+                server["missing"] = missing
             elif server["name"] in refused:
                 server["needs"] = "token"
         problem = UNREADABLE if settings_unreadable(home) else None
@@ -1237,7 +1268,12 @@ def create_app(
         # Its secrets by name, only their start and end; it reads the Keychain, in a thread.
         held = settings["servers"][server]
         access = await asyncio.to_thread(access_rows, server, held, keychain_run)
-        return JSONResponse({**answer, "problem": tool_problems.get(server), "access": access})
+        # What it does: the catalog's words while its entry is the catalog's, else its own.
+        note = catalog_note(load_catalog_notes(home_dir()), server, held)
+        about = (note or {}).get("description") or load_about(home_dir()).get(server)
+        return JSONResponse(
+            {**answer, "problem": tool_problems.get(server), "access": access, "about": about}
+        )
 
     async def gateway_tools_refresh(request: Request) -> JSONResponse:
         """Starts asking each held server for its tools; `gateway_tools` says when it is done."""
@@ -1305,6 +1341,24 @@ def create_app(
         if command is None and needed:
             raise ValueError("Install the tool first: uv tool install <this folder>")
         return command
+
+    def remember_catalog(row: dict) -> bool:
+        """Keep what a catalog row says of its server: its entry, description and the values it
+        requires (catalog_note uses it only while the held entry is that one). True when that
+        changed. A note that cannot be written is skipped: it only adds words."""
+        entry = row.get("entry")
+        if row.get("kind") != "mcp" or not isinstance(entry, dict) or home is None:
+            return False
+        same = {k: entry[k] for k in ("url", "command", "args") if k in entry}
+        fields = [
+            {k: f[k] for k in ("field", "name", "label", "prefix") if k in f}
+            for f in row.get("setup") or []
+        ]
+        note = {"entry": same, "description": row.get("description") or "", "fields": fields}
+        try:
+            return save_catalog_note(home_dir(), short_name(str(row.get("name", ""))), note)
+        except OSError:
+            return False
 
     def _online_row(params: dict, kind: str, words: str) -> dict:
         """The online catalog row a request names, of this kind; never in the demo."""
@@ -1484,6 +1538,7 @@ def create_app(
                 if not row.get("entry"):
                     raise ValueError(needs_setup)
                 fields = row.get("setup") or None
+                remember_catalog(row)
                 discovered = (short_name(row["name"]), configured_entry(row, params))
             steps = await asyncio.to_thread(
                 gateway_add_steps,
@@ -1967,9 +2022,15 @@ def create_app(
             )
             rows = found["results"]
             held = set(load_settings(home_dir())["servers"])
+            learned = False
             for row in rows:
                 item_kind = "mcp_server" if row["kind"] == "mcp" else row["kind"]
                 row["held"] = row["kind"] == "mcp" and short_name(row["name"]) in held
+                if row["held"]:
+                    # The catalog may say more of it now (a description, a key it requires).
+                    learned |= remember_catalog(discovery.results.get(row["id"]) or {})
+            if learned:
+                events.publish("gateway_tools")  # the map shows what it needs now
                 row["installed"] = sorted(
                     {
                         i.client
@@ -2037,6 +2098,7 @@ def create_app(
             Route("/api/batch/preview", _with_changes(batch_preview), methods=["POST"]),
             Route("/api/batch/check", _with_changes(batch_check), methods=["POST"]),
             Route("/api/sign-in/offer", sign_in_offer, methods=["POST"]),
+            Route("/api/gateway/access-kind", gateway_access_kind, methods=["POST"]),
             Route("/api/sign-in/start", sign_in_start, methods=["POST"]),
             Route("/api/sign-in/wait", sign_in_wait, methods=["POST"]),
             Route("/api/sign-in/cancel", sign_in_cancel, methods=["POST"]),

@@ -27,6 +27,11 @@ CALLS_FILE = "gateway-calls.json"
 NAMES_FILE = "gateway-names.json"
 # The remote servers that turned down a call (HTTP 401 or 403), with the time: they need a token.
 REFUSED_FILE = "gateway-refused.json"
+# What each held server says it does, in its own words (its description, else its instructions).
+ABOUT_FILE = "gateway-about.json"
+# What a catalog said of each held server it lists: its entry (url, or command and args), its
+# description and the values it requires. Used only while the held entry is still that one.
+CATALOG_FILE = "gateway-catalog.json"
 CLIENT = "kitden"
 STATES = ("on", "off")
 # A Codex entry's own start time; the move carries it and the gateway waits that long.
@@ -111,6 +116,66 @@ def save_tools(home: Path, server: str, tools: list[dict]) -> None:
         for tool in tools
     ]
     write_atomic(folder / TOOLS_FILE, json.dumps(cache, indent=2).encode())
+
+
+def load_about(home: Path) -> dict[str, str]:
+    """What each held server says it does, as its last tool read found it."""
+    data = read_object(data_dir(home) / ABOUT_FILE)
+    return {server: text for server, text in data.items() if isinstance(text, str)}
+
+
+def save_about(home: Path, server: str, text: str | None) -> None:
+    """Keep what a server says it does; None forgets it. Nothing is written when it is the same.
+    Like the tool cache, no lock: the write is atomic."""
+    about = load_about(home)
+    if about.get(server) == text:
+        return
+    if text:
+        about[server] = text
+    else:
+        about.pop(server, None)
+    write_atomic(private_data_dir(home) / ABOUT_FILE, json.dumps(about, indent=2).encode())
+
+
+def load_catalog_notes(home: Path) -> dict[str, dict]:
+    """What a catalog said of each server, by its name (see CATALOG_FILE)."""
+    data = read_object(data_dir(home) / CATALOG_FILE)
+    return {name: note for name, note in data.items() if isinstance(note, dict)}
+
+
+def save_catalog_note(home: Path, server: str, note: dict) -> bool:
+    """Keep what a catalog says of a server; True when it changed (nothing is written when it is
+    the same). Like the tool cache, no lock: the write is atomic."""
+    notes = load_catalog_notes(home)
+    if notes.get(server) == note:
+        return False
+    notes[server] = note
+    write_atomic(private_data_dir(home) / CATALOG_FILE, json.dumps(notes, indent=2).encode())
+    return True
+
+
+def catalog_note(notes: dict[str, dict], server: str, entry: dict) -> dict | None:
+    """The catalog's note on a held server, only while its entry is the one the catalog gave
+    (same url, or same command and args)."""
+    note = notes.get(server)
+    given = note.get("entry") if note else None
+    if not isinstance(given, dict):
+        return None
+    if given.get("url"):
+        return note if given["url"] == entry.get("url") else None
+    same = given.get("command") == entry.get("command") and given.get("args") == entry.get("args")
+    return note if given.get("command") and same else None
+
+
+def missing_value(note: dict | None, entry: dict) -> dict | None:
+    """The first value the catalog says the server requires that its entry does not have: a
+    header or an env variable ({field, name, label, prefix}), or None."""
+    for field in (note or {}).get("fields") or []:
+        if not isinstance(field, dict) or field.get("field") not in ("headers", "env"):
+            continue
+        if field.get("name") not in (entry.get(field["field"]) or {}):
+            return field
+    return None
 
 
 def load_names(home: Path) -> dict[str, str]:

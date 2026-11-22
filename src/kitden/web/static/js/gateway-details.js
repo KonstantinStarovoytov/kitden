@@ -721,19 +721,23 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
   const step = { server: name, tool: null, title: name, target, shared, rules: detail, readIn: picked, warning };
   const some = changedIn(projects, detail.projects, target, (p) => p.server).length ? stepAction(IN_SOME[target], () => projectsStep(step)) : null;
   const actions = clients.length ? [stepAction(MOVE_OUT, () => moveOutStep({ name, detail, readIn: picked, warning }))] : [];
-  // A server whose sign-in ended says so first and leads with signing in again.
+  // Its secrets come first (Access, once its details are read), then its tools.
+  const access = Array.isArray(detail.access) ? accessBlock(name, detail.access, { remote: server.kind === "remote", need: server.missing }) : null;
+  // A server whose sign-in ended says so first and leads with signing in again. One that needs a
+  // token leads with Add access… until its Access block, which has that button, shows.
   if (server.needs === "sign-in") {
     warning = `${name} needs sign-in again.`;
-    actions.unshift(stepAction("Sign in", () => signInAgain(name)));
+    actions.unshift(stepAction("Sign in", () => signInAgain(name, { back: backToHeld(name) })));
   } else if (server.needs === "token") {
-    warning = `${name} needs a token, or its token is wrong.`;
-    actions.unshift(stepAction(ADD_ACCESS, () => addAccess(name, { remote: true })));
+    // A value its catalog entry requires is named; else the server turned down a call.
+    warning = server.missing ? `${name} needs ${server.missing.name}. Its catalog entry asks for it.` : `${name} needs a token, or its token is wrong.`;
+    if (!access) actions.unshift(stepAction(ADD_ACCESS, () => addAccess(name, { remote: server.kind === "remote", back: backToHeld(name), need: server.missing })));
   }
   const more = [...heldMore(server, picked, detail, some), ...heldActions(name, clients, server.plain_secrets)];
   const id = `${server.kind === "remote" ? "Remote" : "Local"} · in the Kitden gateway`;
-  // Its secrets come first (Access, once its details are read), then its tools.
-  const access = Array.isArray(detail.access) ? accessBlock(name, detail.access, { remote: server.kind === "remote" }) : null;
-  const shown = [access, heldList(name, detail, picked, folder)].filter(Boolean);
+  // What the server says it does, as the catalog shows it, before its Access and tools.
+  const about = detail.about ? el("p", "muted held-about", detail.about) : null;
+  const shown = [about, access, heldList(name, detail, picked, folder)].filter(Boolean);
   const parts = shown.length > 1 ? el("div", "held-parts") : shown[0] || null;
   if (shown.length > 1) parts.append(...shown);
   return { kind: KIND.server, title: name, id, facts, list: parts, actions, more, warning };
@@ -741,13 +745,18 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
 
 const ADD_ACCESS = "Add access…";
 
+// Back from an access form to the server's Details, read again (a change may wait in the tray).
+const backToHeld = (name) => () => showHeld(name, { step: "back", focus: [`action:${ADD_ACCESS}`] }).catch(reportError);
+
 // A held server's secrets (Access): each by name, with only its start and end ("Bearer
 // sk-a…1234"; the server never sends more), and where it is missing from the Keychain. A
 // sign-in says when its token ends and whether the gateway refreshes it. Its buttons (replace,
 // remove, sign in again, sign out) each go through the tray: preview, Apply, Undo. Add access…
-// ends it: a token, a header or a sign-in for a remote server, a variable for a local one.
-export function accessBlock(server, rows, { now = Date.now() / 1000, remote = true } = {}) {
+// ends it: a token, a header or a sign-in for a remote server, a variable for a local one; `need`,
+// a value its catalog entry requires, comes filled in.
+export function accessBlock(server, rows, { now = Date.now() / 1000, remote = true, need = null } = {}) {
   const section = el("section", "access");
+  const back = backToHeld(server);
   section.append(el("h2", "sw-head", "Access"));
   if (!rows.length) section.append(el("p", "muted", remote ? "No token or header. Kitden sends none." : "No secret variables. Kitden sets none."));
   for (const row of rows) {
@@ -759,15 +768,15 @@ export function accessBlock(server, rows, { now = Date.now() / 1000, remote = tr
     const acts = el("div", "access-acts");
     const change = (value) => addToTray({ action: "gateway.access", targets: [], params: { server, field: row.field, name: row.name, value } });
     if (row.field === "sign_in") {
-      acts.append(button("Sign in again", () => signInAgain(server)), button("Sign out", () => change(null)));
+      acts.append(button("Sign in again", () => signInAgain(server, { back })), button("Sign out", () => change(null)));
     } else {
-      acts.append(button("Replace…", () => replaceAccess(server, row)), button("Remove", () => change(null)));
+      acts.append(button("Replace…", () => replaceAccess(server, row, { back })), button("Remove", () => change(null)));
     }
     line.append(what, acts);
     section.append(line);
   }
   const add = el("div", "access-acts");
-  add.append(button(ADD_ACCESS, () => addAccess(server, { remote })));
+  add.append(button(ADD_ACCESS, () => addAccess(server, { remote, back, need })));
   section.append(add);
   return section;
 }

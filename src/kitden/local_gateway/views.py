@@ -27,6 +27,7 @@ from kitden.local_gateway.settings import (
     own_state,
     rule_parts,
     rule_step,
+    save_about,
     save_tools,
     state_in,
     strict_mode,
@@ -505,9 +506,11 @@ async def refresh_tools(home: Path, names: Iterable[str] | None = None) -> dict[
                 except proxy.UpstreamError as problem:
                     found[name] = str(problem)
                     continue
+                about = upstreams.about(name)
         except Exception:  # noqa: BLE001 - the server did not stop cleanly; the others go on
             found.setdefault(name, f"{name} did not list its tools.")
             continue
         save_tools(home, name, tools)
+        save_about(home, name, about)
         found[name] = None
     return found
