@@ -76,10 +76,10 @@ def client_order(client: str) -> int:
 
 
 def in_project(item: Item, project: str | None) -> Item:
-    """A user skill as this project's own settings leave it (see `Item.project_rules`)."""
+    """A user skill or hook as this project's own settings leave it (see `Item.project_rules`)."""
     for path, enabled, scope, state in item.project_rules:
         if path == project:
-            skill_state = None if state == "on" else state
+            skill_state = None if state == "on" or item.kind is not ItemKind.SKILL else state
             return replace(item, enabled=enabled, state_scope=scope, skill_state=skill_state)
     return item
 

@@ -411,3 +411,58 @@ def test_a_local_on_rule_clears_a_user_name_only_in_that_project(tmp_path, no_ve
         Scope.LOCAL,
     )
     assert _skill_in(home, None).skill_state == "name-only"
+
+
+# `disableAllHooks` (checked 2026-11-22, see claude_code.py): the value left after precedence,
+# local over project over user, turns the hooks of settings files off.
+HOOKS = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": []}]}}
+
+
+def _hooks(items):
+    return {
+        (str(i.scope), str(i.enabled), str(i.state_scope)) for i in items if i.kind is ItemKind.HOOK
+    }
+
+
+def _loaded_hooks(home, project):
+    view = effective_view(build_inventory(home), "claude_code", project)
+    return {str(i.scope) for i in view.items if i.kind is ItemKind.HOOK}
+
+
+def test_disable_all_hooks_in_user_settings_turns_the_hooks_off(tmp_path, no_version):
+    home, root = _home(tmp_path, user={**HOOKS, "disableAllHooks": True}, project=HOOKS)
+    assert _hooks(_scan(home, no_version)) == {("user", "off", "user"), ("project", "off", "user")}
+    assert _loaded_hooks(home, None) == set()
+    assert _loaded_hooks(home, str(root)) == set()
+
+
+def test_a_project_false_turns_hooks_back_on_in_that_project_only(tmp_path, no_version):
+    home, root = _home(
+        tmp_path,
+        user={**HOOKS, "disableAllHooks": True},
+        project={**HOOKS, "disableAllHooks": False},
+    )
+    items = _scan(home, no_version)
+    assert _hooks(items) == {("user", "off", "user"), ("project", "on", "project")}
+    (user_hook,) = [i for i in items if i.kind is ItemKind.HOOK and i.scope is Scope.USER]
+    assert user_hook.project_rules == ((str(root), Enabled.ON, Scope.PROJECT, "on"),)
+    assert _loaded_hooks(home, None) == set()
+    assert _loaded_hooks(home, str(root)) == {"user", "project"}
+
+
+def test_a_local_true_turns_hooks_off_in_that_project_only(tmp_path, no_version):
+    home, root = _home(
+        tmp_path,
+        user=HOOKS,
+        project={**HOOKS, "disableAllHooks": False},
+        local={"disableAllHooks": True},
+    )
+    assert _hooks(_scan(home, no_version)) == {("user", "on", "None"), ("project", "off", "local")}
+    assert _loaded_hooks(home, None) == {"user"}
+    assert _loaded_hooks(home, str(root)) == set()
+
+
+def test_without_disable_all_hooks_the_hooks_stay_on(tmp_path, no_version):
+    home, root = _home(tmp_path, user={**HOOKS, "disableAllHooks": "yes"}, project=HOOKS)
+    assert _hooks(_scan(home, no_version)) == {("user", "on", "None"), ("project", "on", "None")}
+    assert _loaded_hooks(home, str(root)) == {"user", "project"}
