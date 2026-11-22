@@ -18,7 +18,7 @@ The Gateway's groups work the same way.
 | --- | --- |
 | **Plugins and skills** | Use **+ Add**, or drag an item onto another client. Turn it on or off, choose its scope, or remove a copy in **Details**, where the client supports it. **Add missing plugins and skills…** fills gaps across clients. |
 | **Marketplaces** | Browse their plugins and skills. **+ Add → Add a marketplace…** adds a GitHub source. **Details → More → Commands…** has update and remove commands to copy. |
-| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. Kitden only reads these; edit them in your editor. |
+| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. A Claude Code hook that `disableAllHooks` turns off shows as off. Kitden only reads these; edit them in your editor. |
 
 The preview names the clients and projects affected. Adds on the map go to all projects;
 the List offers a project scope where supported. Start a new client session to load a change.
