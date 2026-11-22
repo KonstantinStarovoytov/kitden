@@ -457,7 +457,7 @@ def _chosen(rows, states, weights, budget, checked: bool, settled: bool) -> tupl
 def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool) -> dict:
     """What the last chat sent: characters per skill sent, and those of descriptions not sent.
     Only the log counts. `chosen` showed only a name by their setting (see `_chosen`): they are
-    told apart and are no misfit."""
+    told apart and are no misfit. The misfit names the other skills that showed only a name."""
     sent: dict[str, int] = {}
     over: dict[str, int] = {}
     names = 0
@@ -476,7 +476,8 @@ def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool) -> di
         short = words.CLAUDE_SHORT_NAMES.format(bad=bad, n=n)
         skills, them = _many(n, "skill", "skills"), _many(bad, "it", "them")
         say = words.CLAUDE_NAMES_ONLY.format(when=when, bad=bad, n=n, skills=skills, them=them)
-        misfit = {"kind": "name", "n": bad}
+        missed = [r.name for r in rows if r.sent is None and r.name not in chosen]
+        misfit = {"kind": "name", "n": bad, "names": missed}
     else:
         short = words.CLAUDE_SHORT_ALL.format(n=n)
         say = _many(n, words.CLAUDE_ONE_SENT, words.CLAUDE_ALL_SENT).format(when=when, n=n)
@@ -767,7 +768,8 @@ def _codex_fact(
     rows: list[_Row], names_only: bool, when: str, shown: dict[str, str], table: int
 ) -> dict:
     """What the last chat sent: tokens per line sent, and those of the parts not sent. `shown`:
-    each skill's path as the list shows it; `table`: tokens of the list's roots table."""
+    each skill's path as the list shows it; `table`: tokens of the list's roots table. The
+    misfit names the skills left out, or else those whose description was cut."""
     sent: dict[str, int] = {}
     over: dict[str, int] = {}
     for r in rows:
@@ -784,7 +786,6 @@ def _codex_fact(
     cuts = _codex_cuts(rows)
     # Full or cut only for skills whose full size is known; else only what the log shows.
     unknown = sum(r.sent is not None and r.full is None for r in rows)
-    misfit = {"kind": "out", "n": out} if out else {"kind": "cut", "n": len(cuts)} if cuts else None
     skills = _many(n, "skill", "skills")
     if out:
         short = words.CODEX_SHORT_OUT.format(out=out)
@@ -824,6 +825,11 @@ def _codex_fact(
         and r.full is not None
         and _codex_kind(len(r.sent), len(r.full)) == "cut"
     }
+    misfit = None
+    if out:
+        misfit = {"kind": "out", "n": out, "names": [r.name for r in rows if r.sent is None]}
+    elif cuts:
+        misfit = {"kind": "cut", "n": len(cuts), "names": list(kept)}
     result = {"short": short, "say": say, "sent": sent, "over": over, "used": used, "kept": kept}
     return result | {
         "size": used + sum(over.values()),
