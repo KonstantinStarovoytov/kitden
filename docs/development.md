@@ -97,7 +97,7 @@ from the test process fails. The guard cannot see an MCP server's own program, s
 starts none and refuses a move into the gateway.
 
 Flow 13 starts the new version's page in the same process; the real hand-over to a new
-process is left to the unit tests and the release check.
+process is left to the unit tests.
 
 Also: a preview writes nothing, Apply and Undo (`test_flows.py`), and the bar that asks
 for a new preview when the settings changed under one (`test_preview_drift.py`). Before its
