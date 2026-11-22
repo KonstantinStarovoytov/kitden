@@ -118,7 +118,7 @@ const flush = async () => { for (let i = 0; i < 6; i += 1) await new Promise((do
 
 const { countUp } = await import('../../src/kitden/web/static/js/motion.js');
 const overviewJs = await import('../../src/kitden/web/static/js/overview.js');
-const { footWords, ledeText, noteGroups, noteItemRow, noteSentence, renderOverview, setupPath, setupTree, targetSel } = overviewJs;
+const { FOLD_FROM, footWords, ledeText, noteGroups, noteItemRow, noteRows, noteSentence, renderOverview, rowSentence, setupPath, setupTree, targetSel } = overviewJs;
 const { data, loadOverview, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { applyTray, cancelTray, endApplied, keyFor, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
@@ -173,18 +173,26 @@ const lede = () => byClass(main, 'lede')[0];
 const setupBox = () => walk(main).find((n) => n.classList.contains('map')) || null;
 const block = (id) => walk(setupBox()).find((n) => n.dataset.focus === `block:${id}`) || null;
 
-test('the head says Your setup, connected. and the lede counts', () => {
+test('the head says Overview and the lede counts, naming the clients', () => {
   show();
-  assert.equal(main.children[0].textContent, 'Your setup, connected.');
+  assert.equal(main.children[0].textContent, 'Overview');
   // The first visit counts the numbers up from 0; the frames bring them to their values.
-  assert.equal(text(lede()), '0 things need your attention. Everything else looks fine: 0 clients, 0 projects.');
+  assert.equal(text(lede()), '0 things need your attention in Claude Code, Codex and Cursor.');
   settle();
-  assert.equal(text(lede()), '3 things need your attention. Everything else looks fine: 3 clients, 4 projects.');
+  assert.equal(text(lede()), '3 things need your attention in Claude Code, Codex and Cursor.');
   // A later draw shows them at once.
   show(MODEL, { again: true });
-  assert.equal(text(lede()), '3 things need your attention. Everything else looks fine: 3 clients, 4 projects.');
-  assert.equal(ledeText({ attention: 1, clients: 1, projects: 1 }), '1 thing needs your attention. Everything else looks fine: 1 client, 1 project.');
-  assert.equal(ledeText({ attention: 0, clients: 3, projects: 4 }), 'Everything looks fine: 3 clients, 4 projects.');
+  assert.equal(text(lede()), '3 things need your attention in Claude Code, Codex and Cursor.');
+  assert.equal(ledeText({ attention: 1 }, ['Claude Code']), '1 thing needs your attention in Claude Code.');
+  assert.equal(ledeText({ attention: 0 }, ['Claude Code', 'Codex', 'Cursor']), 'Nothing needs your attention in Claude Code, Codex and Cursor.');
+  assert.equal(ledeText({ attention: 5 }, ['Codex', 'Cursor']), '5 things need your attention in Codex and Cursor.');
+  // Only the clients found on this computer are named.
+  const some = structuredClone(MODEL);
+  some.map.clients[1].on = false;
+  show(some);
+  settle();
+  assert.equal(text(lede()), '3 things need your attention in Claude Code and Cursor.');
+  show(MODEL, { again: true });
   // The scope bar: All projects with the layers icon, or the project in the accent.
   const scope = byClass(main, 'scope-bar')[0];
   assert.equal(text(scope), 'All projects');
@@ -241,7 +249,7 @@ test('a group with no card hides its caption', async () => {
   assert.deepEqual(byClass(main, 'ov-group').filter((n) => !n.hidden).map((n) => text(n.children[0])), ['Can improve']);
   // The lede's start rolls from 3 things to none; then it says so.
   await new Promise((done) => setTimeout(done, 200));
-  assert.equal(text(lede()), 'Everything looks fine: 3 clients, 4 projects.');
+  assert.equal(text(lede()), 'Nothing needs your attention in Claude Code, Codex and Cursor.');
 });
 
 test('Move in… adds its row; the button says In preview while it waits', async () => {
@@ -376,8 +384,8 @@ test('a read that started before Apply was checked does not decide whether a car
 
 test('the lede rolls at 1 → 0 and 0 → 1 too', async () => {
   const at = (attention) => ({ ...MODEL, counts: { ...MODEL.counts, attention } });
-  const ONE = '1 thing needs your attention. Everything else looks fine: ';
-  const NONE = 'Everything looks fine: ';
+  const ONE = '1 thing needs your attention';
+  const NONE = 'Nothing needs your attention';
   show(at(1), { again: true });
   // 1 → 0: the sentence's start rolls down, as a smaller number does.
   show(at(0), { again: true });
@@ -541,6 +549,70 @@ test('notes are grouped by item, each with its clients', () => {
     ['b', ['codex'], 1],
   ]);
   assert.equal(groups[0].first.type, 'same_name_other_source');
+});
+
+// The same example as tests/unit/test_overview.py `test_note_count_folds_repeats`: five items that
+// load from another client (one row), three with an unreadable state (three rows), and "docs" with
+// two notes (one row). Five rows in all.
+const REPEATS = [
+  ...['a', 'b', 'c', 'd', 'e'].map((name) => ({ type: 'cross_loaded', names: [name], clients: ['codex'], items: ['i'], severity: 'info' })),
+  ...['u1', 'u2', 'u3'].map((name) => ({ type: 'unknown_state', names: [name], clients: ['cursor'], items: ['i'], severity: 'info' })),
+  { type: 'same_name_other_source', names: ['docs'], clients: ['codex'], items: ['i'], severity: 'info' },
+  { type: 'bypasses_gateway', names: ['docs'], clients: ['codex'], items: ['i'], severity: 'info' },
+];
+
+test('items with the same words fold into one row from four on', () => {
+  assert.equal(FOLD_FROM, 4);
+  const rows = noteRows(noteGroups(REPEATS));
+  assert.equal(rows.length, 5);
+  assert.deepEqual(rows.map(rowSentence), [
+    '5 items load from another client.',
+    'u1 has an on/off state Kitden cannot read.',
+    'u2 has an on/off state Kitden cannot read.',
+    'u3 has an on/off state Kitden cannot read.',
+    'docs has the same name as an entry from another source and is not connected to the gateway.',
+  ]);
+  // Exactly four fold; three stay single.
+  const four = (n) => noteRows(noteGroups(REPEATS.slice(0, n)));
+  assert.equal(four(4).length, 1);
+  assert.equal(four(3).length, 3);
+  // Every kind of note has its plural words.
+  const types = ['cross_loaded', 'same_in_other_clients', 'same_name_other_source', 'scope_override', 'unknown_state', 'bypasses_gateway'];
+  const many = types.map((type) => rowSentence(noteRows(noteGroups(['a', 'b', 'c', 'd'].map((name) => ({ type, names: [name], clients: [], items: ['i'], severity: 'info' }))))[0]));
+  assert.deepEqual(many, [
+    '4 items load from another client.',
+    '4 items are set up in more than one client.',
+    '4 items have the same name as an entry from another source.',
+    '4 items have one definition that replaces another.',
+    '4 items have an on/off state Kitden cannot read.',
+    '4 items are not connected to the gateway.',
+  ]);
+});
+
+test('a row of many items opens its list right under it', async () => {
+  queue('/api/findings', { status: 200, json: REPEATS });
+  show({ ...MODEL, notes: 5 }, { again: true });
+  const fold = byClass(main, 'ov-fold')[0];
+  assert.equal(text(fold), 'Show 5 notes (nothing to fix)');
+  fire(fold, 'click');
+  await flush();
+  const box = byClass(main, 'ov-notes')[0];
+  assert.equal(box.children.length, 5);
+  const row = byClass(box, 'ov-note-group')[0];
+  const items = byClass(box, 'ov-note-items')[0];
+  assert.equal(text(row), '5 items load from another client.');
+  assert.equal(row.getAttribute('aria-expanded'), 'false');
+  assert.equal(row.children[0].dataset.icon, 'chevron-right');
+  assert.equal(items.hidden, true);
+  assert.deepEqual(items.children.map(text), ['a loads from another client.', 'b loads from another client.', 'c loads from another client.', 'd loads from another client.', 'e loads from another client.']);
+  fire(row, 'click');
+  assert.equal(row.getAttribute('aria-expanded'), 'true');
+  assert.equal(items.hidden, false);
+  fire(row, 'click');
+  assert.equal(row.getAttribute('aria-expanded'), 'false');
+  assert.equal(items.hidden, true);
+  fire(fold, 'click');
+  await flush();
 });
 
 test('with no client found the Overview says so', () => {

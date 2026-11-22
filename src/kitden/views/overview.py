@@ -5,6 +5,7 @@ a change for the tray (`body`) or a page to open (`go`). Cards never show file p
 in the side panel.
 """
 
+from collections import Counter
 from pathlib import Path
 
 from kitden.changes.actions import (
@@ -341,9 +342,23 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
     }
 
 
+# Items with exactly the same words fold into one row from this many on (overview.js, FOLD_FROM,
+# has the same number).
+FOLD_FROM = 4
+
+
 def note_count(findings: list[Finding]) -> int:
-    """The notes the page shows: one row per name, however many notes it has."""
-    return len({name for f in findings for name in f.names})
+    """The rows the folded notes draw. An item is one name; the words of its notes are its
+    distinct note types, in the order they come. Items with the same words (FOLD_FROM or more of
+    them) are one row; every other item has a row of its own (overview.js `noteRows`)."""
+    words: dict[str, list[str]] = {}
+    for finding in findings:
+        for name in dict.fromkeys(finding.names):
+            seen = words.setdefault(name, [])
+            if str(finding.type) not in seen:
+                seen.append(str(finding.type))
+    same = Counter(tuple(w) for w in words.values())
+    return sum(1 if n >= FOLD_FROM else n for n in same.values())
 
 
 def overview(

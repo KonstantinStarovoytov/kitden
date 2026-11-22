@@ -1,4 +1,4 @@
-// Overview, "Your setup, connected.": what needs attention and what can improve, one card each
+// Overview: what needs attention and what can improve, one card each
 // with one action, the notes folded under them, and the "Your setup" map beside them. A card's
 // button only adds a row to the tray. The card leaves once that change is applied and checked
 // and the page has read the result; an Undo brings it back.
@@ -15,7 +15,7 @@ import { banner, folderName, mark, setHint, skeleton, staleNote, versionWords } 
 import { current, currentError, data, go, goTo, libraryChoice, loadMap, parseSel, projectPath, retry, state } from "./store.js";
 import { keyFor, onTray } from "./tray.js";
 
-const TITLE = "Your setup, connected.";
+const TITLE = "Overview";
 const HINT = "Hover a card to see it on the map · a button adds a preview · click Kitden gateway or Library to open it";
 const GROUPS = [
   { id: "attention", words: "Needs attention", icon: "triangle-alert", look: "btn primary" },
@@ -30,11 +30,12 @@ const GROUPS = [
 // - `gone`: the cards that left, so the draw that brings one back (an Undo) shows it coming;
 // - `need`: the attention count the lede showed; `counted`: the lede counted up once;
 // - `drew`: the last draw had the page's data;
-// - `notesOpen`, and `notes`, the notes read last ({ project, groups });
+// - `notesOpen`, `notes`, the notes read last ({ project, groups }), and `openRows`, the folded
+//   rows of many items that are open, by their words;
 // - `setup`: the "Your setup" map ({ view, model }).
 const page = {
   shown: new Map(), applied: new Map(), leaving: new Map(), gone: new Set(), need: null, counted: false, drew: false,
-  notesOpen: false, notes: null, setup: null,
+  notesOpen: false, notes: null, openRows: new Set(), setup: null,
 };
 
 export function renderOverview(main, { again = false } = {}) {
@@ -59,7 +60,7 @@ export function renderOverview(main, { again = false } = {}) {
   let lede = null;
   if (none) head.textContent = "No clients found";
   else {
-    lede = ledeNode(model.counts, { count: !page.counted, from: again ? page.need : null });
+    lede = ledeNode(model.counts, foundNames(model.map), { count: !page.counted, from: again ? page.need : null });
     page.counted = true;
     page.need = model.counts.attention;
     main.append(lede);
@@ -101,28 +102,32 @@ export function renderOverview(main, { again = false } = {}) {
   }
 }
 
-// The lede's words, with each number as { num, value }: "3 things need your attention. Everything
-// else looks fine: 3 clients, 4 projects.", or "Everything looks fine: …" with nothing to fix.
-function ledeParts({ attention, clients, projects }) {
-  const rest = [{ num: "clients", value: clients }, ` ${clients === 1 ? "client" : "clients"}, `, { num: "projects", value: projects }, ` ${projects === 1 ? "project" : "projects"}.`];
-  if (!attention) return ["Everything looks fine: ", ...rest];
-  return [{ num: "need", value: attention }, ` ${attention === 1 ? "thing needs" : "things need"} your attention. Everything else looks fine: `, ...rest];
+// The lede's words, with the number as { num, value }: "3 things need your attention in Claude
+// Code, Codex and Cursor.", or "Nothing needs your attention in Codex." at 0. The last part is always
+// the clients' names; what comes before it is the sentence's start.
+function ledeParts({ attention }, names) {
+  const where = names.length ? ` in ${joinWords(names)}.` : ".";
+  if (!attention) return ["Nothing needs your attention", where];
+  return [{ num: "need", value: attention }, ` ${attention === 1 ? "thing needs" : "things need"} your attention`, where];
 }
 
 const textOf = (parts) => parts.map((part) => (typeof part === "string" ? part : String(part.value))).join("");
-export const ledeText = (counts) => textOf(ledeParts(counts));
+export const ledeText = (counts, names) => textOf(ledeParts(counts, names));
 
-// The lede. Its numbers count up on the first visit (700 ms OUT3, 200 / 260 / 320 ms late); on a
-// later draw the attention count rolls from the one shown before (`from`), if it changed. To or
-// from 0 the sentence's start changes, so the start rolls as one (`rollHead`).
-const COUNT_DELAYS = { need: 200, clients: 260, projects: 320 };
-function ledeNode(counts, { count, from }) {
+// The names of the clients found on this computer, in the map's order.
+const foundNames = (map) => map.clients.filter((c) => c.on).map((c) => c.name);
+
+// The lede. Its number counts up on the first visit (700 ms OUT3, 200 ms late); on a later draw
+// it rolls from the one shown before (`from`), if it changed. To or from 0 the sentence's start
+// changes, so the start rolls as one (`rollHead`).
+const COUNT_DELAYS = { need: 200 };
+function ledeNode(counts, names, { count, from }) {
   const lede = el("p", "lede ov-lede");
-  let parts = ledeParts(counts);
+  let parts = ledeParts(counts, names);
   if (!count && typeof from === "number" && !from !== !counts.attention) {
-    const cut = (all) => all.slice(0, all.findIndex((part) => part.num === "clients"));
+    const cut = (all) => all.slice(0, -1);
     const head = cut(parts);
-    lede.append(rollHead(textOf(cut(ledeParts({ ...counts, attention: from }))), textOf(head), counts.attention > from));
+    lede.append(rollHead(textOf(cut(ledeParts({ ...counts, attention: from }, names))), textOf(head), counts.attention > from));
     parts = parts.slice(head.length);
   }
   for (const part of parts) {
@@ -331,16 +336,21 @@ function comeBack(node) {
 
 // The notes ---------------------------------------------------------------------------------
 
-// A note as part of a sentence: "<name> <words>."; the full explanation, with its paths, is in
-// the item's panel.
+// A note as part of a sentence: "<name> <one>." for one item, "<n> items <many>." for a row that
+// stands for several. The full explanation, with its paths, is in the item's panel.
 const NOTE_WORDS = {
-  cross_loaded: "loads from another client",
-  same_in_other_clients: "is set up in more than one client",
-  same_name_other_source: "has the same name as an entry from another source",
-  scope_override: "has one definition that replaces another",
-  unknown_state: "has an on/off state Kitden cannot read",
-  bypasses_gateway: "is not connected to the gateway",
+  cross_loaded: { one: "loads from another client", many: "load from another client" },
+  same_in_other_clients: { one: "is set up in more than one client", many: "are set up in more than one client" },
+  same_name_other_source: { one: "has the same name as an entry from another source", many: "have the same name as an entry from another source" },
+  scope_override: { one: "has one definition that replaces another", many: "have one definition that replaces another" },
+  unknown_state: { one: "has an on/off state Kitden cannot read", many: "have an on/off state Kitden cannot read" },
+  bypasses_gateway: { one: "is not connected to the gateway", many: "are not connected to the gateway" },
 };
+const noteWords = (type) => NOTE_WORDS[type] || { one: `has a note: ${type.replaceAll("_", " ")}`, many: `have a note: ${type.replaceAll("_", " ")}` };
+
+// Items with exactly the same words fold into one row from this many on (views/overview.py,
+// FOLD_FROM, has the same number).
+export const FOLD_FROM = 4;
 
 const notesWords = (count, open) => (open ? `Hide ${plural(count, "note", "notes")}` : `Show ${plural(count, "note", "notes")} (nothing to fix)`);
 
@@ -391,7 +401,7 @@ function fillNotes(list, lift) {
   const project = projectPath();
   const had = page.notes && page.notes.project === project ? page.notes.groups : null;
   const draw = (groups, delay) => {
-    list.replaceChildren(...groups.map(noteNode));
+    list.replaceChildren(...noteRows(groups).map(rowNode));
     if (lift) rise([...list.children], { delay, step: 40 });
   };
   if (had) draw(had, 280);
@@ -400,7 +410,7 @@ function fillNotes(list, lift) {
     const groups = noteGroups(findings.filter((x) => x.severity === "info"));
     page.notes = { project, groups };
     if (had && JSON.stringify(had.map(noteSentence)) === JSON.stringify(groups.map(noteSentence))) return;
-    list.replaceChildren(...groups.map(noteNode));
+    list.replaceChildren(...noteRows(groups).map(rowNode));
     if (lift && !had) rise([...list.children], { step: 40 });
   }).catch(() => {
     if (!had) list.replaceChildren(el("p", "muted", "Could not load the notes."));
@@ -413,7 +423,7 @@ function fillNotes(list, lift) {
 export function noteGroups(findings) {
   const groups = new Map();
   for (const finding of findings) {
-    const words = NOTE_WORDS[finding.type] || `has a note: ${finding.type.replaceAll("_", " ")}`;
+    const words = noteWords(finding.type);
     for (const name of new Set(finding.names)) {
       if (!groups.has(name)) groups.set(name, { name, clients: [], notes: [], first: finding });
       const group = groups.get(name);
@@ -426,7 +436,65 @@ export function noteGroups(findings) {
 
 // "docs has the same name as an entry from another source and is not connected to the gateway."
 export function noteSentence(group) {
-  return `${group.name} ${joinWords(group.notes)}.`;
+  return `${group.name} ${joinWords(group.notes.map((words) => words.one))}.`;
+}
+
+// The rows of the fold: items with exactly the same words (FOLD_FROM or more of them) are one
+// row, { many: [groups], words }; each other item is a row of its own, { one: group }. A row
+// stands where its first item stood.
+export function noteRows(groups) {
+  const same = new Map();
+  for (const group of groups) {
+    const key = sameWords(group);
+    if (!same.has(key)) same.set(key, []);
+    same.get(key).push(group);
+  }
+  const rows = [];
+  const done = new Set();
+  for (const group of groups) {
+    const key = sameWords(group);
+    const mine = same.get(key);
+    if (mine.length < FOLD_FROM) rows.push({ one: group });
+    else if (!done.has(key)) {
+      done.add(key);
+      rows.push({ many: mine, words: joinWords(group.notes.map((words) => words.many)) });
+    }
+  }
+  return rows;
+}
+const sameWords = (group) => group.notes.map((words) => words.one).join("|");
+
+// "46 items load from another client."
+export const rowSentence = (row) => (row.many ? `${row.many.length} items ${row.words}.` : noteSentence(row.one));
+
+// A row of one item is a note; a row of many is a fold with its items under it.
+function rowNode(row) {
+  return row.many ? foldNode(row) : noteNode(row.one);
+}
+
+// A row of many: a press opens and closes the list of its items right under it. The open
+// rows are kept by their words across draws.
+function foldNode(row) {
+  const box = el("div", "ov-note-fold");
+  const toggle = el("button", "ov-note ov-note-group");
+  toggle.type = "button";
+  const key = rowSentence(row);
+  const open = page.openRows.has(key);
+  toggle.setAttribute("aria-expanded", String(open));
+  toggle.append(icon("chevron-right", 13), el("span", null, key));
+  const list = el("div", "ov-note-items");
+  list.hidden = !open;
+  list.append(...row.many.map(noteNode));
+  toggle.addEventListener("click", () => {
+    const now = list.hidden;
+    if (now) page.openRows.add(key);
+    else page.openRows.delete(key);
+    list.hidden = !now;
+    toggle.setAttribute("aria-expanded", String(now));
+    if (now) rise([...list.children], { step: 40 });
+  });
+  box.append(toggle, list);
+  return box;
 }
 
 // A note is one sentence with the info icon; a press opens its item.
