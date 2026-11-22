@@ -418,7 +418,8 @@ SHOW = ("setup", "findings", "item", "projects", "context")
 
 def _show_answer(args: argparse.Namespace) -> int:
     """Print one read-only answer as JSON: what the MCP server's tools give, for a skill or a
-    script that has no MCP server. Nothing waits for a client's own commands."""
+    script that has no MCP server. The first run waits up to 15 s for `codex plugin list` and
+    says so on stderr; Kitden keeps the answer, so a repeat run does not wait."""
     from kitden.views import answers
 
     home = _home(args) or Path.home()

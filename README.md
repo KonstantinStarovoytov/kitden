@@ -9,8 +9,8 @@
 uvx --python 3.13 kitden scan
 ```
 
-Needs [uv](https://docs.astral.sh/uv/getting-started/installation/). The scan only reads your
-settings and changes nothing.
+Needs [uv](https://docs.astral.sh/uv/getting-started/installation/). The scan reads your
+agents' settings and changes none of them.
 
 <p align="center">One local page for their MCP servers, plugins, skills and instruction files.<br>
 It changes nothing until you press Apply, and every change can be undone.</p>
@@ -74,7 +74,7 @@ refused, not just hidden. A token or sign-in is given once and checked before Ap
   servers you add, and a check for a newer Kitden, at most once a day.
 - **Secrets live in the macOS Keychain or your Linux keyring only.** The page shows no more
   than their first and last characters.
-- **Kitden's agent tools only read.** Asking an agent to show your setup changes nothing.
+- **Kitden's agent tools only read.** Asking an agent to show your setup changes none of your settings.
 - **Leaving is easy.** Plugins and skills you add live in each agent's own settings, and a server
   in the gateway moves back out. [How to stop using Kitden](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md#stop-using-kitden).
 

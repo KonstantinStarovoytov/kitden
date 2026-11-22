@@ -6,7 +6,7 @@ description: Use when the user is about to add or install an MCP server, plugin 
 Before something new is added, look whether this computer already has it. The same server or
 skill added twice loads twice.
 
-1. Run `kitden show item NAME` in the project's folder. It only reads and prints JSON: every
+1. Run `kitden show item NAME` in the project's folder. It changes no settings and prints JSON: every
    place the name is set, for each client, at the user level and in this project. If `kitden` is not found or the command fails as unknown, follow the kitden `install` skill.
 2. Read each definition's `client`, `scope`, `enabled`, `loads` and `why`. Tell the user where
    the item already is and whether it loads here.

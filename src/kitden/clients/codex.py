@@ -7,13 +7,16 @@ comments). Spike S4: the running app keeps outside edits.
 import json
 import os
 import subprocess  # runs the codex command without a shell
+import sys
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from kitden.changes import toml_edit
+from kitden.changes.atomic import RefusedWriteError, write_atomic
 from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
 from kitden.clients.base import (
     PLUGIN_REMOVE,
@@ -39,6 +42,7 @@ from kitden.clients.base import (
     visible_folders,
 )
 from kitden.clients.versions import version_command
+from kitden.gateways import data_dir, private_data_dir
 from kitden.local_gateway.settings import as_dict
 from kitden.model import (
     Client,
@@ -62,12 +66,46 @@ REMOTE_HINT = "On/off is stored in your ChatGPT account. Change it in Codex: Plu
 BUILT_IN_FOLDERS = (".codex/.tmp", ".cache/codex-runtimes")
 LIST_TIMEOUT_SECONDS = 15
 # `codex plugin list --json` results, reused until config.toml changes (the app rewrites it on
-# every plugin toggle, spike S4).
-_LIST_CACHE: dict[tuple, dict] = {}
+# every plugin toggle, spike S4). The same answer is kept in a file in Kitden's data folder, so
+# the next `kitden scan` does not wait for Codex again.
+PLUGIN_LIST_FILE = "codex-plugins.json"
+# A remote plugin's on/off is stored in the ChatGPT account (REMOTE_HINT), so a change made in
+# Codex on another computer does not touch this config.toml. A stored answer is therefore used
+# for an hour only: long enough for scans one after another, short enough to stay accurate.
+PLUGIN_LIST_MAX_AGE_SECONDS = 3600
+_LIST_CACHE: dict[tuple, tuple[float, dict]] = {}  # key -> (when it was asked, answer)
 # Lists being asked for in the background, so a second quick scan does not ask again.
 _FILLING: set[tuple] = set()
 _FILL_LOCK = threading.Lock()
 REMOTE_INSTALL_RECORD = ".codex-remote-plugin-install.json"
+
+
+def _recent(asked_at: float) -> bool:
+    """False when an answer is older than an hour or from the future (the clock was set back)."""
+    return 0 <= time.time() - asked_at <= PLUGIN_LIST_MAX_AGE_SECONDS
+
+
+def _is_plugin_state(entry: Any) -> bool:
+    return (
+        isinstance(entry, dict)
+        and isinstance(entry.get("pluginId"), str)
+        and isinstance(entry.get("enabled"), bool)
+    )
+
+
+def _plugin_states_only(listing: Any) -> dict | None:
+    """`{"installed": [{"pluginId", "enabled"}]}`: the part of `codex plugin list --json` that
+    Kitden reads. None when the answer has no `installed` list."""
+    installed = as_dict(listing).get("installed")
+    if not isinstance(installed, list):
+        return None
+    return {
+        "installed": [
+            {"pluginId": p["pluginId"], "enabled": bool(p.get("enabled"))}
+            for p in installed
+            if isinstance(p, dict) and isinstance(p.get("pluginId"), str)
+        ]
+    }
 
 
 def _on(value: Any) -> Enabled:
@@ -129,13 +167,52 @@ class CodexAdapter(ClientAdapter):
         if command is None:
             return {}
         key = self._list_key()
-        if key in _LIST_CACHE:
-            return _LIST_CACHE[key]
+        remembered = _LIST_CACHE.get(key)
+        if remembered is not None and _recent(remembered[0]):
+            return remembered[1]
+        if (kept := self._read_kept(key)) is not None:
+            _LIST_CACHE[key] = kept
+            return kept[1]
         if self.quick:
             self.skipped = True
             self._ask_later(command, key)
             return {}
+        print(
+            f"Asking Codex which plugins are on (up to {LIST_TIMEOUT_SECONDS} s)…",
+            file=sys.stderr,
+            flush=True,
+        )
         return self._ask(command, key)
+
+    def _read_kept(self, key: tuple) -> tuple[float, dict] | None:
+        """The stored answer and when it was asked, if it was made for this config.toml and is
+        recent; None otherwise."""
+        try:
+            data = json.loads((data_dir(self.home) / PLUGIN_LIST_FILE).read_text())
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict) or data.get("key") != list(key):
+            return None
+        asked_at = data.get("asked_at")
+        if not isinstance(asked_at, int | float) or isinstance(asked_at, bool):
+            return None
+        if not _recent(asked_at):
+            return None  # too old, or written in the future: ask Codex again
+        plugins = data.get("installed")
+        if not isinstance(plugins, list) or not all(_is_plugin_state(p) for p in plugins):
+            return None
+        return asked_at, {"installed": plugins}
+
+    def _keep(self, key: tuple, asked_at: float, listing: dict) -> None:
+        """Store an answer. Only the plugin ids and whether each is on: that is all Kitden reads,
+        and Codex's own output may hold more."""
+        data = {"key": list(key), "asked_at": asked_at, "installed": listing["installed"]}
+        try:
+            folder = private_data_dir(self.home)
+            written = write_atomic(folder / PLUGIN_LIST_FILE, json.dumps(data, indent=2).encode())
+            written.chmod(0o600)
+        except (OSError, RefusedWriteError):
+            pass  # a repeat run asks Codex again; the scan itself is fine
 
     def _ask(self, command: list[str], key: tuple) -> dict:
         env = {**os.environ, "HOME": str(self.home), "CODEX_HOME": str(self.codex_home)}
@@ -147,8 +224,12 @@ class CodexAdapter(ClientAdapter):
             timeout=LIST_TIMEOUT_SECONDS,
             check=False,
         )
-        _LIST_CACHE[key] = json.loads(done.stdout) if done.returncode == 0 else {}
-        return _LIST_CACHE[key]
+        listing = _plugin_states_only(json.loads(done.stdout)) if done.returncode == 0 else None
+        asked_at = time.time()
+        _LIST_CACHE[key] = (asked_at, listing or {})
+        if listing is not None:  # a failed or timed out call (it raises above) is never stored
+            self._keep(key, asked_at, listing)
+        return _LIST_CACHE[key][1]
 
     def _ask_later(self, command: list[str], key: tuple) -> None:
         """Ask for the list in a thread, once per config.toml; then call `on_slow_answer`."""
@@ -161,7 +242,10 @@ class CodexAdapter(ClientAdapter):
             try:
                 self._ask(command, key)
             except (OSError, ValueError, subprocess.SubprocessError):
-                _LIST_CACHE[key] = {}  # no answer: the plugins stay "Unknown", no retry loop
+                _LIST_CACHE[key] = (
+                    time.time(),
+                    {},
+                )  # no answer: the plugins stay "Unknown", no retry loop
             finally:
                 with _FILL_LOCK:
                     _FILLING.discard(key)

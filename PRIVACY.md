@@ -26,6 +26,11 @@ nothing from it.
 - The versions Kitden finds for each client are kept in one small file, `versions.json`, in
   Kitden's own data folder. The page and `kitden scan` write it. `kitden scan` changes no
   client settings.
+- The answer of `codex plugin list` is kept in `codex-plugins.json` in the same folder, so a
+  repeat `kitden scan` does not wait for Codex. It holds only each plugin's id and whether it is
+  on, and it is used again only for one hour and only while Codex's `config.toml` is unchanged (a plugin
+  switched in Codex on another computer does not change that file). Kitden writes it when the
+  page, `kitden scan` or `kitden show` asks Codex, and only when Codex answered.
 
 ## When Kitden goes online
 
@@ -44,7 +49,7 @@ agent and the company behind it see it, under their own privacy terms. Secret va
 tokens in a server's settings, are replaced with `[secret]` first. The one exception is
 `kitden show context`: it prints each skill's description as written in its `SKILL.md`, and
 Kitden does not replace anything in it. Keep secrets out of a skill's description. `kitden show`
-changes nothing and does not go online.
+changes no client settings and does not go online.
 
 ## Questions
 
