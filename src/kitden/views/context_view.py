@@ -217,6 +217,9 @@ def _skill(
     return {
         "name": name,
         "shown": name.split(":")[-1],
+        # The plugin part of "venture:review" (None for a skill with no plugin), as the client and
+        # `kitden scan` write it.
+        "plugin": name.rpartition(":")[0] or None,
         "item": item.id if item else None,
         "project": Project(project, True).id if project else None,
         "source": _source(item, built_in),
@@ -717,7 +720,8 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
         **parts,
         # Grey: Kitden cannot judge that chat (the limit may have dropped a skill set now).
         lamp="warn" if misfit else "none" if now else "ok",
-        message=None if checked else words.TWO_LIMITS if two_limits else words.NO_CHECK,
+        # An estimate that cannot be checked is explained under "How this is counted".
+        message=words.TWO_LIMITS if two_limits and not checked else None,
         fact={
             "date": date,
             "surface": found.surface,
@@ -1085,7 +1089,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
         client,
         lede=words.CONTEXT_LEDE + lede,
         lamp="warn" if bad else "none" if unknown else "ok",
-        message=None if checked else words.NO_CHECK,
+        message=None,
         fact={
             "date": date,
             "surface": None,

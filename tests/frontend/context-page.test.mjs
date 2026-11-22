@@ -119,7 +119,7 @@ const { syncTray } = await import('../../src/kitden/web/static/js/details.js');
 
 const STATIC = new URL('../../src/kitden/web/static/', import.meta.url);
 const LEDE = 'Every chat starts with a list of your skills. The agent reads it to choose the right skill.';
-const NO_CHECK = 'Kitden cannot check its estimate against your last chat, so it shows none.';
+const NO_CHECK = 'Two limits give the list of your last chat, so Kitden shows no estimate.';
 
 // A window card as the server gives it (views/context_view.py).
 function window(title, models, tag, short, say, { budget = 30000, misfit = null, room = null } = {}) {
@@ -462,6 +462,29 @@ test('the two sides list the pills by side, and hovering one lights its piece an
   // One lit at a time.
   await fire(pieceOf('alpha'), 'mouseenter');
   assert.deepEqual(pills().filter((p) => p.classList.contains('hot')).map((p) => p.dataset.skill), ['alpha']);
+});
+
+test('the sides say what a pill number is, and a plugin skill shows its plugin first', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const plugged = skill('venture:review', 464, 0, { shown: 'review', plugin: 'venture' });
+  show(answer({ ...TIGHT, skills: [skill('alpha', 3990, 0), plugged, skill('gamma', 0, 1)] }, CODEX, CURSOR));
+  const note = byClass(main, 'ctx-pillnote')[0];
+  assert.equal(text(note), 'The number beside a skill is the length of its description, in characters.');
+  // The line sits right above the two panels.
+  assert.equal(note.parentNode.children.indexOf(note) + 1, note.parentNode.children.indexOf(byClass(main, 'ctx-sides')[0]));
+  // The plugin is its own quiet part before the name; both are in the pill's words and its hover text.
+  const pill = pillOf('venture:review');
+  assert.equal(text(pill), 'venture:review464');
+  assert.deepEqual(pill.children.slice(0, 2).map((n) => [n.className, n.textContent]), [['ctx-plug', 'venture:'], ['', 'review']]);
+  assert.equal(pill.getAttribute('title'), 'venture:review');
+  // A skill with no plugin is unchanged.
+  assert.equal(text(pillOf('alpha')), 'alpha3,990');
+  assert.equal(pillOf('alpha').getAttribute('title'), null);
+  assert.equal(byClass(pillOf('alpha'), 'ctx-plug').length, 0);
+  // No pill with a number: no line.
+  show(answer({ ...TIGHT, skills: [skill('gamma', 0, 1)] }, CODEX, CURSOR));
+  assert.equal(byClass(main, 'ctx-pillnote').length, 0);
 });
 
 test('a skill on the first side warms with its size against the largest there, pill and piece alike', async () => {

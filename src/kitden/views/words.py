@@ -185,7 +185,6 @@ CANNOT_READ_LOG = (
 THIS_VERSION = "this version of {client}"
 NOTHING_TO_FIT = "There is nothing to fit."
 CURSOR_CANNOT_SEE = "Kitden cannot see what Cursor sends, so it cannot tell if your skills fit."
-NO_CHECK = "Kitden cannot check its estimate against your last chat, so it shows none."
 TWO_LIMITS = "Two limits give the list of your last chat, so Kitden shows no estimate."
 # After the model's name, when the window comes from the list and not from the model.
 WORKED_OUT = "worked out from the list"
@@ -333,9 +332,9 @@ HOW_CLAUDE_CHECK = (
     "chat."
 )
 HOW_CLAUDE_CHECKED = "On Nov 7 the rule also matched two test chats with a smaller limit."
-HOW_NOT_MATCHED = "This time it does not."
+HOW_NOT_MATCHED = "This time it does not, so Kitden shows no estimate."
 # The rule could not run: no limit known, or a size not known.
-HOW_NOT_RUN = "This time Kitden could not run the check."
+HOW_NOT_RUN = "This time Kitden could not run the check, so it shows no estimate."
 HOW_TWO_LIMITS = "This time two limits give it, so the check cannot pick one."
 HOW_CLAUDE_WINDOW = (
     "The chat log does not say the window. Only a {size} window gives this list, so Kitden "
