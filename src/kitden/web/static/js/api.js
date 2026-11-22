@@ -13,6 +13,12 @@ export async function getJson(url) {
   return response.json();
 }
 
+// Why a change could not be prepared when the page gave no words: no answer at all (status 0:
+// the page stopped) or a failed one. Plain words, no status code.
+export function notPrepared(status) {
+  return status === 0 ? "Kitden is not running. Start it with kitden open, then try again." : "Could not prepare this change. Try again.";
+}
+
 export async function postJson(url, body) {
   const response = await fetch(url, {
     method: "POST",

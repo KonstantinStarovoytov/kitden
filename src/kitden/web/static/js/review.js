@@ -1,6 +1,6 @@
 // Change review: a change in Details as it was previewed (a row of the tray, or Add missing's
 // list before its row is added), what the page does after Apply all, and Undo.
-import { postJson } from "./api.js";
+import { notPrepared, postJson } from "./api.js";
 import { backToDetails, clientName, KIND_WORDS } from "./details.js";
 import { $, $$, button, el, joinWords, plural, reportError, secretsWord, shortPath, shortPaths } from "./dom.js";
 import { loadLibrary, morphOnNextRender } from "./library.js";
@@ -308,7 +308,7 @@ async function chooseMissing(previewBody, note) {
   // Another project was picked while it was prepared: it opens nothing.
   if (state.project !== asked) return;
   if (!canShowReview(result)) {
-    const reason = baseNames((result.data && result.data.detail) || `Could not prepare this change (${result.status}).`);
+    const reason = baseNames((result.data && result.data.detail) || notPrepared(result.status));
     // "Nothing is missing." is an answer, not a failure: it says so plainly, with only Close,
     // also when it was asked from open Details.
     const nothing = reason.startsWith(NOTHING_MISSING);
