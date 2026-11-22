@@ -92,9 +92,12 @@ def projects_answer(inventory: Inventory) -> dict[str, Any]:
     return {"projects": [_project_dict(p) for p in inventory.projects]}
 
 
-def context_answer(inventory: Inventory, home: Path, folder: str) -> dict[str, Any]:
-    """The Context page's cards: whether each client's skill list fit, in written sentences."""
+def context_answer(
+    inventory: Inventory, home: Path, folder: str, anywhere: bool = False
+) -> dict[str, Any]:
+    """The Context page's cards: whether each client's skill list fit, in written sentences.
+    With `anywhere`, a client with no chat in this project shows its last chat elsewhere."""
     project, path = _where(inventory, folder)
     codex_home = Path(os.environ.get("CODEX_HOME") or home / ".codex")
-    clients = context_view(inventory, home, codex_home, path, {})["clients"]
+    clients = context_view(inventory, home, codex_home, path, {}, anywhere)["clients"]
     return {"project": _project_dict(project), "clients": clients}

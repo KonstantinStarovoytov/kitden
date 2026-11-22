@@ -18,6 +18,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **The scan names the skills that did not fit:** `kitden scan` lists the skills your last chat
   sent by name only or cut, names the warnings, counts the notes and ends with `kitden open`
   (#156).
+- **The scan finds your last chat from any folder:** run in a folder with no chat, such as
+  the home folder of a new terminal, `kitden scan` reads your last chat in another folder and
+  names it. A chat whose folder changed while it ran now counts for each folder it was in
+  (#PR).
 - **Secrets in a server's arguments go to the Keychain:** a value like `--api-key=…` or
   `NAME_API_KEY=…` in a moved server's command no longer stays in `gateway.json` as plain text;
   a server moved in earlier gets **Move secrets to the Keychain…** (#157).

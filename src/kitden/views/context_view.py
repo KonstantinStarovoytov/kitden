@@ -78,17 +78,23 @@ class _Row:
 
 
 def context_view(
-    inventory, home: Path, codex_home: Path, folder: str | None, draft: dict[str, dict[str, str]]
+    inventory,
+    home: Path,
+    codex_home: Path,
+    folder: str | None,
+    draft: dict[str, dict[str, str]],
+    anywhere: bool = False,
 ) -> dict:
     """One card per found client. `folder` is the picked project (None: all projects); `draft`
-    maps client -> skill name -> state, the tray's changes not applied yet."""
+    maps client -> skill name -> state, the tray's changes not applied yet. With `anywhere`, a
+    client with no chat in `folder` shows its last chat in any folder; the card's fact names it."""
     clients = []
     for client in found_columns(inventory):
         changes = as_dict(draft.get(client))
         if client == "claude_code":
-            clients.append(_claude(inventory, home, folder, changes))
+            clients.append(_claude(inventory, home, folder, changes, anywhere))
         elif client == "codex":
-            clients.append(_codex(inventory, codex_home, folder, changes))
+            clients.append(_codex(inventory, codex_home, folder, changes, anywhere))
         else:
             clients.append(_cursor(inventory, folder))
     return {"clients": clients}
@@ -556,9 +562,11 @@ def _model_name(model: str | None) -> str | None:
     return model
 
 
-def _claude(inventory, home: Path, folder: str | None, draft: dict) -> dict:
+def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bool) -> dict:
     client = "claude_code"
     found = last_claude_list(home, folder)
+    if found is None and anywhere and folder is not None:
+        found = last_claude_list(home, None)
     if found is None or isinstance(found, Unreadable):
         return _no_list(client, _skills(inventory, client, folder), found)
     if not found.skills:
@@ -886,9 +894,11 @@ def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str
     return result | {"used": fit.used, "size": fit.size, "room": None, "misfit": misfit}
 
 
-def _codex(inventory, codex_home: Path, folder: str | None, draft: dict) -> dict:
+def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywhere: bool) -> dict:
     client = "codex"
     found = last_codex_list(codex_home, folder)
+    if found is None and anywhere and folder is not None:
+        found = last_codex_list(codex_home, None)
     if found is None or isinstance(found, Unreadable):
         return _no_list(client, _skills(inventory, client, folder), found)
     sent_list = found.list

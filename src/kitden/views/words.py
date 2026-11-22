@@ -371,6 +371,8 @@ HOW_NO_SKILLS = "Kitden looks in the same folders and plugins as {client}."
 # `kitden scan`, after the clients: the skills the last chat cut, the findings, and where to go
 # next. Lines wrap at 80 columns.
 SCAN_MORE = "+{n} more"
+# Under the skill list when the last chat was in another folder than the one scanned.
+SCAN_CHAT_FOLDER = "That chat was in {folder}."
 SCAN_LOADS = "{client} loads {kind} '{name}' {times}"
 SCAN_WARNINGS = "{n} {warnings}: {said}."
 SCAN_NOTES = "{n} {notes}: kitden show findings"

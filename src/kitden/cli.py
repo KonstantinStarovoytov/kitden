@@ -289,7 +289,13 @@ def _delete(folder: Path) -> None:
         print(f"The sample folder was not deleted: {folder}", file=sys.stderr)
 
 
-def _print_summary(inventory: Inventory, cards: dict[str, dict], findings: list[dict]) -> None:
+def _print_summary(
+    inventory: Inventory,
+    cards: dict[str, dict],
+    findings: list[dict],
+    here: str | None,
+    home: Path,
+) -> None:
     from kitden.views import words
 
     counts = Counter((i.client, str(i.kind)) for i in inventory.items)
@@ -302,8 +308,10 @@ def _print_summary(inventory: Inventory, cards: dict[str, dict], findings: list[
                 print(f"  {kind}: {count}")
         fit = _skill_list(cards.get(client.id))
         if fit:
-            say, names = fit
+            say, names, folder = fit
             print(f"  Skill list: {say}")
+            if folder and folder != here:
+                print(f"    {words.SCAN_CHAT_FOLDER.format(folder=_short(folder, home))}")
             if names:
                 misfits = True
                 print(*_wrap(_first_few(names, FEW_NAMES, ", "), "    ", "    "), sep="\n")
@@ -318,15 +326,24 @@ def _print_summary(inventory: Inventory, cards: dict[str, dict], findings: list[
     print(words.SCAN_FIX if fix else words.SCAN_OPEN)
 
 
-def _skill_list(card: dict | None) -> tuple[str, list[str]] | None:
+def _skill_list(card: dict | None) -> tuple[str, list[str], str | None] | None:
     """Whether the client's skill list fit, as its Context card says it: the last chat's
-    result and the skills that did not fit, or else why Kitden cannot tell."""
+    result, the skills that did not fit and the chat's folder, or else why Kitden cannot tell."""
     if card is None:
         return None
     if card["windows"]:
         result = card["windows"][0]["result"]
-        return result["say"], (result["misfit"] or {}).get("names", [])
-    return card["message"], []
+        folder = (card["fact"] or {}).get("folder")
+        return result["say"], (result["misfit"] or {}).get("names", []), folder
+    return card["message"], [], None
+
+
+def _short(folder: str, home: Path) -> str:
+    """~/work/app for a folder in the home folder; any other folder as it is."""
+    try:
+        return str(Path("~") / Path(folder).relative_to(home))
+    except ValueError:
+        return folder
 
 
 # The skill names and the warnings the scan writes before "+N more".
@@ -405,11 +422,16 @@ def _scan(args: argparse.Namespace) -> int:
         # Read as `kitden show` and the page read it: with the servers Kitden holds.
         inventory = answers.read_setup(home or Path.home())
         # The Context page's cards for the current folder, as `kitden show context` gives them.
-        context = answers.context_answer(inventory, home or Path.home(), str(Path.cwd()))
+        # With no chat here, a client's last chat in another folder, named: a scan is often run
+        # from a new terminal in the home folder, where nobody chats.
+        context = answers.context_answer(
+            inventory, home or Path.home(), str(Path.cwd()), anywhere=True
+        )
         # The findings for the current folder, as `kitden show findings` gives them.
         findings = answers.findings_answer(inventory, str(Path.cwd()))["findings"]
         cards = {card["client"]: card for card in context["clients"]}
-        _print_summary(inventory, cards, findings)
+        here = context["project"]["path"] if context["project"] else None
+        _print_summary(inventory, cards, findings, here, home or Path.home())
     return EXIT_UNREADABLE if inventory.problems else 0
 
 
