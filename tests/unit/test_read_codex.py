@@ -406,3 +406,22 @@ def test_an_answer_from_the_future_or_without_a_time_is_asked_for_again(tmp_path
     _new_run(monkeypatch)
     _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
     assert len(runs) == 3
+
+
+def test_a_stored_file_with_a_hard_link_does_not_stop_the_scan(tmp_path, monkeypatch):
+    # Kitden does not write over a file with a hard link; it asks Codex again next time.
+    import os
+
+    from kitden.gateways import data_dir
+
+    runs = _ask_codex(monkeypatch, LISTING)
+    home = make_home(tmp_path, FIXTURE)
+    folder = data_dir(home)
+    folder.mkdir(parents=True)
+    (tmp_path / "elsewhere.json").write_text("{}")
+    os.link(tmp_path / "elsewhere.json", folder / "codex-plugins.json")
+    assert str(_gmail(CodexAdapter(home, read_version=lambda: "0.163.0")).enabled) == "off"
+    assert (tmp_path / "elsewhere.json").read_text() == "{}"
+    _new_run(monkeypatch)
+    _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
+    assert len(runs) == 2

@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from kitden.changes import toml_edit
-from kitden.changes.atomic import write_atomic
+from kitden.changes.atomic import RefusedWriteError, write_atomic
 from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
 from kitden.clients.base import (
     PLUGIN_REMOVE,
@@ -204,7 +204,7 @@ class CodexAdapter(ClientAdapter):
             folder = private_data_dir(self.home)
             written = write_atomic(folder / PLUGIN_LIST_FILE, json.dumps(data, indent=2).encode())
             written.chmod(0o600)
-        except OSError:
+        except (OSError, RefusedWriteError):
             pass  # a repeat run asks Codex again; the scan itself is fine
 
     def _ask(self, command: list[str], key: tuple) -> dict:
