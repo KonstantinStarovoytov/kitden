@@ -24,6 +24,13 @@ def test_apply_all_writes_both_changes_in_the_tray(page, demo):
     assert json.loads(SETTINGS(demo).read_text())["enabledPlugins"][PLUGIN] is True
     assert "docs" in json.loads(claude.read_text())["mcpServers"]
     apply_all.click()
-    wait_until(lambda: "docs" not in json.loads(claude.read_text())["mcpServers"], 15)
-    assert json.loads(SETTINGS(demo).read_text())["enabledPlugins"][PLUGIN] is False
+    # The page's own words after a verified Apply of both.
+    expect(dock).to_contain_text("Applied 2 changes")
     expect(apply_all).to_be_hidden()
+    wait_until(
+        lambda: (
+            "docs" not in json.loads(claude.read_text())["mcpServers"]
+            and json.loads(SETTINGS(demo).read_text())["enabledPlugins"][PLUGIN] is False
+        ),
+        15,
+    )
