@@ -29,7 +29,7 @@ from kitden.clients.base import (
 from kitden.clients.claude_code import holds, rule_file
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
 from kitden.context.rules import grid_share, on_share_grid
-from kitden.context.tables import CLAUDE_SHARE_STEPS
+from kitden.context.tables import CLAUDE_SHARE_STEPS, CODEX_LIMIT_STEP, CODEX_MAX_LIMIT
 from kitden.local_gateway.keychain import (
     SECRET_FIELDS,
     KeychainError,
@@ -62,6 +62,7 @@ from kitden.views.setup_server import is_own_entry
 from kitden.views.words import (
     APP_SET_UP,
     CHANGE_UNREAD,
+    CODEX_LIMIT_BAD,
     CODEX_NO_NAME_ONLY,
     CODEX_NO_PROJECT,
     CURSOR_NO_SKILL_SWITCH,
@@ -1470,13 +1471,24 @@ def skill_rule_steps(
 def skill_limit_steps(
     adapters: dict[str, ClientAdapter], targets: list, params: dict
 ) -> list[Step]:
-    """Claude Code's `skillListingBudgetFraction` in the user settings (spec skill-list-limit):
-    `params.fraction` is a share on the half-percent grid, or "default", which takes the key out.
-    One target, {client: "claude_code"}."""
+    """The skill list's limit for one client, in its user settings (specs skill-list-limit and
+    limit-line-control). Claude Code: `skillListingBudgetFraction`, `params.fraction` a share on
+    the half-percent grid. Codex: `[skills] max_context_tokens`, `params.tokens` a whole number
+    of tokens in steps of 500 up to 10,000. "default" takes the key out. One target, {client}."""
     one = targets[0] if len(targets) == 1 and isinstance(targets[0], dict) else {}
-    adapter = adapters.get("claude_code")
-    if one.get("client") != "claude_code" or adapter is None:
+    client = one.get("client")
+    adapter = adapters.get(str(client))
+    if client not in ("claude_code", "codex") or adapter is None:
         raise ValueError(LIMIT_CLAUDE_ONLY)
+    if client == "codex":
+        tokens = params.get("tokens")
+        if tokens == "default":
+            return [adapter.skill_limit_step(json_splice.ABSENT)]
+        if not isinstance(tokens, int) or isinstance(tokens, bool):
+            raise ValueError(CODEX_LIMIT_BAD)
+        if not 0 < tokens <= CODEX_MAX_LIMIT or tokens % CODEX_LIMIT_STEP:
+            raise ValueError(CODEX_LIMIT_BAD)
+        return [adapter.skill_limit_step(tokens)]
     value = params.get("fraction")
     if value == "default":
         return [adapter.skill_limit_step(json_splice.ABSENT)]

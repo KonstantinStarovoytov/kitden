@@ -61,6 +61,9 @@ from kitden.views.words import CHANGE_UNREAD, CODEX_SKILLS_NOT_TABLES
 
 CLIENT = "codex"
 RESTART = "Restart Codex (the app and any open CLI sessions) for this to take effect."
+# checked 2026-11-15 (learn.chatgpt.com/docs/build-skills): `[skills] max_context_tokens`, the
+# skill list's limit in tokens, at most 10,000; unset, 2% of the window.
+LIMIT_KEY = ("skills", "max_context_tokens")
 REMOTE_HINT = "On/off is stored in your ChatGPT account. Change it in Codex: Plugins."
 # Built-in marketplaces live in folders Codex manages itself; other clients cannot add them.
 BUILT_IN_FOLDERS = (".codex/.tmp", ".cache/codex-runtimes")
@@ -335,6 +338,25 @@ class CodexAdapter(ClientAdapter):
         edit = FileEdit(path=str(config), fmt="toml", key=key, after=after)
         return Step(
             client=CLIENT, scope=Scope.USER, name=item.name, edit=edit, restart_note=RESTART
+        )
+
+    # Whether a project's `.codex/config.toml` or a profile can set the key too is not known to
+    # Kitden (docs/clients.md, 2026-11-23): it writes the user file only, as it reads.
+    def skill_limit_step(self, value: Any) -> Step:
+        """`[skills] max_context_tokens` set to `value` in the user's config.toml; ABSENT takes it
+        out, so the default (2% of the window) applies again. `[[skills.config]]` tables stay."""
+        config = self.codex_home / "config.toml"
+        try:
+            text = config.read_text() if config.is_file() else ""
+            if value is not ABSENT:
+                toml_edit.set_value(text, LIMIT_KEY, value)
+        except (OSError, UnicodeDecodeError):
+            raise ValueError(CHANGE_UNREAD.format(config.name)) from None
+        except UnrecognizedFormatError:
+            raise ValueError(CODEX_SKILLS_NOT_TABLES) from None
+        edit = FileEdit(path=str(config), fmt="toml", key=LIMIT_KEY, after=value)
+        return Step(
+            client=CLIENT, scope=Scope.USER, name=LIMIT_KEY[1], edit=edit, restart_note=RESTART
         )
 
     def marketplace_sources(self) -> dict[str, str | None]:

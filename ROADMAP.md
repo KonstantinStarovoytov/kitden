@@ -10,9 +10,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 ### Not yet released
 
 - **Raise Claude Code's skill list limit from the Context page:** when skills showed only a
-  name because the list ran out of room, "Raise the limit…" suggests the smallest share of the
-  window that fits every description, says what it costs in every chat, and sets it with a
-  preview, a backup and Undo.
+  name because the list ran out of room, drag the limit line on the skill list's bar (or use
+  the arrow keys) to see what each step gives, snap to the smallest share that fits every
+  description, and set it with a preview, a backup and Undo; its label opens the details.
+  Codex's line does the same in tokens, for `[skills] max_context_tokens`.
 
 ### 0.11.1
 

@@ -1529,10 +1529,15 @@ def test_a_skill_limit_says_the_share_everywhere_it_shows():
     assert "return title ? pastTitle(title)" in parts
     assert 'if (action === "skill.limit") return `limit:${one.client}`;' in tray
     assert '"skill.rule", "skill.limit"];' in tray
-    assert 'raise: "Raise the limit…"' in context and 'title: "Skill list limit"' in context
+    # No button: the limit line is the control (spec limit-line-control).
+    assert "Raise the limit…" not in context and "Skill list limit…" not in context
+    assert 'title: "Skill list limit"' in context
+    assert 'next: "Next chats", today: "Limit now"' in context
+    assert 'grip.setAttribute("role", "slider")' in context
     assert 'now: "Now", offer: "Suggested", cost: "Cost"' in context
     assert "addToTray(body, { note: CONTEXT_NOTE })" in context
-    assert "Raise the limit…$/" in tips
+    assert "Skill list limit$/" in tips
+    assert "Drag the line to set the limit for your next chats, or click it for details." in tips
     assert said.LIMIT_NOW == "{share} of the context window: {n} characters"
     assert said.LIMIT_FITS_ALL == "{share}: all {n} skills get their description"
     assert said.LIMIT_FITS_ONE == "{share}: the skill gets its description"
@@ -1546,10 +1551,27 @@ def test_a_skill_limit_says_the_share_everywhere_it_shows():
     assert said.CLAUDE_SHARE_SET == (
         "Your Claude Code settings let this list use {share} of the context window."
     )
-    assert 'open: "Skill list limit…"' in context
+    assert said.LIMIT_STEP_NOW == "{share} now"
+    assert said.LIMIT_STEP_DEFAULT == "{share}, the default"
+    assert said.LIMIT_STEP_ALL == "all {n} fit"
+    assert said.LIMIT_STEP_SHORT == "{short} of {n} show only a name"
+    assert said.LIMIT_STEP_MORE == "about {n} more {unit} per chat"
+    assert said.LIMIT_STEP_LESS == "about {n} fewer {unit} per chat"
     assert said.LIMIT_AFTER == "Limit {share}"
     assert said.LIMIT_AFTER_DEFAULT == "Limit {share}, the default"
-    assert said.LIMIT_CLAUDE_ONLY == "Kitden changes the skill list limit for Claude Code only."
+    assert said.LIMIT_CLAUDE_ONLY == (
+        "Kitden changes the skill list limit for Claude Code and Codex only."
+    )
+    assert said.CODEX_LIMIT_BAD == (
+        "Codex's skill list limit must be in steps of 500 tokens, up to 10,000."
+    )
+    assert said.CODEX_LIMIT_NOW_DEFAULT == "2% of the context window: {n} tokens"
+    assert said.CODEX_LIMIT_NOW_SET == "Set in config.toml: {n} tokens"
+    assert said.CODEX_LIMIT_FITS == "{limit}: no description is cut and no skill is left out"
+    assert said.CODEX_LIMIT_COST == "About {tokens} more tokens in every chat"
+    assert said.CODEX_LIMIT_BACK == "Back to the default"
+    assert said.CODEX_LIMIT_STEP_SHORT == "{short} of {n} cut short or left out"
+    assert said.CODEX_AFTER_DEFAULT == "Limit 2% of the window, the default"
     assert said.LIMIT_BAD_SHARE == (
         "The skill list limit must be a share of the window in steps of 0.5%, up to 100%."
     )

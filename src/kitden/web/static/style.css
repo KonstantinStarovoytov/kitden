@@ -1303,11 +1303,8 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-short { grid-column: 2 / 4; margin-top: 6px; font-size: 12px; color: var(--ink-2); }
 .ctx-verdict { max-width: 900px; margin: 0 0 22px; font-size: 15px; line-height: 1.35; font-weight: 500; letter-spacing: -0.01em; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .ctx-est { color: var(--route); }
-/* The skill list limit's button on its own line under the verdict (spec skill-list-limit). It,
-   and Details' Set and Back, take the preview's look while their row waits, as a skill's switch
-   does. */
-.ctx-limit-row { margin: -12px 0 22px; }
-.ctx-raise.pending, .drawer .btn.pending, .drawer .btn.primary.pending { background: var(--preview-fill); border-color: var(--preview-line); color: var(--ink); }
+/* Details' Set and Back take the preview's look while their row waits, as a skill's switch does. */
+.drawer .btn.pending, .drawer .btn.primary.pending { background: var(--preview-fill); border-color: var(--preview-line); color: var(--ink); }
 .ctx-room, .ctx-note { max-width: 900px; margin: -14px 0 22px; font-size: 12px; color: var(--ink-3); }
 .ctx-room { font-size: 13px; color: var(--ink-2); }
 /* The zoom picture: the window strip, its slice opening into the skill list's bar, the limit line
@@ -1331,6 +1328,24 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-limit { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); pointer-events: none; }
 .ctx-chip { position: absolute; top: 29px; transform: translate(-50%, -50%); padding: 2px 8px; border: 1px solid var(--wire); border-radius: 6px; background: var(--panel); font-size: 11px; font-weight: 500; white-space: nowrap; pointer-events: none; }
 .ctx-flag { position: absolute; bottom: calc(100% + 6px); font-size: 11px; font-weight: 500; color: var(--ink); white-space: nowrap; pointer-events: none; }
+/* The limit line as a control (spec limit-line-control): a handle on the line (grab, then
+   grabbing while it moves; the route tint on hover), the flag that opens Details, and while it
+   moves a dashed "next chats" line with its readout under the bar and a mark under the place that
+   fits everything. No motion: the line jumps place by place. */
+.ctx-chip.after { transform: translateY(-50%); }
+.ctx-grip { position: absolute; top: 28px; z-index: 2; width: 12px; height: 26px; transform: translate(-50%, -50%); border: 1px solid var(--ink); border-radius: 6px; background: var(--panel-raised); box-shadow: 0 1px 3px rgb(0 0 0 / .25); cursor: grab; touch-action: none; }
+.ctx-grip::before { content: ""; position: absolute; inset: 7px 3px; border-left: 1px solid var(--ink-3); border-right: 1px solid var(--ink-3); }
+.ctx-grip:hover { border-color: var(--route); background: var(--route-soft); }
+.ctx-grip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.ctx-flag.act { pointer-events: auto; cursor: pointer; text-decoration: underline dotted var(--ink-3); text-underline-offset: 3px; }
+.ctx-flag.act:hover { color: var(--route); text-decoration-color: var(--route); }
+.ctx-next { position: absolute; top: -5px; bottom: -5px; width: 0; margin-left: -1px; border-left: 2px dashed var(--route); pointer-events: none; }
+.ctx-next.pending { border-left-color: var(--preview-line); }
+.ctx-next-tag, .ctx-readout { position: absolute; top: calc(100% + 6px); transform: translateX(-50%); font-size: 11px; white-space: nowrap; pointer-events: none; }
+.ctx-next-tag { color: var(--route); font-weight: 500; }
+.ctx-readout { z-index: 3; padding: 2px 8px; border: 1px solid var(--wire); border-radius: 6px; background: var(--panel); color: var(--ink); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; box-shadow: var(--shadow); }
+.ctx-readout.end, .ctx-next-tag.end { transform: translateX(-100%); }
+.ctx-mark { position: absolute; bottom: -10px; width: 7px; height: 7px; margin-left: -3.5px; transform: rotate(45deg); background: var(--lamp-on); pointer-events: none; }
 /* The two sides: pills with the same marks as the bar. A dashed line while the tray changes one;
    after Apply, filled when it gets its description, amber when it loses it. */
 .ctx-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 900px; }

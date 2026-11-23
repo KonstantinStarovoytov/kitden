@@ -226,6 +226,15 @@ test('a skill list limit says the share it sets, for all projects', () => {
   assert.equal(changeWords(limit).title, 'Set the skill list limit of Claude Code for all projects');
 });
 
+test("Codex's skill list limit says the tokens it sets, or back to the default", () => {
+  const limit = { action: 'skill.limit', steps: [{ client: 'codex', name: 'max_context_tokens' }], target: target('all') };
+  assert.deepEqual(changeWords(limit, { params: { tokens: 6000 } }), {
+    title: 'Set the skill list limit of Codex to 6,000 tokens for all projects',
+    done: 'Set the skill list limit of Codex to 6,000 tokens for all projects',
+  });
+  assert.equal(changeWords(limit, { params: { tokens: 'default' } }).title, 'Set the skill list limit of Codex back to the default for all projects');
+});
+
 test('connecting a client to Kitden and disconnecting it name their place and no scope', () => {
   for (const action of ['setup_server.register', 'client.disconnect']) assert.ok(PLACE_IN_TITLE.includes(action), action);
   const connect = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }], target: target('all') };

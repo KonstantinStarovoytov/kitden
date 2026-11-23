@@ -46,7 +46,8 @@ In Claude Code each skill is also a command, such as `/kitden:audit`.
 
 `kitden show` reads the settings files of Claude Code, Codex and Cursor on this computer. This
 includes the limits Claude Code's settings set for the skill list (`skillListingBudgetFraction`
-and `skillListingMaxDescChars`); only the Kitden page, after your Apply, can raise the first. For
+and `skillListingMaxDescChars`); only the Kitden page, after your Apply, can raise the first,
+and Codex's `[skills] max_context_tokens`. For
 the context check it also reads what the client sent in your last chats, from the client's own
 chat files, the skills the Claude app gives Claude Code, from the app's own folder, and Codex's
 model list (`models_cache.json`), for the size of its context window. For Codex it also reads

@@ -10,7 +10,7 @@ import tomlkit
 from tomlkit.exceptions import TOMLKitError
 from tomlkit.items import AoT
 
-from kitden.changes.json_splice import ABSENT, UnrecognizedFormatError
+from kitden.changes.json_splice import ABSENT, UnrecognizedFormatError, same_value
 
 
 def _load(text: str) -> tomlkit.TOMLDocument:
@@ -115,7 +115,7 @@ def _set_picked(doc: Any, path: tuple[str, ...], value: Any) -> None:
 
 def set_value(text: str, path: tuple[str, ...], value: Any) -> str:
     """Add or replace the value at `path`, creating missing parent tables."""
-    if get_value(text, path) == value:
+    if same_value(get_value(text, path), value):
         return text
     doc = _load(text)
     if path[-1].startswith(PICK):

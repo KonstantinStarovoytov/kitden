@@ -555,83 +555,279 @@ test('a pill opens Details with the size, the source and the switch; Name only j
   assert.deepEqual(now.map((n) => n.getAttribute('aria-pressed')), ['false', 'true', 'false']);
 });
 
-// The skill list limit as the server offers it for TIGHT (spec skill-list-limit).
+// The skill list limit as the server offers it for TIGHT (specs skill-list-limit and
+// limit-line-control): the places the limit line can go, today's first, with the server's words.
+const steps = (from, ...more) => [from, ...more];
+const STEPS = steps(
+  { value: 0.01, limit: 8000, short: 1, say: '1% now · 1 of 3 show only a name', now: true },
+  { value: 0.015, limit: 12000, short: 0, say: '1.5% · all 3 fit · about 3,000 more characters per chat' },
+  { value: 0.02, limit: 16000, short: 0, say: '2% · all 3 fit · about 3,000 more characters per chat' },
+  { value: 0.025, limit: 20000, short: 0, say: '2.5% · all 3 fit · about 3,000 more characters per chat' },
+);
 const LIMIT = {
   now: '1% of the context window: 8,000 characters',
   offer: { fraction: 0.015, label: 'Set to 1.5%', say: '1.5%: all 3 skills get their description', cost: 'About 3,000 more characters in every chat (about 750 tokens)' },
   back: null,
   note: 'Kitden writes it in your Claude Code user settings, for all projects. Your next chat will show the real list.',
   why: null,
+  param: 'fraction',
+  steps: STEPS,
 };
 const LIMIT_URL = `/api/context?draft=${encodeURIComponent(JSON.stringify({ limits: { claude_code: 0.015 } }))}`;
 const LIMIT_AFTER = { ...AFTER, say: 'After Apply, estimate: On a 200K window, every skill would keep its description. gamma gets a description.', gets: ['gamma'], loses: [], budget: 12000 };
+const EMPTY_URL = `/api/context?draft=${encodeURIComponent('{}')}`;
+const grip = () => byClass(main, 'ctx-grip')[0];
+const readout = () => byClass(main, 'ctx-readout')[0];
+const nextLine = () => byClass(main, 'ctx-next')[0];
+// The bar is 1200 px wide from x 0 (the stand-in's box): a pointer at `pct` % of it.
+const at = (pct) => ({ button: 0, pointerId: 1, clientX: (pct / 100) * 1200 });
+// The scale of TIGHT with the control: 12,000 (the suggested place) and room for the places past it,
+// which share the rest of the bar up to 98%: 2% and 2.5% there.
+const SCALE = 12000 * 1.3;
+const spotOf = (limit) => (limit / SCALE) * 100;
+const PAST = [spotOf(12000) + (98 - spotOf(12000)) / 2, 98];
+async function drag(...points) {
+  const node = grip();
+  await fire(node, 'pointerdown', at(spotOf(8000)));
+  for (const point of points) await fire(node, 'pointermove', at(point));
+  return node;
+}
 
-test('Raise the limit… opens Details with the share, its cost, and Set, which joins the tray', async () => {
+test('the limit line is the control: a handle, a flag that opens Details, no button under the verdict', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };
-  // No share to offer: no button.
-  show(answer(TIGHT, CODEX, CURSOR));
-  assert.equal(buttonIn(main, 'Raise the limit…'), undefined);
+  // Nothing to change: the line is only a picture.
+  show(answer({ ...TIGHT, limit: { ...LIMIT, offer: null, steps: [] } }, CODEX, CURSOR));
+  assert.equal(grip(), undefined);
   show(answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR));
-  await fire(buttonIn(main, 'Raise the limit…'), 'click');
+  assert.equal(walk(main).some((n) => n.tagName === 'BUTTON' && /limit/i.test(text(n))), false);
+  const handle = grip();
+  assert.equal(handle.getAttribute('role'), 'slider');
+  assert.equal(handle.getAttribute('tabindex'), '0');
+  assert.equal(handle.getAttribute('aria-label'), 'Skill list limit');
+  assert.equal(handle.getAttribute('aria-valuetext'), '1% now · 1 of 3 show only a name');
+  assert.equal(handle.style.left, `${spotOf(8000)}%`);
+  assert.equal(nextLine().hidden, true);
+  // A press with no move opens Details; so does the flag.
+  await fire(handle, 'pointerdown', at(spotOf(8000)));
+  await fire(handle, 'pointerup', { ...at(spotOf(8000)), type: 'pointerup' });
   assert.match(text(drawer), /Skill list limit/);
-  assert.match(text(drawer), /Now1% of the context window: 8,000 characters/);
   assert.match(text(drawer), /Suggested1\.5%: all 3 skills get their description/);
   assert.match(text(drawer), /CostAbout 3,000 more characters in every chat \(about 750 tokens\)/);
-  assert.match(text(drawer), /Your next chat will show the real list\./);
-  assert.equal(buttonIn(drawer, 'Back to 1%'), undefined);
+  closePanel({ instant: true });
+  const flag = byClass(main, 'ctx-flag')[0];
+  assert.equal(flag.classList.contains('act'), true);
+  await fire(flag, 'click');
+  assert.match(text(drawer), /Now1% of the context window: 8,000 characters/);
+});
+
+test('a drag moves a next-chats line place by place with the server words, snaps, and a release adds the row', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR));
+  const handle = await drag(spotOf(8000) + 0.2);
+  // Under DRAG_START px: still a press, nothing moves.
+  assert.equal(readout().hidden, true);
+  await fire(handle, 'pointermove', at(spotOf(12000) - 2.5));
+  // Within SNAP of the suggested place: it snaps there; the mark shows where it is.
+  assert.equal(text(readout()), '1.5% · all 3 fit · about 3,000 more characters per chat');
+  assert.equal(nextLine().hidden, false);
+  assert.equal(nextLine().style.left, `${spotOf(12000)}%`);
+  assert.equal(byClass(main, 'ctx-mark')[0].hidden, false);
+  // The chat's own line stays where it was.
+  assert.equal(byClass(main, 'ctx-limit')[0].style.left, `${spotOf(8000)}%`);
+  // Past the suggested place the others share the bar's last part: 2%, then 2.5%.
+  await fire(handle, 'pointermove', at(PAST[0]));
+  assert.equal(text(readout()), '2% · all 3 fit · about 3,000 more characters per chat');
+  await fire(handle, 'pointermove', at(PAST[1]));
+  assert.equal(text(readout()), '2.5% · all 3 fit · about 3,000 more characters per chat');
+  await fire(handle, 'pointermove', at(spotOf(12000) + 1));
+  queue(PREVIEW, previewed('c1'));
+  queue(LIMIT_URL, { status: 200, json: answer({ ...TIGHT, limit: LIMIT, after: LIMIT_AFTER }, CODEX, CURSOR) });
+  state.view = 'context';
+  await fire(handle, 'pointerup', { ...at(spotOf(12000) + 1), type: 'pointerup' });
+  await flush();
+  await flush();
+  // The same row as Details' "Set to 1.5%", and no request while it moved.
+  const previews = asked.filter((a) => a.url === PREVIEW);
+  assert.equal(previews.length, 1);
+  assert.deepEqual([previews[0].body.requests[0].kind, previews[0].body.requests[0].params], ['skill.limit', { fraction: 0.015 }]);
+  assert.equal(tray.rows[0].note, CONTEXT_NOTE);
+  // Drawn again from the tray: the next-chats line waits at 12,000, the chat's line at 8,000.
+  assert.equal(nextLine().hidden, false);
+  assert.equal(nextLine().style.left, `${spotOf(12000)}%`);
+  assert.equal(text(byClass(main, 'ctx-next-tag')[0]), 'Next chats: 12,000 characters');
+  assert.equal(grip().style.left, `${spotOf(12000)}%`);
+  assert.equal(byClass(main, 'ctx-limit')[0].style.left, `${spotOf(8000)}%`);
+  // Dragged back to today's place, the row is taken out.
+  const again = grip();
+  await fire(again, 'pointerdown', at(spotOf(12000)));
+  await fire(again, 'pointermove', at(spotOf(8000)));
+  assert.equal(text(readout()), '1% now · 1 of 3 show only a name');
+  queue(EMPTY_URL, { status: 200, json: answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR) });
+  await fire(again, 'pointerup', { ...at(spotOf(8000)), type: 'pointerup' });
+  await flush();
+  assert.equal(tray.rows.length, 0);
+});
+
+test('Esc during a drag, or a release where it started, changes nothing', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR));
+  const handle = await drag(spotOf(12000));
+  await fire(handle, 'keydown', { key: 'Escape', stopPropagation() {} });
+  assert.equal(readout().hidden, true);
+  assert.equal(nextLine().hidden, true);
+  assert.equal(handle.style.left, `${spotOf(8000)}%`);
+  await fire(handle, 'pointerup', { ...at(spotOf(12000)), type: 'pointerup' });
+  const back = await drag(spotOf(12000), spotOf(8000));
+  await fire(back, 'pointerup', { ...at(spotOf(8000)), type: 'pointerup' });
+  await flush();
+  assert.equal(asked.some((a) => a.url === PREVIEW), false);
+  assert.equal(tray.rows.length, 0);
+});
+
+test('keys move the handle place by place; Enter commits, Esc cancels, Enter with no move opens Details', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR));
+  const handle = grip();
+  await fire(handle, 'keydown', { key: 'Enter' });
+  assert.match(text(drawer), /Skill list limit/);
+  closePanel({ instant: true });
+  await fire(handle, 'keydown', { key: 'ArrowRight' });
+  await fire(handle, 'keydown', { key: 'ArrowRight' });
+  assert.equal(text(readout()), '2% · all 3 fit · about 3,000 more characters per chat');
+  assert.equal(handle.getAttribute('aria-valuenow'), '16000');
+  assert.equal(handle.getAttribute('aria-valuetext'), '2% · all 3 fit · about 3,000 more characters per chat');
+  await fire(handle, 'keydown', { key: 'Escape', stopPropagation() {} });
+  assert.equal(handle.getAttribute('aria-valuenow'), '8000');
+  assert.equal(readout().hidden, true);
+  await fire(handle, 'keydown', { key: 'ArrowRight' });
+  queue(PREVIEW, previewed('c1'));
+  queue(LIMIT_URL, { status: 200, json: answer({ ...TIGHT, limit: LIMIT, after: LIMIT_AFTER }, CODEX, CURSOR) });
+  await fire(handle, 'keydown', { key: 'Enter' });
+  await flush();
+  assert.deepEqual(asked.find((a) => a.url === PREVIEW).body.requests[0].params, { fraction: 0.015 });
+});
+
+test('with a share above the default, the line drags back to 1% and adds the Back row; a changed limit is said under the verdict', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const changed = ['The limit was changed after this chat: it is 1.5% now. Your next chat will show the real list.', 'Estimate: On a 200K window, every skill would keep its description.'];
+  const backOnly = {
+    ...LIMIT, now: '1.5% of the context window: 12,000 characters', offer: null, back: { fraction: 'default', label: 'Back to 1%' }, note: null,
+    why: 'Kitden does not offer a new skill list limit: every description fits.',
+    steps: [
+      { value: 'default', limit: 8000, short: 1, say: '1%, the default · 1 of 3 show only a name · about 3,000 fewer characters per chat' },
+      { value: 0.015, limit: 12000, short: 0, say: '1.5% now · all 3 fit', now: true },
+    ],
+  };
+  // The chat was sent at 1%: its line is at 8,000; today's limit, 12,000, is the next-chats line.
+  // Nothing lies past 12,000, so the bar is drawn to 12,000 and a little more.
+  const spotOf = (limit) => (limit / (12000 * 1.04)) * 100;
+  show(answer({ ...TIGHT, limit: backOnly, changed }, CODEX, CURSOR));
+  assert.deepEqual(byClass(main, 'ctx-room').map(text), changed);
+  assert.equal(text(byClass(byClass(main, 'ctx-room')[1], 'ctx-est')[0]), 'Estimate:');
+  assert.equal(nextLine().hidden, false);
+  assert.equal(grip().style.left, `${spotOf(12000)}%`);
+  // Details, from the flag, show only Now and Back to 1%.
+  await fire(byClass(main, 'ctx-flag')[0], 'click');
+  assert.match(text(drawer), /Now1\.5% of the context window: 12,000 characters/);
+  assert.doesNotMatch(text(drawer), /Suggested|Cost/);
+  assert.notEqual(buttonIn(drawer, 'Back to 1%'), undefined);
+  closePanel({ instant: true });
+  const handle = grip();
+  await fire(handle, 'pointerdown', at(spotOf(12000)));
+  await fire(handle, 'pointermove', at(spotOf(8000)));
+  assert.equal(text(readout()), '1%, the default · 1 of 3 show only a name · about 3,000 fewer characters per chat');
+  queue(PREVIEW, previewed('c1'));
+  const backUrl = `/api/context?draft=${encodeURIComponent(JSON.stringify({ limits: { claude_code: 'default' } }))}`;
+  queue(backUrl, { status: 200, json: answer({ ...TIGHT, limit: backOnly, changed }, CODEX, CURSOR) });
+  await fire(handle, 'pointerup', { ...at(spotOf(8000)), type: 'pointerup' });
+  await flush();
+  assert.deepEqual(asked.find((a) => a.url === PREVIEW).body.requests[0].params, { fraction: 'default' });
+});
+
+test('with no limit line for the chat, the control stands at today\'s limit; Details still work', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const windows = [{ ...TIGHT.windows[0], budget: null }];
+  show(answer({ ...TIGHT, windows, limit: LIMIT }, CODEX, CURSOR));
+  const flag = byClass(main, 'ctx-flag')[0];
+  assert.equal(text(flag), 'Limit now: 8,000 characters');
+  assert.notEqual(grip(), undefined);
+  await fire(flag, 'click');
+  assert.match(text(drawer), /Skill list limit/);
+});
+
+// Codex's limit, in tokens: today's 5,440 (2% of a 272K window), 5,500 fits all, 6,000 more.
+const CODEX_LIMIT = {
+  now: '2% of the context window: 5,440 tokens',
+  offer: { tokens: 5500, label: 'Set to 5,500 tokens', say: '5,500 tokens: no description is cut and no skill is left out', cost: 'About 60 more tokens in every chat' },
+  back: null,
+  note: 'Kitden writes it in your Codex config.toml, for all projects. Your next chat will show the real list.',
+  why: null,
+  param: 'tokens',
+  steps: [
+    { value: 5440, limit: 5440, short: 3, say: '5,440 tokens now · 3 of 9 cut short or left out', now: true },
+    { value: 5500, limit: 5500, short: 0, say: '5,500 tokens · all 9 fit · about 60 more tokens per chat' },
+    { value: 6000, limit: 6000, short: 0, say: '6,000 tokens · all 9 fit · about 60 more tokens per chat' },
+  ],
+};
+
+test("Codex's limit line works the same, in tokens: drag, snap, release adds a tokens row", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'codex' };
+  show(answer(CLAUDE, { ...CODEX, limit: CODEX_LIMIT }, CURSOR));
+  const scale = 5500 * 1.3;
+  const spot = (limit) => (limit / scale) * 100;
+  const handle = grip();
+  assert.equal(handle.getAttribute('aria-valuetext'), '5,440 tokens now · 3 of 9 cut short or left out');
+  assert.equal(text(byClass(main, 'ctx-flag')[0]), 'Limit: 5,440 tokens');
+  await fire(handle, 'pointerdown', at(spot(5440)));
+  await fire(handle, 'pointermove', at(spot(5440) - 1));
+  // Today's place stays reachable, though the suggested place is within SNAP of it.
+  assert.equal(text(readout()), '5,440 tokens now · 3 of 9 cut short or left out');
+  await fire(handle, 'pointermove', at(spot(5500) + 1.5));
+  assert.equal(text(readout()), '5,500 tokens · all 9 fit · about 60 more tokens per chat');
+  await fire(handle, 'pointermove', at(98));
+  assert.equal(text(readout()), '6,000 tokens · all 9 fit · about 60 more tokens per chat');
+  await fire(handle, 'pointermove', at(spot(5500) + 1.9));
+  queue(PREVIEW, previewed('c1'));
+  const url = `/api/context?draft=${encodeURIComponent(JSON.stringify({ limits: { codex: 5500 } }))}`;
+  queue(url, { status: 200, json: answer(CLAUDE, { ...CODEX, limit: CODEX_LIMIT }, CURSOR) });
+  state.view = 'context';
+  await fire(handle, 'pointerup', { ...at(spot(5500) + 1.9), type: 'pointerup' });
+  await flush();
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual([sent.kind, sent.targets, sent.params], ['skill.limit', [{ client: 'codex' }], { tokens: 5500 }]);
+  assert.equal(asked.some((a) => a.url === url), true);
+  // Details from the flag: in tokens, with Set to 5,500 tokens.
+  await fire(byClass(main, 'ctx-flag')[0], 'click');
+  assert.match(text(drawer), /Now2% of the context window: 5,440 tokens/);
+  assert.notEqual(buttonIn(drawer, 'Set to 5,500 tokens'), undefined);
+});
+
+test('Details keep Set to 1.5%, which makes the same row and shows pressed', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR));
+  await fire(byClass(main, 'ctx-flag')[0], 'click');
   queue(PREVIEW, previewed('c1'));
   queue(LIMIT_URL, { status: 200, json: answer({ ...TIGHT, limit: LIMIT, after: LIMIT_AFTER }, CODEX, CURSOR) });
   await fire(buttonIn(drawer, 'Set to 1.5%'), 'click');
   await flush();
   await flush();
-  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
-  // The page sends back the share the server offered; it never makes one up.
-  assert.deepEqual([sent.kind, sent.targets, sent.params], ['skill.limit', [{ client: 'claude_code' }], { fraction: 0.015 }]);
-  assert.equal(tray.rows[0].note, CONTEXT_NOTE);
-  // The draft carries the share, and the estimate after Apply shows, with the limit line moved.
-  assert.equal(asked.some((a) => a.url === LIMIT_URL), true);
+  assert.deepEqual(asked.find((a) => a.url === PREVIEW).body.requests[0].params, { fraction: 0.015 });
   assert.equal(text(verdict()).startsWith(LIMIT_AFTER.say), true);
-  assert.equal(text(byClass(main, 'ctx-flag')[0]), 'Limit: 12,000 characters');
   syncTray();
   assert.equal(buttonIn(drawer, 'Set to 1.5%').getAttribute('aria-pressed'), 'true');
-  // The page's button shows the waiting row pressed, in the preview's look.
-  const raise = buttonIn(main, 'Raise the limit…');
-  assert.equal(raise.getAttribute('aria-pressed'), 'true');
-  assert.equal(raise.classList.contains('pending'), true);
-  // A second press takes the row out.
+  queue(EMPTY_URL, { status: 200, json: answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR) });
   await fire(buttonIn(drawer, 'Set to 1.5%'), 'click');
   await flush();
   assert.equal(tray.rows.length, 0);
-});
-
-test('Details of the limit offer Back to 1% when the share is higher', async () => {
-  await fresh();
-  state.selected = { kind: 'client', name: 'claude_code' };
-  const higher = { ...LIMIT, now: '1.5% of the context window: 12,000 characters', offer: { ...LIMIT.offer, fraction: 0.02, label: 'Set to 2%' }, back: { fraction: 'default', label: 'Back to 1%' } };
-  show(answer({ ...TIGHT, limit: higher }, CODEX, CURSOR));
-  await fire(buttonIn(main, 'Raise the limit…'), 'click');
-  assert.notEqual(buttonIn(drawer, 'Set to 2%'), undefined);
-  queue(PREVIEW, previewed('c1'));
-  await fire(buttonIn(drawer, 'Back to 1%'), 'click');
-  await flush();
-  assert.deepEqual(asked.find((a) => a.url === PREVIEW).body.requests[0].params, { fraction: 'default' });
-});
-
-test('with nothing to raise, Skill list limit… opens Now and Back to 1%; a changed limit is said under the verdict', async () => {
-  await fresh();
-  state.selected = { kind: 'client', name: 'claude_code' };
-  const changed = ['The limit was changed after this chat: it is 1.5% now. Your next chat will show the real list.', 'Estimate: On a 200K window, every skill would keep its description.'];
-  const backOnly = { ...LIMIT, now: '1.5% of the context window: 12,000 characters', offer: null, back: { fraction: 'default', label: 'Back to 1%' }, note: null, why: 'Kitden does not offer a new skill list limit: every description fits.' };
-  show(answer({ ...TIGHT, limit: backOnly, changed }, CODEX, CURSOR));
-  const notes = byClass(main, 'ctx-room').map(text);
-  assert.deepEqual(notes, changed);
-  assert.equal(text(byClass(byClass(main, 'ctx-room')[1], 'ctx-est')[0]), 'Estimate:');
-  assert.equal(buttonIn(main, 'Raise the limit…'), undefined);
-  await fire(buttonIn(main, 'Skill list limit…'), 'click');
-  assert.match(text(drawer), /Now1\.5% of the context window: 12,000 characters/);
-  assert.doesNotMatch(text(drawer), /Suggested|Cost|every description fits/);
-  assert.notEqual(buttonIn(drawer, 'Back to 1%'), undefined);
 });
 
 test('a project\'s own skill asks for a rule in its project', async () => {

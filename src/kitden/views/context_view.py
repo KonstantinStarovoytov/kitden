@@ -45,6 +45,8 @@ from kitden.context.tables import (
     CLAUDE_SHARE_STEPS,
     CLAUDE_WINDOWS,
     CODEX_DESCRIPTION_CAP,
+    CODEX_LIMIT_STEP,
+    CODEX_MAX_LIMIT,
 )
 from kitden.local_gateway.settings import as_dict
 from kitden.model import CLIENT_WORDS, Item, ItemKind, Project, Scope
@@ -115,7 +117,8 @@ def context_view(
             asked = limits.get(client)
             clients.append(_claude(inventory, home, folder, changes, anywhere, asked))
         elif client == "codex":
-            clients.append(_codex(inventory, codex_home, folder, changes, anywhere))
+            asked = limits.get(client)
+            clients.append(_codex(inventory, codex_home, folder, changes, anywhere, asked))
         else:
             clients.append(_cursor(inventory, folder))
     return {"clients": clients}
@@ -453,6 +456,62 @@ def _asked_share(value) -> float | None:
     return value if _whole(value) and 0 < value <= 1 else None
 
 
+def _limit_steps(
+    points: list[tuple], now_used: int | None, n: int, unit: str, short_words: str
+) -> list[dict]:
+    """Where the limit line can be dragged to and what each place gives, in words the page shows
+    as they are (spec limit-line-control). `points`: (value, limit, short, used, head, now) per
+    place, `value` as a tray row sends it, `limit` in the card's unit, `short` how many skills the
+    limit would still cut and `used` what the list would send (both None with no estimate), and
+    `head` the share or the limit in words. `n`: the skills the limit can cut."""
+    out = []
+    for value, limit, short, used, head, now in points:
+        parts = [head]
+        if short is not None:
+            fit = words.LIMIT_STEP_ALL.format(n=n)
+            parts.append(fit if short == 0 else short_words.format(short=short, n=n))
+        if used is not None and now_used is not None and used != now_used:
+            extra = used - now_used
+            more = words.LIMIT_STEP_MORE if extra > 0 else words.LIMIT_STEP_LESS
+            parts.append(more.format(n=_about(abs(extra)), unit=unit))
+        step = {"value": value, "limit": limit, "short": short, "say": " · ".join(parts)}
+        out.append(step | {"now": True} if now else step)
+    return out
+
+
+def _claude_steps(
+    pair: tuple[int, int] | None,
+    share: float,
+    base: tuple[list[ClaudeSkill], ClaudeFit] | None,
+    cap: int,
+    back: bool,
+    ups: list[tuple[float, ClaudeFit]],
+) -> list[dict]:
+    """The limit line's places for Claude Code: 1% when Back is offered, the share now, and the
+    shares above it Kitden offers (`ups`, as the suggestion ran them). None without a window."""
+    if pair is None:
+        return []
+    skills, now = base if base is not None else ([], None)
+    wanted = {s.name for s in skills if not s.name_only}
+
+    def point(value, at: float, fit: ClaudeFit | None, head: str, here: bool = False) -> tuple:
+        short = len(wanted - fit.full) if fit is not None else None
+        used = fit.used if fit is not None else None
+        return (value, claude_budget(*pair, at), short, used, head, here)
+
+    points = []
+    if back:
+        fit = claude_rule(skills, claude_budget(*pair, CLAUDE_SHARE), cap) if now else None
+        head = words.LIMIT_STEP_DEFAULT.format(share=_percent(None))
+        points.append(point("default", CLAUDE_SHARE, fit, head))
+    points.append(
+        point(share, share, now, words.LIMIT_STEP_NOW.format(share=_percent(share)), True)
+    )
+    points += [point(at, at, fit, words.percent(at)) for at, fit in ups]
+    used = now.used if now is not None else None
+    return _limit_steps(points, used, len(wanted), "characters", words.LIMIT_STEP_SHORT)
+
+
 def _claude_limit(
     home: Path,
     files: list[Path],
@@ -475,28 +534,39 @@ def _claude_limit(
     if setting is None and holder == user and above:
         back = {"fraction": "default", "label": words.LIMIT_BACK.format(share=_percent(None))}
     limit = {"now": None, "offer": None, "back": back, "note": None, "why": None}
+    limit |= {"param": "fraction", "steps": []}
     if setting is not None:
-        return limit | {"why": words.LIMIT_NOT_FIXED}
+        return limit | {"back": None, "why": words.LIMIT_NOT_FIXED}
     if holder is not None and holder != user:
         place = home_path(str(holder), home)
-        return limit | {"why": words.LIMIT_NOT_PROJECT.format(file=place)}
+        return limit | {"back": None, "why": words.LIMIT_NOT_PROJECT.format(file=place)}
     if pair is None or base is None or not checked:
-        return limit | {"why": words.LIMIT_NOT_ESTIMATED}
+        steps = _claude_steps(pair, share, None, cap, back is not None, []) if back else []
+        return limit | {"why": words.LIMIT_NOT_ESTIMATED, "steps": steps}
     budget = claude_budget(*pair, share)
     limit["now"] = words.LIMIT_NOW.format(share=_percent(share), n=f"{budget:,}")
     skills, now = base
     wanted = {s.name for s in skills if not s.name_only}
     if wanted <= now.full:
-        return limit | {"why": words.LIMIT_NOT_NEEDED}
+        steps = _claude_steps(pair, share, base, cap, True, []) if back else []
+        return limit | {"why": words.LIMIT_NOT_NEEDED, "steps": steps}
+    # Every share above today's up to the ceiling, as the line can be dragged there. Once all
+    # fit, a higher share sends the same list: the rule runs no more.
+    ups: list[tuple[float, ClaudeFit]] = []
+    found = None
     first = int(share * CLAUDE_SHARE_STEPS + 1e-9) + 1
     for steps in range(first, CLAUDE_SHARE_MOST + 1):
-        offered = grid_share(steps)
-        fit = claude_rule(skills, claude_budget(*pair, offered), cap)
-        if wanted <= fit.full:
-            break
-    else:
+        at = grid_share(steps)
+        fit = found[1] if found else claude_rule(skills, claude_budget(*pair, at), cap)
+        ups.append((at, fit))
+        if found is None and wanted <= fit.full:
+            found = (at, fit)
+    if found is None:
         most = words.percent(grid_share(CLAUDE_SHARE_MOST))
-        return limit | {"why": words.LIMIT_NOT_ENOUGH.format(share=most)}
+        steps = _claude_steps(pair, share, base, cap, True, []) if back else []
+        return limit | {"why": words.LIMIT_NOT_ENOUGH.format(share=most), "steps": steps}
+    offered, fit = found
+    limit["steps"] = _claude_steps(pair, share, base, cap, back is not None, ups)
     shown = words.percent(offered)
     n = len(fit.full)
     say = (words.LIMIT_FITS_ALL if n > 1 else words.LIMIT_FITS_ONE).format(share=shown, n=n)
@@ -1133,7 +1203,92 @@ def _codex_estimate(skills: list[CodexSkill], fit: CodexFit, on: str, frame: str
     return result | {"used": fit.used, "size": fit.size, "room": None, "misfit": misfit}
 
 
-def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywhere: bool) -> dict:
+def _codex_full(fit: CodexFit, lengths: dict[str, int]) -> set[str]:
+    """The skills a fit sends whole (up to Codex's cap on one description)."""
+    return {n for n, kept in fit.sent.items() if _codex_kind(kept, lengths[n]) == "full"}
+
+
+def _codex_limit_card(
+    window: int | None,
+    limit: int | None,
+    budget: int | None,
+    base: tuple[list[CodexSkill], CodexFit] | None,
+    checked: bool,
+    lengths: dict[str, int],
+    rerun,
+) -> dict:
+    """Details' "Skill list limit" for Codex (spec limit-line-control, stage 2): the limit now in
+    tokens, the smallest limit in steps of 500 above it up to 10,000 at which no description is
+    cut and no skill is left out, by the rule that gives the verdict, its cost, and Back to the
+    default when config.toml sets the key. `rerun(budget)` runs the rule on today's skills. The
+    places the limit line can be dragged to are in `steps`, as for Claude Code."""
+    back = {"tokens": "default", "label": words.CODEX_LIMIT_BACK} if limit is not None else None
+    card = {"now": None, "offer": None, "back": back, "note": None, "why": None}
+    card |= {"param": "tokens", "steps": []}
+    default = codex_budget(window, None) if window else None
+    skills, now = base if base is not None else ([], None)
+    names = {s.name for s in skills}
+
+    def point(value, at: int, fit: CodexFit | None, head: str, here: bool = False) -> tuple:
+        short = len(names - _codex_full(fit, lengths)) if fit is not None else None
+        return (value, at, short, fit.used if fit is not None else None, head, here)
+
+    def steps(ups: list[tuple[int, CodexFit]]) -> list[dict]:
+        if budget is None:
+            return []
+        points = []
+        if back and default is not None:
+            fit = rerun(default) if now is not None else None
+            head = words.LIMIT_STEP_DEFAULT.format(share=words.TOKENS.format(n=f"{default:,}"))
+            points.append(point("default", default, fit, head))
+        head = words.LIMIT_STEP_NOW.format(share=words.TOKENS.format(n=f"{budget:,}"))
+        points.append(point(limit if limit is not None else budget, budget, now, head, True))
+        points += [point(n, n, fit, words.TOKENS.format(n=f"{n:,}")) for n, fit in ups]
+        used = now.used if now is not None else None
+        return _limit_steps(points, used, len(names), "tokens", words.CODEX_LIMIT_STEP_SHORT)
+
+    if base is None or not checked or budget is None:
+        return card | {"why": words.LIMIT_NOT_ESTIMATED, "steps": steps([]) if back else []}
+    shown = words.TOKENS.format(n=f"{budget:,}")
+    said = words.CODEX_LIMIT_NOW_SET if limit is not None else words.CODEX_LIMIT_NOW_DEFAULT
+    card["now"] = said.format(n=f"{budget:,}")
+    assert now is not None
+    if names <= _codex_full(now, lengths):
+        return card | {"why": words.LIMIT_NOT_NEEDED, "steps": steps([]) if back else []}
+    ups: list[tuple[int, CodexFit]] = []
+    found = None
+    for n in range(
+        (budget // CODEX_LIMIT_STEP + 1) * CODEX_LIMIT_STEP, CODEX_MAX_LIMIT + 1, CODEX_LIMIT_STEP
+    ):
+        fit = found[1] if found else rerun(n)
+        ups.append((n, fit))
+        if found is None and names <= _codex_full(fit, lengths):
+            found = (n, fit)
+    if found is None:
+        why = words.CODEX_LIMIT_NOT_ENOUGH.format(n=f"{CODEX_MAX_LIMIT:,}")
+        return card | {"why": why, "steps": steps([]) if back else []}
+    offered, fit = found
+    shown = words.TOKENS.format(n=f"{offered:,}")
+    offer = {"tokens": offered, "label": words.LIMIT_SET.format(share=shown)}
+    offer["say"] = words.CODEX_LIMIT_FITS.format(limit=shown)
+    offer["cost"] = words.CODEX_LIMIT_COST.format(tokens=_about(fit.used - now.used))
+    return card | {"offer": offer, "note": words.CODEX_LIMIT_NOTE, "steps": steps(ups)}
+
+
+def _asked_tokens(value, window: int | None) -> int | None:
+    """The Codex limit a tray row asks for, as the budget it gives: "default" (2% of the window)
+    or a whole number of tokens (capped as Codex caps it)."""
+    if value == "default":
+        return codex_budget(window, None) if window else None
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return codex_budget(window or 0, value)
+    return None
+
+
+def _codex(
+    inventory, codex_home: Path, folder: str | None, draft: dict, anywhere: bool, asked=None
+) -> dict:
+    """`asked`: the skill list's limit a tray row asks for (tokens, or "default")."""
     client = "codex"
     found = last_codex_list(codex_home, folder)
     if found is None and anywhere and folder is not None:
@@ -1196,12 +1351,28 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
 
     base = run(states, budget) if budget and known else None
     checked = base is not None and _codex_same(rows, base[1], names_only)
+    # config.toml changed after the chat: the limit may differ from the one the chat was sent
+    # under. When the default or a limit Kitden offers rebuilds the chat's list, the chat's card
+    # shows that limit and the estimates use today's (as for Claude Code).
+    moved = not _unchanged([codex_home / "config.toml"], at_ms)
+    then_budget = budget
+    then_found = False
+    if not checked and known and window and moved:
+        offers = range(CODEX_LIMIT_STEP, CODEX_MAX_LIMIT + 1, CODEX_LIMIT_STEP)
+        for then in dict.fromkeys([codex_budget(window, None), *offers]):
+            if then != budget and _codex_same(rows, run(states, then)[1], names_only):
+                then_budget, then_found = then, True
+                break
+        checked = then_found and base is not None
+    if moved and not checked:
+        then_budget = None
 
     fact = _codex_fact(rows, names_only, when, as_shown, codex_table(roots))
     bad = fact.pop("bad")
     unknown = fact.pop("unknown")
-    if checked and not bad:
-        fact["room"] = words.ROOM_LEFT.format(left=f"{budget - fact['used']:,}", unit="tokens")
+    if checked and not bad and then_budget is not None:
+        left = f"{then_budget - fact['used']:,}"
+        fact["room"] = words.ROOM_LEFT.format(left=left, unit="tokens")
     lede = words.CONTEXT_LIMITS[client]
     if limit is not None and budget is not None:
         title, models = (
@@ -1215,7 +1386,19 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
     else:
         title = words.WINDOW_TITLE.format(size=_size(window)) if window else words.UNKNOWN_WINDOW
         models = sent_list.model or ""
-    windows = [_window_card(title, models, _tag(date), budget, fact)]
+    if then_found:  # the chat was sent under another limit than today's
+        title = words.WINDOW_TITLE.format(size=_size(window or 0))
+        models = sent_list.model or ""
+    windows = [_window_card(title, models, _tag(date), then_budget, fact)]
+    lengths = {r.name: len(r.full or "") for r in rows}
+    limit_card = _codex_limit_card(
+        window, limit, budget, base, checked, lengths, lambda b: run(states, b)[1]
+    )
+    changed = []
+    if then_found and base is not None and budget:
+        expect = _codex_estimate(base[0], base[1], _on(window), words.ESTIMATE)
+        shown = words.TOKENS.format(n=f"{budget:,}")
+        changed = [words.LIMIT_CHANGED.format(share=shown), expect["say"]]
     if base is not None and checked:
         other = None
         if limit is not None and window:
@@ -1235,20 +1418,21 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
 
     after = None
     changes = _changes(draft, states, SWITCHES[client])
-    if base is not None and budget and checked and changes:
-        skills, fit = run(states | changes, budget)
-        lengths = {r.name: len(r.full or "") for r in rows}
-
-        def full(fit: CodexFit) -> set[str]:
-            return {n for n, kept in fit.sent.items() if _codex_kind(kept, lengths[n]) == "full"}
-
-        was, now = full(base[1]), full(fit)
+    # A limit in the tray counts only where Kitden could estimate today's.
+    new_budget = _asked_tokens(asked, window) if limit_card["now"] is not None else None
+    if new_budget == budget:
+        new_budget = None
+    if base is not None and budget and checked and (changes or new_budget is not None):
+        budget_after = new_budget if new_budget is not None else budget
+        skills, fit = run(states | changes, budget_after)
+        was, now = _codex_full(base[1], lengths), _codex_full(fit, lengths)
         gets = [r.name for r in rows if r.name not in changes and r.name in now - was]
         loses = [r.name for r in rows if r.name not in changes and r.name in was - now]
-        on = words.WITH_LIMIT if limit is not None else _on(window)
+        on = words.WITH_LIMIT if limit is not None or new_budget is not None else _on(window)
         result = _codex_estimate(skills, fit, on, words.AFTER_APPLY)
         say = f"{result['say']} {_swap(client, gets, loses)}".strip()
         after = {"say": say, "gets": gets, "loses": loses, "result": result}
+        after["budget"] = budget_after
 
     skills = []
     for r in rows:
@@ -1290,6 +1474,7 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
         *([words.HOW_CODEX_SETTING] if limit is not None else []),
         words.HOW_CODEX_SIZES.format(when=when),
         words.HOW_CODEX_TOKENS,
+        *([limit_card["why"]] if limit_card["why"] else []),
     ]
     return _card(
         client,
@@ -1307,6 +1492,8 @@ def _codex(inventory, codex_home: Path, folder: str | None, draft: dict, anywher
         skills=skills,
         after=after,
         how=how,
+        limit=limit_card,
+        changed=changed,
     )
 
 
