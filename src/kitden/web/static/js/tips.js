@@ -141,6 +141,17 @@ export function startTips(root = document) {
     // Measured above with opacity 0, so the fade runs from there.
     tip.classList.add("in");
   };
+  // A control that says "quiettip" (the limit handle once a drag or a key moves it: its own readout
+  // and tag take the place of the words) keeps them off until the pointer has left it and comes
+  // back. A redraw replaces the node and gives it the pointer and focus again, so it is known by
+  // its data-focus key. Focus does not show them again until it has gone to another control.
+  let quiet = null; // { key, hovered }
+  const isQuiet = (node) => quiet && node.dataset.focus === quiet.key;
+  root.addEventListener("quiettip", (event) => {
+    hide();
+    const key = event.target.dataset?.focus;
+    quiet = key ? { key, hovered: Boolean(event.target.matches?.(":hover")) } : null;
+  });
   const wait = (node, ms) => {
     clearTimeout(timer);
     if (owner && owner !== node) hide();
@@ -151,12 +162,17 @@ export function startTips(root = document) {
   root.addEventListener("pointerover", (event) => {
     const node = event.target.closest?.(ACTS);
     if (!node || event.pointerType === "touch") return;
+    if (isQuiet(node)) {
+      if (quiet.hovered) return;
+      quiet = null;
+    }
     hold(node);
     wait(node, WAIT_MS);
   });
   root.addEventListener("pointerout", (event) => {
     const node = event.target.closest?.(ACTS);
     if (node && !node.contains(event.relatedTarget)) {
+      if (isQuiet(node)) quiet.hovered = false;
       hide();
       release();
     }
@@ -164,7 +180,8 @@ export function startTips(root = document) {
   // Keyboard focus shows it at once; focus from a press does not.
   root.addEventListener("focusin", (event) => {
     const node = event.target.closest?.(ACTS);
-    if (node && node.matches(":focus-visible")) wait(node, 0);
+    if (node && !isQuiet(node)) quiet = null;
+    if (node && !isQuiet(node) && node.matches(":focus-visible")) wait(node, 0);
   });
   root.addEventListener("focusout", hide);
   root.addEventListener("pointerdown", hide);

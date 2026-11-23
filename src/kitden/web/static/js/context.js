@@ -656,7 +656,12 @@ function limitControl(card, control, hold, pct, flag, chatLimit) {
   grip.addEventListener("pointermove", (event) => {
     if (!press || !steps.length) return;
     if (!press.dragging && Math.abs(event.clientX - press.x) < DRAG_START) return;
-    if (!press.dragging) document.documentElement.classList.add("grabbing");
+    if (!press.dragging) {
+      document.documentElement.classList.add("grabbing");
+      // The tag takes the place under the handle where its hover words were: they stay off until
+      // the pointer has left the handle and come back (tips.js).
+      grip.dispatchEvent?.(new Event("quiettip", { bubbles: true }));
+    }
     press.dragging = true;
     moving = true;
     const box = hold.getBoundingClientRect();
@@ -679,9 +684,9 @@ function limitControl(card, control, hold, pct, flag, chatLimit) {
     const move = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[event.key];
     if (move && steps.length) {
       event.preventDefault();
-      // The readout takes the place under the handle where its hover words were: they go, as for
-      // a press (tips.js hides them on a pointerdown that reaches the page).
-      if (!moving) hold.dispatchEvent?.(new Event("pointerdown", { bubbles: true }));
+      // The readout takes the place under the handle where its hover words were: they stay off, as
+      // for a drag.
+      if (!moving) grip.dispatchEvent?.(new Event("quiettip", { bubbles: true }));
       const i = Math.min(steps.length - 1, Math.max(0, shown + move));
       moving = moving || i !== control.at;
       draw(i, true);

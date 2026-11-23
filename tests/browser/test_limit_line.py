@@ -148,6 +148,44 @@ def test_a_drag_moves_place_by_place_snaps_and_a_release_adds_the_row_with_no_re
     expect(dock.get_by_role("button", name="Apply")).to_be_hidden()
 
 
+def test_the_hover_words_stay_off_the_tag_after_a_drag_until_the_pointer_comes_back(page):
+    handle = open_context(page)
+    hold = bar_box(page)
+    tip = page.locator("#tip")
+    tag = page.locator(".ctx-next-tag")
+    # Drag to the suggested place and let go with the pointer still on the handle.
+    drag_to(page, handle, hold["x"] + hold["width"] * 0.3)
+    mark_x, y = center(page.locator(".ctx-mark"))
+    page.mouse.move(mark_x, y)
+    assert readout(page) == SUGGESTED
+    page.mouse.up()
+    expect(tag).to_have_text("Next chats: 12,000 characters")
+    # The hover words wait 400 ms after the pointer rests; a negative check has to outlast that.
+    page.wait_for_timeout(1000)
+    expect(tip).to_be_hidden()
+    # They are back once the pointer has left the handle and returns.
+    page.mouse.move(mark_x, y + 150)
+    page.mouse.move(*center(handle))
+    expect(tip).to_contain_text("Drag the line to set the limit")
+
+
+def test_the_hover_words_stay_off_the_tag_after_a_key_move_until_the_pointer_comes_back(page):
+    handle = open_context(page)
+    handle.hover()
+    expect(page.locator("#tip")).to_contain_text("Drag the line to set the limit")
+    # A key moves it while the pointer rests on it: the words go and stay gone.
+    handle.focus()
+    page.keyboard.press("ArrowRight")
+    page.keyboard.press("Enter")
+    expect(page.locator(".ctx-next-tag")).to_have_text("Next chats: 12,000 characters")
+    page.wait_for_timeout(1000)
+    expect(page.locator("#tip")).to_be_hidden()
+    x, y = center(handle)
+    page.mouse.move(x, y + 150)
+    page.mouse.move(x, y)
+    expect(page.locator("#tip")).to_contain_text("Drag the line to set the limit")
+
+
 def test_escape_during_a_drag_changes_nothing(page):
     handle = open_context(page)
     mark_x = bar_box(page)
