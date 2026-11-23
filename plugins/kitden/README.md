@@ -47,8 +47,10 @@ In Claude Code each skill is also a command, such as `/kitden:audit`.
 `kitden show` reads the settings files of Claude Code, Codex and Cursor on this computer. For
 the context check it also reads what the client sent in your last chats, from the client's own
 chat files, the skills the Claude app gives Claude Code, from the app's own folder, and Codex's
-model list (`models_cache.json`), for the size of its context window. It uses them to size the
-skill list and keeps none of it. It also reads each skill's description from its `SKILL.md`, and
+model list (`models_cache.json`), for the size of its context window. For Codex it also reads
+the skill files of a plugin's newest version, when an update removed the version the chat used.
+It uses them to size the skill list and keeps none of it. It also reads each skill's description
+from its `SKILL.md`, and
 `kitden show context` prints it, together with the names of the skills that did not fit in your
 last chat. To learn versions and plugins it may run the clients' own
 commands, such as `claude --version` and `codex plugin list`. A client you turned off on the
