@@ -175,7 +175,13 @@ const block = (id) => walk(setupBox()).find((n) => n.dataset.focus === `block:${
 
 test('the head says Overview and the lede counts, naming the clients', () => {
   show();
-  assert.equal(main.children[0].textContent, 'Overview');
+  const head = main.children[0];
+  assert.equal(head.className, 'page-head');
+  assert.equal(head.children[0].tagName, 'H1');
+  assert.equal(head.children[0].textContent, 'Overview');
+  // "Choose clients…" is at the head's right, in the same place as on the Library.
+  const choose = head.children[1].children[0];
+  assert.deepEqual([head.children[1].className, choose.textContent, choose.className, choose.dataset.focus], ['head-actions', 'Choose clients…', 'btn', 'choose:clients']);
   // The first visit counts the numbers up from 0; the frames bring them to their values.
   assert.equal(text(lede()), '0 things need your attention in Claude Code, Codex and Cursor.');
   settle();
@@ -480,6 +486,21 @@ test('the setup map draws no block for a client that is off, and the lede does n
   assert.equal(ledeText({ attention: 3 }, map.clients.filter((c) => c.on).map((c) => c.name)), '3 things need your attention in Claude Code and Cursor.');
 });
 
+test('the Overview says which clients are off, as text only, under the scope bar and above the cards', () => {
+  show();
+  assert.equal(byClass(main, 'scope-note').length, 0);
+  main.replaceChildren();
+  data.clients = [{ id: 'claude_code', status: 'found' }, { id: 'codex', status: 'off' }];
+  renderOverview(main, { again: true });
+  const notes = byClass(main, 'scope-note');
+  assert.equal(notes.length, 1);
+  assert.equal(notes[0].textContent, 'Codex is turned off in Kitden.');
+  assert.equal(notes[0].children.length, 0);
+  const at = (node) => main.children.indexOf(node);
+  assert.equal(at(notes[0]), at(byClass(main, 'scope-bar')[0]) + 1);
+  assert.equal(at(notes[0]) + 1, at(byClass(main, 'ov-grid')[0]));
+});
+
 test('the setup map draws clients, Kitden gateway and Library with their counts and the foot', () => {
   show(MODEL, { again: true });
   const model = setupTree(MAP, null);
@@ -503,7 +524,7 @@ test('the setup map draws clients, Kitden gateway and Library with their counts 
   assert.equal(walk(setupBox()).filter((n) => n.dataset.focus && n.dataset.focus.startsWith('link:')).length, 0);
   const foot = byClass(main, 'ov-foot')[0];
   assert.equal(text(foot.children[1]), '4 projects · 3 have their own rules');
-  assert.equal(text(foot.children[2]), 'Choose clients…');
+  assert.equal(foot.children.length, 2);
   assert.equal(foot.children[0].dataset.icon, 'folder');
   assert.equal(footWords(1, 1), '1 project · 1 has its own rules');
   // While Kitden cannot read the gateway settings, the gateway block claims no counts.
@@ -628,7 +649,7 @@ test('with no client found the Overview says so', () => {
   data.scope.overview = '';
   main.replaceChildren();
   renderOverview(main, { again: true });
-  assert.equal(main.children[0].textContent, 'No clients found');
+  assert.equal(main.children[0].children[0].textContent, 'No clients found');
   assert.equal(byClass(main, 'lede').length, 0);
   assert.ok(walk(main).some((n) => n.textContent === 'Kitden found no AI coding clients.'));
 });

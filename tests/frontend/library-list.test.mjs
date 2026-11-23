@@ -226,6 +226,26 @@ test('the List has the two tabs and one column per client', async () => {
   for (const gone of ['MCP servers', 'Marketplaces', 'New', 'All', 'All categories', 'Add a marketplace…']) assert.ok(!texts(main).includes(gone), gone);
 });
 
+test('the List has "Choose clients…" in its head, and says which clients are off once, as text only', async () => {
+  const was = data.clients;
+  try {
+    for (const kind of ['plugin', 'instructions']) {
+      data.clients = [];
+      await showList({ kind });
+      const actions = main.children[0].children.at(-1);
+      assert.deepEqual(actions.children.slice(0, 2).map((n) => n.textContent), ['Choose clients…', '+ Add plugins']);
+      assert.equal(main.children.filter((n) => n.classList.contains('scope-note')).length, 0);
+      data.clients = [{ id: 'codex', status: 'off' }];
+      main.replaceChildren();
+      renderLibrary(main);
+      const lines = main.children.filter((n) => n.classList.contains('scope-note'));
+      assert.deepEqual(lines.map((n) => [n.textContent, n.children.length]), [['Codex is turned off in Kitden.', 0]]);
+    }
+  } finally {
+    data.clients = was;
+  }
+});
+
 test('a plugin row says Plugin · n items and folds its parts', async () => {
   await showList();
   const plugin = rowOf('item:p2');

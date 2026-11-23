@@ -18,7 +18,7 @@ The Gateway's groups work the same way.
 | --- | --- |
 | **Plugins and skills** | Use **+ Add**, or drag an item onto another client. Turn it on or off, choose its scope, or remove a copy in **Details**, where the client supports it. **Add missing plugins and skills…** fills gaps across clients. |
 | **Marketplaces** | Browse their plugins and skills. **+ Add → Add a marketplace…** adds a GitHub source. **Details → More → Commands…** has update and remove commands to copy. |
-| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. With **All projects** it shows the files loaded in every project, and a quiet line names a client that loads none; pick a project to see its own files. When a client is turned off in Kitden, the tab says so, with a **Choose clients…** button. A Claude Code hook that `disableAllHooks` turns off shows as off. Kitden only reads these; edit them in your editor. |
+| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. With **All projects** it shows the files loaded in every project, and a quiet line names a client that loads none; pick a project to see its own files. When a client is turned off in Kitden, the tab says so. A Claude Code hook that `disableAllHooks` turns off shows as off. Kitden only reads these; edit them in your editor. |
 
 On the map each client's block says what it loads there: its plugins and skills ("5 plugins ·
 62 skills"), or its hooks when a hook is all it has ("1 hook"). On **Instructions** it counts
@@ -31,9 +31,9 @@ the List offers a project scope where supported. Start a new client session to l
 
 ## Choose your clients
 
-If you use only some of Claude Code, Codex and Cursor, tell Kitden. On the **Overview**, press
-**Choose clients…** under "Your setup" (the Library's **Instructions** tab has the same button
-when a client is off). **Details** lists the three clients, each with a
+If you use only some of Claude Code, Codex and Cursor, tell Kitden. Press
+**Choose clients…** at the top right of the **Overview**, the **Library**, the **Gateway** or
+the **Context** page. Each of these pages says which clients are turned off. **Details** lists the three clients, each with a
 switch. Turn a client off and Kitden stops reading it: it runs none of the client's commands,
 and the client leaves the Overview, the Library, the Gateway, **Agents** and `kitden scan`. Turn
 it on and it comes back. A toast with **Undo** follows each switch. Kitden keeps at least one

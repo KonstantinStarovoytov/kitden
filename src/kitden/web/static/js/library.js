@@ -5,7 +5,7 @@
 // server builds the rows and cells (views/library.py library_list). A row opens the same Details as
 // the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
 import { getJson, query } from "./api.js";
-import { showChoice } from "./clients-choice.js";
+import { chooseButton, offLine, showChoice } from "./clients-choice.js";
 import { button, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, plural, treeRow } from "./dom.js";
 import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, pressLibraryAdd, renderLibraryMap, setListOnly } from "./library-map.js";
 import { addHeadButton, headActions, glidePill, modeSwitch, switchedNow } from "./map-page.js";
@@ -327,7 +327,7 @@ export function renderLibrary(main, { again = false } = {}) {
   head.append(el("h1", null, "Library"));
   const letGo = () => { letGoLibraryMap(); letGoList(); };
   const seg = modeSwitch("library", mode, { old: () => main.querySelector(mode === "map" ? ":scope > div.map" : ":scope > .table-scroll"), letGo, shows: () => libraryShows.mode });
-  head.append(headActions(addHeadButton("+ Add plugins", "add:plugins", pressLibraryAdd), seg));
+  head.append(headActions(chooseButton(), addHeadButton("+ Add plugins", "add:plugins", pressLibraryAdd), seg));
   main.append(head);
   let found = null;
   if (mode === "map") found = renderLibraryMap(main, { head, again, switched });
@@ -363,6 +363,9 @@ function renderList(main) {
     main.append(noClients());
     return;
   }
+  // The Map's line (library-map.js): here too, once rows or none are read.
+  const off = answer ? offLine(data.clients) : null;
+  if (off) main.append(off);
   const tools = toolbar(kind, answer);
   if (tools) main.append(tools);
   const show = tools && tools.querySelector(".seg");

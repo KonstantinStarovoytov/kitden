@@ -556,8 +556,6 @@ input:focus-visible + .chk { outline: 2px solid var(--focus); outline-offset: 2p
 .ov-note:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .ov-setup div.map { margin: 4px 0 0 -6px; }
 .ov-foot { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; color: var(--ink-3); font-size: 11px; }
-/* "Choose clients…" sits at the foot line's right end. */
-.ov-foot .choose { margin-left: auto; }
 div.map .block.page .block-label { color: var(--ink-4); }
 .card { background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; padding: 12px 14px; }
 .card h2 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }

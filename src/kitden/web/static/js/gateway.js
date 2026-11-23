@@ -1,5 +1,6 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
+import { chooseButton, offLine } from "./clients-choice.js";
 import { $, button, byKeys, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, pageWaits, plural, reportError, treeRow, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
@@ -108,6 +109,8 @@ export function renderGateway(main, { again = false } = {}) {
   // Under the head: what the page shows, the shared setup or a project's rules that differ from it.
   const scope = scopeBar(folderName(projectPath()), view.own_rules);
   main.append(scope);
+  const off = offLine(data.clients);
+  if (off) main.append(off);
   riseHead(head, lede, scope, { again });
   switchInPlace(again, scope);
   if (currentError("gateway")) main.append(staleNote(data.readAt.gateway));
@@ -122,7 +125,7 @@ export function renderGateway(main, { again = false } = {}) {
   const mode = viewMode(state);
   gatewayShows.mode = mode;
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
-  head.append(headActions(addHeadButton("+ Add servers", "add:servers", (node) => openAdd({ from: node })), seg));
+  head.append(headActions(chooseButton(), addHeadButton("+ Add servers", "add:servers", (node) => openAdd({ from: node })), seg));
   const model = treeFor(view, mode);
   setHint(mode === "map" ? mapHint() : "", mode === "map" ? hintActs() : []);
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).

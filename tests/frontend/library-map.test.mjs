@@ -167,7 +167,9 @@ test('the head has the tabs, the lede, the scope bar and Map | List', () => {
   // The add button and Map | List sit together, so a narrow head wraps them as one.
   const actions = head.children.at(-1);
   assert.equal(actions.className, 'head-actions');
-  assert.deepEqual(actions.children.map((n) => n.className), ['btn add', 'seg']);
+  assert.deepEqual(actions.children.map((n) => n.className), ['btn', 'btn add', 'seg']);
+  assert.deepEqual(actions.children.slice(0, 2).map((n) => n.textContent), ['Choose clients…', '+ Add plugins']);
+  assert.equal(actions.children[0].dataset.focus, 'choose:clients');
   const seg = actions.children.at(-1);
   assert.deepEqual(seg.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Map', 'true'], ['List', 'false']]);
   assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
@@ -1308,18 +1310,20 @@ test('with no instruction files the tab says No instruction files here.', () => 
   }
 });
 
-test('the Instructions tab says which clients are off, with the button, and only there', () => {
+test('each tab of the Map says which clients are off, as text only, once', () => {
   const was = data.clients;
   try {
     Object.assign(data, { libraryMap: MEDIUM, instructionsMap: INSTR, projects: [], clients: [{ id: 'codex', status: 'off' }] });
     Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
-    Object.assign(state, { view: 'library', mode: 'map', kind: 'instructions', project: '', q: '', selected: null });
-    main.replaceChildren();
-    renderLibrary(main);
-    settle();
-    const line = walk(main).find((n) => n.classList.contains('scope-note'));
-    assert.deepEqual(line.children.map((n) => n.textContent), ['Choose clients…']);
-    assert.equal(line.textContent, 'Codex is turned off in Kitden. ');
+    for (const kind of ['instructions', 'plugin']) {
+      Object.assign(state, { view: 'library', mode: 'map', kind, project: '', q: '', selected: null });
+      main.replaceChildren();
+      renderLibrary(main);
+      settle();
+      const lines = walk(main).filter((n) => n.classList.contains('scope-note') && n.textContent === 'Codex is turned off in Kitden.');
+      assert.equal(lines.length, 1);
+      assert.equal(lines[0].children.length, 0);
+    }
     data.clients = [{ id: 'codex', status: 'found' }];
     main.replaceChildren();
     renderLibrary(main);

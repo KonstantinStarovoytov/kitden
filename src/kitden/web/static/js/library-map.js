@@ -486,7 +486,7 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   if (tab === "instructions" && answer.note) main.append(el("p", "muted scope-note", answer.note));
   // The note says it already when it is there: one line, not two.
   if (tab === "instructions" && !answer.note && !answer.groups.some((group) => group.files.length)) main.append(el("p", "muted", NO_FILES));
-  const off = tab === "instructions" ? offLine(data.clients) : null;
+  const off = offLine(data.clients);
   if (off) main.append(off);
   main.append(onMap.view.box);
   const text = state.q.trim();

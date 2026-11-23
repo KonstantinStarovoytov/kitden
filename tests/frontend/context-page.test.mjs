@@ -207,8 +207,10 @@ test('the rail has Context after Library, drawn with the gauge', () => {
 test('the page draws the title, the lede, the clients, the windows and the verdict', async () => {
   await fresh();
   show();
-  assert.equal(main.children[0].tagName, 'H1');
-  assert.equal(text(main.children[0]), 'Do your skills fit?');
+  assert.equal(main.children[0].className, 'page-head');
+  assert.equal(main.children[0].children[0].tagName, 'H1');
+  assert.equal(text(main.children[0].children[0]), 'Do your skills fit?');
+  assert.deepEqual(byClass(main.children[0], 'head-actions')[0].children.map((n) => text(n)), ['Choose clients…']);
   // Codex is the first client whose lamp is amber, so it shows.
   assert.equal(text(byClass(main, 'lede')[0]), CODEX.lede);
   assert.deepEqual(chips().map((n) => text(n)), ['Claude Code', 'Codex', 'Cursor']);
@@ -292,7 +294,8 @@ test('the page waits with a skeleton, says when the read failed, and uses up the
   state.selected = { kind: 'client', name: 'codex' };
   main.replaceChildren();
   renderContext(main);
-  assert.equal(text(main.children[0]), 'Do your skills fit?');
+  assert.equal(text(main.children[0].children[0]), 'Do your skills fit?');
+  assert.equal(main.children[0].children.length, 2);
   assert.equal(byClass(main, 'skeleton').length > 0, true);
   assert.equal(arrival.pending, false);
   data.errors.context = new Error('down');
