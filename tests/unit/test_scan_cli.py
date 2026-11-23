@@ -226,6 +226,28 @@ def test_scan_in_a_folder_with_no_chat_shows_the_last_chat_and_its_folder(
     )
 
 
+def test_show_context_without_a_project_finds_the_last_chat_in_another_folder(
+    bare, capsys, monkeypatch
+):
+    here, there = bare / "work/here", bare / "work/there"
+    here.mkdir(parents=True)
+    there.mkdir(parents=True)
+    write_json(bare / ".claude.json", {"projects": {str(here): {}, str(there): {}}})
+    skill(bare / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(bare, {"alpha": "Does alpha."}, folder=str(there))
+    monkeypatch.chdir(here)
+    assert main(["show", "context", "--home", str(bare)]) == 0
+    cards = {c["client"]: c for c in json.loads(capsys.readouterr().out)["clients"]}
+    assert cards["claude_code"]["fact"]["folder"] == str(there)
+    assert cards["claude_code"]["message"] is None
+    # With --project the answer stays with that folder, as before.
+    assert main(["show", "context", "--home", str(bare), "--project", str(here)]) == 0
+    cards = {c["client"]: c for c in json.loads(capsys.readouterr().out)["clients"]}
+    assert cards["claude_code"]["message"] == (
+        "No Claude Code chat yet. Open one chat, and Kitden will show what Claude Code sent."
+    )
+
+
 def test_scan_with_no_chat_anywhere_says_there_is_none(bare, capsys):
     skill(bare / ".claude/skills", "alpha", "Does alpha.")
     lines = _summary(bare, capsys)

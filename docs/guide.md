@@ -49,7 +49,8 @@ Kitden still reads the client, and **Show** brings the column back.
 
 ## Check that your skills fit
 
-Open **Context** to see whether each client's skill list fit in its last chat. Claude Code and
+Open **Context** to see whether each client's skill list fit in its last chat: for Claude Code
+that is the chat that last got a full skill list, one that was started or resumed. Claude Code and
 Codex let that list use only a small part of the context window. Claude Code then shows some
 skills by name only; Codex shortens descriptions and, past that, leaves skills out. Kitden reads
 the skill list from the last chat log, plus the settings, skill files and use counts it needs
@@ -66,7 +67,8 @@ into Claude Code, such as `dataviz`, is marked **built-in**: it is not a file, s
 does not list it and Kitden cannot turn it off. The change goes through preview,
 **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
 did not fit. `kitden show context`, which the plugin's `context` skill runs, also prints each
-skill's description, so your agent sees it too.
+skill's description, so your agent sees it too. With no chat in the current folder, it shows the
+last chat in any folder and names that folder; with `--project` it stays with that folder.
 
 ## Add from the catalogs
 
