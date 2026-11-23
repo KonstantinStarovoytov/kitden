@@ -9,8 +9,8 @@ from playwright.sync_api import expect
 pytestmark = pytest.mark.browser
 
 # The medium sample's last Claude Code chat (tests/unit/test_demo_home.py): 4 of 20 skills
-# showed only a name.
-NAME_ONLY = ["brandkit", "release-notes", "shared-style", "planning"]
+# showed only a name. A plugin's skill shows its plugin before its name.
+NAME_ONLY = ["brandkit", "release-notes", "shared-style", "superpowers: planning"]
 # Its last Codex chat had room for all four of Codex's own skills.
 CODEX = ["api-style", "code-review", "docker-expert", "langfuse"]
 
