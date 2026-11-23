@@ -1,13 +1,13 @@
 # Kitden roadmap
 
-Last updated: 2026-11-22
+Last updated: 2026-11-23
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not yet released
+### 0.11.0
 
 - **Picking a project is quicker when its last Claude Code chat is far down the list of
   chats:** Kitden no longer reads every newer chat log in full. On one real setup the read of

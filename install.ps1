@@ -3,7 +3,7 @@
 # It never changes anything in Claude Code, Codex or Cursor.
 $ErrorActionPreference = "Stop"
 
-$KitdenVersion = "0.10.3"
+$KitdenVersion = "0.11.0"
 
 # 1. Windows support is a later feature. Steps 2 to 5 run once it lands.
 $WindowsSupported = $false
