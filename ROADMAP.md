@@ -16,12 +16,15 @@ What Kitden does today and what comes next. Ideas and bugs:
   says why no file is shown, "No instruction files here." is left out.
 - **Pages say which clients are off:** the Overview, the Library, the Gateway and the Context
   page each say it in a quiet line, such as "Codex is turned off in Kitden."
-- **`kitden scan` counts in plain words:** it prints `MCP servers: 12` and `Skills: 62` where it
-  printed `mcp_server` and `skill`, says on the `Skills` line why that count and the last
-  chat's differ, puts the Claude Desktop Code tab on one line under Claude Code, and no longer
-  breaks a line inside `kitden show findings` or "+26 more". A skill reached twice, through a
-  project's path and a symlink to it, counts once, and a client that is not installed reads
-  "Codex: not found".
+- **`kitden scan` puts the problem first:** each agent prints as a block with its version,
+  then whether its skill list fit and the names of the skills that did not, then one line,
+  "On this computer: 2 plugins, 4 skills, 2 MCP servers", where it printed one count on each
+  line. A line says why a chat's skill count differs, an agent with no skills says
+  "nothing yet", the notes say they need no fix, and the last line says what to do, such as
+  "To make the skills fit, turn off the ones you do not use". The Claude Desktop Code tab is
+  one line under Claude Code, a line no longer breaks inside `kitden show findings` or
+  "+26 more", a skill reached twice counts once, and a file that cannot be read gets a reason
+  in words. A client that is not installed reads "Codex: not found".
 - **A description that a plugin update changed is not counted as cut:** when a Codex plugin was
   updated after your last chat and a skill's description changed with it, Kitden compared what
   the chat sent with the new text and said it was cut, such as "31 of 61 cut to 139–338

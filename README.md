@@ -16,21 +16,22 @@ agents' settings and changes none of them.
 It prints what each agent loads, for example:
 
 ```text
-Claude Code: found (2.1.311)
-  Instruction files: 2
-  Marketplaces: 1
-  MCP servers: 2
-  Plugins: 2
-  Skills: 4 on this computer; a chat lists one project's and Claude Code's own
-  Skill list: In your last chat on Oct 1, 3 of 19 skills showed only a name. The agent may not have used them.
-    That chat was in ~/work/atlas.
+Claude Code 2.1.311
+  In your last chat on Oct 1, 3 of 19 skills showed only a name. The agent may
+  not have used them.
     brandkit, release-notes, superpowers:planning
-Codex: found (0.171.0)
-  Skill list: There is nothing to fit.
+    That chat was in ~/work/atlas.
+  On this computer: 2 plugins, 4 skills, 2 MCP servers, 2 instruction files,
+  1 marketplace
+  A chat lists only one project's skills, and Claude Code's own too.
+
+Codex 0.171.0
+  On this computer: nothing yet
 …
-6 notes: kitden show findings
+
+6 notes (nothing to fix): kitden show findings
 Your agents' settings were not changed: scan only reads them.
-To fix: kitden open
+To make the skills fit, turn off the ones you do not use: kitden open
 ```
 
 <p align="center">One local page for their MCP servers, plugins, skills and instruction files.<br>

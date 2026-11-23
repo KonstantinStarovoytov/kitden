@@ -299,49 +299,70 @@ def _print_summary(
 ) -> None:
     from kitden.views import words
     from kitden.views.effective import column_of
+    from kitden.views.overview import READ_PROBLEMS
 
     # An item reached twice (a project listed by its path and by a symlink to it) counts once.
     seen = {(i.client, str(i.kind), i.id) for i in inventory.items}
     counts = Counter((client, kind) for client, kind, _ in seen)
     misfits = False
+    blocks = []
     for client in inventory.clients:
         if column_of(client.id) != client.id:
             continue  # the Desktop Code tab: a line under Claude Code
-        status = words.SCAN_STATUS.get(str(client.status), str(client.status))
+        name = client.display_name
         if client.status in (ClientStatus.NOT_FOUND, ClientStatus.OFF):
-            print(f"{client.display_name}: {status}")
+            blocks.append([f"{name}: {words.SCAN_STATUS[str(client.status)]}"])
             continue
-        print(f"{client.display_name}: {status} ({_version(client)})")
+        if client.status is ClientStatus.UNREADABLE:
+            said = f"{name}: {words.SCAN_STATUS[str(client.status)]}"
+            blocks.append([f"{said} ({client.version})" if client.version else said])
+            continue
+        known = words.SCAN_FOUND if client.version else words.SCAN_FOUND_NO_VERSION
+        lines = [known.format(name=name, version=client.version)]
         card = cards.get(client.id)
-        for kind, label in words.SCAN_KINDS.items():
-            count = counts[(client.id, kind)]
-            if not count:
-                continue
-            said = str(count)
-            if kind == "skill" and card and card["windows"]:  # a chat's own count follows
-                said = words.SCAN_SKILLS.format(n=count, client=client.display_name)
-            print(f"  {label}: {said}")
         fit = _skill_list(card)
         if fit:
             say, names, folder = fit
-            print(f"  Skill list: {say}")
-            if folder and folder != here:
-                print(f"    {words.SCAN_CHAT_FOLDER.format(folder=_short(folder, home))}")
-            if names:
-                misfits = True
-                print(*_wrap(_first_few(names, FEW_NAMES, ", "), "    ", "    "), sep="\n")
+            if say and say != words.NOTHING_TO_FIT:  # no skills: nothing to judge
+                lines += _wrap(say, "  ", "  ")
+                if names:
+                    misfits = True
+                    lines += _wrap(_first_few(names, FEW_NAMES, ", "), "    ", "    ")
+                if folder and folder != here:
+                    lines.append(
+                        f"    {words.SCAN_CHAT_FOLDER.format(folder=_short(folder, home))}"
+                    )
+        have = [
+            f"{n}{TIED}{one if n == 1 else many}"
+            for kind, (one, many) in words.SCAN_KINDS.items()
+            if (n := counts[(client.id, kind)])
+        ]
+        lines += _wrap(words.SCAN_HAVE.format(have=", ".join(have) or words.SCAN_NONE), "  ", "  ")
+        # Why the chat's number and the computer's can differ.
+        if card and card["windows"] and counts[(client.id, "skill")]:
+            lines += _wrap(words.SCAN_COUNT_NOTE.format(client=name), "  ", "  ")
         for tab in inventory.clients:
             if tab.id != client.id and column_of(tab.id) == client.id:
                 servers = counts[(tab.id, "mcp_server")]
-                print(f"  {words.SCAN_DESKTOP.format(version=_version(tab), n=servers)}")
+                lines.append(f"  {words.SCAN_DESKTOP.format(version=_version(tab), n=servers)}")
+        blocks.append(lines)
+    for i, lines in enumerate(blocks):
+        print("\n" * (i > 0) + "\n".join(lines))
+    if blocks:
+        print()
     for problem in inventory.problems:
-        print(f"Could not read {problem.path or problem.owner_client}: {problem.unknown_reason}")
+        reason = problem.unknown_reason
+        why = READ_PROBLEMS.get(reason) if reason else None
+        said = why[0].lower() + why[1:] if why else reason  # a reason without words: its id
+        print(f"Could not read {problem.path or problem.owner_client}: {said}")
     for line in _findings_lines(findings, {i.id: i for i in inventory.items}):
         print(line)
     warned = any(f["severity"] == "warning" for f in findings)
     print(words.SCAN_READ_ONLY)
-    fix = misfits or warned or inventory.problems
-    print(words.SCAN_FIX if fix else words.SCAN_OPEN)
+    if misfits:
+        print(words.SCAN_FIX_SKILLS)
+    else:
+        print(words.SCAN_FIX if warned or inventory.problems else words.SCAN_OPEN)
 
 
 def _version(client: Client) -> str:

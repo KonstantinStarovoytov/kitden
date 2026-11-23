@@ -121,31 +121,32 @@ def test_scan_says_which_skills_the_last_chat_cut(bare, capsys):
         at="2026-11-07T12:00:00Z",
     )
     lines = _summary(bare, capsys)
-    said = (
-        "  Skill list: In your last chat on Nov 7, 2 of 4 skills showed only a name. "
-        "The agent may not have used them."
-    )
-    claude, codex = lines.index("Claude Code: found (unknown version)"), lines.index(said)
-    assert claude < codex < next(i for i, line in enumerate(lines) if line.startswith("Codex:"))
-    assert _after(lines, said) == [ELSEWHERE, "    gamma, delta"]
-    assert lines[-1] == "To fix: kitden open"
-    # The count beside it says why the two numbers can differ, in one line of the terminal.
-    counted = "  Skills: 4 on this computer; a chat lists one project's and Claude Code's own"
-    assert lines[lines.index(said) - 1] == counted
-    assert len(counted.replace("4", "999")) <= 80
+    # The block's order: the first line, the verdict, the names, the folder, what is here, and
+    # why the counts differ.
+    assert lines[:8] == [
+        "Claude Code (version unknown)",
+        "  In your last chat on Nov 7, 2 of 4 skills showed only a name. The agent may",
+        "  not have used them.",
+        "    gamma, delta",
+        ELSEWHERE,
+        "  On this computer: 1 plugin, 4 skills",
+        "  A chat lists only one project's skills, and Claude Code's own too.",
+        "",
+    ]
+    assert lines[-1] == "To make the skills fit, turn off the ones you do not use: kitden open"
+    assert all(len(line) <= 80 for line in lines)
 
 
 def test_scan_names_the_first_few_skills_and_counts_the_rest(bare, capsys):
     names = [f"plugin-dev:skill-number-{n}" for n in range(1, 10)]
     claude_chat(bare, {"alpha": "Does alpha."} | dict.fromkeys(names))
     lines = _summary(bare, capsys)
-    said = next(line for line in lines if line.startswith("  Skill list:"))
-    assert said.startswith("  Skill list: In your last chat on Nov 6, 9 of 10 skills showed")
-    assert _after(lines, said) == [
-        ELSEWHERE,
+    assert lines[1].startswith("  In your last chat on Nov 6, 9 of 10 skills showed")
+    assert _after(lines, lines[2]) == [
         "    plugin-dev:skill-number-1, plugin-dev:skill-number-2,",
         "    plugin-dev:skill-number-3, plugin-dev:skill-number-4,",
         "    plugin-dev:skill-number-5 +4 more",
+        ELSEWHERE,
     ]
 
 
@@ -154,9 +155,8 @@ def test_scan_does_not_list_skills_set_to_name_only(bare, capsys):
     before_the_chat(bare / ".claude/settings.json")
     claude_chat(bare, {"alpha": LONG[:1000], "beta": LONG[:1000], "gamma": None, "delta": None})
     lines = _summary(bare, capsys)
-    said = next(line for line in lines if line.startswith("  Skill list:"))
-    assert said.endswith("1 more showed only a name, as you chose.")
-    assert _after(lines, said) == [ELSEWHERE, "    gamma"]
+    said = next(line for line in lines if line.endswith("1 more showed only a name, as you chose."))
+    assert _after(lines, said) == ["    gamma", ELSEWHERE]
 
 
 def test_scan_lists_nothing_when_every_name_only_skill_was_chosen(bare, capsys):
@@ -164,11 +164,8 @@ def test_scan_lists_nothing_when_every_name_only_skill_was_chosen(bare, capsys):
     before_the_chat(bare / ".claude/settings.json")
     claude_chat(bare, {"alpha": LONG[:1000], "beta": LONG[:1000], "gamma": None, "delta": None})
     lines = _summary(bare, capsys)
-    said = (
-        "  Skill list: In your last chat on Nov 6, all 4 skills were sent; 2 showed only a name, "
-        "as you chose."
-    )
-    assert _after(lines, said) == [ELSEWHERE]
+    said = "  In your last chat on Nov 6, all 4 skills were sent; 2 showed only a name, as"
+    assert lines[1:4] == [said, "  you chose.", ELSEWHERE]
     assert lines[-1] == "To see or change it: kitden open"
 
 
@@ -186,9 +183,8 @@ def test_scan_names_the_codex_skills_whose_description_was_cut(bare, capsys):
         ],
     )
     lines = _summary(bare, capsys)
-    said = next(line for line in lines if line.startswith("  Skill list: In your last chat on Oct"))
-    assert "2 of 3 descriptions were cut" in said
-    assert _after(lines, said) == [ELSEWHERE, "    alpha, beta"]
+    assert "2 of 3 descriptions were cut" in " ".join(lines)
+    assert lines[lines.index("    alpha, beta") + 1] == ELSEWHERE
 
 
 def test_scan_names_the_codex_skills_left_out(bare, capsys):
@@ -202,8 +198,8 @@ def test_scan_names_the_codex_skills_left_out(bare, capsys):
         at="2026-11-07T12:00:00Z",
     )
     lines = _summary(bare, capsys)
-    said = next(line for line in lines if "left 1 of 3 skills out" in line)
-    assert _after(lines, said) == [ELSEWHERE, "    gamma"]
+    assert "left 1 of 3 skills out" in " ".join(" ".join(lines).split())
+    assert lines[lines.index("    gamma") + 1] == ELSEWHERE
 
 
 def test_scan_in_a_folder_with_no_chat_shows_the_last_chat_and_its_folder(
@@ -217,12 +213,11 @@ def test_scan_in_a_folder_with_no_chat_shows_the_last_chat_and_its_folder(
     claude_chat(bare, {"alpha": "Does alpha."}, folder=str(there))
     monkeypatch.chdir(here)
     lines = _summary(bare, capsys)
-    said = next(line for line in lines if line.startswith("  Skill list: In your last chat"))
-    assert _after(lines, said) == ["    That chat was in ~/work/there."]
+    said = next(line for line in lines if line.startswith("  In your last chat"))
+    assert _after(lines, said)[-1:] == ["    That chat was in ~/work/there."]
     monkeypatch.chdir(there)
     lines = _summary(bare, capsys)
-    said = next(line for line in lines if line.startswith("  Skill list: In your last chat"))
-    assert _after(lines, said) == []
+    assert not [line for line in lines if "That chat was in" in line]
     # The page and `kitden show context` still answer for the project itself.
     assert main(["show", "context", "--home", str(bare), "--project", str(here)]) == 0
     cards = {c["client"]: c for c in json.loads(capsys.readouterr().out)["clients"]}
@@ -234,25 +229,42 @@ def test_scan_in_a_folder_with_no_chat_shows_the_last_chat_and_its_folder(
 def test_scan_with_no_chat_anywhere_says_there_is_none(bare, capsys):
     skill(bare / ".claude/skills", "alpha", "Does alpha.")
     lines = _summary(bare, capsys)
-    assert "  Skills: 1" in lines  # no chat's number beside it, so nothing to explain
-    assert (
-        "  Skill list: No Claude Code chat yet. Open one chat, and Kitden will show what "
-        "Claude Code sent." in lines
-    )
+    assert lines[1:4] == [
+        "  No Claude Code chat yet. Open one chat, and Kitden will show what Claude Code",
+        "  sent.",
+        "  On this computer: 1 plugin, 1 skill",
+    ]
+    # No chat's number beside it, so nothing to explain.
+    assert not [line for line in lines if "its count differs" in line]
 
 
 def test_scan_says_so_when_it_cannot_tell(bare, capsys):
     skill(bare / ".claude/skills", "alpha", "Does alpha.")
     skill(bare / ".cursor/skills", "alpha", "Does alpha.")
     lines = _summary(bare, capsys)
-    assert (
-        "  Skill list: No Claude Code chat yet. Open one chat, and Kitden will show what "
-        "Claude Code sent."
-    ) in lines
-    assert (
-        "  Skill list: Kitden cannot see what Cursor sends, so it cannot tell if your skills fit."
-    ) in lines
-    assert "  Skill list: There is nothing to fit." in lines  # Codex has no skills
+    assert lines[1:3] == [
+        "  No Claude Code chat yet. Open one chat, and Kitden will show what Claude Code",
+        "  sent.",
+    ]
+    cursor = lines.index("Cursor (version unknown)")
+    assert lines[cursor + 1 : cursor + 4] == [
+        "  Kitden cannot see what Cursor sends, so it cannot tell if your skills fit.",
+        "  On this computer: 2 skills",
+        "",
+    ]
+
+
+def test_scan_prints_no_verdict_for_a_client_with_no_skills(bare, capsys):
+    skill(bare / ".claude/skills", "alpha", "Does alpha.")
+    lines = _summary(bare, capsys)
+    codex = lines.index("Codex (version unknown)")
+    # Nothing to fit is not a verdict: the block is its first line and what it has.
+    assert lines[codex : codex + 3] == [
+        "Codex (version unknown)",
+        "  On this computer: nothing yet",
+        "",
+    ]
+    assert words.NOTHING_TO_FIT not in "\n".join(lines)
 
 
 def test_scan_names_the_warnings_and_points_to_the_findings(bare, capsys):
@@ -262,9 +274,9 @@ def test_scan_names_the_warnings_and_points_to_the_findings(bare, capsys):
     # Cursor reads both folders too.
     assert lines[-4:] == [
         "2 warnings: Codex loads skill 'docker-expert' twice; Cursor loads skill",
-        "  'docker-expert' twice. 2 notes: kitden show findings",
+        "  'docker-expert' twice. 2 notes (nothing to fix): kitden show findings",
         "Your agents' settings were not changed: scan only reads them.",
-        "To fix: kitden open",
+        "To fix this: kitden open",
     ]
 
 
@@ -275,26 +287,23 @@ def test_scan_reads_the_servers_kitden_holds_as_show_does(bare, capsys):
         add_entry(bare, "cursor", name, entry)
     hold_github(bare)
     lines = _summary(bare, capsys)
-    cursor = lines.index("Cursor: found (unknown version)")
-    assert "  MCP servers: 3" in lines[cursor:]  # kitden, github, and github through Kitden
+    cursor = lines.index("Cursor (version unknown)")
+    # kitden, github, and github through Kitden
+    assert any("3 MCP servers" in line for line in lines[cursor:])
     assert main(["show", "findings", "--home", str(bare)]) == 0
     shown = json.loads(capsys.readouterr().out)["findings"]
-    assert lines[-3] == f"{len(shown)} notes: kitden show findings"
+    assert lines[-3] == f"{len(shown)} notes (nothing to fix): kitden show findings"
     # The held copy replaces the direct one in Cursor's view: one server, no warning.
     assert not [f for f in shown if f["severity"] == "warning"]
 
 
-def test_scan_counts_each_kind_in_plain_words(home, capsys):
+def test_scan_counts_each_kind_in_one_line(home, capsys):
     lines = _summary(home, capsys)
-    claude = lines.index("Claude Code: found (unknown version)")
-    assert lines[claude + 1 : claude + 7] == [
-        "  Hooks: 1",
-        "  Instruction files: 5",
-        "  Marketplaces: 1",
-        "  MCP servers: 4",
-        "  Plugins: 3",
-        "  Skills: 4",
-    ]
+    claude = lines.index("Claude Code (version unknown)")
+    on = lines.index(
+        "  On this computer: 3 plugins, 4 skills, 4 MCP servers, 1 hook, 5 instruction", claude
+    )
+    assert lines[on + 1] == "  files, 1 marketplace"
     assert set(words.SCAN_KINDS) == {str(kind) for kind in ItemKind}
 
 
@@ -311,12 +320,12 @@ def test_scan_counts_an_item_reached_twice_once(home, capsys, monkeypatch):
 
     monkeypatch.setattr(answers, "read_setup", twice)
     lines = _summary(home, capsys)
-    assert "  Skills: 4" in lines
+    assert any("4 skills" in line for line in lines)
 
 
 def test_scan_says_a_client_is_not_found_in_plain_words(tmp_path, capsys):
     lines = _summary(make_home(tmp_path, "claude_code/2.1.283"), capsys)
-    assert "Codex: not found" in lines
+    assert lines[lines.index("Codex: not found") - 1] == ""
     assert "Cursor: not found" in lines
     assert not [line for line in lines if "not_found" in line]
 
@@ -324,21 +333,84 @@ def test_scan_says_a_client_is_not_found_in_plain_words(tmp_path, capsys):
 def test_scan_puts_the_desktop_code_tab_under_claude_code(home, capsys):
     (claude_desktop_dir(home) / "claude-code/2.1.330").mkdir(parents=True)
     lines = _summary(home, capsys)
-    clients = [line.split(":")[0] for line in lines if ": found (" in line]
-    assert clients == ["Claude Code", "Codex", "Cursor"]
-    # Its own servers, after everything Claude Code loads: the Code tab loads that too.
-    assert lines[lines.index("Codex: found (unknown version)") - 1] == (
+    clients = [line for line in lines if line.endswith("(version unknown)")]
+    assert len(clients) == 3
+    # Its own servers, last in Claude Code's block: the Code tab loads what it loads too.
+    assert lines[lines.index("Codex (version unknown)") - 2] == (
         "  Only in the Claude Desktop app (Code tab, 2.1.330): MCP servers: 1"
     )
 
 
 def test_scan_ends_by_saying_the_settings_were_not_changed(bare, capsys):
     before = _snapshot(bare)
-    assert _summary(bare, capsys)[-2:] == [
+    assert _summary(bare, capsys)[-3:] == [
+        "1 note (nothing to fix): kitden show findings",
         "Your agents' settings were not changed: scan only reads them.",
         "To see or change it: kitden open",
     ]
     assert _snapshot(bare) == before
+
+
+def test_scan_separates_the_blocks_and_the_closing_lines_by_one_blank_line(bare, capsys):
+    out = _summary(bare, capsys)
+    assert out[0] and out[-1]  # no blank line at the start or the end
+    assert [i for i, line in enumerate(out) if not line] == [
+        out.index("Codex (version unknown)") - 1,
+        out.index("Cursor (version unknown)") - 1,
+        out.index("1 note (nothing to fix): kitden show findings") - 1,
+    ]
+
+
+def test_scan_blocks_of_clients_that_are_not_found_are_one_line(tmp_path, capsys):
+    lines = _summary(make_home(tmp_path, "claude_code/2.1.283"), capsys)
+    assert lines[0] == "Claude Code (version unknown)"
+    assert lines[lines.index("Codex: not found") + 1 :][:2] == ["", "Cursor: not found"]
+
+
+def test_scan_names_a_client_and_its_version_on_one_line(home, tmp_path, monkeypatch, capsys):
+    codex = fake_client_command(tmp_path, "codex", "echo codex-cli 0.159.2")
+    monkeypatch.setattr(version_cache, "version_command", {"codex": [str(codex), "--version"]}.get)
+    assert "Codex 0.159.2" in _summary(home, capsys)
+
+
+def test_scan_last_line_says_what_to_do(bare, capsys):
+    # Skills that did not fit.
+    names = {"alpha": "Does alpha.", "beta": None}
+    for name in names:
+        skill(bare / ".claude/skills", name, "Does it.")
+    claude_chat(bare, names)
+    fits = "To make the skills fit, turn off the ones you do not use: kitden open"
+    assert _summary(bare, capsys)[-1] == fits
+
+
+def test_scan_last_line_for_a_warning_or_a_file_that_cannot_be_read(bare, capsys):
+    (bare / ".claude.json").write_text("{ broken")
+    assert main(["scan", "--home", str(bare)]) == 3
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[-1] == "To fix this: kitden open"
+    # The reason is in words, not the id `scan --json` has.
+    assert lines[-4].endswith(": the file has a syntax error")
+    assert lines[-4].startswith("Could not read ")
+
+
+def test_scan_explains_the_two_skill_counts_only_beside_a_chat_and_skills(bare, capsys):
+    note = "  A chat lists only one project's skills, and Claude Code's own too."
+    # No chat: no number to differ from.
+    skill(bare / ".claude/skills", "alpha", "Does alpha.")
+    assert note not in _summary(bare, capsys)
+    # A chat and a skill: said once, right under the count.
+    claude_chat(bare, {"alpha": "Does alpha."})
+    lines = _summary(bare, capsys)
+    assert lines[lines.index(note) - 1].startswith("  On this computer: ")
+    assert lines.count(note) == 1
+    # A chat, but no skill on this computer: nothing to compare.
+    (bare / ".claude/skills/alpha/SKILL.md").unlink()
+    assert note not in _summary(bare, capsys)
+
+
+def test_scan_words_are_singular_for_one(bare, capsys):
+    skill(bare / ".claude/skills", "alpha", "Does alpha.")
+    assert "  On this computer: 1 plugin, 1 skill" in _summary(bare, capsys)
 
 
 # The findings line, from the answer `kitden show findings` gives
@@ -355,9 +427,11 @@ def _finding(severity, client="codex", items=("a",), text="It is so."):
 
 
 def test_findings_lines_count_the_notes():
-    assert cli._findings_lines([_finding("info")], {}) == ["1 note: kitden show findings"]
+    assert cli._findings_lines([_finding("info")], {}) == [
+        "1 note (nothing to fix): kitden show findings"
+    ]
     notes = [_finding("info")] * 61
-    assert cli._findings_lines(notes, {}) == ["61 notes: kitden show findings"]
+    assert cli._findings_lines(notes, {}) == ["61 notes (nothing to fix): kitden show findings"]
     assert cli._findings_lines([], {}) == []
 
 
@@ -370,7 +444,7 @@ def test_findings_lines_name_the_first_few_warnings_and_fit_80_columns():
     warnings = [_finding("warning", text=f"Warning number {n} is here") for n in range(1, 6)]
     assert cli._findings_lines(warnings + [_finding("info")] * 2, {}) == [
         "5 warnings: Warning number 1 is here; Warning number 2 is here; Warning number 3",
-        "  is here +2 more. 2 notes: kitden show findings",
+        "  is here +2 more. 2 notes (nothing to fix): kitden show findings",
     ]
 
 
@@ -380,7 +454,7 @@ def test_findings_lines_name_the_first_few_warnings_and_fit_80_columns():
 def test_findings_lines_keep_the_command_whole():
     warning = _finding("warning", text="Cursor loads plugin 'superpowers' twice.")
     assert cli._findings_lines([warning] + [_finding("info")] * 61, {}) == [
-        "1 warning: Cursor loads plugin 'superpowers' twice. 61 notes:",
+        "1 warning: Cursor loads plugin 'superpowers' twice. 61 notes (nothing to fix):",
         "  kitden show findings",
     ]
 

@@ -385,24 +385,29 @@ HOW_UNREADABLE = (
 )
 HOW_NO_SKILLS = "Kitden looks in the same folders and plugins as {client}."
 
-# `kitden scan`: each kind a client has and how many, in the order the scan prints them. Skills
-# come last, so the skill list follows their count.
+# `kitden scan`: each kind a client has, as "one" and "many", in the order the scan prints it.
 SCAN_KINDS = {
-    "hook": "Hooks",
-    "instructions": "Instruction files",
-    "marketplace": "Marketplaces",
-    "mcp_server": "MCP servers",
-    "plugin": "Plugins",
-    "skill": "Skills",
+    "plugin": ("plugin", "plugins"),
+    "skill": ("skill", "skills"),
+    "mcp_server": ("MCP server", "MCP servers"),
+    "hook": ("hook", "hooks"),
+    "instructions": ("instruction file", "instruction files"),
+    "marketplace": ("marketplace", "marketplaces"),
 }
-# After "Skills: " when the next line counts the skills of the last chat. The two numbers differ:
-# this one counts every skill Kitden finds for the client, on or off, in the user's folders and
-# in each project; the chat's list is the client's own, for one project, with skills Kitden
-# does not count (built into the client, or from the Claude app or a Codex plugin).
-SCAN_SKILLS = "{n} on this computer; a chat lists one project's and {client}'s own"
-# A client's status after its name: plain words, not the ids of `scan --json`.
+# A found client's first line: its name and version. The version may not be known yet.
+SCAN_FOUND = "{name} {version}"
+SCAN_FOUND_NO_VERSION = "{name} (version unknown)"
+# What a client has on this computer: the kinds that are not zero, or "nothing yet".
+SCAN_HAVE = "On this computer: {have}"
+SCAN_NONE = "nothing yet"
+# Under that line when a chat's skill count is shown too. The two numbers differ: this one
+# counts every skill Kitden finds for the client, on or off, in the user's folders and in each
+# project; the chat's list is the client's own, for one project, with skills Kitden does not
+# count (built into the client, or from the Claude app or a Codex plugin).
+SCAN_COUNT_NOTE = "A chat lists only one project's skills, and {client}'s own too."
+# A client's status after its name, when it has no version line: plain words, not the ids of
+# `scan --json`.
 SCAN_STATUS = {
-    "found": "found",
     "not_found": "not found",
     "unreadable": "could not be read",
     "off": "turned off in Kitden",
@@ -413,13 +418,18 @@ SCAN_DESKTOP = "Only in the Claude Desktop app (Code tab, {version}): MCP server
 # After the clients: the skills the last chat cut, the findings, and where to go next. Lines
 # wrap at 80 columns; "+N more" and a command to copy stay on one line.
 SCAN_MORE = "+{n} more"
-# Under the skill list when the last chat was in another folder than the one scanned.
+# Under the names of the skills that did not fit, when the last chat was in another folder than
+# the one scanned.
 SCAN_CHAT_FOLDER = "That chat was in {folder}."
 SCAN_LOADS = "{client} loads {kind} '{name}' {times}"
 SCAN_WARNINGS = "{n} {warnings}: {said}."
-SCAN_NOTES = "{n} {notes}: {command}"
+# The notes are the findings that need no fix (severity info).
+SCAN_NOTES = "{n} {notes} (nothing to fix): {command}"
 SCAN_SEE = "See: {command}"
 SCAN_FINDINGS = "kitden show findings"
 SCAN_READ_ONLY = "Your agents' settings were not changed: scan only reads them."
-SCAN_FIX = "To fix: kitden open"
+# The last line: skills that did not fit; else a warning or a file that could not be read; else
+# nothing wrong.
+SCAN_FIX_SKILLS = "To make the skills fit, turn off the ones you do not use: kitden open"
+SCAN_FIX = "To fix this: kitden open"
 SCAN_OPEN = "To see or change it: kitden open"
