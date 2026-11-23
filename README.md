@@ -23,6 +23,7 @@ A backfill installs each release with the dependencies of its release day; a nig
 | 0.9.2 | 47.022 (46.94–47.411) | 0.45 (0.44–0.46) | 0.06 (0.05–0.08) | 0.0 (0.0–0.0) | 548, 348445 | AMD EPYC 7763 64-Core Processor | backfill 2026-11-21 |
 | 0.10.0 | 46.993 (46.78–47.12) | 0.44 (0.44–0.45) | 0.07 (0.06–0.08) | 0.0 (0.0–0.0) | 548, 348445 | AMD EPYC 7763 64-Core Processor | backfill 2026-11-21 |
 | 0.10.1 | 46.862 (46.715–47.088) | 0.45 (0.44–0.46) | 0.07 (0.06–0.1) | 0.0 (0.0–0.0) | 548, 348445 | AMD EPYC 7763 64-Core Processor | backfill 2026-11-21 |
+| 0.10.3 | 46.383 (46.227–46.51) | 0.3 (0.3–0.31) | 0.09 (0.07–0.1) | 0.0 (0.0–0.0) | 548, 348445 | AMD EPYC 9V45 96-Core Processor | night 2026-11-23 |
 
 Charts of peak memory and CPU to ready by release: https://konstantinstarovoytov.github.io/kitden-sdlc/desk/#use
 
@@ -32,5 +33,6 @@ A is the newest release, B is `main` that night, measured in turn in the same jo
 
 | Night | A | B | Peak A | Peak B | CPU to ready A | CPU to ready B | Idle CPU B | Growth B | Gateway idle CPU B | Gateway growth B | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-11-23 | 0.10.3 | main@9e5f6fd | 46.383 (46.227–46.51) | 46.428 (46.379–46.633) | 0.3 (0.3–0.31) | 0.31 (0.3–0.33) | 0.08 (0.08–0.11) | 0.0 (0.0–0.0) | 0.0 (0.0–0.0) | 0.016 (0.0–0.033) | — |
 | 2026-11-22 | 0.10.1 | main@f38818b | 46.658 (46.588–46.768) | 46.678 (46.588–46.842) | 0.45 (0.45–0.46) | 0.45 (0.44–0.45) | 0.07 (0.06–0.08) | 0.0 (0.0–0.0) | 0.0 (0.0–0.0) | 0.012 (0.0–0.021) | — |
 | 2026-11-21 | 0.10.1 | main@e7e5e31 | 46.486 (46.404–46.58) | 46.35 (46.309–46.473) | 0.25 (0.25–0.27) | 0.25 (0.25–0.26) | 0.03 (0.03–0.04) | 0.0 (0.0–0.0) | — | — | — |
