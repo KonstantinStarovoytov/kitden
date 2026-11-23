@@ -31,8 +31,8 @@ class ClaudeFit:
     size: int  # characters with every description
 
 
-def claude_budget(window: int, per_token: int) -> int:
-    return int(window * per_token * CLAUDE_SHARE)
+def claude_budget(window: int, per_token: int, share: float = CLAUDE_SHARE) -> int:
+    return int(window * per_token * share)
 
 
 def claude_weight(count: float, last_used_ms: float, at_ms: int) -> float:
@@ -41,18 +41,20 @@ def claude_weight(count: float, last_used_ms: float, at_ms: int) -> float:
     return count * max(0.5 ** (days / 7), 0.1)
 
 
-def _description_size(skill: ClaudeSkill) -> int:
+def _description_size(skill: ClaudeSkill, cap: int) -> int:
     if skill.description is None:
         raise ValueError(f"the description of {skill.name} is not known")
-    return min(len(skill.description), CLAUDE_DESCRIPTION_CAP)
+    return min(len(skill.description), cap)
 
 
-def claude_rule(skills: list[ClaudeSkill], budget: int) -> ClaudeFit:
+def claude_rule(
+    skills: list[ClaudeSkill], budget: int, cap: int = CLAUDE_DESCRIPTION_CAP
+) -> ClaudeFit:
     # checked 2026-11-07 (Claude Code 2.1.311, two test chats): everything when it fits; else
     # built-ins and Name only keep their entry, every other skill shows its name, and
     # descriptions go to the most used.
     def entry(s: ClaudeSkill) -> int:
-        return len(s.name) + 2 if s.name_only else len(s.name) + 4 + _description_size(s)
+        return len(s.name) + 2 if s.name_only else len(s.name) + 4 + _description_size(s, cap)
 
     separators = max(0, len(skills) - 1)
     size = sum(entry(s) for s in skills) + separators
@@ -69,7 +71,7 @@ def claude_rule(skills: list[ClaudeSkill], budget: int) -> ClaudeFit:
     full = {s.name for s in skills if s.always_full and not s.name_only}
     # sorted is stable: the order of the skills breaks ties
     for s in sorted((s for s in skills if not fixed(s)), key=lambda s: -s.weight):
-        extra = _description_size(s) + 2
+        extra = _description_size(s, cap) + 2
         if used + extra <= budget:
             used += extra
             full.add(s.name)

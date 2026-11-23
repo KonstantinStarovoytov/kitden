@@ -349,6 +349,13 @@ HOW_CLAUDE_SETTING = (
     "The limit is SLASH_COMMAND_TOOL_CHAR_BUDGET from your Claude Code settings. "
     "A value set in the shell is out of Kitden's sight."
 )
+HOW_CLAUDE_FRACTION = (
+    "The limit is skillListingBudgetFraction in Claude Code's settings: {share} of the context "
+    "window."
+)
+HOW_CLAUDE_CAP = (
+    "A description is cut at skillListingMaxDescChars in Claude Code's settings: {n} characters."
+)
 HOW_CLAUDE_SHELL = "A SLASH_COMMAND_TOOL_CHAR_BUDGET set in the shell is out of Kitden's sight."
 HOW_CLAUDE_SURFACE = "The list in the terminal can differ from the Claude app."
 HOW_CLAUDE_REST = "The rest of the window (system prompt, tools, MCP, the chat) is not measured."

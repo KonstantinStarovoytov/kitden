@@ -39,6 +39,7 @@ from kitden.context.tables import (
     CLAUDE_CANDIDATES,
     CLAUDE_DESCRIPTION_CAP,
     CLAUDE_OTHER_WINDOW,
+    CLAUDE_SHARE,
     CLAUDE_WINDOWS,
     CODEX_DESCRIPTION_CAP,
 )
@@ -58,6 +59,10 @@ ASKED = ("user-invocable-only", "only-asked")
 # in Claude Code's settings sets the list's limit in characters. Like other settings, the most
 # specific file wins: local, then project, then user (checked 2026-10-26, /en/settings).
 BUDGET_KEY = "SLASH_COMMAND_TOOL_CHAR_BUDGET"
+# checked 2026-11-23 (/en/settings-reference): top-level keys of any settings file; the share of
+# the window the list may use (default 0.01) and the cap on one description (default 1536).
+FRACTION_KEY = "skillListingBudgetFraction"
+CAP_KEY = "skillListingMaxDescChars"
 WHOLE = re.compile(r"[0-9]+")
 
 
@@ -248,6 +253,12 @@ def _seen(full: str | None, sent: str | None, side: int | None, cap: int | None)
     return None if got >= len(full) else got
 
 
+def _cap_then(cap: int, sent: str | None) -> int:
+    """The cap for what the last chat sent: today's setting, or more when the log holds a longer
+    description. The setting may have been lowered since, and the log is what the agent got."""
+    return max(cap, len(sent or ""))
+
+
 def _source(item: Item | None, built_in: bool) -> str | None:
     if item is None:
         return words.SOURCE_BUILT_IN if built_in else None
@@ -384,6 +395,35 @@ def _claude_setting(files: list[Path]) -> int | None:
     return None
 
 
+def _claude_key(files: list[Path], key: str):
+    """The value of a top-level key in the winning settings file that has it."""
+    read = Reader("claude_code")
+    for path in reversed(files):
+        settings = as_dict(read.json(path))
+        if key in settings:
+            return settings[key]
+    return None
+
+
+def _claude_fraction(files: list[Path]) -> float | None:
+    """skillListingBudgetFraction: a number above 0 and at most 1; anything else is not set."""
+    value = _claude_key(files, FRACTION_KEY)
+    return value if _whole(value) and 0 < value <= 1 else None
+
+
+def _claude_cap(files: list[Path]) -> int:
+    """skillListingMaxDescChars: a positive whole number; anything else is the default."""
+    value = _claude_key(files, CAP_KEY)
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    return CLAUDE_DESCRIPTION_CAP
+
+
+def _percent(fraction: float | None) -> str:
+    """0.02 as "2%", 0.015 as "1.5%"."""
+    return f"{(fraction or CLAUDE_SHARE) * 100:g}%"
+
+
 def _claude_weights(home: Path, at_ms: int) -> dict[str, float]:
     """Each skill's use, aged from the chat's time.
 
@@ -400,7 +440,14 @@ def _claude_weights(home: Path, at_ms: int) -> dict[str, float]:
 
 
 def _claude_run(
-    rows, states, weights, budget, unknown: str | None = None, *, as_sent: bool = False
+    rows,
+    states,
+    weights,
+    budget,
+    unknown: str | None = None,
+    *,
+    as_sent: bool = False,
+    cap: int = CLAUDE_DESCRIPTION_CAP,
 ) -> tuple[list[ClaudeSkill], ClaudeFit] | None:
     """The rule on the list's skills in these states; None when a size is not known.
     `unknown` stands in for a description Kitden cannot find. `as_sent`: as in the chat itself,
@@ -417,7 +464,7 @@ def _claude_run(
         if states[r.name] != "off" and not (as_sent and r.added)
     ]
     try:
-        fit = claude_rule(skills, budget)
+        fit = claude_rule(skills, budget, cap)
     except ValueError:
         return None
     if as_sent:
@@ -426,14 +473,16 @@ def _claude_run(
     return skills, fit
 
 
-def _claude_gives(rows, states, weights, budget, sent_full: frozenset[str]) -> bool:
+def _claude_gives(rows, states, weights, budget, sent_full: frozenset[str], cap: int) -> bool:
     """This limit rebuilds the sent list, whatever the size of a description Kitden cannot find.
 
     The rule gives the same list with every such description empty and with every one at the
     cap, so it gives it for any size between: a skill that fits at the cap fits when smaller,
-    and one that does not fit when all are empty never fits."""
-    for unknown in ("", "x" * CLAUDE_DESCRIPTION_CAP):
-        run = _claude_run(rows, states, weights, budget, unknown, as_sent=True)
+    and one that does not fit when all are empty never fits. A description longer than the whole
+    limit cannot fit either way, so the longer one stops just past the limit: the cap is a
+    setting, and a huge number in it must not make a huge text."""
+    for unknown in ("", "x" * min(cap, budget + 1)):
+        run = _claude_run(rows, states, weights, budget, unknown, as_sent=True, cap=cap)
         if run is None or run[1].full != sent_full:
             return False
     return True
@@ -451,7 +500,9 @@ def _unchanged(files: list[Path], at_ms: int) -> bool:
     return True
 
 
-def _chosen(rows, states, weights, budget, checked: bool, settled: bool) -> tuple[set[str], bool]:
+def _chosen(
+    rows, states, weights, budget, checked: bool, settled: bool, cap: int
+) -> tuple[set[str], bool]:
     """The skills that showed only a name because they were set to Name only, not because of
     the limit; and True when Kitden can tell only that they are set so now.
 
@@ -467,13 +518,13 @@ def _chosen(rows, states, weights, budget, checked: bool, settled: bool) -> tupl
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
     needed = set()
     for name in named:
-        run = _claude_run(rows, states | {name: "on"}, weights, budget, as_sent=True)
+        run = _claude_run(rows, states | {name: "on"}, weights, budget, as_sent=True, cap=cap)
         if run is not None and run[1].full != sent_full:
             needed.add(name)
     return needed, False
 
 
-def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool) -> dict:
+def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool, cap: int) -> dict:
     """What the last chat sent: characters per skill sent, and those of descriptions not sent.
     Only the log counts. `chosen` showed only a name by their setting (see `_chosen`): they are
     told apart and are no misfit. The misfit names the other skills that showed only a name."""
@@ -482,11 +533,12 @@ def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool) -> di
     names = 0
     for r in rows:
         if r.sent is not None:
-            sent[r.name] = len(r.name) + 4 + min(len(r.sent), CLAUDE_DESCRIPTION_CAP)
+            # The log's own length: the cap may have been another one when the chat was sent.
+            sent[r.name] = len(r.name) + 4 + len(r.sent)
             continue
         names += len(r.name) + 2
         if r.full is not None and r.name not in chosen:
-            over[r.name] = min(len(r.full), CLAUDE_DESCRIPTION_CAP) + 2
+            over[r.name] = min(len(r.full), cap) + 2
     used = sum(sent.values()) + names + max(0, len(rows) - 1)
     n, picked = len(rows), len(chosen)
     bad = n - len(sent) - picked
@@ -514,14 +566,16 @@ def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool) -> di
     return result | {"size": used + sum(over.values()), "room": None, "misfit": misfit}
 
 
-def _claude_estimate(skills: list[ClaudeSkill], fit: ClaudeFit, on: str, frame: str) -> dict:
+def _claude_estimate(
+    skills: list[ClaudeSkill], fit: ClaudeFit, on: str, frame: str, cap: int
+) -> dict:
     sent = {}
     over = {}
     for s in skills:
         if s.name in fit.full:
-            sent[s.name] = len(s.name) + 4 + min(len(s.description or ""), CLAUDE_DESCRIPTION_CAP)
+            sent[s.name] = len(s.name) + 4 + min(len(s.description or ""), cap)
         elif not s.name_only:
-            over[s.name] = min(len(s.description or ""), CLAUDE_DESCRIPTION_CAP) + 2
+            over[s.name] = min(len(s.description or ""), cap) + 2
     n = len(skills)
     chosen = sum(s.name_only for s in skills)
     bad = n - len(fit.full) - chosen
@@ -546,6 +600,7 @@ def _claude_note(
     size: int,
     explained: bool = True,
     can_free: bool = True,
+    cap: int = CLAUDE_DESCRIPTION_CAP,
 ) -> str | None:
     """`explained`: the limit rebuilds the list, so it is why a description is missing.
     `can_free`: some skill with a description has a switch."""
@@ -560,7 +615,7 @@ def _claude_note(
     if state == "name-only":
         return words.NOTE_NAME_ONLY
     if side == 0:
-        return words.NOTE_FREES.format(n=f"{min(size, CLAUDE_DESCRIPTION_CAP) + 2:,}")
+        return words.NOTE_FREES.format(n=f"{min(size, cap) + 2:,}")
     if not explained:
         return words.NOTE_NOT_SENT
     return f"{words.NOTE_NO_ROOM} {words.NOTE_FREE_ROOM}" if can_free else words.NOTE_NO_ROOM
@@ -600,12 +655,18 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
 
     files = _claude_files(home, found.folder)
     setting = _claude_setting(files)
+    fraction = _claude_fraction(files)
+    # A guess: the docs say "or" and not which wins, so the fixed budget is the limit when both
+    # are set (2026-11-23).
+    by_fraction = setting is None and fraction is not None
+    share = fraction if by_fraction and fraction is not None else CLAUDE_SHARE
+    cap = _claude_cap(files)
     model = CLAUDE_WINDOWS.get(found.model or "")
     window = model[0] if model else None
-    budget = setting if setting is not None else (claude_budget(*model) if model else None)
-    base = _claude_run(rows, states, weights, budget) if budget else None
+    budget = setting if setting is not None else (claude_budget(*model, share) if model else None)
+    base = _claude_run(rows, states, weights, budget, cap=cap) if budget else None
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
-    as_sent = _claude_run(rows, states, weights, budget, as_sent=True) if budget else None
+    as_sent = _claude_run(rows, states, weights, budget, as_sent=True, cap=cap) if budget else None
     checked = as_sent is not None and as_sent[1].full == sent_full
     # The log does not say the window: take the only one whose limit rebuilds the list.
     worked_out = two_limits = False
@@ -614,21 +675,23 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
         fits = [
             candidate
             for candidate in CLAUDE_CANDIDATES
-            if _claude_gives(rows, states, weights, claude_budget(*candidate), sent_full)
+            if _claude_gives(
+                rows, states, weights, claude_budget(*candidate, share), sent_full, cap
+            )
         ]
         if len({size for size, _ in fits}) == 1:
             worked_out = True
             window, rate = fits[0]
             two_limits = len(fits) > 1
-            budget = None if two_limits else claude_budget(*fits[0])
+            budget = None if two_limits else claude_budget(*fits[0], share)
             # None when a size is not known: the window is sure, an estimate is not.
-            base = _claude_run(rows, states, weights, budget) if budget else None
+            base = _claude_run(rows, states, weights, budget, cap=cap) if budget else None
             checked = base is not None
 
     when = _on_date(date)
     settled = bool(date) and _unchanged(files, at_ms)
-    chosen, now = _chosen(rows, states, weights, budget, checked, settled)
-    fact = _claude_fact(rows, when, chosen, now)
+    chosen, now = _chosen(rows, states, weights, budget, checked, settled, cap)
+    fact = _claude_fact(rows, when, chosen, now, cap)
     misfit = fact["misfit"] is not None
     if checked and not misfit:
         left = f"{budget - fact['used']:,}"
@@ -646,23 +709,24 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
         shown = ""  # which models have that window is not in any file Kitden can read
         if worked_out:
             per_token = rate  # the rate this chat's own list gives
-        limit = claude_budget(other, per_token)
+        limit = claude_budget(other, per_token, share)
         skills = base[0]
-        result = _claude_estimate(skills, claude_rule(skills, limit), _on(other), words.ESTIMATE)
+        fit = claude_rule(skills, limit, cap)
+        result = _claude_estimate(skills, fit, _on(other), words.ESTIMATE, cap)
         title = words.WINDOW_TITLE.format(size=_size(other))
         windows.append(_window_card(title, shown, words.ESTIMATE_TAG, limit, result))
 
     after = None
     changes = _changes(draft, states, SWITCHES[client])
     if checked and changes:
-        run = _claude_run(rows, states | changes, weights, budget)
+        run = _claude_run(rows, states | changes, weights, budget, cap=cap)
         if run is not None and base is not None:
             skills, fit = run
             full = base[1].full
             gets = [r.name for r in rows if r.name not in changes and r.name in fit.full - full]
             loses = [r.name for r in rows if r.name not in changes and r.name in full - fit.full]
             on = words.WITH_LIMIT if setting is not None else _on(window)
-            result = _claude_estimate(skills, fit, on, words.AFTER_APPLY)
+            result = _claude_estimate(skills, fit, on, words.AFTER_APPLY, cap)
             say = f"{result['say']} {_swap(client, gets, loses)}".strip()
             after = {"say": say, "gets": gets, "loses": loses, "result": result}
 
@@ -678,10 +742,10 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
     for r in rows:
         side = 0 if r.sent is not None else 1
         size = len(r.full) if r.full is not None else len(r.sent or "")
-        note = _claude_note(r, states[r.name], side, size, explained, can_free)
+        note = _claude_note(r, states[r.name], side, size, explained, can_free, cap)
         text, seen = (
             r.full if r.full is not None else r.sent,
-            _seen(r.full, r.sent, side, None if r.added else CLAUDE_DESCRIPTION_CAP),
+            _seen(r.full, r.sent, side, None if r.added else _cap_then(cap, r.sent)),
         )
         skills.append(_skill(client, r.name, r.item, size, side, note, r.built_in, text, seen))
     listed = {r.name for r in rows}
@@ -707,7 +771,9 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
         *([words.HOW_CLAUDE_WINDOW.format(size=_size(window))] if worked_out and window else []),
         words.HOW_CLAUDE_RULE,
         f"{words.HOW_CLAUDE_CHECK} {check}",
+        *([words.HOW_CLAUDE_FRACTION.format(share=_percent(fraction))] if by_fraction else []),
         words.HOW_CLAUDE_SETTING if setting is not None else words.HOW_CLAUDE_SHELL,
+        *([words.HOW_CLAUDE_CAP.format(n=f"{cap:,}")] if cap != CLAUDE_DESCRIPTION_CAP else []),
         words.HOW_CLAUDE_SURFACE,
         words.HOW_CLAUDE_REST,
     ]

@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Kitden reads `skillListingBudgetFraction` and `skillListingMaxDescChars`:** the limit and the
+  estimates are right for a person who raised or lowered Claude Code's share of the context
+  window for the skill list, or its cap on one description. A fixed
+  `SLASH_COMMAND_TOOL_CHAR_BUDGET` still wins when both are set (a guess: the docs do not say).
 - **The last chat is the one with the newest full skill list:** Kitden took a later list of
   added skills as a new last chat. The Claude app can add skills to a chat nobody is in, so two
   old chats became "your last chat". Skills the app adds to an old chat no longer make it the

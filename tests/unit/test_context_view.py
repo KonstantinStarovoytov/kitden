@@ -410,6 +410,75 @@ def test_a_budget_setting_that_is_not_a_number_is_ignored(home):
     ]
 
 
+def budgets(home) -> list[int]:
+    return [w["budget"] for w in view(home)["claude_code"]["windows"]]
+
+
+def fraction_home(home, settings):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    write_json(home / ".claude/settings.json", settings)
+    claude_chat(home, {"alpha": "Does alpha."}, model="claude-sonnet-4-6")
+
+
+def test_a_budget_fraction_changes_the_limit_and_says_so(home):
+    fraction_home(home, {"skillListingBudgetFraction": 0.02})
+    cc = view(home)["claude_code"]
+    assert [(w["title"], w["budget"]) for w in cc["windows"]] == [
+        ("200K window", 16_000),
+        ("1M window", 60_000),
+    ]
+    sentence = (
+        "The limit is skillListingBudgetFraction in Claude Code's settings: 2% of the context "
+        "window."
+    )
+    assert sentence in cc["how"]
+    fraction_home(home, {"skillListingBudgetFraction": 0.015})
+    assert budgets(home) == [12_000, 45_000]
+    assert "1.5% of the context window." in " ".join(view(home)["claude_code"]["how"])
+
+
+@pytest.mark.parametrize("value", [0, -0.5, 1.5, True, "0.02", None])
+def test_a_budget_fraction_that_is_not_allowed_is_ignored(home, value):
+    fraction_home(home, {"skillListingBudgetFraction": value})
+    cc = view(home)["claude_code"]
+    assert budgets(home) == [8_000, 30_000]
+    assert not any("skillListingBudgetFraction" in line for line in cc["how"])
+
+
+def test_the_fixed_budget_wins_over_the_fraction(home):
+    settings = {"env": {"SLASH_COMMAND_TOOL_CHAR_BUDGET": "9000"}}
+    fraction_home(home, settings | {"skillListingBudgetFraction": 0.05})
+    cc = view(home)["claude_code"]
+    assert budgets(home) == [9000]
+    assert not any("skillListingBudgetFraction" in line for line in cc["how"])
+
+
+def test_the_budget_fraction_of_a_project_applies_to_that_project_only(home, tmp_path):
+    project = tmp_path / "work/a"
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.05})
+    write_json(project / ".claude/settings.json", {"skillListingBudgetFraction": 0.02})
+    claude_chat(home, {"alpha": "Does alpha."}, model="claude-sonnet-4-6", folder=str(project))
+    assert budgets(home) == [16_000, 60_000]
+    other = tmp_path / "work/b"
+    claude_chat(home, {"alpha": "Does alpha."}, model="claude-sonnet-4-6", folder=str(other))
+    assert budgets(home) == [40_000, 150_000]
+
+
+def test_a_description_cap_setting_replaces_1536(home):
+    own = home / ".claude/skills"
+    skill(own, "alpha", "x" * 1000)
+    write_json(home / ".claude/settings.json", {"skillListingMaxDescChars": 500})
+    claude_chat(home, {"alpha": "x" * 500}, model="claude-sonnet-4-6")
+    cc = view(home)["claude_code"]
+    assert cc["windows"][0]["result"]["sent"] == {"alpha": len("alpha") + 4 + 500}
+    assert "500 characters." in " ".join(cc["how"])
+    for bad in (0, -5, 1.5, True, "500"):
+        write_json(home / ".claude/settings.json", {"skillListingMaxDescChars": bad})
+        how = " ".join(view(home)["claude_code"]["how"])
+        assert "skillListingMaxDescChars" not in how
+
+
 def test_the_project_settings_of_the_chat_set_the_limit(home, tmp_path):
     project = tmp_path / "work/a"
     skill(home / ".claude/skills", "alpha", "Does alpha.")
@@ -1363,6 +1432,39 @@ def test_a_description_past_the_client_cap_has_its_tail_grey(home):
     codex_chat(home, [f"- beta: {long.strip()[:1021]}... (file: {path})"])
     [row] = [s for s in view(home)["codex"]["skills"] if s["name"] == "beta"]
     assert row["seen"] == 1021
+
+
+def test_a_huge_cap_setting_does_not_make_a_huge_text(home, monkeypatch):
+    # A model Kitden does not know, so it looks for the window whose limit rebuilds the list,
+    # and a skill with no file it can find: the check tries that one empty and at the cap.
+    skill(home / ".claude/skills", "alpha", "Short.")
+    sent = {"alpha": "Short.", "ghost": "From a file Kitden cannot find."}
+    claude_chat(home, sent, model="a-model-kitden-does-not-know")
+    write_json(home / ".claude/settings.json", {"skillListingMaxDescChars": 10**12})
+    from kitden.views import context_view as module
+
+    sizes = []
+    run = module._claude_run
+
+    def watched(rows, states, weights, budget, unknown=None, **more):
+        sizes.append(len(unknown or ""))
+        return run(rows, states, weights, budget, unknown, **more)
+
+    monkeypatch.setattr(module, "_claude_run", watched)
+    view(home)
+    assert 0 < max(sizes) < 10**7  # the long one was tried, and it was not the cap's size
+
+
+def test_a_cap_lowered_after_the_chat_does_not_shrink_what_the_chat_sent(home):
+    # The chat sent 1,000 characters under a cap of 1,000; the cap is 500 now.
+    long = "word " * 400  # 2,000 characters
+    skill(home / ".claude/skills", "alpha", long.strip())
+    claude_chat(home, {"alpha": long.strip()[:1000]})
+    write_json(home / ".claude/settings.json", {"skillListingMaxDescChars": 500})
+    card = view(home)["claude_code"]
+    [row] = [s for s in card["skills"] if s["name"] == "alpha"]
+    assert row["seen"] == 1000
+    assert card["windows"][0]["result"]["sent"]["alpha"] == len("alpha") + 4 + 1000
 
 
 def test_a_skill_added_during_the_chat_got_its_whole_description_past_the_cap(home):
