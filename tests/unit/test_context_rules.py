@@ -5,6 +5,7 @@ import pytest
 from kitden.context.rules import (
     ClaudeSkill,
     CodexSkill,
+    claude_budget,
     claude_rule,
     claude_weight,
     codex_budget,
@@ -58,6 +59,16 @@ def test_claude_built_ins_alone_can_pass_the_limit():
 def test_claude_caps_a_description_at_1536():
     fit = claude_rule([skill("abc", "x" * 3000)], 100_000)
     assert fit.size == len("abc") + 4 + 1536
+
+
+def test_claude_caps_a_description_at_the_given_length():
+    fit = claude_rule([skill("abc", "x" * 3000)], 100_000, 500)
+    assert fit.size == len("abc") + 4 + 500
+
+
+def test_claude_budget_is_a_share_of_the_window_in_characters():
+    assert claude_budget(1_000_000, 3) == 30_000
+    assert claude_budget(1_000_000, 3, 0.02) == 60_000
 
 
 def test_claude_entry_sizes():

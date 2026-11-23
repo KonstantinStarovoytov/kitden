@@ -57,7 +57,9 @@ the skill list from the last chat log, plus the settings, skill files and use co
 to size and check that list; it keeps none of it and sends nothing. Estimates for another
 window, or for a change you are about to make, show only while Kitden's rule rebuilds that last
 list. Claude Code's log does not say the window, so Kitden names it only when one window alone
-gives that list. Cursor gets no verdict, because Kitden cannot see what Cursor sends. Skills
+gives that list. When Claude Code's settings set the limit, with `skillListingBudgetFraction` or
+`SLASH_COMMAND_TOOL_CHAR_BUDGET`, Kitden uses that limit, and `skillListingMaxDescChars` for the
+length of a description. Cursor gets no verdict, because Kitden cannot see what Cursor sends. Skills
 whose descriptions are sent go from grey to orange with the length of their description, so the
 few that take most of the list stand out. A skill's **Details** shows its description, with
 the part the agent did not get in grey. There you can also
