@@ -126,6 +126,23 @@ def test_the_newest_list_wins_not_the_newest_file(tmp_path):
     assert (got.at, got.skills) == ("2026-11-11T23:00:00Z", (("a", "New."),))
 
 
+def test_skills_added_to_an_old_chat_do_not_make_it_the_last_chat(tmp_path):
+    # The app can add skills to a chat nobody is in: the chat with the newest full list wins.
+    old = list_entry(["a"], "- a: Old.", at="2026-11-13T10:00:00Z")
+    added = list_entry(["b"], "- b: New.", at="2026-11-23T12:00:00Z", isInitial=False)
+    fresh = list_entry(["a", "b"], "- a\n- b", at="2026-11-23T09:00:00Z")
+    write_chat(tmp_path, "p", "old", [old, added], stamp("2026-11-23T12:00:00Z"))
+    write_chat(tmp_path, "p", "fresh", [fresh], stamp("2026-11-23T09:00:00Z"))
+    got = last_claude_list(tmp_path, None)
+    assert got.skills == (("a", None), ("b", None))
+    assert got.at == "2026-11-23T09:00:00Z"
+    # Alone, the old chat is still read with what was added to it, at the time of that list.
+    (tmp_path / ".claude/projects/p/fresh.jsonl").unlink()
+    got = last_claude_list(tmp_path, None)
+    assert got.skills == (("a", "Old."), ("b", "New."))
+    assert got.at == "2026-11-23T12:00:00Z"
+
+
 def test_a_newer_unreadable_list_wins_over_an_older_good_one(tmp_path):
     good = list_entry(["a"], "- a: Old.", at="2026-11-10T09:00:00Z")
     odd = list_entry("a", "- a: New.", at="2026-11-11T09:00:00Z")

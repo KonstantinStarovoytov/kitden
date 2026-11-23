@@ -7,6 +7,16 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **The last chat is the one with the newest full skill list:** Kitden took a later list of
+  added skills as a new last chat. The Claude app can add skills to a chat nobody is in, so two
+  old chats became "your last chat". Skills the app adds to an old chat no longer make it the
+  last chat.
+- **`kitden show context` finds your last chat from any folder:** as the scan does, with no chat
+  in the current folder it shows the last chat in any folder and names that folder. With
+  `--project` it stays with that folder.
+
 ### 0.11.0
 
 - **Picking a project is quicker when its last Claude Code chat is far down the list of

@@ -222,7 +222,11 @@ jobs:
           name: dist
           path: dist/
       - name: Create the GitHub release with the built files and its notes
-        run: gh release create "$GITHUB_REF_NAME" dist/* --notes-file "docs/releases/$GITHUB_REF_NAME.md" --verify-tag --title "Kitden ${GITHUB_REF_NAME#v}"
+        run: |
+          # The title is the notes' first heading, such as "Kitden 0.11.0 — choose which clients".
+          title="$(sed -n '1s/^# //p' "docs/releases/$GITHUB_REF_NAME.md" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          if [ -z "$title" ]; then title="Kitden ${GITHUB_REF_NAME#v}"; fi
+          gh release create "$GITHUB_REF_NAME" dist/* --notes-file "docs/releases/$GITHUB_REF_NAME.md" --title "$title" --verify-tag
         env:
           GH_TOKEN: ${{ github.token }}
 

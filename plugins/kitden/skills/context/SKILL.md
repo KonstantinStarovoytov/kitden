@@ -9,7 +9,9 @@ client sent in the last chat.
 
 1. In the project's folder run `kitden show context`. It changes no settings and prints JSON, one card
    for each client. If `kitden` is not found or the command fails as unknown, follow the kitden `install` skill.
-2. Use the card of the client the user asks about; by default the one you run in.
+2. Use the card of the client the user asks about; by default the one you run in. With no chat in
+   the current folder, the card shows the last chat in any folder: say which folder it was in
+   (the card's `fact.folder`).
 3. Give the answer in the card's own words: each window's `say`, then the names in `over`, the
    skills that did not keep their description. A window tagged Estimate is Kitden's estimate,
    not a measurement: say so.

@@ -518,7 +518,9 @@ def _show_answer(args: argparse.Namespace) -> int:
         elif args.what == "projects":
             answer = answers.projects_answer(inventory)
         else:
-            answer = answers.context_answer(inventory, home, folder)
+            # No --project: as the scan does, a client's last chat in another folder, named in
+            # the card's fact. With --project the answer stays with that folder.
+            answer = answers.context_answer(inventory, home, folder, anywhere=not args.project)
     except ValueError as error:
         print(error, file=sys.stderr)
         return EXIT_USAGE
@@ -549,7 +551,13 @@ def main(argv: list[str] | None = None) -> int:
     show = commands.add_parser("show", help="print one read-only answer as JSON, then exit")
     show.add_argument("what", choices=SHOW, help="which answer")
     show.add_argument("name", nargs="?", help="for item: the name to explain")
-    show.add_argument("--project", help="a folder; the current folder by default")
+    show.add_argument(
+        "--project",
+        help=(
+            "a folder; the current folder by default "
+            "(for context: with no chat there, the last chat in any folder)"
+        ),
+    )
     show.add_argument("--client", help="for setup: only this client")
     show.add_argument("--kind", help="for item: mcp_server, skill, plugin, hook, ...")
     mcp = commands.add_parser("mcp", help="run the Kitden MCP server and gateway over stdio")

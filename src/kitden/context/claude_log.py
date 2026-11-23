@@ -32,6 +32,10 @@ class SentList:
     folder: str | None
     skills: tuple[tuple[str, str | None], ...]  # name, sent text (None = name only)
     added: frozenset[str] = frozenset()  # added during the chat: sent whole, outside the limit
+    # When the chat's last full list was sent. `at` moves on with every list of added skills,
+    # and the app can add skills to a chat nobody is in; a full list comes when a chat starts
+    # or is resumed, so it says which chat is the last one.
+    full: str = field(default="", compare=False)
 
 
 @dataclass(frozen=True)
@@ -150,6 +154,7 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                         model,
                         entry.get("cwd"),
                         skills,
+                        full=at,
                     )
                     answered = False
                 elif isinstance(result, SentList):
@@ -184,12 +189,15 @@ def newest[T: _Dated](
     paths: Iterable[Path],
     read: Callable[[Path], T | None],
     latest: Callable[[Path], float | None] | None = None,
+    when: Callable[[T], float] | None = None,
 ) -> T | None:
     """The list sent last among these logs, by the time in the log, not by when the file last
     changed: an app may rewrite an old chat's file with no new list. Files are read newest first;
     one that last changed before the best list so far cannot hold a newer one. `latest` is a
     quick look at a file: the latest time its list can have, or None when it holds no list. A
-    file whose list cannot be newer than the best so far is not read."""
+    file whose list cannot be newer than the best so far is not read. `when` gives the time a
+    list is ranked by, when that is not its own time."""
+    rank = when or (lambda found: _time(found.at))
     files = []
     for path in paths:
         try:
@@ -198,17 +206,17 @@ def newest[T: _Dated](
             continue
     best: T | None = None
     for changed, path in sorted(files, reverse=True):
-        if best is not None and changed < _time(best.at):
+        if best is not None and changed < rank(best):
             break
         try:
             if latest is not None:
                 top = latest(path)
-                if top is None or (best is not None and top <= _time(best.at)):
+                if top is None or (best is not None and top <= rank(best)):
                     continue
             found = read(path)
         except OSError:  # removed or unreadable: this log only
             continue
-        if found is not None and (best is None or _time(found.at) > _time(best.at)):
+        if found is not None and (best is None or rank(found) > rank(best)):
             best = found
     return best
 
@@ -251,5 +259,18 @@ def last_claude_list(home: Path, folder: str | None) -> SentList | Unreadable | 
     """The newest list sent in a chat. With a folder, only that folder's chats."""
     chats = (home / ".claude/projects").glob("*/*.jsonl")  # not */*/subagents/*
     return newest(
-        chats, lambda path: _read_chat(path, folder), lambda path: _latest_list(path, folder)
+        chats,
+        lambda path: _read_chat(path, folder),
+        lambda path: _latest_list(path, folder),
+        _ranked,
     )
+
+
+def _ranked(found: SentList | Unreadable) -> float:
+    """The time a chat is ranked by: its last full list, not a later list of added skills.
+
+    # checked 2026-11-23 (real logs, Claude app): the app added 21 new skills to two chats of
+    # Nov 13 and 14 that nobody was in. Ranked by that list, they were "your last chat", with 3
+    # skills by name only, while every chat started that week had 22.
+    """
+    return _time(found.full if isinstance(found, SentList) and found.full else found.at)

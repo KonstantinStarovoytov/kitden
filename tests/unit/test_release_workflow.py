@@ -1,6 +1,8 @@
 """The checks-and-release workflow (feature 003: FR-001, contracts/release.md)."""
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -92,6 +94,43 @@ def test_the_release_text_is_the_notes_file():
     release = WORKFLOW.read_text().split("  release:")[1]
     assert '--notes-file "docs/releases/$GITHUB_REF_NAME.md"' in release
     assert "--generate-notes" not in release
+
+
+def test_the_release_is_named_by_the_first_heading_of_its_notes():
+    release = WORKFLOW.read_text().split("  release:")[1]
+    assert """sed -n '1s/^# //p' "docs/releases/$GITHUB_REF_NAME.md\"""" in release
+    # No heading, or an empty one: the old name.
+    assert 'if [ -z "$title" ]; then title="Kitden ${GITHUB_REF_NAME#v}"; fi' in release
+    assert '--title "$title"' in release
+    assert "${{" not in release.split("run: |")[1].split("env:")[0]
+
+
+def test_the_title_line_reads_a_heading_and_falls_back(tmp_path):
+    """The step's own shell lines, run on a notes file."""
+    release = WORKFLOW.read_text().split("  release:")[1]
+    lines = release.split("run: |\n")[1].split("          gh release create")[0]
+    script = "\n".join(line.strip() for line in lines.splitlines() if not line.startswith("#"))
+    for first, want in (
+        (
+            "# Kitden 0.11.0 — choose which clients\n\nText\n",
+            "Kitden 0.11.0 — choose which clients",
+        ),
+        ("Plain first line\n", "Kitden 0.11.0"),
+        ("#\n", "Kitden 0.11.0"),
+        ("# \n", "Kitden 0.11.0"),
+        ("", "Kitden 0.11.0"),
+    ):
+        (tmp_path / "docs/releases").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "docs/releases/v0.11.0.md").write_text(first)
+        out = subprocess.run(
+            ["bash", "-c", script + '\nprintf %s "$title"'],
+            cwd=tmp_path,
+            env={"GITHUB_REF_NAME": "v0.11.0", "PATH": os.environ["PATH"]},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        assert out == want
 
 
 def test_a_tag_without_notes_stops_before_pypi():
