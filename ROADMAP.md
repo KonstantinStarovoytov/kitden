@@ -7,7 +7,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
-### Not yet released
+### 0.11.1
 
 - **Kitden reads `skillListingBudgetFraction` and `skillListingMaxDescChars`:** the limit and the
   estimates are right for a person who raised or lowered Claude Code's share of the context

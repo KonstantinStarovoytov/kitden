@@ -14,13 +14,13 @@
       "sizes": ["1024x1024"]
     }
   ],
-  "version": "0.11.0",
+  "version": "0.11.1",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "kitden",
-      "version": "0.11.0",
+      "version": "0.11.1",
       "runtimeHint": "uvx",
       "transport": { "type": "stdio" },
       "packageArguments": [{ "type": "positional", "value": "mcp" }]

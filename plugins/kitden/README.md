@@ -44,7 +44,9 @@ In Claude Code each skill is also a command, such as `/kitden:audit`.
 
 ## What it reads
 
-`kitden show` reads the settings files of Claude Code, Codex and Cursor on this computer. For
+`kitden show` reads the settings files of Claude Code, Codex and Cursor on this computer. This
+includes the limits Claude Code's settings set for the skill list (`skillListingBudgetFraction`
+and `skillListingMaxDescChars`). For
 the context check it also reads what the client sent in your last chats, from the client's own
 chat files, the skills the Claude app gives Claude Code, from the app's own folder, and Codex's
 model list (`models_cache.json`), for the size of its context window. For Codex it also reads
@@ -52,7 +54,9 @@ the skill files of a plugin's newest version, when an update removed the version
 It uses them to size the skill list and keeps none of it. It also reads each skill's description
 from its `SKILL.md`, and
 `kitden show context` prints it, together with the names of the skills that did not fit in your
-last chat. To learn versions and plugins it may run the clients' own
+last chat. When the folder you run it in has no chat, `kitden show context` reads your last chat
+in any folder and also prints that folder's path (with `--project` it stays with that folder).
+To learn versions and plugins it may run the clients' own
 commands, such as `claude --version` and `codex plugin list`. A client you turned off on the
 Kitden page is not read, and its commands are not run. The first run can wait up to
 15 s for Codex and says so on stderr. The answer (each plugin's id and whether it is on) is kept
@@ -64,7 +68,7 @@ A skill's description is printed as written, so keep secrets out of it. There is
 no telemetry.
 
 What `kitden show` prints goes into the chat, so your agent and the company behind it see it,
-under their own privacy terms.
+under their own privacy terms. This includes the folder path above.
 
 The install is the one step that goes online, and only after your yes. The agent uses uv or
 Homebrew. With neither, it gives you a link to Kitden's install steps.
