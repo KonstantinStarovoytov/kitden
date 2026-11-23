@@ -1434,6 +1434,27 @@ def test_a_description_past_the_client_cap_has_its_tail_grey(home):
     assert row["seen"] == 1021
 
 
+def test_a_huge_cap_setting_does_not_make_a_huge_text(home, monkeypatch):
+    # A model Kitden does not know, so it looks for the window whose limit rebuilds the list,
+    # and a skill with no file it can find: the check tries that one empty and at the cap.
+    skill(home / ".claude/skills", "alpha", "Short.")
+    sent = {"alpha": "Short.", "ghost": "From a file Kitden cannot find."}
+    claude_chat(home, sent, model="a-model-kitden-does-not-know")
+    write_json(home / ".claude/settings.json", {"skillListingMaxDescChars": 10**12})
+    from kitden.views import context_view as module
+
+    sizes = []
+    run = module._claude_run
+
+    def watched(rows, states, weights, budget, unknown=None, **more):
+        sizes.append(len(unknown or ""))
+        return run(rows, states, weights, budget, unknown, **more)
+
+    monkeypatch.setattr(module, "_claude_run", watched)
+    view(home)
+    assert 0 < max(sizes) < 10**7  # the long one was tried, and it was not the cap's size
+
+
 def test_a_cap_lowered_after_the_chat_does_not_shrink_what_the_chat_sent(home):
     # The chat sent 1,000 characters under a cap of 1,000; the cap is 500 now.
     long = "word " * 400  # 2,000 characters

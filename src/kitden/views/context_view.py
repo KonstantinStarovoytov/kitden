@@ -478,8 +478,10 @@ def _claude_gives(rows, states, weights, budget, sent_full: frozenset[str], cap:
 
     The rule gives the same list with every such description empty and with every one at the
     cap, so it gives it for any size between: a skill that fits at the cap fits when smaller,
-    and one that does not fit when all are empty never fits."""
-    for unknown in ("", "x" * cap):
+    and one that does not fit when all are empty never fits. A description longer than the whole
+    limit cannot fit either way, so the longer one stops just past the limit: the cap is a
+    setting, and a huge number in it must not make a huge text."""
+    for unknown in ("", "x" * min(cap, budget + 1)):
         run = _claude_run(rows, states, weights, budget, unknown, as_sent=True, cap=cap)
         if run is None or run[1].full != sent_full:
             return False
