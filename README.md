@@ -48,8 +48,7 @@ It changes nothing until you press Apply, and every change can be undone.</p>
 
 ### See whether your skills fit
 
-Every chat starts with the list of your skills, and that list has a small budget: 1% of the
-context window in Claude Code, 2% in Codex. Past it, Claude Code sends some skills by name
+Every chat starts with the list of your skills, and that list has a small budget: 1% of the context window in Claude Code (or the share you set in its settings), 2% in Codex. Past it, Claude Code sends some skills by name
 only and Codex shortens or drops them, so the agent may never reach for them. Kitden reads the
 last chat's log and shows which skills went in whole, so you can turn off the ones you do not
 use. A skill's Details shows its description, with the part the agent did not get in grey. A
