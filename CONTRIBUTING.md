@@ -6,6 +6,8 @@ user can see or set (a route, a command, a setting, a page element, a dependency
 [issue](https://github.com/KonstantinStarovoytov/kitden/issues) first, so the maintainer can
 agree to it. The [roadmap](ROADMAP.md) shows current plans.
 
+The issue forms ask for what helps most. Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Pick your first issue
 
 Browse the [open good first issues](https://github.com/KonstantinStarovoytov/kitden/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22).

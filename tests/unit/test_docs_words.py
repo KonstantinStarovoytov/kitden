@@ -30,8 +30,9 @@ def test_docs_promise_no_undo_they_cannot_keep():
 def test_readme_is_short_and_the_guide_names_the_page_words():
     text = (ROOT / "README.md").read_text()
     # The README has five parts, the other features and three commands; the details live in the
-    # guide (2026-11-14: `kitden scan` came first, so the limit went from 125 to 135).
-    assert len(text.splitlines()) <= 135
+    # guide (2026-11-14: `kitden scan` came first, so the limit went from 125 to 135;
+    # 2026-11-23: the example output of `kitden scan` and a badge, 135 to 156).
+    assert len(text.splitlines()) <= 156
     assert "docs/images/readme/context-light.png" in text
     assert "docs/guide.md" in text
     guide = " ".join((ROOT / "docs/guide.md").read_text().split())
