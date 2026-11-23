@@ -1,6 +1,8 @@
 """Claude Code's last skill list: the newest one sent, from the chat logs."""
 
 import json
+import math
+import mmap
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
@@ -14,6 +16,8 @@ CLIENT = "claude_code"
 # will confirm it. An entrypoint not here is still read, without a surface.
 INTERACTIVE = {"claude-desktop": "in the Claude app", "cli": "in the terminal"}
 
+LISTING = b'"skill_listing"'  # in the line of every list
+STAMP = re.compile(rb'"timestamp"\s*:\s*"([^"]*)"')
 ASSISTANT = re.compile(r'"type"\s*:\s*"assistant"')
 MODEL = re.compile(r'"model"\s*:\s*"([^"]*)"')
 
@@ -176,10 +180,16 @@ class _Dated(Protocol):
     def at(self) -> str: ...
 
 
-def newest[T: _Dated](paths: Iterable[Path], read: Callable[[Path], T | None]) -> T | None:
+def newest[T: _Dated](
+    paths: Iterable[Path],
+    read: Callable[[Path], T | None],
+    latest: Callable[[Path], float | None] | None = None,
+) -> T | None:
     """The list sent last among these logs, by the time in the log, not by when the file last
     changed: an app may rewrite an old chat's file with no new list. Files are read newest first;
-    one that last changed before the best list so far cannot hold a newer one."""
+    one that last changed before the best list so far cannot hold a newer one. `latest` is a
+    quick look at a file: the latest time its list can have, or None when it holds no list. A
+    file whose list cannot be newer than the best so far is not read."""
     files = []
     for path in paths:
         try:
@@ -191,6 +201,10 @@ def newest[T: _Dated](paths: Iterable[Path], read: Callable[[Path], T | None]) -
         if best is not None and changed < _time(best.at):
             break
         try:
+            if latest is not None:
+                top = latest(path)
+                if top is None or (best is not None and top <= _time(best.at)):
+                    continue
             found = read(path)
         except OSError:  # removed or unreadable: this log only
             continue
@@ -199,7 +213,43 @@ def newest[T: _Dated](paths: Iterable[Path], read: Callable[[Path], T | None]) -
     return best
 
 
+def _latest_list(path: Path, folder: str | None) -> float | None:
+    """The latest time on a line of this log that may hold a list (one sent from the folder, when
+    a folder is picked); None when no line may. It is found by a search of the raw file, far
+    quicker than reading the log line by line, and it is never earlier than the time of the list
+    a full read gives.
+
+    # measured 2026-11-23 on a real home: 525 logs (1.9 GB) had changed after the newest list of
+    # a picked project, 402 of them with an older list of that project, so the file's time ruled
+    # none of them out and reading them took 4 s on every read of the page; this takes 0.4 s.
+    """
+    # The folder as a JSON string, with other letters as they are and as \u escapes.
+    spellings = {json.dumps(folder, ensure_ascii=plain).encode() for plain in (True, False)}
+    latest = None
+    with path.open("rb") as file:
+        try:
+            data = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
+        except ValueError:  # an empty file cannot be mapped
+            return None
+        with data:
+            at = data.find(LISTING)
+            while at != -1:
+                start = data.rfind(b"\n", 0, at) + 1
+                end = data.find(b"\n", at)
+                end = len(data) if end == -1 else end
+                at = data.find(LISTING, end)
+                if folder is not None and all(data.find(s, start, end) == -1 for s in spellings):
+                    continue
+                times = [_time(t.decode(errors="replace")) for t in STAMP.findall(data, start, end)]
+                # A line with no time Kitden can read rules nothing out.
+                top = max(times) if times and all(times) else math.inf
+                latest = top if latest is None else max(latest, top)
+    return latest
+
+
 def last_claude_list(home: Path, folder: str | None) -> SentList | Unreadable | None:
     """The newest list sent in a chat. With a folder, only that folder's chats."""
     chats = (home / ".claude/projects").glob("*/*.jsonl")  # not */*/subagents/*
-    return newest(chats, lambda path: _read_chat(path, folder))
+    return newest(
+        chats, lambda path: _read_chat(path, folder), lambda path: _latest_list(path, folder)
+    )

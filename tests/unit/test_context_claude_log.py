@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+from kitden.context import claude_log
 from kitden.context.claude_log import SentList, Unreadable, last_claude_list
 
 
@@ -139,6 +140,35 @@ def test_a_picked_folder_reads_only_its_own_chats(tmp_path):
     assert last_claude_list(tmp_path, "/work/a").skills == (("a", "Mine."),)
     assert last_claude_list(tmp_path, None).skills == (("a", "Other."),)
     assert last_claude_list(tmp_path, "/work/none") is None
+
+
+def test_a_chat_from_another_folder_is_not_read_line_by_line(tmp_path, monkeypatch):
+    # A project whose last chat is far down must not read every newer log in full.
+    names_it = {"type": "user", "cwd": "/work/b", "message": {"content": "see /work/a"}}
+    other = [list_entry(["a"], "- a: Other.", folder="/work/b"), names_it, {"cwd": "/work/a"}]
+    write_chat(tmp_path, "other", "chat", other, 200)
+    write_chat(tmp_path, "other", "empty", [], 300)
+    write_chat(tmp_path, "mine", "chat", [list_entry(["a"], "- a: Mine.", folder="/work/a")], 100)
+    read = []
+    whole = claude_log._read_chat
+    monkeypatch.setattr(claude_log, "_read_chat", lambda p, f: read.append(p.stem) or whole(p, f))
+    assert last_claude_list(tmp_path, "/work/a").skills == (("a", "Mine."),)
+    assert read == ["chat"]  # only the picked folder's
+
+
+def test_a_folder_with_other_letters_is_found_however_the_log_spells_it(tmp_path):
+    folder = '/work/проект "один"'
+    entry = list_entry(["a"], "- a: Mine.", folder=folder)
+    for n, plain in enumerate((True, False)):
+        path = write_chat(tmp_path, f"p{n}", "chat", [], 100)
+        path.write_text(json.dumps(entry, ensure_ascii=plain) + "\n", encoding="utf-8")
+        os.utime(path, (100, 100))
+    for n in (0, 1):
+        only = tmp_path / ".claude/projects" / f"p{1 - n}" / "chat.jsonl"
+        kept = only.read_bytes()
+        only.write_bytes(b"")
+        assert last_claude_list(tmp_path, folder).skills == (("a", "Mine."),)
+        only.write_bytes(kept)
 
 
 def test_a_chat_that_moved_to_another_folder_keeps_the_picked_folders_list(tmp_path):
