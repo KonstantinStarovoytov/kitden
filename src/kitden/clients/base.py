@@ -466,6 +466,10 @@ class ClientAdapter(ABC):
         """The edit that turns one skill off or on, in all projects."""
         raise ValueError(f"{self.id} has no skill switch of this kind")
 
+    def skill_limit_step(self, value: Any) -> Step:
+        """The edit that sets the skill list's share of the window for all projects."""
+        raise ValueError(f"{self.id} has no skill list limit Kitden changes")
+
     def add_server_step(self, name: str, entry: dict) -> Step:
         """The edit that adds one MCP entry, already in this client's format (user scope)."""
         return self._add_entry(name, entry)

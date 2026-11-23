@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from kitden.clients.cursor import CURSOR_HINT
+from kitden.views import words as said
 from kitden.views.skills import NEEDS_PLUGIN, NO_CLIENT
 from kitden.views.words import (
     AFTER_WORDS,
@@ -1509,6 +1510,49 @@ def test_adding_a_marketplace_server_names_the_kitden_gateway():
     assert 'if (action === "gateway.add") return `add:${params.server}`;' in tray
     assert AFTER_WORDS["gateway.add"] == ("gw", STATE_WORDS["gw"])
     assert NO_GATEWAY_CLIENT == "No client uses the Kitden gateway yet."
+
+
+def test_a_skill_limit_says_the_share_everywhere_it_shows():
+    review, parts, tray = reviews(), script("parts.js"), script("tray.js")
+    context, tips = script("context.js"), script("tips.js")
+    # Tray row, review title and the line after Apply: one sentence with the share.
+    assert (
+        '"skill.limit": `Set ${limitWords(previewBody && previewBody.params, clients)}`' in review
+    )
+    assert "`the skill list limit of ${clients} back to ${DEFAULT_SHARE}`" in review
+    assert "`the skill list limit of ${clients} to ${Number((fraction * 100).toFixed(2))}%`" in (
+        review
+    )
+    assert '"skill.limit": "Set"' in review
+    # Changes: the row's title in the past; else the action's words and the client.
+    assert '"skill.limit": "Changed the skill list limit of"' in parts
+    assert "return title ? pastTitle(title)" in parts
+    assert 'if (action === "skill.limit") return `limit:${one.client}`;' in tray
+    assert '"skill.rule", "skill.limit"];' in tray
+    assert 'raise: "Raise the limit…"' in context and 'title: "Skill list limit"' in context
+    assert 'now: "Now", offer: "Suggested", cost: "Cost"' in context
+    assert "addToTray(body, { note: CONTEXT_NOTE })" in context
+    assert "Raise the limit…$/" in tips
+    assert said.LIMIT_NOW == "{share} of the context window: {n} characters"
+    assert said.LIMIT_FITS_ALL == "{share}: all {n} skills get their description"
+    assert said.LIMIT_FITS_ONE == "{share}: the skill gets its description"
+    assert said.LIMIT_COST == "About {chars} more characters in every chat (about {tokens} tokens)"
+    assert (said.LIMIT_SET, said.LIMIT_BACK) == ("Set to {share}", "Back to {share}")
+    assert said.LIMIT_KEEPS_CHOSEN == "Skills set to Name only stay as they are."
+    assert said.LIMIT_CHANGED == (
+        "The limit was changed after this chat: it is {share} now. Your next chat will show the "
+        "real list."
+    )
+    assert said.CLAUDE_SHARE_SET == (
+        "Your Claude Code settings let this list use {share} of the context window."
+    )
+    assert 'open: "Skill list limit…"' in context
+    assert said.LIMIT_AFTER == "Limit {share}"
+    assert said.LIMIT_AFTER_DEFAULT == "Limit {share}, the default"
+    assert said.LIMIT_CLAUDE_ONLY == "Kitden changes the skill list limit for Claude Code only."
+    assert said.LIMIT_BAD_SHARE == (
+        "The skill list limit must be a share of the window in steps of 0.5%, up to 100%."
+    )
 
 
 def test_a_skill_rule_says_what_it_turns_off_and_where():

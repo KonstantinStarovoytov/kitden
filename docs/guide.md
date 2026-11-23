@@ -72,6 +72,20 @@ did not fit. `kitden show context`, which the plugin's `context` skill runs, als
 skill's description, so your agent sees it too. With no chat in the current folder, it shows the
 last chat in any folder and names that folder; with `--project` it stays with that folder.
 
+When some Claude Code skills showed only a name because the list ran out of room, **Raise the
+limit…** beside the verdict opens the skill list limit: its share of the context window now,
+the smallest share in steps of 0.5% at which every description fits (skills you set to Name only
+or Off stay as they are), and about how many more characters and tokens every chat then costs.
+**Set to 1.5%** (or the share shown) adds the change to the preview, and the page shows the
+estimate after Apply; a second press takes it out. When your user settings set a share above
+1%, **Back to 1%** takes it out again; with nothing to raise, the button reads **Skill list
+limit…**. After Apply, the last chat keeps the limit it was sent under, and the page says the
+limit changed and what Kitden expects from your next chat. Kitden writes `skillListingBudgetFraction` in your user
+settings (`~/.claude/settings.json`), for all projects, with a backup and Undo. Your next chat
+shows the real list. Kitden does not offer it when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when
+a project's own settings file sets the share, when there is no estimate, when everything fits,
+or when even 5% would not fit every description; "How this is counted" then says which.
+
 ## Add from the catalogs
 
 **+ Add plugins** in Library and **+ Add servers** in Gateway open one catalog: **skills.sh**,

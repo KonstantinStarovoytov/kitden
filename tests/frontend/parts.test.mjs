@@ -194,6 +194,13 @@ test('a skill rule on the Changes page says what changed and where', () => {
   assert.equal(changeTitle(here), 'Changed how superpowers loads in website · Claude Code');
 });
 
+test('a skill list limit on the Changes page keeps its row title, in the past', () => {
+  const steps = [{ client: 'claude_code', name: 'skillListingBudgetFraction' }];
+  const rows = [{ title: 'Set the skill list limit of Claude Code to 1.5% for all projects' }];
+  assert.equal(changeTitle({ action: 'skill.limit', steps, rows, target: { scope: 'all', project: null } }), 'Set the skill list limit of Claude Code to 1.5% for all projects');
+  assert.equal(changeTitle({ action: 'skill.limit', steps, rows: [] }), 'Changed the skill list limit of Claude Code');
+});
+
 test('a plugin removal on the Changes page uses the short name', () => {
   assert.equal(changeTitle({ action: 'plugin.remove', steps: [{ client: 'codex', name: 'browser@openai-bundled' }] }), 'Removed browser · Codex');
 });

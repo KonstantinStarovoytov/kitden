@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TypeGuard
 
 from kitden.clients.base import Reader, found_columns, from_plugin
-from kitden.clients.claude_code import local_files
+from kitden.clients.claude_code import LIMIT_KEY, local_files
 from kitden.clients.versions import highest_version
 from kitden.context.claude_log import Unreadable, last_claude_list
 from kitden.context.codex_log import codex_window, codex_windows, last_codex_list
@@ -33,6 +33,7 @@ from kitden.context.rules import (
     codex_rule,
     codex_table,
     codex_tokens,
+    grid_share,
 )
 from kitden.context.tables import (
     CLAUDE_ALWAYS_FULL,
@@ -40,6 +41,8 @@ from kitden.context.tables import (
     CLAUDE_DESCRIPTION_CAP,
     CLAUDE_OTHER_WINDOW,
     CLAUDE_SHARE,
+    CLAUDE_SHARE_MOST,
+    CLAUDE_SHARE_STEPS,
     CLAUDE_WINDOWS,
     CODEX_DESCRIPTION_CAP,
 )
@@ -47,6 +50,7 @@ from kitden.local_gateway.settings import as_dict
 from kitden.model import CLIENT_WORDS, Item, ItemKind, Project, Scope
 from kitden.system import claude_desktop_dir
 from kitden.views import words
+from kitden.views.after import home_path
 from kitden.views.effective import effective_view
 from kitden.views.match import plugin_of
 from kitden.views.skills import read_skill
@@ -61,7 +65,7 @@ ASKED = ("user-invocable-only", "only-asked")
 BUDGET_KEY = "SLASH_COMMAND_TOOL_CHAR_BUDGET"
 # checked 2026-11-23 (/en/settings-reference): top-level keys of any settings file; the share of
 # the window the list may use (default 0.01) and the cap on one description (default 1536).
-FRACTION_KEY = "skillListingBudgetFraction"
+FRACTION_KEY = LIMIT_KEY
 CAP_KEY = "skillListingMaxDescChars"
 WHOLE = re.compile(r"[0-9]+")
 
@@ -95,17 +99,21 @@ def context_view(
     home: Path,
     codex_home: Path,
     folder: str | None,
-    draft: dict[str, dict[str, str]],
+    draft: dict,
     anywhere: bool = False,
 ) -> dict:
     """One card per found client. `folder` is the picked project (None: all projects); `draft`
-    maps client -> skill name -> state, the tray's changes not applied yet. With `anywhere`, a
-    client with no chat in `folder` shows its last chat in any folder; the card's fact names it."""
+    maps client -> skill name -> state, the tray's changes not applied yet, and `limits` to
+    client -> the skill list's share of the window in the tray ("default": the key taken out).
+    With `anywhere`, a client with no chat in `folder` shows its last chat in any folder; the
+    card's fact names it."""
     clients = []
+    limits = as_dict(draft.get("limits"))
     for client in found_columns(inventory):
         changes = as_dict(draft.get(client))
         if client == "claude_code":
-            clients.append(_claude(inventory, home, folder, changes, anywhere))
+            asked = limits.get(client)
+            clients.append(_claude(inventory, home, folder, changes, anywhere, asked))
         elif client == "codex":
             clients.append(_codex(inventory, codex_home, folder, changes, anywhere))
         else:
@@ -130,6 +138,8 @@ def _card(client: str, **parts) -> dict:
         "skills": [],
         "after": None,
         "how": [],
+        "limit": None,
+        "changed": [],
     }
     return card | parts
 
@@ -421,7 +431,96 @@ def _claude_cap(files: list[Path]) -> int:
 
 def _percent(fraction: float | None) -> str:
     """0.02 as "2%", 0.015 as "1.5%"."""
-    return f"{(fraction or CLAUDE_SHARE) * 100:g}%"
+    return words.percent(fraction or CLAUDE_SHARE)
+
+
+def _limit_file(files: list[Path]) -> Path | None:
+    """The winning settings file that has skillListingBudgetFraction, whatever its value."""
+    read = Reader("claude_code")
+    return next((p for p in reversed(files) if FRACTION_KEY in as_dict(read.json(p))), None)
+
+
+def _about(n: float) -> str:
+    """A count to two figures: 14,237 as "14,000", 4,745 as "4,700"; at least 1."""
+    whole = max(1, round(n))
+    return f"{round(whole, 2 - len(str(whole))):,}" if whole >= 100 else str(whole)
+
+
+def _asked_share(value) -> float | None:
+    """The share a tray row asks for: a number above 0 and at most 1, or the default."""
+    if value == "default":
+        return CLAUDE_SHARE
+    return value if _whole(value) and 0 < value <= 1 else None
+
+
+def _claude_limit(
+    home: Path,
+    files: list[Path],
+    setting: int | None,
+    fraction: float | None,
+    share: float,
+    pair: tuple[int, int] | None,
+    base: tuple[list[ClaudeSkill], ClaudeFit] | None,
+    checked: bool,
+    cap: int,
+) -> dict:
+    """Details' "Skill list limit" (spec skill-list-limit): the limit now, the smallest share in
+    steps of 0.5% above it at which every description the limit cut fits, by the same rule as the
+    verdict, and what that costs; Back to the default when the user file has a higher share.
+    `why`: why there is no suggestion. Skills set to Name only or Off stay as they are."""
+    holder = _limit_file(files)
+    user = files[0]
+    above = fraction is not None and fraction > CLAUDE_SHARE
+    back = None
+    if setting is None and holder == user and above:
+        back = {"fraction": "default", "label": words.LIMIT_BACK.format(share=_percent(None))}
+    limit = {"now": None, "offer": None, "back": back, "note": None, "why": None}
+    if setting is not None:
+        return limit | {"why": words.LIMIT_NOT_FIXED}
+    if holder is not None and holder != user:
+        place = home_path(str(holder), home)
+        return limit | {"why": words.LIMIT_NOT_PROJECT.format(file=place)}
+    if pair is None or base is None or not checked:
+        return limit | {"why": words.LIMIT_NOT_ESTIMATED}
+    budget = claude_budget(*pair, share)
+    limit["now"] = words.LIMIT_NOW.format(share=_percent(share), n=f"{budget:,}")
+    skills, now = base
+    wanted = {s.name for s in skills if not s.name_only}
+    if wanted <= now.full:
+        return limit | {"why": words.LIMIT_NOT_NEEDED}
+    first = int(share * CLAUDE_SHARE_STEPS + 1e-9) + 1
+    for steps in range(first, CLAUDE_SHARE_MOST + 1):
+        offered = grid_share(steps)
+        fit = claude_rule(skills, claude_budget(*pair, offered), cap)
+        if wanted <= fit.full:
+            break
+    else:
+        most = words.percent(grid_share(CLAUDE_SHARE_MOST))
+        return limit | {"why": words.LIMIT_NOT_ENOUGH.format(share=most)}
+    shown = words.percent(offered)
+    n = len(fit.full)
+    say = (words.LIMIT_FITS_ALL if n > 1 else words.LIMIT_FITS_ONE).format(share=shown, n=n)
+    extra = fit.used - now.used
+    cost = words.LIMIT_COST.format(chars=_about(extra), tokens=_about(extra / pair[1]))
+    note = words.LIMIT_NOTE
+    if any(s.name_only for s in skills):
+        note = f"{words.LIMIT_KEEPS_CHOSEN} {note}"
+    offer = {"fraction": offered, "label": words.LIMIT_SET.format(share=shown), "say": say}
+    return limit | {"offer": offer | {"cost": cost}, "note": note}
+
+
+def _share_then(
+    rows, states, weights, model: tuple[int, int], share: float, sent_full: frozenset[str], cap: int
+) -> float | None:
+    """The share the chat was sent under, when today's does not give its list: the default, or
+    a share Kitden offers, whose limit rebuilds what the chat sent. None when none does."""
+    shares = [CLAUDE_SHARE, *(grid_share(n) for n in range(1, CLAUDE_SHARE_MOST + 1))]
+    for then in dict.fromkeys(shares):
+        if abs(then - share) < 1e-9:
+            continue
+        if _claude_gives(rows, states, weights, claude_budget(*model, then), sent_full, cap):
+            return then
+    return None
 
 
 def _claude_weights(home: Path, at_ms: int) -> dict[str, float]:
@@ -630,7 +729,10 @@ def _model_name(model: str | None) -> str | None:
     return model
 
 
-def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bool) -> dict:
+def _claude(
+    inventory, home: Path, folder: str | None, draft: dict, anywhere: bool, asked=None
+) -> dict:
+    """`asked`: the skill list's share a tray row asks for (a number or "default")."""
     client = "claude_code"
     found = last_claude_list(home, folder)
     if found is None and anywhere and folder is not None:
@@ -668,9 +770,19 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
     as_sent = _claude_run(rows, states, weights, budget, as_sent=True, cap=cap) if budget else None
     checked = as_sent is not None and as_sent[1].full == sent_full
+    # Settings changed after the chat: the share may differ from the one the chat was sent
+    # under. When another share rebuilds the chat's list, the chat's card shows that limit, and
+    # the estimates use today's (`changed`).
+    moved = not _unchanged(files, at_ms)
+    then_share = None
+    if setting is None and model and not checked and moved:
+        then_share = _share_then(rows, states, weights, model, share, sent_full, cap)
+        checked = then_share is not None and base is not None
     # The log does not say the window: take the only one whose limit rebuilds the list.
     worked_out = two_limits = False
     rate = 0
+    # The window and characters per token the limit is worked out from; None with a fixed limit.
+    pair = model if setting is None else None
     if setting is None and not checked:
         fits = [
             candidate
@@ -684,17 +796,25 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
             window, rate = fits[0]
             two_limits = len(fits) > 1
             budget = None if two_limits else claude_budget(*fits[0], share)
+            pair = None if two_limits else fits[0]
             # None when a size is not known: the window is sure, an estimate is not.
             base = _claude_run(rows, states, weights, budget, cap=cap) if budget else None
             checked = base is not None
 
+    # The limit the chat was sent under: today's, the share found above, or not known when the
+    # settings changed since and nothing rebuilds the chat's list (then no limit line is drawn).
+    then_budget = budget
+    if then_share is not None and model:
+        then_budget = claude_budget(*model, then_share)
+    elif setting is None and moved and not checked:
+        then_budget = None
     when = _on_date(date)
-    settled = bool(date) and _unchanged(files, at_ms)
-    chosen, now = _chosen(rows, states, weights, budget, checked, settled, cap)
+    settled = bool(date) and not moved
+    chosen, now = _chosen(rows, states, weights, then_budget, checked, settled, cap)
     fact = _claude_fact(rows, when, chosen, now, cap)
     misfit = fact["misfit"] is not None
-    if checked and not misfit:
-        left = f"{budget - fact['used']:,}"
+    if checked and not misfit and then_budget is not None:
+        left = f"{then_budget - fact['used']:,}"
         fact["room"] = words.ROOM_LEFT.format(left=left, unit="characters")
     if setting is not None:
         title = words.LIMIT_TITLE.format(n=f"{setting:,}", unit="characters")
@@ -703,7 +823,12 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
         title = words.WINDOW_TITLE.format(size=_size(window)) if window else words.UNKNOWN_WINDOW
         source = words.WORKED_OUT if worked_out else None
         models = " · ".join(p for p in (_model_name(found.model), found.surface, source) if p)
-    windows = [_window_card(title, models, _tag(date), budget, fact)]
+    windows = [_window_card(title, models, _tag(date), then_budget, fact)]
+    # What Kitden expects from the limit now, said under the chat's verdict.
+    changed = []
+    if then_share is not None and base is not None:
+        expect = _claude_estimate(base[0], base[1], _on(window), words.ESTIMATE, cap)
+        changed = [words.LIMIT_CHANGED.format(share=_percent(share)), expect["say"]]
     if base is not None and checked and setting is None and window in CLAUDE_OTHER_WINDOW:
         other, per_token = CLAUDE_OTHER_WINDOW[window]
         shown = ""  # which models have that window is not in any file Kitden can read
@@ -716,10 +841,19 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
         title = words.WINDOW_TITLE.format(size=_size(other))
         windows.append(_window_card(title, shown, words.ESTIMATE_TAG, limit, result))
 
+    limit_card = _claude_limit(home, files, setting, fraction, share, pair, base, checked, cap)
+    # A share in the tray counts only where Kitden would write it: the user file decides.
+    new_share = _asked_share(asked) if limit_card["now"] is not None else None
+    if new_share is not None and abs(new_share - share) < 1e-9:
+        new_share = None
     after = None
     changes = _changes(draft, states, SWITCHES[client])
-    if checked and changes:
-        run = _claude_run(rows, states | changes, weights, budget, cap=cap)
+    if checked and (changes or new_share is not None):
+        if new_share is not None and pair is not None:
+            budget_after = claude_budget(*pair, new_share)
+        else:
+            budget_after = budget
+        run = _claude_run(rows, states | changes, weights, budget_after, cap=cap)
         if run is not None and base is not None:
             skills, fit = run
             full = base[1].full
@@ -729,6 +863,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
             result = _claude_estimate(skills, fit, on, words.AFTER_APPLY, cap)
             say = f"{result['say']} {_swap(client, gets, loses)}".strip()
             after = {"say": say, "gets": gets, "loses": loses, "result": result}
+            after["budget"] = budget_after
 
     explained = checked or two_limits
     can_free = any(
@@ -776,11 +911,14 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
         *([words.HOW_CLAUDE_CAP.format(n=f"{cap:,}")] if cap != CLAUDE_DESCRIPTION_CAP else []),
         words.HOW_CLAUDE_SURFACE,
         words.HOW_CLAUDE_REST,
+        *([limit_card["why"]] if limit_card["why"] else []),
     ]
     parts = {}
     if setting is not None:
         limit_set = words.CONTEXT_LIMIT_SET[client].format(n=f"{setting:,}")
         parts["lede"] = words.CONTEXT_LEDE + limit_set
+    elif by_fraction:
+        parts["lede"] = words.CONTEXT_LEDE + words.CLAUDE_SHARE_SET.format(share=_percent(share))
     return _card(
         client,
         **parts,
@@ -799,6 +937,8 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
         skills=skills,
         after=after,
         how=how,
+        limit=limit_card,
+        changed=changed,
     )
 
 

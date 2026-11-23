@@ -21,7 +21,7 @@ const DONE_WORDS = {
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
   "skill.install": "Added", "plugin.skills": "Added",
   "gateway.remove": "Removed", "gateway.put_back": "Put", "gateway.move_out": "Moved", "mcp.add": "Added",
-  "gateway.keychain": "Moved", "gateway.add": "Added", "skill.rule": "Turned off",
+  "gateway.keychain": "Moved", "gateway.add": "Added", "skill.rule": "Turned off", "skill.limit": "Set",
   "gateway.sign_in": "Signed in",
 };
 
@@ -71,6 +71,16 @@ function accessText({ server, field, name, value, added = false }) {
     return { title: `Add ${what} to ${server}`, done: `Added ${what} to ${server}` };
   }
   return { title: `Replace ${name} of ${server}`, done: `Replaced ${name} of ${server}` };
+}
+
+// Claude Code's skill list limit in words: "the skill list limit of Claude Code to 1.5%", or "back
+// to 1%" when the row takes the key out. The share is the one the server offered.
+const DEFAULT_SHARE = "1%";
+export function limitWords(params, clients) {
+  const fraction = (params || {}).fraction;
+  if (fraction === "default") return `the skill list limit of ${clients} back to ${DEFAULT_SHARE}`;
+  if (typeof fraction !== "number") return `the skill list limit of ${clients}`;
+  return `the skill list limit of ${clients} to ${Number((fraction * 100).toFixed(2))}%`;
 }
 
 export function changeWords(change, previewBody) {
@@ -127,6 +137,7 @@ export function changeWords(change, previewBody) {
     "gateway.sign_in": `Sign in to ${server} again`,
     "gateway.add": `Add ${added} to the Kitden gateway`,
     "skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`,
+    "skill.limit": `Set ${limitWords(previewBody && previewBody.params, clients)}`,
   }[change.action] || change.action;
   // A skill set to Name only is neither off nor back to the shared rule.
   const nameOnly = change.action === "skill.rule" && ruleState(previewBody && previewBody.params) === "name-only";
@@ -169,6 +180,8 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${added} to the Kitden gateway`;
   } else if (change.action === "skill.rule") {
     what = nameOnly ? `${short} is Name only` : off ? `${verb} ${short}` : onForAll ? `Turned on ${short}` : `${short} uses the shared rule`;
+  } else if (change.action === "skill.limit") {
+    what = `${verb} ${limitWords(previewBody && previewBody.params, clients)}`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   } else if (change.action === "project.align") {

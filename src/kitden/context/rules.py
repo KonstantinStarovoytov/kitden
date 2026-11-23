@@ -6,6 +6,7 @@ from math import ceil
 from kitden.context.tables import (
     CLAUDE_DESCRIPTION_CAP,
     CLAUDE_SHARE,
+    CLAUDE_SHARE_STEPS,
     CODEX_DESCRIPTION_CAP,
     CODEX_INTRO,
     CODEX_INTRO_ROOTS,
@@ -33,6 +34,20 @@ class ClaudeFit:
 
 def claude_budget(window: int, per_token: int, share: float = CLAUDE_SHARE) -> int:
     return int(window * per_token * share)
+
+
+def on_share_grid(value: object) -> bool:
+    """A share of the window Kitden may write: a number (not true or false) above 0, at most 1,
+    in steps of half a percent."""
+    if not isinstance(value, int | float) or isinstance(value, bool) or not 0 < value <= 1:
+        return False
+    steps = value * CLAUDE_SHARE_STEPS
+    return abs(steps - round(steps)) < 1e-6
+
+
+def grid_share(steps: int) -> float:
+    """The share of `steps` half percents, as Kitden writes it: 3 is 0.015."""
+    return round(steps / CLAUDE_SHARE_STEPS, 4)
 
 
 def claude_weight(count: float, last_used_ms: float, at_ms: int) -> float:

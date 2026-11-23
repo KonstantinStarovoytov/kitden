@@ -120,6 +120,8 @@ export function keyFor(body) {
   if (action === "gateway.access") return `access:${params.server}/${params.field}/${params.name}`;
   const one = targets[0] || {};
   if (action === "skill.rule") return `skill:${one.client}:${one.item}@${params.project || ""}`;
+  // One skill list limit per client: another share replaces the row.
+  if (action === "skill.limit") return `limit:${one.client}`;
   return JSON.stringify(sorted({ action, targets: inClientOrder(action, targets), params }));
 }
 
@@ -142,7 +144,7 @@ function inClientOrder(action, targets) {
 }
 
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove", "gateway.remove"];
-const SWITCHES = ["gateway.rule", "gateway.rules", "gateway.strict", "plugin.enable", "plugin.disable", "setup_server.enable", "skill.rule"];
+const SWITCHES = ["gateway.rule", "gateway.rules", "gateway.strict", "plugin.enable", "plugin.disable", "setup_server.enable", "skill.rule", "skill.limit"];
 const MOVES = ["gateway.move", "gateway.put_back", "gateway.keychain", "gateway.sign_in", "gateway.access"];
 const PLUGS = ["setup_server.register", "setup_server.update", "client.disconnect"];
 const ADDS = ["mcp.add", "plugin.install", "plugin.skills", "skill.install", "marketplace.add", "gateway.add"];

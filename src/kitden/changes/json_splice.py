@@ -188,6 +188,12 @@ def _insert(text: str, node: _Node, key: str, value: Any, sep: str) -> str:
     return text[: last.value.end] + addition + text[last.value.end :]
 
 
+def same_value(a: Any, b: Any) -> bool:
+    """Equal, and not true or false against a number: in Python `True == 1`, but a settings
+    file that says `true` where 1 is wanted must still be written."""
+    return a == b and isinstance(a, bool) == isinstance(b, bool)
+
+
 def get_value(text: str, path: tuple[str, ...]) -> Any:
     """The value at `path`, or ABSENT."""
     if not text.strip():
@@ -204,7 +210,7 @@ def set_value(text: str, path: tuple[str, ...], value: Any) -> str:
     """Add or replace the member at `path`, creating missing parent objects."""
     if not text.strip():
         return json.dumps(_nested(path, value), ensure_ascii=False, indent=2) + "\n"
-    if get_value(text, path) == value:
+    if same_value(get_value(text, path), value):
         return text
     _, node = _load(text)
     sep = _key_separator(text, node)
