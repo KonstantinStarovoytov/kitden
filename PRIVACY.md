@@ -5,7 +5,9 @@ nothing from it.
 
 ## What Kitden reads
 
-- The settings files of Claude Code, Codex and Cursor on this computer.
+- The settings files of Claude Code, Codex and Cursor on this computer. This includes the limits
+  Claude Code's settings set for the skill list (`skillListingBudgetFraction`,
+  `skillListingMaxDescChars`). Kitden uses them to size the skill list and keeps none of it.
 - For the context check, what the client sent in your last chats, from the client's own chat
   files, and the skills the Claude app gives Claude Code, from the app's own folder. For Codex, also
   its model list (`models_cache.json`), for the size of its context window, and the skill files of a
@@ -14,7 +16,7 @@ nothing from it.
   this check. `kitden scan` prints in your terminal one line about each skill list, the names of
   the first five skills that did not fit, and nothing else from the chats. When the folder you run
   it in has no chat, it reads the client's last chat in any folder and also prints that folder's
-  path.
+  path. `kitden show context` does the same, unless you give `--project`.
 - A skill's description, from its `SKILL.md`. The page shows it in the skill's Details, and
   `kitden show context` prints it (see "The plugin and your agent"). Kitden keeps none of it.
 - Versions and plugin lists, from the clients' own commands.
@@ -64,8 +66,9 @@ agent and the company behind it see it, under their own privacy terms. Secret va
 tokens in a server's settings, are replaced with `[secret]` first. The one exception is
 `kitden show context`: it prints each skill's description as written in its `SKILL.md`, and
 Kitden does not replace anything in it. Keep secrets out of a skill's description. It also prints
-the names of the skills that did not fit in your last chat. `kitden show` changes no client
-settings and does not go online.
+the names of the skills that did not fit in your last chat. When the folder you run it in has no
+chat, it also prints the path of the folder of your last chat, which is often a project name.
+`kitden show` changes no client settings and does not go online.
 
 ## Questions
 
