@@ -9,6 +9,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Picking a project is quicker when its last Claude Code chat is far down the list of
+  chats:** Kitden no longer reads every newer chat log in full. On one real setup the read of
+  the logs went from about 4 s to about 1 s.
+- **The Library's Instructions tab says an empty map once:** when the server's note already
+  says why no file is shown, "No instruction files here." is left out.
+- **Pages say which clients are off:** the Overview, the Library, the Gateway and the Context
+  page each say it in a quiet line, such as "Codex is turned off in Kitden."
 - **`kitden scan` counts in plain words:** it prints `MCP servers: 12` and `Skills: 62` where it
   printed `mcp_server` and `skill`, says on the `Skills` line why that count and the last
   chat's differ, puts the Claude Desktop Code tab on one line under Claude Code, and no longer
@@ -21,8 +28,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   characters" for 30 real cuts at 334–338. It now leaves that skill out of the count and says
   it cannot tell for it, and the check against Codex's rule passes again. The same holds when
   the update only added text to the end of a description.
-- **Choose which clients Kitden reads:** on the Overview, **Choose clients…** under "Your setup"
-  lists Claude Code, Codex and Cursor with a switch each. A client you turn off is not read at
+- **Choose which clients Kitden reads:** **Choose clients…**, a button at the top right of the
+  Overview, the Library, the Gateway and the Context page, lists Claude Code, Codex and Cursor
+  with a switch each. A client you turn off is not read at
   all: no scan, no version or plugin command (Codex's 15 s wait is gone), and it leaves the
   Overview, Library, Gateway and Agents pages, `kitden scan` ("Codex: turned off in Kitden") and
   `kitden show`. Nothing in the client's own settings changes. Kitden keeps one client on, and an

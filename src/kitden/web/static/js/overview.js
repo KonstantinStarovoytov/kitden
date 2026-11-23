@@ -3,13 +3,14 @@
 // button only adds a row to the tray. The card leaves once that change is applied and checked
 // and the page has read the result; an Undo brings it back.
 import { getJson, query } from "./api.js";
-import { showChoice } from "./clients-choice.js";
+import { chooseButton, offLine } from "./clients-choice.js";
 import { previewButton, syncTrayIn } from "./details.js";
 import { $, button, el, icon, joinWords, plural, reportError } from "./dom.js";
 import { SETUP_NOTE } from "./gateway-details.js";
 import { loadLibraryFor, noClients } from "./library.js";
 import { layoutTree, litFrom } from "./map.js";
 import { mapView } from "./map-view.js";
+import { headActions } from "./map-page.js";
 import { animateTo, countUp, D, rise, riseHead, rollTo } from "./motion.js";
 import { toast } from "./panel.js";
 import { banner, folderName, mark, setHint, skeleton, staleNote, versionWords } from "./parts.js";
@@ -39,9 +40,17 @@ const page = {
   notesOpen: false, notes: null, openRows: new Set(), setup: null,
 };
 
+// The title with "Choose clients…" at its right, as the Library's head.
+function pageHead(title) {
+  const row = el("div", "page-head");
+  row.append(title, headActions(chooseButton()));
+  return row;
+}
+
 export function renderOverview(main, { again = false } = {}) {
   const model = current("overview");
-  const head = el("h1", null, TITLE);
+  const title = el("h1", null, TITLE);
+  const head = pageHead(title);
   main.append(head);
   setHint(model ? HINT : "");
   if (!model) {
@@ -59,7 +68,7 @@ export function renderOverview(main, { again = false } = {}) {
   // No client found: what Kitden looks for comes first, and no lede promises anything.
   const none = Array.isArray(data.clients) && !data.clients.some((c) => c.status === "found");
   let lede = null;
-  if (none) head.textContent = "No clients found";
+  if (none) title.textContent = "No clients found";
   else {
     lede = ledeNode(model.counts, foundNames(model.map), { count: !page.counted, from: again ? page.need : null });
     page.counted = true;
@@ -70,6 +79,8 @@ export function renderOverview(main, { again = false } = {}) {
   const scope = el("p", folder ? "scope-bar project" : "scope-bar");
   scope.append(icon(folder ? "folder" : "layers", 14), el("span", null, folder ? `Project ${folder}` : "All projects"));
   main.append(scope);
+  const off = offLine(data.clients);
+  if (off) main.append(off);
   riseHead(head, lede, scope, { again });
   if (currentError("overview")) main.append(staleNote(data.readAt.overview));
 
@@ -597,9 +608,6 @@ function setupColumn(map, fresh) {
   const box = drawSetup(map, { fresh });
   const foot = el("p", "ov-foot");
   foot.append(icon("folder", 13), el("span", null, footWords(map.projects, map.own_rules)));
-  const choose = button("Choose clients…", showChoice, "btn ghost small");
-  choose.classList.add("choose");
-  foot.append(choose);
   column.append(caption, box, foot);
   return column;
 }

@@ -3,7 +3,7 @@
 // saves the choice and reads again; the page reads everything again and draws.
 import { postJson } from "./api.js";
 import { detailsCard, keepFrom, switchNode } from "./details.js";
-import { el, reportError } from "./dom.js";
+import { button, el, joinWords, reportError } from "./dom.js";
 import { openPanel, panelState, toast } from "./panel.js";
 import { CLIENT_NAMES, kitdenClients, mark, versionWords, WRITABLE } from "./parts.js";
 import { detailsAgain, reloadAll, showEffect } from "./review.js";
@@ -52,6 +52,30 @@ export function choiceCard(clients, setup, press, progress = null) {
     list.append(item);
   }
   return { kind: CHOICE_KIND, title: CHOICE_TITLE, list, text: el("p", "muted", CHOICE_NOTE) };
+}
+
+// The sentence for the clients that are off ("Codex and Cursor are turned off in Kitden."), in
+// client order, or null when none is off.
+export function offWords(clients) {
+  const list = Array.isArray(clients) ? clients : [];
+  const off = WRITABLE.filter((id) => list.some((c) => c.id === id && c.status === "off"));
+  if (!off.length) return null;
+  return `${joinWords(off.map((id) => CLIENT_NAMES[id]))} ${off.length === 1 ? "is" : "are"} turned off in Kitden.`;
+}
+
+// A quiet line for a page that shows less because a client is off. Null when none is off. The
+// button that opens the panel is in the page's head (chooseButton).
+export function offLine(clients = data.clients) {
+  const words = offWords(clients);
+  return words ? el("p", "muted scope-note", words) : null;
+}
+
+// The page head's button that opens the panel, the same on every page that lists clients. It has a
+// focus key, so a page drawn again while the panel is open still gives focus back to it.
+export function chooseButton() {
+  const choose = button("Choose clients…", showChoice, "btn");
+  choose.dataset.focus = "choose:clients";
+  return choose;
 }
 
 // Open the panel. A press draws it again from what the page read.

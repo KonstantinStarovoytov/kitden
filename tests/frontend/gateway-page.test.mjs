@@ -175,6 +175,31 @@ test('a tray change draws the Gateway map again in place: no new page, no entran
   assert.equal(renders, 0);
 });
 
+test('the head has "Choose clients…" before "+ Add servers", and the page says which clients are off, as text only', () => {
+  const was = data.clients;
+  try {
+    for (const mode of ['map', 'list']) {
+      state.mode = mode;
+      data.clients = [];
+      main.replaceChildren();
+      renderGateway(main);
+      const actions = main.children[0].children.at(-1);
+      assert.deepEqual(actions.children.slice(0, 2).map((n) => [n.textContent, n.className]), [['Choose clients…', 'btn'], ['+ Add servers', 'btn add']]);
+      assert.equal(actions.children[0].dataset.focus, 'choose:clients');
+      assert.equal(main.children.filter((n) => n.classList.contains('scope-note')).length, 0);
+      data.clients = [{ id: 'codex', status: 'off' }];
+      main.replaceChildren();
+      renderGateway(main);
+      const lines = main.children.filter((n) => n.classList.contains('scope-note'));
+      assert.deepEqual(lines.map((n) => [n.textContent, n.children.length]), [['Codex is turned off in Kitden.', 0]]);
+      assert.equal(main.children.indexOf(lines[0]), main.children.findIndex((n) => n.classList.contains('scope-bar')) + 1);
+    }
+  } finally {
+    data.clients = was;
+    state.mode = 'map';
+  }
+});
+
 test('the map gives the hint line its words, and the List hides it', () => {
   const heard = () => (hintLine.hidden ? '' : hintLine.children.at(-1).textContent);
   freshMap();
@@ -1049,6 +1074,8 @@ test('the skeleton, the error banner and "No gateway yet" rise when they come', 
       main.replaceChildren();
       renderGateway(main, { again: i > 0 });
       assert.ok(is(under()), name);
+      // The head has "Choose clients…" on each of them, and only that.
+      assert.deepEqual(main.children[0].children.at(-1).children.map((n) => n.textContent), ['Choose clients…'], name);
       if (calm) assert.equal(under().animations.length, 0, name);
       else assert.deepEqual(lastMotion(under()), IN, name);
       // Drawn again as it is, it stays still.

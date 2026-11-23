@@ -5,6 +5,7 @@
 // plugin or a skill drags onto a client (map-drag.js), which only adds a row to the tray. Its
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
+import { offLine } from "./clients-choice.js";
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
 import { findIn, focusAfter, foldStep, groupsWith, layoutTree, linkKey, litFor, litFrom, newCards, pagesNow, pagesWith, shownFound } from "./map.js";
 import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
@@ -13,7 +14,7 @@ import { linkRemoval } from "./library-rules.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, rise, riseHead } from "./motion.js";
 import { banner, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
-import { busy, current, currentError, projectPath, render, retry, setState, state, viewMode } from "./store.js";
+import { busy, current, currentError, data, projectPath, render, retry, setState, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { addToTray, inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray } from "./tray.js";
 
@@ -483,7 +484,10 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   keepWhatShows(answer, { opens: !fresh && !projectChanged && !swap });
   // Why a client has no file in the scope shown (the server says it), under the scope line.
   if (tab === "instructions" && answer.note) main.append(el("p", "muted scope-note", answer.note));
-  if (tab === "instructions" && !answer.groups.some((group) => group.files.length)) main.append(el("p", "muted", NO_FILES));
+  // The note says it already when it is there: one line, not two.
+  if (tab === "instructions" && !answer.note && !answer.groups.some((group) => group.files.length)) main.append(el("p", "muted", NO_FILES));
+  const off = offLine(data.clients);
+  if (off) main.append(off);
   main.append(onMap.view.box);
   const text = state.q.trim();
   onMap.found = text ? findIn(onMap.model, text) : null;

@@ -5,11 +5,13 @@
 // /api/context; the page only places them and names the parts of the picture. A switch only adds
 // a `skill.rule` row to the tray; the server then answers with the estimate after Apply.
 import { detailsCard, followTray, keepFrom } from "./details.js";
+import { chooseButton, offLine } from "./clients-choice.js";
 import { button, el, reportError } from "./dom.js";
+import { headActions } from "./map-page.js";
 import { animateTo, fold, riseHead } from "./motion.js";
 import { closePanel, openPanel, panelState, whenGone } from "./panel.js";
 import { banner, CLIENT_NAMES, mark, skeleton } from "./parts.js";
-import { current, currentError, loadContext, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
+import { current, currentError, data, loadContext, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
 import { addToTray, CONTEXT_NOTE, inTray, keyFor, onTray, ruleState, takeOut, tray, trayRow } from "./tray.js";
 
 const TITLE = "Do your skills fit?";
@@ -98,7 +100,9 @@ function sentence(say, className) {
 export function renderContext(main, { again = false } = {}) {
   if (!again) Object.assign(page, { client: null, bar: { at: "", spots: new Map() } });
   page.marks = new Map();
-  const head = el("h1", null, TITLE);
+  // The title, with "Choose clients…" at its right, as the Library's head.
+  const head = el("div", "page-head");
+  head.append(el("h1", null, TITLE), headActions(chooseButton()));
   main.append(head);
   // Nothing here opens Details; the arrival of a link that picked a client is used up.
   takeArrival();
@@ -121,7 +125,10 @@ export function renderContext(main, { again = false } = {}) {
   clients.setAttribute("role", "group");
   clients.setAttribute("aria-label", "Client");
   clients.append(...cards.map((c) => chipFor(c, card)));
-  main.append(lede, clients);
+  main.append(lede);
+  const off = offLine(data.clients);
+  if (off) main.append(off);
+  main.append(clients);
   riseHead(head, lede, clients, { again });
   // With the check failed there is no estimate: only the last chat's window, and no After Apply.
   const windows = card.checked ? card.windows : card.windows.slice(0, 1);
