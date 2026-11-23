@@ -1434,6 +1434,18 @@ def test_a_description_past_the_client_cap_has_its_tail_grey(home):
     assert row["seen"] == 1021
 
 
+def test_a_cap_lowered_after_the_chat_does_not_shrink_what_the_chat_sent(home):
+    # The chat sent 1,000 characters under a cap of 1,000; the cap is 500 now.
+    long = "word " * 400  # 2,000 characters
+    skill(home / ".claude/skills", "alpha", long.strip())
+    claude_chat(home, {"alpha": long.strip()[:1000]})
+    write_json(home / ".claude/settings.json", {"skillListingMaxDescChars": 500})
+    card = view(home)["claude_code"]
+    [row] = [s for s in card["skills"] if s["name"] == "alpha"]
+    assert row["seen"] == 1000
+    assert card["windows"][0]["result"]["sent"]["alpha"] == len("alpha") + 4 + 1000
+
+
 def test_a_skill_added_during_the_chat_got_its_whole_description_past_the_cap(home):
     # Claude Code sends a skill added mid-chat whole, even past 1,536 characters.
     long = ("word " * 400).strip()

@@ -253,6 +253,12 @@ def _seen(full: str | None, sent: str | None, side: int | None, cap: int | None)
     return None if got >= len(full) else got
 
 
+def _cap_then(cap: int, sent: str | None) -> int:
+    """The cap for what the last chat sent: today's setting, or more when the log holds a longer
+    description. The setting may have been lowered since, and the log is what the agent got."""
+    return max(cap, len(sent or ""))
+
+
 def _source(item: Item | None, built_in: bool) -> str | None:
     if item is None:
         return words.SOURCE_BUILT_IN if built_in else None
@@ -525,7 +531,8 @@ def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool, cap: 
     names = 0
     for r in rows:
         if r.sent is not None:
-            sent[r.name] = len(r.name) + 4 + min(len(r.sent), cap)
+            # The log's own length: the cap may have been another one when the chat was sent.
+            sent[r.name] = len(r.name) + 4 + len(r.sent)
             continue
         names += len(r.name) + 2
         if r.full is not None and r.name not in chosen:
@@ -736,7 +743,7 @@ def _claude(inventory, home: Path, folder: str | None, draft: dict, anywhere: bo
         note = _claude_note(r, states[r.name], side, size, explained, can_free, cap)
         text, seen = (
             r.full if r.full is not None else r.sent,
-            _seen(r.full, r.sent, side, None if r.added else cap),
+            _seen(r.full, r.sent, side, None if r.added else _cap_then(cap, r.sent)),
         )
         skills.append(_skill(client, r.name, r.item, size, side, note, r.built_in, text, seen))
     listed = {r.name for r in rows}
