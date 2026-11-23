@@ -7,6 +7,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **Raise Claude Code's skill list limit from the Context page:** when skills showed only a
+  name because the list ran out of room, "Raise the limit…" suggests the smallest share of the
+  window that fits every description, says what it costs in every chat, and sets it with a
+  preview, a backup and Undo.
+
 ### 0.11.1
 
 - **Kitden reads `skillListingBudgetFraction` and `skillListingMaxDescChars`:** the limit and the

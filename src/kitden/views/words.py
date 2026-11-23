@@ -6,6 +6,11 @@ def join_words(words: list[str]) -> str:
     return " and ".join([", ".join(words[:-1]), words[-1]] if len(words) > 1 else words)
 
 
+def percent(share: float) -> str:
+    """0.02 as "2%", 0.015 as "1.5%"."""
+    return f"{share * 100:g}%"
+
+
 # The Instructions map: found clients that read no instruction file in the scope shown.
 NO_FILE_ALL = "{names} {loads} no instruction file in every project."
 NO_FILE_HERE = "{names} {loads} no instruction file in this project."
@@ -175,6 +180,8 @@ CONTEXT_LIMITS = {
     "codex": "Codex lets this list use 2% of the context window.",
     "cursor": "Cursor does not publish a limit for this list.",
 }
+# In place of CONTEXT_LIMITS when skillListingBudgetFraction sets another share.
+CLAUDE_SHARE_SET = "Your Claude Code settings let this list use {share} of the context window."
 # In place of CONTEXT_LIMITS when the user's own setting is the limit.
 CONTEXT_LIMIT_SET = {
     "claude_code": "Your Claude Code settings limit this list to {n} characters.",
@@ -358,6 +365,49 @@ HOW_CLAUDE_CAP = (
 )
 HOW_CLAUDE_SHELL = "A SLASH_COMMAND_TOOL_CHAR_BUDGET set in the shell is out of Kitden's sight."
 HOW_CLAUDE_SURFACE = "The list in the terminal can differ from the Claude app."
+
+# Details' "Skill list limit" on the Context page (spec skill-list-limit, 2026-11-23): Claude
+# Code's skillListingBudgetFraction, written in the user settings only.
+LIMIT_NOW = "{share} of the context window: {n} characters"
+LIMIT_FITS_ALL = "{share}: all {n} skills get their description"
+LIMIT_FITS_ONE = "{share}: the skill gets its description"
+LIMIT_COST = "About {chars} more characters in every chat (about {tokens} tokens)"
+LIMIT_SET = "Set to {share}"
+LIMIT_BACK = "Back to {share}"
+LIMIT_NOTE = (
+    "Kitden writes it in your Claude Code user settings, for all projects. Your next chat will "
+    "show the real list."
+)
+LIMIT_KEEPS_CHOSEN = "Skills set to Name only stay as they are."
+# Under the last chat's verdict when the share changed after that chat; an estimate follows.
+LIMIT_CHANGED = (
+    "The limit was changed after this chat: it is {share} now. Your next chat will show the real "
+    "list."
+)
+# Why Kitden does not offer a new limit; the sentence goes under "How this is counted".
+LIMIT_NOT_FIXED = (
+    "Kitden does not offer a new skill list limit: SLASH_COMMAND_TOOL_CHAR_BUDGET is set, and it "
+    "wins. Kitden does not change env."
+)
+LIMIT_NOT_PROJECT = (
+    "Kitden does not offer a new skill list limit: {file} sets it for this project, and that "
+    "file wins."
+)
+LIMIT_NOT_ESTIMATED = (
+    "Kitden does not offer a new skill list limit: there is no estimate for this chat, so it "
+    "cannot tell what would fit."
+)
+LIMIT_NOT_NEEDED = "Kitden does not offer a new skill list limit: every description fits."
+LIMIT_NOT_ENOUGH = (
+    "Kitden does not offer a new skill list limit: even {share} of the window would not fit "
+    "every description. Set some skills to Name only or Off."
+)
+# A `skill.limit` row the server refuses.
+LIMIT_CLAUDE_ONLY = "Kitden changes the skill list limit for Claude Code only."
+LIMIT_BAD_SHARE = "The skill list limit must be a share of the window in steps of 0.5%, up to 100%."
+# The review's line for Claude Code after a `skill.limit` change.
+LIMIT_AFTER = "Limit {share}"
+LIMIT_AFTER_DEFAULT = "Limit {share}, the default"
 HOW_CLAUDE_REST = "The rest of the window (system prompt, tools, MCP, the chat) is not measured."
 HOW_CODEX_LIST = "Last chat: the list Codex{version} sent{when}, read from its chat log."
 HOW_CODEX_RULE = (

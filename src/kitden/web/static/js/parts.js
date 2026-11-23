@@ -634,6 +634,7 @@ const ACTION_WORDS = {
   "project.align": "Added missing items",
   "gateway.add": "Added",
   "skill.rule": "Changed how",
+  "skill.limit": "Changed the skill list limit of",
 };
 
 // A Kitden gateway rule in words: "slow of echo in website", as the review's after line says
@@ -725,6 +726,12 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.keychain" && entry.steps.length) return `Moved the secrets of ${entry.steps[0].name} to the ${secretsWord()}`;
   if (entry.action === "gateway.sign_in" && entry.steps.length) return `Signed in to ${entry.steps[0].name} again`;
   if (entry.action === "gateway.access" && entry.steps.length) return `Changed the access of ${entry.steps[0].name}`;
+  // The skill list limit: the row's title says the share, in the past; a line without one names
+  // the client.
+  if (entry.action === "skill.limit") {
+    const title = entry.rows && entry.rows.length ? entry.rows[0].title : "";
+    return title ? pastTitle(title) : `${ACTION_WORDS[entry.action]} ${entry.steps.map((s) => CLIENT_NAMES[s.client] || s.client).join(", ")}`;
+  }
   // An add's first step is the server's entry; a PATH step and Codex's timeouts may follow.
   if (entry.action === "gateway.add" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} to the Kitden gateway`;
   const move = entry.action === "gateway.move";

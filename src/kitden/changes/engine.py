@@ -33,7 +33,7 @@ from kitden.changes.copy_folder import (
     list_files,
     remove_folder,
 )
-from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
+from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError, same_value
 from kitden.gateways import data_dir
 from kitden.local_gateway import keychain
 from kitden.local_gateway.keychain import KeychainError
@@ -236,7 +236,7 @@ def _matches(step: Step, value: Any, expected: Any) -> bool:
     # A client command may add fields of its own; our fields must all be there.
     if step.mechanism == CLIENT_CLI and isinstance(value, dict) and isinstance(expected, dict):
         return all(value.get(k) == v for k, v in expected.items())
-    return value == expected
+    return same_value(value, expected)
 
 
 def _edited(edit: FileEdit, text: str, value: Any) -> str:
@@ -271,7 +271,7 @@ def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
 def _back_already(steps: list[Step], data: bytes | None) -> bool:
     """Every entry these steps changed in one file reads as it did before the change."""
     try:
-        return all(_value(s.file_edit, data) == s.file_edit.before for s in steps)
+        return all(same_value(_value(s.file_edit, data), s.file_edit.before) for s in steps)
     except (UnrecognizedFormatError, UnicodeDecodeError):
         return False
 
@@ -513,7 +513,7 @@ class Engine:
             except (UnrecognizedFormatError, UnicodeDecodeError) as error:
                 raise ChangeRefusedError(f"{edit.path}: {error}") from None
             # A new value of a secret changes only the Keychain; the reference stays.
-            same = edit.before == edit.after and not step.keychain
+            same = same_value(edit.before, edit.after) and not step.keychain
             if same or (edit.after is PRESENT and edit.before is not ABSENT):
                 raise NothingToChangeError(edit.path, step.client)
             if edit.after is PRESENT and step.mechanism != CLIENT_CLI:
@@ -633,7 +633,7 @@ class Engine:
             ok = _sha(data) == edit.before_hash
         else:
             try:
-                ok = _value(edit, data) == edit.before
+                ok = same_value(_value(edit, data), edit.before)
             except (UnrecognizedFormatError, UnicodeDecodeError):
                 ok = False
         return None if ok else f"{edit.path} changed since preview; review the change again"
@@ -670,7 +670,7 @@ class Engine:
         assert edit is not None
         data = _read(edit.path)
         now = _value(edit, data)
-        if edit.before is ABSENT or now is ABSENT or now == edit.before:
+        if edit.before is ABSENT or now is ABSENT or same_value(now, edit.before):
             return
         text = EDITORS[edit.fmt].set_value((data or b"").decode(), edit.key, edit.before)
         self._write(edit.path, text.encode())
@@ -872,7 +872,7 @@ class Engine:
         edit = step.edit
         assert edit is not None
         with contextlib.suppress(Exception):
-            if _value(edit, _read(edit.path)) == edit.before:
+            if same_value(_value(edit, _read(edit.path)), edit.before):
                 return []
         if self.run(step.undo, step.cwd).returncode != 0:
             return [f"`{_shown(step.undo)}` failed; {step.name} was not put back."]
@@ -889,7 +889,7 @@ class Engine:
             if path not in by_command:
                 return now == data
             return all(
-                _value(s.file_edit, now) == s.file_edit.before
+                same_value(_value(s.file_edit, now), s.file_edit.before)
                 for s in ran
                 if s.file_edit.path == path
             )
@@ -1090,7 +1090,7 @@ class Engine:
         for step in reversed(change.steps):
             if step.edit is None or not _by_command(step):
                 continue
-            if _value(step.edit, _read(step.edit.path)) == step.edit.before:
+            if same_value(_value(step.edit, _read(step.edit.path)), step.edit.before):
                 continue  # gone already, or put back by a blocked Undo
             result = self.run(step.undo, step.cwd)
             if result.returncode != 0:
@@ -1109,7 +1109,9 @@ class Engine:
         for path, data in plans.items():
             self._write(path, data)
         for step in change.steps:
-            if step.edit and _value(step.edit, _read(step.edit.path)) != step.edit.before:
+            if step.edit and not same_value(
+                _value(step.edit, _read(step.edit.path)), step.edit.before
+            ):
                 raise RuntimeError(f"{step.edit.path}: undo did not read back as expected")
             if step.copy and os.path.lexists(step.copy.target):
                 raise RuntimeError(f"{step.copy.target}: undo did not remove the copy")

@@ -62,6 +62,9 @@ from kitden.views.words import NO_CLAUDE_FOLDER
 CLIENT = "claude_code"
 WRITABLE_SCOPES = {Scope.USER, Scope.LOCAL, Scope.PROJECT}
 NEW_SESSION = "Start a new Claude Code session (or a new Code tab chat) for this to take effect."
+# checked 2026-11-23 (/en/settings-reference): a top-level key of any settings file, the share
+# of the context window the skill list may use (default 0.01).
+LIMIT_KEY = "skillListingBudgetFraction"
 RELOAD = "Run /reload-plugins in Claude Code, or start a new session, for this to take effect."
 ACCOUNT_HINT = "Stored in your Claude account. Change it in the Claude app or on claude.ai."
 DESKTOP = "claude_desktop_code_tab"
@@ -394,6 +397,20 @@ class ClaudeCodeAdapter(ClientAdapter):
         applies there."""
         value = state if state in ("off", "name-only") else ABSENT
         return self._rule_steps(("skillOverrides", name), project, value, NEW_SESSION)
+
+    # Whether Claude Code reads the key again in a chat that is open is not known (a guess,
+    # docs/clients.md, 2026-11-23): the note asks for a new chat, as for `skillOverrides`.
+    def skill_limit_step(self, value: Any) -> Step:
+        """`skillListingBudgetFraction` set to `value` in the user settings; ABSENT takes it out,
+        so the default applies again. Never a project's file."""
+        path = self.home / ".claude/settings.json"
+        return Step(
+            client=CLIENT,
+            scope=Scope.USER,
+            name=LIMIT_KEY,
+            edit=FileEdit(path=str(path), fmt="json", key=(LIMIT_KEY,), after=value),
+            restart_note=NEW_SESSION,
+        )
 
     # checked 2026-10-26 (code.claude.com/docs/en/settings-reference, `enabledPlugins`): "To opt
     # out of a project-enabled plugin on your machine, set it to false in

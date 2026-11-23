@@ -135,6 +135,10 @@ test('keyFor names a switch by what it switches', () => {
   assert.equal(keyFor(skill('p1')), 'skill:claude_code:i1@p1');
   assert.equal(keyFor(skill('p1', false)), keyFor(skill('p1')));
   assert.notEqual(keyFor({ ...skill(), targets: [{ client: 'codex', item: 'i1' }] }), keyFor(skill()));
+  // The skill list limit: one row per client, whatever its share, so another share replaces it.
+  const limit = (fraction) => ({ action: 'skill.limit', targets: [{ client: 'claude_code' }], params: { fraction } });
+  assert.equal(keyFor(limit(0.015)), 'limit:claude_code');
+  assert.equal(keyFor(limit('default')), keyFor(limit(0.015)));
   // Any other change: its action, targets and params, whatever order the params came in.
   const first = { action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'x', scope: 'user' } };
   const second = { action: 'mcp.add', targets: [{ client: 'codex' }], params: { scope: 'user', item: 'x' } };
@@ -168,6 +172,7 @@ test("iconFor picks the mockup's icon", () => {
   assert.equal(icon('gateway.rule', { server: 's', project: null }), 'toggle-right');
   for (const action of ['gateway.rules', 'gateway.strict', 'plugin.enable', 'plugin.disable', 'setup_server.enable', 'skill.rule']) assert.equal(icon(action), 'toggle-right', action);
   assert.equal(icon('skill.rule', { scope: 'project', project: 'p1' }), 'folder');
+  assert.equal(icon('skill.limit', { fraction: 0.015 }), 'toggle-right');
   for (const action of ['gateway.move', 'gateway.put_back', 'gateway.keychain']) assert.equal(icon(action), 'arrow-right', action);
   assert.equal(icon('gateway.move_out', { server: 'files' }), 'log-out');
   for (const action of ['setup_server.register', 'setup_server.update', 'client.disconnect']) assert.equal(icon(action), 'plug', action);

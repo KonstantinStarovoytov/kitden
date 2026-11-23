@@ -47,6 +47,7 @@ from kitden.changes.actions import (
     SETUP_SERVER_ENABLE,
     SETUP_SERVER_UPDATE,
     SKILL_INSTALL,
+    SKILL_LIMIT,
     SKILL_RULE,
     NeedsAccess,
     access_steps,
@@ -66,6 +67,7 @@ from kitden.changes.actions import (
     remove_steps,
     setup_server_steps,
     sign_in_steps,
+    skill_limit_steps,
     skill_remove_steps,
     skill_rule_steps,
     skill_steps,
@@ -1252,18 +1254,28 @@ def create_app(
 
     def _context(request, project, path):
         """Context: what each client's last chat sent, and whether its skill list fit. `draft`
-        is the tray's skill states not applied yet, as JSON: client -> skill name -> state."""
+        is the tray's changes not applied yet, as JSON: client -> skill name -> state, and
+        `limits`: client -> the skill list's share of the window, a number or "default"."""
         try:
             draft = json.loads(request.query_params.get("draft") or "{}")
         except ValueError:
             draft = None
         good = isinstance(draft, dict) and all(
-            isinstance(states, dict) and all(isinstance(v, str) for v in states.values())
-            for states in draft.values()
+            _draft_limits(value)
+            if client == "limits"
+            else isinstance(value, dict) and all(isinstance(v, str) for v in value.values())
+            for client, value in draft.items()
         )
         if not good:
             return _error("Kitden cannot read the draft.", 422)
         return JSONResponse({"project": project, "clients": _context_clients(path, draft)})
+
+    def _draft_limits(limits) -> bool:
+        """Each limit is a number (not true or false) or "default"; the view checks the rest."""
+        return isinstance(limits, dict) and all(
+            v == "default" or (isinstance(v, int | float) and not isinstance(v, bool))
+            for v in limits.values()
+        )
 
     def _context_clients(path, draft=None):
         """The Context page's client cards; none without a home folder."""
@@ -1643,6 +1655,8 @@ def create_app(
             )
         elif action == SKILL_RULE:
             steps = skill_rule_steps(adapters, state.inventory, home_dir(), targets, params)
+        elif action == SKILL_LIMIT:
+            steps = skill_limit_steps(adapters, targets, params)
         elif action == MCP_ADD:
             item = _item(str(params.get("item", "")))
             if item is None:

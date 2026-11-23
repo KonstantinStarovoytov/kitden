@@ -28,6 +28,8 @@ from kitden.clients.base import (
 )
 from kitden.clients.claude_code import holds, rule_file
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
+from kitden.context.rules import grid_share, on_share_grid
+from kitden.context.tables import CLAUDE_SHARE_STEPS
 from kitden.local_gateway.keychain import (
     SECRET_FIELDS,
     KeychainError,
@@ -63,6 +65,8 @@ from kitden.views.words import (
     CODEX_NO_NAME_ONLY,
     CODEX_NO_PROJECT,
     CURSOR_NO_SKILL_SWITCH,
+    LIMIT_BAD_SHARE,
+    LIMIT_CLAUDE_ONLY,
     NO_SKILL_MERGE,
     PLUGIN_ALL_PROJECTS,
     PLUGIN_NO_NAME_ONLY,
@@ -97,6 +101,7 @@ GATEWAY_ACCESS = "gateway.access"  # one secret of a held server replaced or rem
 MCP_ADD = "mcp.add"  # a direct server one client has, added to other clients
 PROJECT_ALIGN = "project.align"  # what one client loads in a project, added to the others
 SKILL_RULE = "skill.rule"  # a skill, or a plugin in one project, turned off by a settings rule
+SKILL_LIMIT = "skill.limit"  # Claude Code's skill list limit: its share of the window
 
 NEEDS_COMMAND = "The setup server needs the absolute path of the kitden command"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
@@ -1460,3 +1465,22 @@ def skill_rule_steps(
     if not steps:
         raise ValueError("Choose a skill.")
     return steps
+
+
+def skill_limit_steps(
+    adapters: dict[str, ClientAdapter], targets: list, params: dict
+) -> list[Step]:
+    """Claude Code's `skillListingBudgetFraction` in the user settings (spec skill-list-limit):
+    `params.fraction` is a share on the half-percent grid, or "default", which takes the key out.
+    One target, {client: "claude_code"}."""
+    one = targets[0] if len(targets) == 1 and isinstance(targets[0], dict) else {}
+    adapter = adapters.get("claude_code")
+    if one.get("client") != "claude_code" or adapter is None:
+        raise ValueError(LIMIT_CLAUDE_ONLY)
+    value = params.get("fraction")
+    if value == "default":
+        return [adapter.skill_limit_step(json_splice.ABSENT)]
+    if not on_share_grid(value):
+        raise ValueError(LIMIT_BAD_SHARE)
+    assert isinstance(value, int | float)  # on_share_grid took only numbers
+    return [adapter.skill_limit_step(grid_share(round(value * CLAUDE_SHARE_STEPS)))]

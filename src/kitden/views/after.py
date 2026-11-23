@@ -16,12 +16,14 @@ from kitden.changes.actions import (
     GATEWAY_STRICT,
     MCP_ADD,
     PROJECT_ALIGN,
+    SKILL_LIMIT,
     SKILL_RULE,
     claude_allows_kitden,
 )
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME, is_home
 from kitden.clients.claude_code import local_files
+from kitden.context.tables import CLAUDE_SHARE
 from kitden.local_gateway.keychain import references_in
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
@@ -47,6 +49,8 @@ from kitden.views.words import (
     FOLLOWS_SHARED,
     KEEP_THEIR_RULES,
     KEEPS_ITS_RULE,
+    LIMIT_AFTER,
+    LIMIT_AFTER_DEFAULT,
     LOADS_PLUGINS,
     NEW_LOCAL_FILE,
     NO_GATEWAY_CLIENT,
@@ -56,6 +60,7 @@ from kitden.views.words import (
     SKILL_STATE_WORDS,
     STATE_WORDS,
     join_words,
+    percent,
 )
 
 CURSOR_IMPORT = {
@@ -825,6 +830,20 @@ def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
     return out
 
 
+def _skill_limit_words(change: Change) -> list[dict]:
+    """Claude Code's skill list limit: the share it is set to, or the default when the key goes."""
+    out = []
+    for step in change.steps:
+        edit = step.edit
+        assert edit is not None
+        if edit.after is ABSENT:
+            word = LIMIT_AFTER_DEFAULT.format(share=percent(CLAUDE_SHARE))
+        else:
+            word = LIMIT_AFTER.format(share=percent(edit.after))
+        out.append({"client": step.client, "state": "on", "word": word})
+    return out
+
+
 def after_words(
     change: Change,
     inventory,
@@ -863,6 +882,8 @@ def after_words(
         return _gateway_add_words(inventory)
     if change.action == SKILL_RULE and home is not None:
         return _skill_rule_words(change, inventory, home)
+    if change.action == SKILL_LIMIT and change.steps:
+        return _skill_limit_words(change)
     if change.action == MCP_ADD and home is not None:
         return _add_server_words(change, home)
     if change.action == PROJECT_ALIGN:

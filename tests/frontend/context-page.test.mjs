@@ -555,6 +555,85 @@ test('a pill opens Details with the size, the source and the switch; Name only j
   assert.deepEqual(now.map((n) => n.getAttribute('aria-pressed')), ['false', 'true', 'false']);
 });
 
+// The skill list limit as the server offers it for TIGHT (spec skill-list-limit).
+const LIMIT = {
+  now: '1% of the context window: 8,000 characters',
+  offer: { fraction: 0.015, label: 'Set to 1.5%', say: '1.5%: all 3 skills get their description', cost: 'About 3,000 more characters in every chat (about 750 tokens)' },
+  back: null,
+  note: 'Kitden writes it in your Claude Code user settings, for all projects. Your next chat will show the real list.',
+  why: null,
+};
+const LIMIT_URL = `/api/context?draft=${encodeURIComponent(JSON.stringify({ limits: { claude_code: 0.015 } }))}`;
+const LIMIT_AFTER = { ...AFTER, say: 'After Apply, estimate: On a 200K window, every skill would keep its description. gamma gets a description.', gets: ['gamma'], loses: [], budget: 12000 };
+
+test('Raise the limit… opens Details with the share, its cost, and Set, which joins the tray', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  // No share to offer: no button.
+  show(answer(TIGHT, CODEX, CURSOR));
+  assert.equal(buttonIn(main, 'Raise the limit…'), undefined);
+  show(answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR));
+  await fire(buttonIn(main, 'Raise the limit…'), 'click');
+  assert.match(text(drawer), /Skill list limit/);
+  assert.match(text(drawer), /Now1% of the context window: 8,000 characters/);
+  assert.match(text(drawer), /Suggested1\.5%: all 3 skills get their description/);
+  assert.match(text(drawer), /CostAbout 3,000 more characters in every chat \(about 750 tokens\)/);
+  assert.match(text(drawer), /Your next chat will show the real list\./);
+  assert.equal(buttonIn(drawer, 'Back to 1%'), undefined);
+  queue(PREVIEW, previewed('c1'));
+  queue(LIMIT_URL, { status: 200, json: answer({ ...TIGHT, limit: LIMIT, after: LIMIT_AFTER }, CODEX, CURSOR) });
+  await fire(buttonIn(drawer, 'Set to 1.5%'), 'click');
+  await flush();
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  // The page sends back the share the server offered; it never makes one up.
+  assert.deepEqual([sent.kind, sent.targets, sent.params], ['skill.limit', [{ client: 'claude_code' }], { fraction: 0.015 }]);
+  assert.equal(tray.rows[0].note, CONTEXT_NOTE);
+  // The draft carries the share, and the estimate after Apply shows, with the limit line moved.
+  assert.equal(asked.some((a) => a.url === LIMIT_URL), true);
+  assert.equal(text(verdict()).startsWith(LIMIT_AFTER.say), true);
+  assert.equal(text(byClass(main, 'ctx-flag')[0]), 'Limit: 12,000 characters');
+  syncTray();
+  assert.equal(buttonIn(drawer, 'Set to 1.5%').getAttribute('aria-pressed'), 'true');
+  // The page's button shows the waiting row pressed, in the preview's look.
+  const raise = buttonIn(main, 'Raise the limit…');
+  assert.equal(raise.getAttribute('aria-pressed'), 'true');
+  assert.equal(raise.classList.contains('pending'), true);
+  // A second press takes the row out.
+  await fire(buttonIn(drawer, 'Set to 1.5%'), 'click');
+  await flush();
+  assert.equal(tray.rows.length, 0);
+});
+
+test('Details of the limit offer Back to 1% when the share is higher', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const higher = { ...LIMIT, now: '1.5% of the context window: 12,000 characters', offer: { ...LIMIT.offer, fraction: 0.02, label: 'Set to 2%' }, back: { fraction: 'default', label: 'Back to 1%' } };
+  show(answer({ ...TIGHT, limit: higher }, CODEX, CURSOR));
+  await fire(buttonIn(main, 'Raise the limit…'), 'click');
+  assert.notEqual(buttonIn(drawer, 'Set to 2%'), undefined);
+  queue(PREVIEW, previewed('c1'));
+  await fire(buttonIn(drawer, 'Back to 1%'), 'click');
+  await flush();
+  assert.deepEqual(asked.find((a) => a.url === PREVIEW).body.requests[0].params, { fraction: 'default' });
+});
+
+test('with nothing to raise, Skill list limit… opens Now and Back to 1%; a changed limit is said under the verdict', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const changed = ['The limit was changed after this chat: it is 1.5% now. Your next chat will show the real list.', 'Estimate: On a 200K window, every skill would keep its description.'];
+  const backOnly = { ...LIMIT, now: '1.5% of the context window: 12,000 characters', offer: null, back: { fraction: 'default', label: 'Back to 1%' }, note: null, why: 'Kitden does not offer a new skill list limit: every description fits.' };
+  show(answer({ ...TIGHT, limit: backOnly, changed }, CODEX, CURSOR));
+  const notes = byClass(main, 'ctx-room').map(text);
+  assert.deepEqual(notes, changed);
+  assert.equal(text(byClass(byClass(main, 'ctx-room')[1], 'ctx-est')[0]), 'Estimate:');
+  assert.equal(buttonIn(main, 'Raise the limit…'), undefined);
+  await fire(buttonIn(main, 'Skill list limit…'), 'click');
+  assert.match(text(drawer), /Now1\.5% of the context window: 12,000 characters/);
+  assert.doesNotMatch(text(drawer), /Suggested|Cost|every description fits/);
+  assert.notEqual(buttonIn(drawer, 'Back to 1%'), undefined);
+});
+
 test('a project\'s own skill asks for a rule in its project', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };

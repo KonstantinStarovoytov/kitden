@@ -57,6 +57,10 @@ CLAUDE_ALWAYS_FULL = frozenset(
 # window, and one description is cut at 1536 characters.
 CLAUDE_SHARE = 0.01
 CLAUDE_DESCRIPTION_CAP = 1536
+# The shares Kitden suggests for skillListingBudgetFraction: steps of half a percent, up to 5% of
+# the window. Past that the list would take a large part of every chat (Kitden's own choice).
+CLAUDE_SHARE_STEPS = 200  # steps in the whole window: one step is 0.5%
+CLAUDE_SHARE_MOST = 10  # 5%, in steps
 
 # checked 2026-11-06 (codex-rs/ext/skills/src/render.rs): the list may use 2% of the window,
 # and one description is cut at 1024 characters.

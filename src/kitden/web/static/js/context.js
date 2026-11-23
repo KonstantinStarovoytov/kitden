@@ -3,7 +3,8 @@
 // window, the verdict, the zoom picture of the skill list, the two sides of skill pills, Details
 // with a skill's switch, and "How this is counted". Every sentence and number comes from
 // /api/context; the page only places them and names the parts of the picture. A switch only adds
-// a `skill.rule` row to the tray; the server then answers with the estimate after Apply.
+// a `skill.rule` row to the tray, and Raise the limit… a `skill.limit` row with the share the
+// server suggests; the server then answers with the estimate after Apply.
 import { detailsCard, followTray, keepFrom } from "./details.js";
 import { chooseButton, offLine } from "./clients-choice.js";
 import { button, el, reportError } from "./dom.js";
@@ -24,6 +25,9 @@ const PICTURE = { window: "Context window", rest: "Rest of the window", list: "S
 const OVER = { claude_code: "Over the limit: not sent", codex: "Over the limit: cut off" };
 const STATES = { on: "On", "name-only": "Name only", off: "Off" };
 const HOW = "How this is counted";
+// Claude Code's skill list limit (spec skill-list-limit): the button under the verdict and its
+// Details. The sentences and the shares are the server's.
+const LIMIT = { raise: "Raise the limit…", open: "Skill list limit…", kind: "Setting", title: "Skill list limit", now: "Now", offer: "Suggested", cost: "Cost" };
 // The skill list's slice of the window strip, in %: a drawing, not a measure.
 const SLICE = 2;
 
@@ -144,13 +148,21 @@ export function renderContext(main, { again = false } = {}) {
   // The verdict: the shown window's sentence (after Apply, the estimate), or the client's message
   // when it has no window. The room left (an estimate on the last chat's window) comes under it.
   main.append(sentence(shown ? (after ? after.say : shown.result.say) : card.message || "", "ctx-verdict"));
+  // The limit changed after the last chat: said under its verdict, with what Kitden expects now.
+  if (index === 0 && !after) for (const line of card.changed || []) main.append(sentence(line, "ctx-room"));
+  // The skill list limit's button, on its own line under the last chat's verdict: Raise the
+  // limit… when the server has a share to offer, else Skill list limit… when it offers Back.
+  const limit = card.limit;
+  if (limit && (limit.offer || limit.back) && index === 0) main.append(limitRow(card));
   if (shown && shown.result.room && !after) main.append(sentence(shown.result.room, "ctx-room"));
   // A message beside windows (the estimate could not be checked) is a note under the verdict.
   if (windows.length && card.message) main.append(el("p", "ctx-note", card.message));
   const result = shown ? (after ? after.result : shown.result) : null;
   const estimate = Boolean(after) || index > 0;
   const heat = heatOf(card, result, estimate);
-  if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`, heat));
+  // After Apply with a new limit in the tray, the limit line moves to it.
+  const drawn = after && after.budget ? { ...shown, budget: after.budget } : shown;
+  if (shown) main.append(zoom(card, drawn, result, `${card.client}:${index}`, heat));
   if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
   if (card.how.length) main.append(howFor(card.how));
   markAll();
@@ -461,6 +473,72 @@ function choose(card, skill, value) {
   return inTray(key) ? takeOut(key) : null;
 }
 
+// The skill list limit ---------------------------------------------------------------------------
+
+// While a limit row waits in the tray the button shows it pressed, in the preview's look, as a
+// skill's switch shows a pending state: not a second call to act.
+function limitRow(card) {
+  const row = el("div", "ctx-limit-row");
+  const node = button(card.limit.offer ? LIMIT.raise : LIMIT.open, () => openLimit(card.client), "btn ctx-raise");
+  node.dataset.focus = `limit:${card.client}`;
+  const key = keyFor(limitBody(card.client, null));
+  followTray(node, key, () => {
+    const waits = Boolean(trayRow(key));
+    node.setAttribute("aria-pressed", String(waits));
+    node.classList.toggle("pending", waits);
+  });
+  row.append(node);
+  return row;
+}
+
+// The row a share adds: the share the server offered, or "default", which takes the key out.
+export function limitBody(client, fraction) {
+  return { action: "skill.limit", targets: [{ client }], params: { fraction } };
+}
+
+// One row per client, whatever its share: a press adds it (or puts this share in place of the
+// other); a second press of the same share takes it out.
+export function pickLimit(body) {
+  const key = keyFor(body);
+  const row = trayRow(key);
+  if (row && row.body.params.fraction === body.params.fraction) return takeOut(key);
+  return addToTray(body, { note: CONTEXT_NOTE });
+}
+
+function limitButton(client, choice, primary) {
+  const body = limitBody(client, choice.fraction);
+  const key = keyFor(body);
+  const node = button(choice.label, () => pickLimit(body), primary ? "btn primary" : "btn");
+  node.dataset.focus = `limit:${choice.fraction}`;
+  followTray(node, key, () => {
+    const row = trayRow(key);
+    const on = Boolean(row && row.body.params.fraction === choice.fraction);
+    node.setAttribute("aria-pressed", String(on));
+    node.classList.toggle("pending", on);
+  });
+  return node;
+}
+
+// Details of the skill list limit: the limit now, the share that fits every description and its
+// cost, Set and Back; or why there is no share to offer. Drawn from the latest read, so they
+// follow an Apply.
+function openLimit(client) {
+  const model = current("context");
+  const card = model && model.clients.find((c) => c.client === client);
+  const limit = card && card.limit;
+  if (!limit) return;
+  const facts = [];
+  if (limit.now) facts.push({ label: LIMIT.now, value: limit.now });
+  if (limit.offer) facts.push({ label: LIMIT.offer, value: limit.offer.say }, { label: LIMIT.cost, value: limit.offer.cost });
+  const choices = [limit.offer, limit.back].filter(Boolean);
+  const actions = choices.map((choice) => ({ node: limitButton(client, choice, choice === limit.offer) }));
+  // With nothing to raise, only the limit now and Back.
+  const content = detailsCard({ kind: LIMIT.kind, title: LIMIT.title, facts, why: limit.offer ? limit.note : null, actions });
+  openPanel(content);
+  panelState.current = { type: "context-limit", client };
+  keepFrom(() => openLimit(client), content);
+}
+
 // "How this is counted": folded, with the server's lines; it stays open across a redraw.
 function howFor(lines) {
   const box = el("details", "ctx-how");
@@ -475,10 +553,15 @@ function howFor(lines) {
 
 // The estimate after Apply ---------------------------------------------------------------------
 
-// The tray's skill rules for the clients of `model`: client -> skill name -> state.
+// The tray's skill rules for the clients of `model`: client -> skill name -> state; and its
+// skill list limits under `limits`: client -> share (or "default").
 function draftFrom(model) {
   const draft = {};
   for (const { body } of tray.rows) {
+    if (body.action === "skill.limit") {
+      for (const target of body.targets || []) (draft.limits ||= {})[target.client] = (body.params || {}).fraction;
+      continue;
+    }
     if (body.action !== "skill.rule") continue;
     for (const target of body.targets || []) {
       const card = model && model.clients.find((c) => c.client === target.client);

@@ -214,6 +214,18 @@ test('a skill rule says what it turns off and where', () => {
   assert.deepEqual(changeWords(off(here), body({ scope: 'project', project: 'p1', off: false })), { title: 'Use the shared rule for deploy in website', done: 'deploy uses the shared rule in website' });
 });
 
+test('a skill list limit says the share it sets, for all projects', () => {
+  const limit = { action: 'skill.limit', steps: [{ client: 'claude_code', name: 'skillListingBudgetFraction' }], target: target('all') };
+  assert.deepEqual(changeWords(limit, { params: { fraction: 0.015 } }), {
+    title: 'Set the skill list limit of Claude Code to 1.5% for all projects',
+    done: 'Set the skill list limit of Claude Code to 1.5% for all projects',
+  });
+  assert.equal(changeWords(limit, { params: { fraction: 0.02 } }).title, 'Set the skill list limit of Claude Code to 2% for all projects');
+  assert.equal(changeWords(limit, { params: { fraction: 'default' } }).title, 'Set the skill list limit of Claude Code back to 1% for all projects');
+  // With no row body (an older record), it does not invent a share.
+  assert.equal(changeWords(limit).title, 'Set the skill list limit of Claude Code for all projects');
+});
+
 test('connecting a client to Kitden and disconnecting it name their place and no scope', () => {
   for (const action of ['setup_server.register', 'client.disconnect']) assert.ok(PLACE_IN_TITLE.includes(action), action);
   const connect = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }], target: target('all') };
