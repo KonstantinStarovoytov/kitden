@@ -1292,11 +1292,41 @@ test('with no instruction files the tab says No instruction files here.', () => 
     assert.ok(texts(main).includes('No instruction files here.'));
     // No empty group caption is drawn.
     assert.equal(node(map(), 'block:group:files:all'), null);
+    // The server's note alone says it: not twice.
+    Object.assign(data, { instructionsMap: { ...empty, note: 'Cursor loads no instruction file in every project. Pick a project to see its own files.' } });
+    main.replaceChildren();
+    renderLibrary(main);
+    settle();
+    assert.ok(!texts(main).includes('No instruction files here.'));
+    assert.ok(texts(main).some((t) => t.startsWith('Cursor loads no instruction file')));
     // With files, it is not said.
     showTab('instructions');
     settle();
     assert.ok(!texts(main).includes('No instruction files here.'));
   } finally {
+    done();
+  }
+});
+
+test('the Instructions tab says which clients are off, with the button, and only there', () => {
+  const was = data.clients;
+  try {
+    Object.assign(data, { libraryMap: MEDIUM, instructionsMap: INSTR, projects: [], clients: [{ id: 'codex', status: 'off' }] });
+    Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
+    Object.assign(state, { view: 'library', mode: 'map', kind: 'instructions', project: '', q: '', selected: null });
+    main.replaceChildren();
+    renderLibrary(main);
+    settle();
+    const line = walk(main).find((n) => n.classList.contains('scope-note'));
+    assert.deepEqual(line.children.map((n) => n.textContent), ['Choose clients…']);
+    assert.equal(line.textContent, 'Codex is turned off in Kitden. ');
+    data.clients = [{ id: 'codex', status: 'found' }];
+    main.replaceChildren();
+    renderLibrary(main);
+    settle();
+    assert.equal(walk(main).filter((n) => n.classList.contains('scope-note')).length, 0);
+  } finally {
+    data.clients = was;
     done();
   }
 });

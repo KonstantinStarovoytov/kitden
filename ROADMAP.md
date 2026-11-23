@@ -9,6 +9,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Picking a project is quicker when its last Claude Code chat is far down the list of
+  chats:** Kitden no longer reads every newer chat log in full. On one real setup the read of
+  the logs went from about 4 s to about 1 s.
+- **The Library's Instructions tab says an empty map once, and which clients are off:** when
+  the server's note already says why no file is shown, "No instruction files here." is left
+  out. When a client is turned off in Kitden, a quiet line names it, such as "Codex is turned
+  off in Kitden.", with the **Choose clients…** button.
 - **`kitden scan` counts in plain words:** it prints `MCP servers: 12` and `Skills: 62` where it
   printed `mcp_server` and `skill`, says on the `Skills` line why that count and the last
   chat's differ, puts the Claude Desktop Code tab on one line under Claude Code, and no longer

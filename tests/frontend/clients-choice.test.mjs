@@ -35,7 +35,7 @@ globalThis.document = { createElement: fakeNode, createElementNS: (namespace, ta
 const posted = [];
 globalThis.fetch = async (url, init) => { posted.push([url, init && init.body]); return { ok: true, status: 200, json: async () => ({}) }; };
 
-const { choiceCard, choiceRows, CHOICE_NOTE, CHOICE_TITLE, LAST_ON } = await import('../../src/kitden/web/static/js/clients-choice.js');
+const { choiceCard, choiceRows, offWords, CHOICE_NOTE, CHOICE_TITLE, LAST_ON } = await import('../../src/kitden/web/static/js/clients-choice.js');
 const { gatewayTree } = await import('../../src/kitden/web/static/js/gateway.js');
 const { clientRows } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { lookFor, shownClients } = await import('../../src/kitden/web/static/js/parts.js');
@@ -128,4 +128,14 @@ test('the Gateway panel lists no client that is off', () => {
   const section = clientRows([entry('claude_code', 'missing'), entry('cursor', 'not_installed')], clients);
   const names = walk(section).filter((n) => n.tag === 'b').map((n) => n.textContent);
   assert.deepEqual(names, ['Claude Code', 'Cursor']);
+});
+
+test('the off line names the clients that are off, in client order, and is nothing when none is', () => {
+  assert.equal(offWords(ALL), null);
+  assert.equal(offWords(null), null);
+  assert.equal(offWords([ALL[0], client('codex', 'off'), ALL[2]]), 'Codex is turned off in Kitden.');
+  assert.equal(offWords([ALL[0], client('codex', 'off'), client('cursor', 'off')]), 'Codex and Cursor are turned off in Kitden.');
+  // The order is the client order, not the order of the list.
+  assert.equal(offWords([client('cursor', 'off'), client('claude_code', 'off'), ALL[1]]), 'Claude Code and Cursor are turned off in Kitden.');
+  assert.equal(offWords([client('cursor', 'off'), client('codex', 'off'), client('claude_code', 'off')]), 'Claude Code, Codex and Cursor are turned off in Kitden.');
 });
