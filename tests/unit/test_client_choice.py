@@ -387,8 +387,8 @@ def test_scan_says_a_client_is_turned_off(tmp_path, capsys):
     # The line has no version and no items under it, and the others are read as before.
     at = lines.index("Codex: turned off in Kitden")
     assert not lines[at + 1].startswith("  ")
-    assert any(line.startswith("Cursor: found") for line in lines)
-    assert any(line.startswith("Claude Code: found") for line in lines)
+    assert any(line.startswith("Cursor ") for line in lines)
+    assert any(line.startswith("Claude Code ") for line in lines)
 
 
 def test_an_off_client_keeps_its_place_in_the_list(tmp_path):

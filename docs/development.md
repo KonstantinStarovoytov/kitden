@@ -111,7 +111,7 @@ browser set passes once in each engine.
 | `kitden` / `kitden open` | Opens the page; it stops 10 minutes after its last tab closes |
 | `kitden serve` | Runs the page in the terminal until Ctrl+C |
 | `kitden demo [--size small\|medium\|large]` | Opens the page on a sample setup (medium if no size is given) in a temporary folder; it runs no client, starts no MCP server, uses no Keychain and stays offline; the folder is deleted when it stops |
-| `kitden scan [--json]` | Prints what each client loads, whether its skill list fit in the last chat and which skills did not, and the findings in one line, then exits; `--json` prints what the page shows instead |
+| `kitden scan [--json]` | Prints, for each client, whether its skill list fit in the last chat and which skills did not, what it has on this computer in one line, and the findings in one line, then exits; `--json` prints what the page shows instead |
 | `kitden show WHAT` | Prints one read-only answer as JSON and exits: `setup`, `findings`, `item NAME`, `projects` or `context`. The plugin's skills run it |
 | `kitden mcp` | The "show my setup" server that clients start; it also offers the tools of servers moved into the Kitden gateway |
 

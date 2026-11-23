@@ -122,26 +122,27 @@ uvx --python 3.13 kitden scan
 
 Kitden is not installed and no page opens. `scan` reads your agents' settings and, for the
 folder you run it in, what they sent in your last chat. With no chat in that folder, it reads
-your last chat in any folder and names that folder. It changes none of them. It asks each
-agent for its version, and Codex for its plugin list, and keeps the versions and the plugin
-list in two small files in Kitden's own data folder. If Codex has to be asked, it says so on
-stderr and waits up to 15 seconds. A run within the next hour, with unchanged Codex settings,
-does not wait; after an hour Kitden asks again, because a plugin switched in Codex on another
-computer does not change your settings file. It prints what each agent loads, as counts such
-as `MCP servers: 12` and `Skills: 62`, and, for Claude Code and Codex, whether the skill list
-fit in that chat, with the names of the skills that did not fit. The two skill numbers can
-differ, and the `Skills` line says why: the first counts the skills Kitden found, in all your
-projects; a chat's list has one project's skills, plus the ones the agent adds, such as the
-skills built into Claude Code. The Claude Desktop app's Code tab loads what Claude Code loads,
-so it has one line under Claude Code, with the MCP servers that only the app has. Skills you
-set to Name only are not listed. A Codex skill whose plugin update changed
-its description after the chat is not counted as cut: the line says Kitden cannot tell for it.
-When Kitden cannot tell at all (Cursor, or no chat yet), the line says why. Then one line names the warnings and counts the notes; `kitden show
-findings` prints them all. The last line says where to fix them: `kitden open`. Before Kitden is
-installed, run these with `uvx --python 3.13` in front. A client you turned off in Kitden is not
-read and gets one line, `Codex: turned off in Kitden`; `kitden scan --json` lists it with
-`"status": "off"`. `kitden scan --json` prints everything
-the page shows.
+your last chat in any folder and names that folder. It changes none of them. It asks each agent
+for its version, and Codex for its plugin list, and keeps the versions and the plugin list in
+two small files in Kitden's own data folder. If Codex has to be asked, it says so on stderr and
+waits up to 15 seconds. A run within the next hour, with unchanged Codex settings, does not
+wait; after an hour Kitden asks again, because a plugin switched in Codex on another computer
+does not change your settings file. It prints one block for each agent, with the problem first:
+whether the skill list fit in that chat, and the names of the skills that did not fit (Claude
+Code and Codex). Under it, one line says what the agent has on this computer, such as `On this
+computer: 2 plugins, 4 skills`. The two skill numbers can differ, and a line under it says why:
+the first counts the skills Kitden found, in all your projects; a chat's list has one project's
+skills, plus the ones the agent adds, such as the skills built into Claude Code. The Claude
+Desktop app's Code tab loads what Claude Code loads, so it has one line under Claude Code, with
+the MCP servers that only the app has. Skills you set to Name only are not listed. A Codex
+skill whose plugin update changed its description after the chat is not counted as cut: the
+line says Kitden cannot tell for it. When Kitden cannot tell at all (Cursor, or no chat yet),
+the line says why. Then one line names the warnings and counts the notes, which need no fix;
+`kitden show findings` prints them all. The last line says what to do: turn off the skills you
+do not use when some did not fit, or fix a warning, in `kitden open`. Before Kitden is
+installed, run these with `uvx --python 3.13` in front. A client you turned off in Kitden is
+not read and gets one line, `Codex: turned off in Kitden`; `kitden scan --json` lists it with
+`"status": "off"`. `kitden scan --json` prints everything the page shows.
 
 ## Try the sample
 
