@@ -13,12 +13,33 @@ Needs [uv](https://docs.astral.sh/uv/getting-started/installation/). Or with Hom
 `brew install konstantinstarovoytov/tap/kitden`, then `kitden scan`. The scan reads your
 agents' settings and changes none of them.
 
+It prints what each agent loads, for example:
+
+```text
+Claude Code: found (2.1.311)
+  Instruction files: 2
+  Marketplaces: 1
+  MCP servers: 2
+  Plugins: 2
+  Skills: 4 on this computer; a chat lists one project's and Claude Code's own
+  Skill list: In your last chat on Oct 1, 3 of 19 skills showed only a name. The agent may not have used them.
+    That chat was in ~/work/atlas.
+    brandkit, release-notes, superpowers:planning
+Codex: found (0.171.0)
+  Skill list: There is nothing to fit.
+…
+6 notes: kitden show findings
+Your agents' settings were not changed: scan only reads them.
+To fix: kitden open
+```
+
 <p align="center">One local page for their MCP servers, plugins, skills and instruction files.<br>
 It changes nothing until you press Apply, and every change can be undone.</p>
 
 <p align="center">
   <a href="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml"><img src="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml/badge.svg?branch=main" alt="Checks on main"></a>
   <a href="https://github.com/KonstantinStarovoytov/kitden/releases/latest"><img src="https://img.shields.io/github/v/release/KonstantinStarovoytov/kitden?label=latest%20release" alt="Latest release"></a>
+  <a href="https://pypi.org/project/kitden/"><img src="https://img.shields.io/pypi/v/kitden?label=PyPI" alt="Kitden on PyPI"></a>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <a href="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden"><img src="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden/badges/score.svg" alt="Kitden on Glama"></a>
   <a href="https://mcprush.com/to/kitden-mcp?ref=badge"><img src="https://mcprush.com/badge/kitden-mcp/score.svg" alt="Kitden MCP on mcprush"></a>

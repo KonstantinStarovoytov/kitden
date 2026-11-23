@@ -35,6 +35,12 @@ body:
       description: What you saw, and what you expected to see.
     validations:
       required: true
+  - type: textarea
+    id: scan
+    attributes:
+      label: What `kitden scan` prints
+      description: Optional. Paste the output. Remove any name or path you do not want public.
+      render: text
   - type: input
     id: caused-by
     attributes:

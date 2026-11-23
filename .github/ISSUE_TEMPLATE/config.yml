@@ -1,1 +1,8 @@
 blank_issues_enabled: true
+contact_links:
+  - name: Security problem
+    url: https://github.com/KonstantinStarovoytov/kitden/security/policy
+    about: Please do not open a public issue.
+  - name: Question
+    url: https://github.com/KonstantinStarovoytov/kitden/discussions
+    about: Ask how something works.

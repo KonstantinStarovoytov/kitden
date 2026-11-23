@@ -368,7 +368,7 @@ Then, with no step from you:
 - `release.yml` on `main` sees a version that has notes and no tag, and tags it with the
   release app, Kitden Beacon.
 - The tag's run checks everything again, publishes to PyPI with trusted publishing and
-  creates the GitHub release with the notes file as its text.
+  creates the GitHub release, named "Kitden" and the version, with the notes file as its text.
 - kitden-sdlc's publish workflow then publishes `server.json` to the
   [MCP Registry](https://registry.modelcontextprotocol.io), moves the `release` branch to the
   tag, and opens the formula pull request in the

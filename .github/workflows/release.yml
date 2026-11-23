@@ -222,7 +222,7 @@ jobs:
           name: dist
           path: dist/
       - name: Create the GitHub release with the built files and its notes
-        run: gh release create "$GITHUB_REF_NAME" dist/* --notes-file "docs/releases/$GITHUB_REF_NAME.md" --verify-tag
+        run: gh release create "$GITHUB_REF_NAME" dist/* --notes-file "docs/releases/$GITHUB_REF_NAME.md" --verify-tag --title "Kitden ${GITHUB_REF_NAME#v}"
         env:
           GH_TOKEN: ${{ github.token }}
 
