@@ -474,6 +474,12 @@ test('the notes fold opens and closes and is hidden at 0', async () => {
   assert.equal(byClass(main, 'ov-fold').length, 0);
 });
 
+test('the setup map draws no block for a client that is off, and the lede does not name it', () => {
+  const map = { ...MAP, clients: MAP.clients.filter((c) => c.id !== 'codex'), links: MAP.links.filter((l) => l.client !== 'codex') };
+  assert.deepEqual(setupTree(map, null).blocks.filter((b) => b.kind === 'client').map((b) => b.id), ['client:claude_code', 'client:cursor']);
+  assert.equal(ledeText({ attention: 3 }, map.clients.filter((c) => c.on).map((c) => c.name)), '3 things need your attention in Claude Code and Cursor.');
+});
+
 test('the setup map draws clients, Kitden gateway and Library with their counts and the foot', () => {
   show(MODEL, { again: true });
   const model = setupTree(MAP, null);
@@ -496,7 +502,8 @@ test('the setup map draws clients, Kitden gateway and Library with their counts 
   assert.ok(walk(block('gateway')).some((n) => n.dataset.icon === 'arrow-up-right'));
   assert.equal(walk(setupBox()).filter((n) => n.dataset.focus && n.dataset.focus.startsWith('link:')).length, 0);
   const foot = byClass(main, 'ov-foot')[0];
-  assert.equal(text(foot), '4 projects · 3 have their own rules');
+  assert.equal(text(foot.children[1]), '4 projects · 3 have their own rules');
+  assert.equal(text(foot.children[2]), 'Choose clients…');
   assert.equal(foot.children[0].dataset.icon, 'folder');
   assert.equal(footWords(1, 1), '1 project · 1 has its own rules');
   // While Kitden cannot read the gateway settings, the gateway block claims no counts.

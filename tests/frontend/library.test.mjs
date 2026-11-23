@@ -155,9 +155,9 @@ test('old map and discover addresses open the Library', () => {
 
 test('no clients: the Library says what Kitden looks for, the folders and the demo behind Details', () => {
   const words = (box) => box.children.map((c) => c.textContent);
-  assert.deepEqual(words(noClients()), ['Kitden found no AI coding clients.', 'It looks for Claude Code, Codex and Cursor.', 'Details', 'Open Overview']);
+  assert.deepEqual(words(noClients()), ['Kitden found no AI coding clients.', 'It looks for Claude Code, Codex and Cursor.', 'Details', 'Choose clients…', 'Open Overview']);
   // On the Overview itself, no link to it.
-  assert.deepEqual(words(noClients({ overview: false })), ['Kitden found no AI coding clients.', 'It looks for Claude Code, Codex and Cursor.', 'Details']);
+  assert.deepEqual(words(noClients({ overview: false })), ['Kitden found no AI coding clients.', 'It looks for Claude Code, Codex and Cursor.', 'Details', 'Choose clients…']);
   assert.equal(noClients().className, 'empty');
 });
 

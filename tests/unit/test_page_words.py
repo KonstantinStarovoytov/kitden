@@ -1634,7 +1634,8 @@ def test_the_tray_says_when_its_settings_changed():
 def test_no_clients_says_what_kitden_looks_for_and_offers_the_demo():
     library = script("library.js")
     assert "Kitden found no AI coding clients." in library and '"Open Overview"' in library
-    assert "It looks for Claude Code, Codex and Cursor." in library
+    # It names only the clients that are not off in Kitden (tests/frontend/clients-choice.test.mjs).
+    assert "It looks for ${joinWords(names)}." in library and '"Choose clients…"' in library
     # The folders and the command sit behind Details (AGENTS.md).
     assert '"What Kitden looks for"' in library and "lookFor(" in library
     assert "It finds a client by that folder or by its command." in library

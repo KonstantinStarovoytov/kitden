@@ -401,7 +401,12 @@ SCAN_KINDS = {
 # does not count (built into the client, or from the Claude app or a Codex plugin).
 SCAN_SKILLS = "{n} on this computer; a chat lists one project's and {client}'s own"
 # A client's status after its name: plain words, not the ids of `scan --json`.
-SCAN_STATUS = {"found": "found", "not_found": "not found", "unreadable": "could not be read"}
+SCAN_STATUS = {
+    "found": "found",
+    "not_found": "not found",
+    "unreadable": "could not be read",
+    "off": "turned off in Kitden",
+}
 # The Claude Desktop Code tab, under Claude Code: it loads what Claude Code loads, and the MCP
 # servers of the Claude Desktop app's own settings file.
 SCAN_DESKTOP = "Only in the Claude Desktop app (Code tab, {version}): MCP servers: {n}"

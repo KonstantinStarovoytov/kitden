@@ -9,10 +9,13 @@ from typing import Any
 
 from kitden.apps import app_roots, app_url
 from kitden.clients.base import ClientAdapter, Scan
+from kitden.clients.choice import off_clients
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import CursorAdapter
 from kitden.model import (
+    CLIENT_WORDS,
+    CLIENTS,
     Client,
     ClientStatus,
     Item,
@@ -102,9 +105,17 @@ def keep_last_good(inventory: Inventory, last: LastGood, now: str) -> Inventory:
 def default_adapters(
     home: Path, quick: bool = False, on_slow_answer: Callable[[], None] | None = None
 ) -> list[ClientAdapter]:
-    """The three clients; `quick` does not wait for slow answers (see CodexAdapter)."""
+    """The clients that are on; `quick` does not wait for slow answers (see CodexAdapter). A
+    client the user turned off in Kitden is left out."""
     codex = CodexAdapter(home, quick=quick, on_slow_answer=on_slow_answer)
-    return [ClaudeCodeAdapter(home), codex, CursorAdapter(home)]
+    adapters = [ClaudeCodeAdapter(home), codex, CursorAdapter(home)]
+    off = off_clients(home)
+    return [a for a in adapters if a.id not in off]
+
+
+def off_client(client: str) -> Client:
+    """The entry of a client that is off: nothing about it is read."""
+    return Client(id=client, display_name=CLIENT_WORDS[client], status=ClientStatus.OFF)
 
 
 def _read(adapter: ClientAdapter, apps: list[Path]) -> tuple[Client, Scan | None]:
@@ -131,9 +142,13 @@ def build_inventory(
     is where to look for the clients' Mac apps; by default the usual folders of `home`'s owner,
     and nowhere when the test passes its own adapters. `quick` does not wait for slow answers:
     they come in the background, and `on_slow_answer` runs when one is in."""
+    root = home
     if adapters is None:
-        adapters = default_adapters(home or Path.home(), quick, on_slow_answer)
-    adapters = list(adapters)
+        root = home or Path.home()
+        adapters = default_adapters(root, quick, on_slow_answer)
+    # Adapters passed in (the demo's, a test's) follow the choice kept under `home` too.
+    off = off_clients(root) if root is not None else frozenset()
+    adapters = [a for a in adapters if a.id not in off]
     if apps is None:
         apps = app_roots(home) if home is not None else []
 
@@ -174,6 +189,10 @@ def build_inventory(
                 if known is None
                 else replace(known, known_by=tuple(dict.fromkeys(known.known_by + found.known_by)))
             )
+    inventory.clients += [off_client(c) for c in CLIENTS if c in off]
+    # In the pages' order, an off client in its own place; the Desktop Code tab after Claude Code.
+    place = {c: n for n, c in enumerate(CLIENTS)}
+    inventory.clients.sort(key=lambda c: place.get(c.id, 0.5))
     inventory.projects = sorted(projects.values(), key=lambda p: p.path)
     inventory.partial = any(adapter.skipped for adapter in adapters)
     with contextlib.suppress(Exception):  # only to match copies; never lose the scan

@@ -9,7 +9,7 @@ from typing import Any
 
 from kitden.local_gateway.settings import load_settings
 from kitden.local_gateway.views import gateway_items
-from kitden.model import Project
+from kitden.model import CLIENT_WORDS, ClientStatus, Project
 from kitden.views.context_view import context_view
 from kitden.views.effective import found_clients, project_views
 from kitden.views.explain import brief, explain
@@ -57,6 +57,8 @@ def setup_answer(inventory: Inventory, folder: str, client: str | None = None) -
     """What each client loads for the project around `folder`; one client when asked."""
     project, path = _where(inventory, folder)
     if client is not None and client not in found_clients(inventory):
+        if any(c.id == client and c.status is ClientStatus.OFF for c in inventory.clients):
+            raise ValueError(f"{CLIENT_WORDS[client]} is turned off in Kitden.")
         raise ValueError(f"Unknown or missing client: {client}")
     views = [
         {

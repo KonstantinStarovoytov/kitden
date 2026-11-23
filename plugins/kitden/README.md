@@ -51,7 +51,8 @@ model list (`models_cache.json`), for the size of its context window. It uses th
 skill list and keeps none of it. It also reads each skill's description from its `SKILL.md`, and
 `kitden show context` prints it, together with the names of the skills that did not fit in your
 last chat. To learn versions and plugins it may run the clients' own
-commands, such as `claude --version` and `codex plugin list`. The first run can wait up to
+commands, such as `claude --version` and `codex plugin list`. A client you turned off on the
+Kitden page is not read, and its commands are not run. The first run can wait up to
 15 s for Codex and says so on stderr. The answer (each plugin's id and whether it is on) is kept
 in one file in Kitden's own data folder, so a run within the next hour, while Codex's
 `config.toml` is unchanged, does not wait. It changes no client settings and does not go

@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from kitden.clients.base import ClientAdapter
+from kitden.clients.choice import off_clients
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import CursorAdapter
@@ -50,8 +51,9 @@ def _version(home: Path, adapter: type[ClientAdapter]) -> Callable[[], str | Non
 
 def demo_adapters(home: Path) -> list[ClientAdapter]:
     """The three clients, reading only the sample: no client command runs, CODEX_HOME is not
-    read, and Codex's plugin list answers at once with no plugins."""
-    return [
+    read, and Codex's plugin list answers at once with no plugins. A client that is off in the
+    sample is left out."""
+    adapters = [
         ClaudeCodeAdapter(home, _version(home, ClaudeCodeAdapter)),
         CodexAdapter(
             home,
@@ -61,6 +63,8 @@ def demo_adapters(home: Path) -> list[ClientAdapter]:
         ),
         CursorAdapter(home, _version(home, CursorAdapter)),
     ]
+    off = off_clients(home)
+    return [a for a in adapters if a.id not in off]
 
 
 def demo_build(home: Path) -> Callable[..., Inventory]:

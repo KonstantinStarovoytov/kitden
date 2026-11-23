@@ -29,6 +29,23 @@ loaded".
 The preview names the clients and projects affected. Adds on the map go to all projects;
 the List offers a project scope where supported. Start a new client session to load a change.
 
+## Choose your clients
+
+If you use only some of Claude Code, Codex and Cursor, tell Kitden. On the **Overview**, press
+**Choose clients…** under "Your setup". **Details** lists the three clients, each with a
+switch. Turn a client off and Kitden stops reading it: it runs none of the client's commands,
+and the client leaves the Overview, the Library, the Gateway, **Agents** and `kitden scan`. Turn
+it on and it comes back. A toast with **Undo** follows each switch. Kitden keeps at least one
+client on, so the last switch stays disabled.
+
+Nothing in a client's own settings changes. If the client still has the `kitden` entry, its row
+says so: disconnect it on the Gateway first if you want that gone. A change you made to an off
+client stays in **Changes**, but its Undo waits: it says "Turn Codex on to undo this." A preview
+you had not applied yet waits the same way. Kitden
+keeps your choice in `clients.json` in its data folder, so it holds after a restart. The small
+**−** on a Library List column is another thing: it hides that column in this browser only,
+Kitden still reads the client, and **Show** brings the column back.
+
 ## Check that your skills fit
 
 Open **Context** to see whether each client's skill list fit in its last chat. Claude Code and
@@ -120,7 +137,9 @@ set to Name only are not listed. A Codex skill whose plugin update changed
 its description after the chat is not counted as cut: the line says Kitden cannot tell for it.
 When Kitden cannot tell at all (Cursor, or no chat yet), the line says why. Then one line names the warnings and counts the notes; `kitden show
 findings` prints them all. The last line says where to fix them: `kitden open`. Before Kitden is
-installed, run these with `uvx --python 3.13` in front. `kitden scan --json` prints everything
+installed, run these with `uvx --python 3.13` in front. A client you turned off in Kitden is not
+read and gets one line, `Codex: turned off in Kitden`; `kitden scan --json` lists it with
+`"status": "off"`. `kitden scan --json` prints everything
 the page shows.
 
 ## Try the sample

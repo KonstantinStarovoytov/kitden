@@ -12,7 +12,7 @@ import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, revealMatc
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, panelState, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote, WRITABLE } from "./parts.js";
+import { banner, CLIENT_NAMES, folderName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, shownClients, skeleton, STATE_WORDS, staleNote, WRITABLE } from "./parts.js";
 import { arrival, busy, current, currentError, data, gatewayShows, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { openAccess } from "./access-form.js";
@@ -270,7 +270,7 @@ export function gatewayTree(view, { setup, clients = [], picked = "", rows = [],
   const { adds, moved } = movesIn(view, kitden, rows, drop);
   const waits = connectRows(rows, setup);
   const out = movesOut(rows);
-  for (const id of WRITABLE) blocks.push(clientBlock(id, { setup, linked, known, first, clients, wait: waits.get(id) }));
+  for (const id of shownClients(clients)) blocks.push(clientBlock(id, { setup, linked, known, first, clients, wait: waits.get(id) }));
   // A gateway block joined to the clients it `reaches` (null when not read), then its `servers` in
   // their groups (by their kind), but those that show elsewhere (`away`, by name); it counts
   // only those not in preview (gateway-notes 4.1), so a server moving out is not counted.

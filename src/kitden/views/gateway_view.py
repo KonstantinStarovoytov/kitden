@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from kitden.changes.actions import KITDEN_GATEWAY, set_up_differently
-from kitden.clients.base import REMOVE_DIRECT, found_clients
+from kitden.clients.base import REMOVE_DIRECT, found_clients, listed_columns
 from kitden.clients.entries import IN_PROJECT_FILES
 from kitden.model import CLIENTS, Enabled, Item, ItemKind, Scope
 from kitden.views.effective import DESKTOP, column_of, effective_view, overrides
@@ -76,7 +76,9 @@ def gateway_view(
     set up differently are a reason it refuses."""
     ids = [KITDEN_GATEWAY] if kitden is not None else []
     # Per gateway and client: the servers that load in this scope and go through that gateway.
-    connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in CLIENTS} for g in ids}
+    connections: dict[str, dict[str, list[str]]] = {
+        g: {c: [] for c in listed_columns(inventory)} for g in ids
+    }
     # One row per server name, with the clients that have it and the entries that can go.
     groups: dict[str, dict[str, dict]] = {"move": {}, "local": {}, "plugin": {}}
     movable = {

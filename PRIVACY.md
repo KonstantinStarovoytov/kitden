@@ -18,6 +18,7 @@ nothing from it.
 - A skill's description, from its `SKILL.md`. The page shows it in the skill's Details, and
   `kitden show context` prints it (see "The plugin and your agent"). Kitden keeps none of it.
 - Versions and plugin lists, from the clients' own commands.
+- A client you turned off in Kitden is not read, and none of its commands are run.
 
 ## What stays on your computer
 
@@ -33,6 +34,9 @@ nothing from it.
 - The versions Kitden finds for each client are kept in one small file, `versions.json`, in
   Kitden's own data folder. The page and `kitden scan` write it. `kitden scan` changes no
   client settings.
+- Which clients you turned off is kept in one small file, `clients.json`, in the same folder
+  (for example `{"off": ["codex"]}`). It is Kitden's own choice, not a client's settings, and it
+  changes nothing in any client's files.
 - The answer of `codex plugin list` is kept in `codex-plugins.json` in the same folder, so a
   repeat `kitden scan` does not wait for Codex. It holds only each plugin's id and whether it is
   on, and it is used again only for one hour and only while Codex's `config.toml` is unchanged (a plugin

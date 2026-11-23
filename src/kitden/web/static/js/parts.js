@@ -338,9 +338,10 @@ export function sourceLines(progress, kind) {
     .map((step) => SOURCE_LINES[step.name].text);
 }
 
-// With no client found: each client Kitden looks for and the folder it checks, in client order.
+// With no client found: each client Kitden looks for (not one that is off) and the folder it checks,
+// in client order.
 export function lookFor(clients) {
-  return WRITABLE.map((id) => (clients || []).find((c) => c.id === id)).filter(Boolean)
+  return shownClients(clients).map((id) => (clients || []).find((c) => c.id === id)).filter(Boolean)
     .map((c) => ({ name: c.display_name, where: shortPath((c.config_roots || [])[0]) }));
 }
 
@@ -374,6 +375,9 @@ export const CLIENT_ORDER = ["claude_code", "claude_desktop_code_tab", "codex", 
 export const byClientOrder = (a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b);
 // The clients Kitden writes and the Kitden gateway reaches, in client order.
 export const WRITABLE = ["claude_code", "codex", "cursor"];
+// The clients that are not off in Kitden (`clients`: the scan's list), in client order. A client
+// that is only not installed stays; without the list all three stay.
+export const shownClients = (clients) => WRITABLE.filter((id) => !(clients || []).some((c) => c.id === id && c.status === "off"));
 // Clients whose own command line installs plugins. Cursor keeps its plugins in the account,
 // and it loads Claude Code's plugins by itself when "Include Third-Party Plugins" is on.
 export const INSTALLERS = ["claude_code", "codex"];

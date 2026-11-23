@@ -104,6 +104,7 @@ from kitden.clients.base import (
     SETUP_SERVER,
     SKILL_REMOVE,
 )
+from kitden.clients.choice import clients_on, off_clients, set_client
 from kitden.command import installed_command
 from kitden.discovery import Discovery, configured_entry, short_name
 from kitden.gateways import data_dir
@@ -192,7 +193,13 @@ from kitden.views.skills import (
     skill_keepers,
     skill_readers,
 )
-from kitden.views.words import CHANGE_UNREAD, KEPT_UNREAD, NO_ADD_UNREAD, ONLY_IN_PROJECT
+from kitden.views.words import (
+    CHANGE_UNREAD,
+    KEPT_UNREAD,
+    NO_ADD_UNREAD,
+    ONLY_IN_PROJECT,
+    join_words,
+)
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
 
@@ -404,8 +411,10 @@ class State:
         quick_first: bool = False,
         warm: Callable[[Inventory], None] | None = None,
         versions: Callable[[], dict[str, str | None]] | None = None,
+        clients_on: Callable[[], Iterable[str]] = lambda: CLIENTS,
     ) -> None:
         self.build = build
+        self.clients_on = clients_on
         self.events = events
         self.quick_first = quick_first
         self.warm = warm
@@ -458,9 +467,10 @@ class State:
                 self.progress.finish()
 
     async def _quick_first_scan(self) -> None:
-        later = [SLOW_STEP]
+        on = list(self.clients_on())  # a client that is off has no step
+        later = [SLOW_STEP] if "codex" in on else []
         later += ([VERSION_STEP] if self.versions else []) + ([WARM_STEP] if self.warm else [])
-        self.progress.start(list(CLIENT_WORDS.values()), later)
+        self.progress.start([CLIENT_WORDS[c] for c in on], later)
         loop = asyncio.get_running_loop()
 
         def step(client: str) -> None:
@@ -473,7 +483,7 @@ class State:
             self.data = inventory_dict(self.inventory)
         self.ready.set()
         # Every client step ends here, also for a client the build did not report.
-        done = list(CLIENT_WORDS.values()) + ([] if self.inventory.partial else [SLOW_STEP])
+        done = [CLIENT_WORDS[c] for c in on] + ([] if self.inventory.partial else [SLOW_STEP])
         self.progress.mark_ready(*done)
         await asyncio.gather(self._read_versions(), self._warm())
 
@@ -703,7 +713,7 @@ def create_app(
         skill_catalog(inventory, adapters)
 
     def read_versions() -> dict[str, str | None]:
-        stale = version_cache.stale_clients(home_dir(), CLIENTS)
+        stale = version_cache.stale_clients(home_dir(), clients_on(home_dir()))
         return version_cache.refresh_versions(home_dir(), stale) if stale else {}
 
     if version_refresh is None and home is not None and not demo:
@@ -716,6 +726,7 @@ def create_app(
         quick_first=quick_first,
         warm=warm if home is not None else None,
         versions=version_refresh,
+        clients_on=lambda: clients_on(home) if home is not None else CLIENTS,
     )
     discovery = Discovery(home) if home is not None else None
     engine = None
@@ -1001,6 +1012,26 @@ def create_app(
         return JSONResponse({"version": __version__, "demo": demo, "secrets": secret_store_name()})
 
     async def clients(request: Request) -> JSONResponse:
+        return JSONResponse(state.data["clients"])
+
+    async def client_choice(request: Request) -> JSONResponse:
+        """Turn a client on or off in Kitden: save it, follow it in the adapters, read again."""
+        if home is None:
+            return _error("Open Kitden on a setup first.", 400)
+        body = await _body(request)
+        client, on = body.get("client"), body.get("on")
+        if not isinstance(client, str) or not isinstance(on, bool):
+            return _error("Say which client, and whether it is on.", 400)
+        try:
+            set_client(home, client, on)
+        except ValueError as error:
+            return _error(str(error), 400)
+        made = {a.id: a for a in make_adapters(home)}
+        for gone in set(adapters) - set(made):  # one at a time: a running read keeps its dict
+            del adapters[gone]
+        adapters.update({k: v for k, v in made.items() if k not in adapters})
+        await state.rescan()
+        read_versions_later()
         return JSONResponse(state.data["clients"])
 
     async def setup_server(request: Request) -> JSONResponse:
@@ -1324,8 +1355,12 @@ def create_app(
         return paths[str(wanted)]
 
     def _clients(targets: list) -> list[str]:
-        """The clients a request targets."""
-        return [str(t.get("client")) for t in targets if isinstance(t, dict)]
+        """The clients a request targets; one that is off in Kitden is refused."""
+        named = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+        off = off_clients(home) if home is not None else frozenset()
+        if turned_off := next((c for c in named if c in off), None):
+            raise ValueError(f"{CLIENT_WORDS[turned_off]} is turned off in Kitden.")
+        return named
 
     def _items(targets: list) -> list:
         """The inventory items a request targets; None for one Kitden does not know."""
@@ -1861,6 +1896,14 @@ def create_app(
         }.get(verb)
         if method is None:
             return _error("Unknown action.", 404)
+        if verb in ("apply", "undo"):
+            # A client that is off is not read and its commands are not run, so its changes
+            # wait: an Undo, and a preview made before the client was turned off.
+            off = off_clients(home_dir())
+            held = [s.client for s in change_engine().changes[change_id].steps if s.client in off]
+            if held:
+                names = join_words([CLIENT_WORDS[c] for c in dict.fromkeys(held)])
+                return _error(f"Turn {names} on to {verb} this.", 422)
         if verb == "apply":
             # The tray sends the titles it shows now; the rows keep them (changes/batch.py).
             retitle(change_engine().changes[change_id], (await _body(request)).get("titles"))
@@ -1950,7 +1993,9 @@ def create_app(
         if engine is None or demo:
             return JSONResponse([])
         starts = await asyncio.to_thread(processes)
-        return JSONResponse(pending_restarts(engine.store.entries(), starts))
+        on = clients_on(home_dir())  # a client that is off gets no strip
+        strips = pending_restarts(engine.store.entries(), starts)
+        return JSONResponse([s for s in strips if s["client"] in on])
 
     def _inherits() -> dict:
         """Whether Cursor loads Claude Code's plugins and the skills in its folder."""
@@ -2121,6 +2166,7 @@ def create_app(
         routes=[
             Route("/", index),
             Route("/api/clients", clients),
+            Route("/api/clients/choice", client_choice, methods=["POST"]),
             Route("/api/setup-server", setup_server),
             Route("/api/items", items),
             Route("/api/projects", projects),

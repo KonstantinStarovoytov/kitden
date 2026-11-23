@@ -3,6 +3,7 @@
 // button only adds a row to the tray. The card leaves once that change is applied and checked
 // and the page has read the result; an Undo brings it back.
 import { getJson, query } from "./api.js";
+import { showChoice } from "./clients-choice.js";
 import { previewButton, syncTrayIn } from "./details.js";
 import { $, button, el, icon, joinWords, plural, reportError } from "./dom.js";
 import { SETUP_NOTE } from "./gateway-details.js";
@@ -596,6 +597,9 @@ function setupColumn(map, fresh) {
   const box = drawSetup(map, { fresh });
   const foot = el("p", "ov-foot");
   foot.append(icon("folder", 13), el("span", null, footWords(map.projects, map.own_rules)));
+  const choose = button("Choose clients…", showChoice, "btn ghost small");
+  choose.classList.add("choose");
+  foot.append(choose);
   column.append(caption, box, foot);
   return column;
 }
