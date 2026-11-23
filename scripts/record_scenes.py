@@ -385,7 +385,7 @@ SCENES = (
     ("find", scene_find, (661, 110, 580, 850)),  # two add panels after a search, a still
     ("context", scene_context, (175, 190, 960, 645)),  # the last chat's skill list, a still
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
-    ("tools", scene_tools, (180, 265, 860, 460)),  # memory, its tools and the changes waiting
+    ("tools", scene_tools, (180, 315, 860, 440)),  # memory, its tools and the changes waiting
 )
 
 
