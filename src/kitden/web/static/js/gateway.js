@@ -92,7 +92,9 @@ export function renderGateway(main, { again = false } = {}) {
   const switched = switchedNow();
   if (!again) onMap.view = null;
   const head = el("div", "page-head");
-  head.append(el("h1", null, "Gateway"));
+  // "Choose clients…" is in the head from the start, also with nothing read yet or no gateway.
+  const actions = headActions(chooseButton());
+  head.append(el("h1", null, "Gateway"), actions);
   const lede = el("p", "lede", "One place for your MCP servers. Turn a server or a tool on or off for every agent.");
   main.append(head, lede);
   const view = current("gateway");
@@ -125,7 +127,7 @@ export function renderGateway(main, { again = false } = {}) {
   const mode = viewMode(state);
   gatewayShows.mode = mode;
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
-  head.append(headActions(chooseButton(), addHeadButton("+ Add servers", "add:servers", (node) => openAdd({ from: node })), seg));
+  actions.append(addHeadButton("+ Add servers", "add:servers", (node) => openAdd({ from: node })), seg);
   const model = treeFor(view, mode);
   setHint(mode === "map" ? mapHint() : "", mode === "map" ? hintActs() : []);
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).

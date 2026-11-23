@@ -1074,6 +1074,8 @@ test('the skeleton, the error banner and "No gateway yet" rise when they come', 
       main.replaceChildren();
       renderGateway(main, { again: i > 0 });
       assert.ok(is(under()), name);
+      // The head has "Choose clients…" on each of them, and only that.
+      assert.deepEqual(main.children[0].children.at(-1).children.map((n) => n.textContent), ['Choose clients…'], name);
       if (calm) assert.equal(under().animations.length, 0, name);
       else assert.deepEqual(lastMotion(under()), IN, name);
       // Drawn again as it is, it stays still.
