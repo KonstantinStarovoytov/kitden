@@ -93,8 +93,11 @@ jobs:
       - run: node --test tests/frontend/*.test.mjs
       # The page opens within its time budgets (docs/development.md, Speed).
       - run: uv run python scripts/measure-start.py
-      # The workflow files themselves have no known weak spots.
+      # The workflow files themselves have no known weak spots. The token lets zizmor ask
+      # GitHub whether each pinned action commit is real and has no known vulnerability.
       - run: uvx zizmor==1.32.0 .github
+        env:
+          GH_TOKEN: ${{ github.token }}
       # No dependency with a known vulnerability.
       - run: uv run --with pip-audit==2.10.1 pip-audit --progress-spinner off --skip-editable
       - name: The tag names the package version
