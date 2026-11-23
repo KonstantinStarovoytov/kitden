@@ -1244,6 +1244,8 @@ def _codex_limit_card(
         head = words.LIMIT_STEP_NOW.format(share=words.TOKENS.format(n=f"{budget:,}"))
         points.append(point(limit if limit is not None else budget, budget, now, head, True))
         points += [point(n, n, fit, words.TOKENS.format(n=f"{n:,}")) for n, fit in ups]
+        # Left to right, smallest first: config.toml may set less than the default.
+        points.sort(key=lambda p: p[1])
         used = now.used if now is not None else None
         return _limit_steps(points, used, len(names), "tokens", words.CODEX_LIMIT_STEP_SHORT)
 

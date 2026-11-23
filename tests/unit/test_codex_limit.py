@@ -224,3 +224,14 @@ def test_a_codex_limit_in_the_draft_is_accepted(home):
         assert page.get("/api/context", params={"draft": json.dumps(ok)}).status_code == 200
         bad = {"limits": {"codex": True}}
         assert page.get("/api/context", params={"draft": json.dumps(bad)}).status_code == 422
+
+
+def test_a_limit_below_the_default_keeps_the_places_in_order_so_a_key_only_goes_up(home):
+    budget = cut_chat(home)
+    # config.toml sets less than the default (2% of the window), which is the chat's limit.
+    (home / ".codex/config.toml").write_text(f"[skills]\nmax_context_tokens = {budget // 2}\n")
+    steps = view(home)["codex"]["limit"]["steps"]
+    values = [s["value"] for s in steps]
+    assert values[:2] == [budget // 2, "default"]
+    assert [s["limit"] for s in steps] == sorted(s["limit"] for s in steps)
+    assert steps[0]["now"] is True and "now" not in steps[1]
