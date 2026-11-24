@@ -55,8 +55,8 @@ Codex let that list use only a small part of the context window. Claude Code the
 skills by name only; Codex shortens descriptions and, past that, leaves skills out. Kitden reads
 the skill list from the last chat log, plus the settings, skill files and use counts it needs
 to size and check that list; it keeps none of it and sends nothing. Estimates for another
-window, or for a change you are about to make, show only while Kitden's rule rebuilds that last
-list. Claude Code's log does not say the window, so Kitden names it only when one window alone
+window, or for a switch you are about to make, show only while Kitden's rule rebuilds that last
+list; a new limit also gets one from a count (below). Claude Code's log does not say the window, so Kitden names it only when one window alone
 gives that list. When Claude Code's settings set the limit, with `skillListingBudgetFraction` or
 `SLASH_COMMAND_TOOL_CHAR_BUDGET`, Kitden uses that limit, and `skillListingMaxDescChars` for the
 length of a description. Cursor gets no verdict, because Kitden cannot see what Cursor sends. Skills
@@ -87,6 +87,17 @@ line back to 1% or press **Back to 1%** to take it out again. After Apply, the l
 the limit it was sent under, the next chats' line shows the new one, and the page says the
 limit changed and what Kitden expects from your next chat.
 
+The line also works when Kitden cannot replay the last chat's list exactly: a newer Claude Code
+may choose other descriptions, or a listed skill may have no file Kitden can find. Then Kitden
+counts what all descriptions need. A step that has room for all of them says "all 92 fit"; a
+step that does not says only "not all fit", because without the replay Kitden cannot tell which
+ones it would keep. The details say that it is a count, and how many skills have no description
+Kitden can find: those count at the longest a description can be (1,536 characters, or your
+`skillListingMaxDescChars`), so the share may be a step higher than you need.
+
+The share is for your next chats, so skills you added or turned on after the last chat are
+counted too, and the details say how many.
+
 Codex's line works the same way, in tokens: when Codex cut descriptions short or left skills
 out, drag it in steps of 500 tokens, up to 10,000, the most Codex allows; it snaps to the
 smallest limit at which no description is cut and no skill is left out. Kitden writes
@@ -95,8 +106,9 @@ Undo; **Back to the default** takes it out, so Codex uses 2% of the window again
 for it to take effect. Kitden writes `skillListingBudgetFraction` in your user
 settings (`~/.claude/settings.json`), for all projects, with a backup and Undo. Your next chat
 shows the real list. Kitden does not offer it when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when
-a project's own settings file sets the share, when there is no estimate, when everything fits,
-or when even 5% would not fit every description; "How this is counted" then says which. For
+a project's own settings file sets the share, when the limit of the last chat is not known, when
+everything fits, when by its count everything fits although the chat left descriptions out, or
+when even 5% would not fit every description; "How this is counted" then says which. For
 Codex: when there is no estimate, when everything fits, or when even 10,000 tokens would not fit
 every description.
 
