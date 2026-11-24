@@ -168,7 +168,7 @@ export function renderContext(main, { again = false } = {}) {
   const planned = after ? after.result : null;
   const result = shown ? planned || shown.result : null;
   const estimate = Boolean(planned) || index > 0;
-  const heat = heatOf(card, result, estimate);
+  const heat = heatOf(card, result, estimate, Boolean(planned));
   // The chat's own limit line stays where it is; a new limit shows as a second line (limitControl).
   if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`, heat, index === 0 ? controlOf(card) : null));
   if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
@@ -303,21 +303,27 @@ function moveFrom(at, spots) {
 // A skill's side: on the last chat's window, the server's; on an estimate (another window, or
 // after Apply), from that estimate (Claude Code: a skill whose description is sent; Codex: one
 // with nothing cut off). A skill on no side (not in the last list, or Kitden cannot tell) stays
-// apart.
-function sideOf(card, skill, result, estimate) {
-  if (skill.side === null || skill.side === undefined || !estimate) return skill.side;
+// apart; one the tray turns on (`back`) has a side in the estimate after Apply, and none in another
+// window's, which knows nothing of the tray.
+function sideOf(card, skill, result, estimate, back = false, planned = false) {
+  if (back && estimate && !planned) return null;
+  const none = skill.side === null || skill.side === undefined;
+  if (!estimate || (none && !back)) return skill.side;
   if (card.client === "codex") return skill.name in (result.over || {}) ? 1 : 0;
   return skill.name in (result.sent || {}) ? 0 : 1;
 }
 
 // How warm each skill on the first side is, grey to orange: its size against the largest there,
 // "0.00" to "1.00". The sizes to weigh at a glance; the other side stays grey.
-function heatOf(card, result, estimate) {
+function heatOf(card, result, estimate, planned) {
   const states = draftFrom(current("context"))[card.client] || {};
-  const first = card.skills.filter((s) => states[s.name] !== "off" && sideOf(card, s, result, estimate) === 0);
+  const first = card.skills.filter((s) => states[s.name] !== "off" && sideOf(card, s, result, estimate, turnedOn(s, states), planned) === 0);
   const top = Math.max(0, ...first.map((s) => s.size));
   return new Map(first.map((s) => [s.name, (top ? s.size / top : 0).toFixed(2)]));
 }
+
+// An off skill that the tray sets to On or Name only.
+const turnedOn = (skill, states) => skill.state === "off" && skill.name in states && states[skill.name] !== "off";
 
 function sidesFor(card, result, after, estimate, heat) {
   const states = draftFrom(current("context"))[card.client] || {};
@@ -337,10 +343,11 @@ function sidesFor(card, result, after, estimate, heat) {
   for (const skill of card.skills) {
     // A skill the tray turns off leaves the list.
     if (states[skill.name] === "off") continue;
-    const side = sideOf(card, skill, result, estimate);
-    // Off, and not in this list: it waits under Turned off, so it can come back. An estimate leaves
-    // it out unless the tray turns it on.
-    const out = skill.state === "off" && ((estimate && !(skill.name in states)) || !clouds[side]);
+    const back = turnedOn(skill, states);
+    const side = sideOf(card, skill, result, estimate, back, Boolean(after && after.result));
+    // Off, and not in this list (an estimate leaves it out): it waits under Turned off, so it can
+    // come back.
+    const out = skill.state === "off" && !back && (estimate || !clouds[side]);
     (out ? off : clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
   }
   const wrap = el("div");
