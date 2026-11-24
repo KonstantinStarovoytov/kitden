@@ -90,7 +90,7 @@ needs no other test. The table lists those written so far, in product order:
 | 11 | Two changes in the tray, "Apply all" | `test_apply_all.py` |
 | 12 | Undo, then "Redo…" from Changes | `test_redo.py` |
 | 13 | Update to a new version | `test_update.py` |
-| 14 | Context: set the skill list limit by its line (drag, keys, Details), Apply, Undo; Claude Code (also with a chat Kitden cannot replay) and Codex | `test_limit_line.py` |
+| 14 | Context: set the skill list limit by its line (drag, keys, Details), Apply, Undo; Claude Code (also with a chat Kitden cannot replay, and down to a share below today's) and Codex | `test_limit_line.py` |
 
 Flows 3 to 5 and 13 use the `sample` fixture: the demo's sample, not in demo mode, with the
 stand-ins of `tests/offline.py` and the network guard on, so a test that tries to go online
@@ -163,7 +163,9 @@ The Context page's limit line has one mark:
   list's limit line, from the move to the line and its readout being updated (no server read and
   no redraw of the page). Aim 16 ms; `tests/browser/test_limit_line.py` fails above 50 ms on
   average over a drag across all steps. Measured 2026-11-23 (Apple M4 Max, Playwright Chromium,
-  medium sample, 1280×800): 9 steps, 0.12 ms on average, 0.2 ms at most.
+  medium sample, 1280×800): 9 steps, 0.12 ms on average, 0.2 ms at most. Again 2026-11-24 with
+the glide (a CSS transition on `left`, which runs after the step): five drags, 60 steps,
+Chromium 0.12 ms on average and 0.2 ms at most, Firefox 0.08 ms and 1 ms.
 
 Measured 2026-10-24 (Apple M4 Max, macOS 26.6.2):
 

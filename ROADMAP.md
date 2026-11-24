@@ -20,7 +20,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   works also when Kitden cannot replay the last chat's list: it then counts what all
   descriptions need and says so. A built-in skill, which has no file, counts as an earlier
   chat's list sent it, not at the longest a description can be.
-  Codex's line does the same in tokens, for `[skills] max_context_tokens`.
+  Codex's line does the same in tokens, for `[skills] max_context_tokens`. When your settings
+  set more than the default, the line also goes down to every place between the default and
+  today's limit, and it glides from place to place (not under reduced motion).
 - **Turn a Claude Code skill off in one project beside your other skill rules:** Kitden refused
   this while your settings, or the project's, already held a skill rule; now one preview can hold
   rules for all projects and for one (#194).

@@ -43,6 +43,7 @@ from kitden.context.rules import (
     codex_tokens,
     same_share,
     shares_above,
+    shares_below,
 )
 from kitden.context.tables import (
     CLAUDE_ALWAYS_FULL,
@@ -697,8 +698,9 @@ def _claude_steps(
     back: bool,
     ups: list[tuple[float, ClaudeFit | None]],
 ) -> list[dict]:
-    """The limit line's places for Claude Code: 1% when Back is offered, the share now, and the
-    shares above it Kitden offers (`ups`, as the suggestion ran them)."""
+    """The limit line's places for Claude Code: 1% when Back is offered and the shares on the list
+    between it and the share now, the share now, and the shares above it Kitden offers (`ups`, as
+    the suggestion ran them)."""
     wanted = {s.name for s in fits.skills if not s.name_only}
 
     def point(value, at: float, fit: ClaudeFit | None, head: str, here: bool = False) -> tuple:
@@ -713,6 +715,8 @@ def _claude_steps(
         fit = fits.at(claude_budget(*pair, CLAUDE_SHARE))
         head = words.LIMIT_STEP_DEFAULT.format(share=_percent(None))
         points.append(point("default", CLAUDE_SHARE, fit, head))
+        for at in shares_below(share):
+            points.append(point(at, at, fits.at(claude_budget(*pair, at)), words.percent(at)))
     now = fits.at(claude_budget(*pair, share))
     head = words.LIMIT_STEP_NOW.format(share=_percent(share))
     points.append(point(share, share, now, head, True))
@@ -1723,6 +1727,12 @@ def _codex_limit_card(
             fit = rerun(default) if now is not None else None
             head = words.LIMIT_STEP_DEFAULT.format(share=words.TOKENS.format(n=f"{default:,}"))
             points.append(point("default", default, fit, head))
+            # The steps of 500 between the default and today's limit; none when config.toml
+            # sets less than the default.
+            first = (default // CODEX_LIMIT_STEP + 1) * CODEX_LIMIT_STEP
+            for n in range(first, budget, CODEX_LIMIT_STEP):
+                fit = rerun(n) if now is not None else None
+                points.append(point(n, n, fit, words.TOKENS.format(n=f"{n:,}")))
         head = words.LIMIT_STEP_NOW.format(share=words.TOKENS.format(n=f"{budget:,}"))
         points.append(point(limit if limit is not None else budget, budget, now, head, True))
         points += [point(n, n, fit, words.TOKENS.format(n=f"{n:,}")) for n, fit in ups]
