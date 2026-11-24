@@ -328,11 +328,13 @@ function sidesFor(card, result, after, estimate, heat) {
     return cloud;
   });
   const apart = el("div", "ctx-cloud ctx-apart");
+  const off = el("div", "ctx-cloud");
   for (const skill of card.skills) {
     // A skill the tray turns off leaves the list.
     if (states[skill.name] === "off") continue;
     const side = sideOf(card, skill, result, estimate);
-    (clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
+    // Not in the last list because it is off: it waits under Turned off, so it can come back.
+    (clouds[side] || (skill.state === "off" ? off : apart)).append(pillFor(card, skill, states, after, heat, result));
   }
   const wrap = el("div");
   // What the number on a pill is: the same for every client (the Codex limit is in tokens, a pill's
@@ -340,6 +342,12 @@ function sidesFor(card, result, after, estimate, heat) {
   if (card.skills.some((s) => s.size)) wrap.append(el("p", "ctx-pillnote", PILL_NUMBERS));
   wrap.append(box);
   if (apart.children.length) wrap.append(apart);
+  if (off.children.length) {
+    const shelf = el("section", "ctx-off ctx-apart");
+    shelf.setAttribute("aria-label", "Turned off");
+    shelf.append(el("p", "ctx-off-head", "Turned off"), off);
+    wrap.append(shelf);
+  }
   return wrap;
 }
 
@@ -358,10 +366,10 @@ function pillFor(card, skill, states, after, heat, result) {
     node.setAttribute("title", skill.name);
   }
   node.append(el("span", null, skill.shown));
-  // Built into Claude Code: no file, so no Library item and no switch. Said on the pill.
+  // Built into Claude Code: no file, so no Library item. Said on the pill.
   if (skill.built_in) {
     node.classList.add("builtin");
-    node.setAttribute("title", `${skill.source || "Built into Claude Code"}. Kitden cannot turn it off.`);
+    node.setAttribute("title", skill.source || "Built into Claude Code");
     node.append(el("i", "ctx-tag", "built-in"));
   }
   const kept = result && result.kept ? result.kept[skill.name] : undefined;
@@ -453,7 +461,9 @@ function describe(skill) {
 // project (Claude Code takes it only there).
 function ruleBody(card, skill, value) {
   const params = skill.project ? { scope: "project", project: skill.project, state: value } : { scope: "all", state: value };
-  return { action: "skill.rule", targets: [{ client: card.client, item: skill.item }], params };
+  // A built-in skill has no item: the target is its name.
+  const which = skill.built_in ? { built_in: skill.name } : { item: skill.item };
+  return { action: "skill.rule", targets: [{ client: card.client, ...which }], params };
 }
 
 // The skill's states, the pressed one as the tray will leave it. A press adds the row (one row per
@@ -755,7 +765,7 @@ function draftFrom(model) {
     if (body.action !== "skill.rule") continue;
     for (const target of body.targets || []) {
       const card = model && model.clients.find((c) => c.client === target.client);
-      const skill = card && card.skills.find((s) => s.item && s.item === target.item);
+      const skill = card && card.skills.find((s) => (target.built_in ? s.built_in && s.name === target.built_in : s.item && s.item === target.item));
       if (skill) (draft[target.client] ||= {})[skill.name] = ruleState(body.params);
     }
   }

@@ -119,7 +119,7 @@ export function keyFor(body) {
   if (action === "gateway.sign_in") return `signin:${params.server}`;
   if (action === "gateway.access") return `access:${params.server}/${params.field}/${params.name}`;
   const one = targets[0] || {};
-  if (action === "skill.rule") return `skill:${one.client}:${one.item}@${params.project || ""}`;
+  if (action === "skill.rule") return `skill:${one.client}:${one.built_in || one.item}@${params.project || ""}`;
   // One skill list limit per client: another share replaces the row.
   if (action === "skill.limit") return `limit:${one.client}`;
   return JSON.stringify(sorted({ action, targets: inClientOrder(action, targets), params }));

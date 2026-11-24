@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TypeGuard
 
 from kitden.clients.base import Reader, found_columns, from_plugin
-from kitden.clients.claude_code import LIMIT_KEY, local_files
+from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, local_files
 from kitden.clients.versions import highest_version
 from kitden.context.claude_log import Unreadable, last_claude_list
 from kitden.context.codex_log import codex_window, codex_windows, last_codex_list
@@ -37,9 +37,11 @@ from kitden.context.rules import (
 )
 from kitden.context.tables import (
     CLAUDE_ALWAYS_FULL,
+    CLAUDE_BUILT_IN,
     CLAUDE_CANDIDATES,
     CLAUDE_DESCRIPTION_CAP,
     CLAUDE_OTHER_WINDOW,
+    CLAUDE_RULED,
     CLAUDE_SHARE,
     CLAUDE_SHARE_MOST,
     CLAUDE_SHARE_STEPS,
@@ -84,7 +86,8 @@ class _Row:
     full: str | None
     path: str = ""  # Codex: the `file:` path of its line
     added: bool = False  # Claude Code: added during the chat, sent whole outside the limit
-    built_in: bool = False  # Claude Code: built in, keeps its description whatever the limit
+    built_in: bool = False  # Claude Code: built in, so no file
+    always_full: bool = False  # Claude Code: built in, keeps its description whatever the limit
     moved: bool = False  # Codex: read from its plugin's newer version, the chat's one is gone
     # Codex: the newer version's description is another text than the chat sent, so the size it
     # had in the chat is not known.
@@ -226,10 +229,13 @@ def _skill(
     built_in: bool = False,
     description: str | None = None,
     seen: int | None = None,
+    state: str | None = None,
 ) -> dict:
+    """`state`: of a built-in skill, which has no item to say it."""
     # Claude Code's skillOverrides does not touch a plugin's skills (spec "Switches per client").
     plugin = client == "claude_code" and item is not None and from_plugin(item)
-    switch = [] if item is None or plugin else SWITCHES.get(client, [])
+    ruled = item is not None or (built_in and name in CLAUDE_RULED)
+    switch = SWITCHES.get(client, []) if ruled and not plugin else []
     # Claude Code takes a rule for a project's own skill only in that project (changes/actions.py).
     project = item.project if client == "claude_code" and item and not plugin else None
     return {
@@ -241,11 +247,11 @@ def _skill(
         "item": item.id if item else None,
         "project": Project(project, True).id if project else None,
         "source": _source(item, built_in),
-        # Not a file on this computer: no Library item, no switch.
+        # Not a file on this computer: no Library item.
         "built_in": built_in,
         "size": size,
         "side": side,
-        "state": _state(item),
+        "state": state or _state(item),
         "switch": list(switch),
         "note": note,
         "description": description,
@@ -406,6 +412,29 @@ def _claude_setting(files: list[Path]) -> int | None:
             value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
         )
     return None
+
+
+def _built_in_rules(files: list[Path]) -> dict[str, str]:
+    """The `skillOverrides` state of each built-in skill it is known to reach, key by key, the
+    winning file last (checked 2026-11-24, Claude Code 2.1.330: the files merge key by key)."""
+    read = Reader("claude_code")
+    rules: dict[str, str] = {}
+    for path in files:
+        found = as_dict(as_dict(read.json(path)).get("skillOverrides"))
+        rules |= {n: s for n, s in found.items() if n in CLAUDE_RULED and s in SKILL_STATES}
+    return rules
+
+
+def _tagged(row: _Row) -> _Row:
+    """Whether the row is a skill built into Claude Code, by its name: such a skill has no file."""
+    own = row.item is None
+    full = own and row.name in CLAUDE_ALWAYS_FULL
+    return replace(row, built_in=own and row.name in CLAUDE_BUILT_IN, always_full=full)
+
+
+def _ruled(row: _Row) -> bool:
+    """A built-in skill that a skill rule is known to reach."""
+    return row.built_in and row.name in CLAUDE_RULED
 
 
 def _claude_key(files: list[Path], key: str):
@@ -625,7 +654,7 @@ def _claude_run(
         ClaudeSkill(
             r.name,
             r.sent if r.sent is not None else r.full if r.full is not None else unknown,
-            r.built_in,
+            r.always_full,
             states[r.name] == "name-only",
             weights.get(r.name, 0.0),
         )
@@ -773,13 +802,15 @@ def _claude_note(
 ) -> str | None:
     """`explained`: the limit rebuilds the list, so it is why a description is missing.
     `can_free`: some skill with a description has a switch."""
-    if row.item is None:
+    if row.item is None and not _ruled(row):
         return words.NOTE_BUILT_IN if row.built_in else None
     if state in ASKED:
         return words.NOTE_ONLY_ASKED
+    if state == "off":
+        return words.NOTE_OFF
     if side is None:
         return words.NOTE_NOT_LISTED
-    if from_plugin(row.item):
+    if row.item is not None and from_plugin(row.item):
         return words.NOTE_PLUGIN
     if state == "name-only":
         return words.NOTE_NAME_ONLY
@@ -820,12 +851,14 @@ def _claude(
         item = by_name.get(name)
         full = _description(item.source.path) if item else _app_description(home, name)
         rows.append(_Row(name, text, item, full, added=name in found.added))
-    states = {r.name: _state(r.item) for r in rows}
-    # Checked against each chat: a wrong name here and the rule no longer rebuilds the list.
-    rows = [replace(r, built_in=r.item is None and r.name in CLAUDE_ALWAYS_FULL) for r in rows]
+    files = _claude_files(home, found.folder)
+    rules = _built_in_rules(files)
+    # `always_full` is checked against each chat: a wrong name here and the rule no longer
+    # rebuilds the list.
+    rows = [_tagged(r) for r in rows]
+    states = {r.name: rules.get(r.name, "on") if _ruled(r) else _state(r.item) for r in rows}
     weights = _claude_weights(home, at_ms)
 
-    files = _claude_files(home, found.folder)
     setting = _claude_setting(files)
     fraction = _claude_fraction(files)
     # checked 2026-11-24 (Claude Code 2.1.311): with both set, the fixed budget is the limit; the
@@ -937,10 +970,9 @@ def _claude(
 
     explained = checked or two_limits
     can_free = any(
-        r.item is not None
-        and r.sent is not None
+        r.sent is not None
         and states[r.name] == "on"
-        and not from_plugin(r.item)
+        and (_ruled(r) or (r.item is not None and not from_plugin(r.item)))
         for r in rows
     )
     skills = []
@@ -952,8 +984,17 @@ def _claude(
             r.full if r.full is not None else r.sent,
             _seen(r.full, r.sent, side, None if r.added else _cap_then(cap, r.sent)),
         )
-        skills.append(_skill(client, r.name, r.item, size, side, note, r.built_in, text, seen))
+        state = states[r.name]
+        skills.append(
+            _skill(client, r.name, r.item, size, side, note, r.built_in, text, seen, state)
+        )
     listed = {r.name for r in rows}
+    # A built-in skill that its setting keeps out of the list: shown, so it can come back.
+    for name, state in rules.items():
+        if state in ("off", *ASKED) and name not in listed and name not in by_name:
+            extra = _tagged(_Row(name, None, None, None))
+            note = _claude_note(extra, state, None, 0)
+            skills.append(_skill(client, name, None, 0, None, note, True, state=state))
     for item in items:
         if _name(client, item) not in listed:
             extra = _Row(_name(client, item), None, item, _description(item.source.path))

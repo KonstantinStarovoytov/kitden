@@ -29,7 +29,12 @@ from kitden.clients.base import (
 from kitden.clients.claude_code import holds, rule_file
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
 from kitden.context.rules import grid_share, on_share_grid
-from kitden.context.tables import CLAUDE_SHARE_STEPS, CODEX_LIMIT_STEP, CODEX_MAX_LIMIT
+from kitden.context.tables import (
+    CLAUDE_RULED,
+    CLAUDE_SHARE_STEPS,
+    CODEX_LIMIT_STEP,
+    CODEX_MAX_LIMIT,
+)
 from kitden.local_gateway.keychain import (
     SECRET_FIELDS,
     KeychainError,
@@ -72,6 +77,7 @@ from kitden.views.words import (
     PLUGIN_ALL_PROJECTS,
     PLUGIN_NO_NAME_ONLY,
     PLUGIN_SKILL,
+    PROJECT_BUILT_IN,
     PROJECT_SKILL_ALL,
 )
 
@@ -1412,6 +1418,21 @@ def _claude_rule_steps(
     return adapter.skill_rule_steps(item.name, project, state)
 
 
+def _built_in_steps(
+    adapter: ClientAdapter | None, home: Path, name: object, project: str | None, state: str
+) -> list[Step]:
+    """Claude Code: the `skillOverrides` key of a skill built into it, in the user settings. It
+    has no file, so no item: the target is its name, one of those the rule is known to reach."""
+    if adapter is None or name not in CLAUDE_RULED:
+        raise ValueError("Choose a known skill.")
+    if project is not None:
+        raise ValueError(PROJECT_BUILT_IN)
+    user_file = home / ".claude/settings.json"
+    if state == "on" and not holds(user_file, ("skillOverrides", str(name))):
+        raise ValueError(ON_NEEDS_PROJECT)
+    return adapter.skill_rule_steps(str(name), None, state)
+
+
 def skill_rule_steps(
     adapters: dict[str, ClientAdapter],
     inventory: "Inventory",
@@ -1420,7 +1441,8 @@ def skill_rule_steps(
     params: dict,
 ) -> list[Step]:
     """Turn skills off for all projects or in one project, one step per target {client, item}
-    (spec 5.5). `params`: scope "all" or "project", `project` (its id), and `state` ("off",
+    (spec 5.5), or {client, built_in} for a skill built into Claude Code, by its name.
+    `params`: scope "all" or "project", `project` (its id), and `state` ("off",
     "name-only" or "on"); without `state`, `off` stands for "off" or "on". "on" takes a project's
     own rule out, so the shared rule applies there again; for all projects it takes the user's
     own key out (Claude Code only, and only when that file has one).
@@ -1443,6 +1465,10 @@ def skill_rule_steps(
     by_id = {i.id: i for i in inventory.items}
     steps = []
     for target in targets:
+        if isinstance(target, dict) and "built_in" in target:
+            adapter = adapters.get("claude_code") if target.get("client") == "claude_code" else None
+            steps += _built_in_steps(adapter, home, target["built_in"], project, state)
+            continue
         item = by_id.get(str(target.get("item"))) if isinstance(target, dict) else None
         if item is None or target.get("client") != item.client:
             raise ValueError("Choose a known skill.")

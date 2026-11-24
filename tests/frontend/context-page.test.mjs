@@ -945,15 +945,69 @@ test('Details counts characters as Python does, so an emoji does not move the gr
   assert.deepEqual(byClass(box, 'ctx-cut').map(text), ['bc']);
 });
 
-test('a built-in skill says so on its pill, and that Kitden cannot turn it off', async () => {
+const draftUrl = (states) => `/api/context?draft=${encodeURIComponent(JSON.stringify({ claude_code: states }))}`;
+const BUILT_IN = { item: null, source: 'Built into Claude Code', built_in: true };
+
+test('a built-in skill says so on its pill', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };
-  const dataviz = skill('dataviz', 1436, 0, { item: null, source: 'Built into Claude Code', switch: [], built_in: true });
-  show(answer({ ...TIGHT, skills: [...TIGHT.skills, dataviz] }, CODEX, CURSOR));
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills, skill('dataviz', 1436, 0, BUILT_IN)] }, CODEX, CURSOR));
   const pill = pillOf('dataviz');
   assert.equal(text(pill), 'datavizbuilt-in1,436');
   assert.equal(pill.classList.contains('builtin'), true);
-  assert.match(pill.getAttribute('title'), /Built into Claude Code\. Kitden cannot turn it off\./);
+  assert.equal(pill.getAttribute('title'), 'Built into Claude Code');
   assert.equal(pillOf('alpha').classList.contains('builtin'), false);
   assert.equal(pillOf('alpha').getAttribute('title'), null);
+});
+
+test('a built-in skill is switched by its name, and the tray change asks for the estimate', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const skills = [...TIGHT.skills, skill('dataviz', 1436, 0, BUILT_IN), skill('loop', 336, 0, BUILT_IN)];
+  show(answer({ ...TIGHT, skills }, CODEX, CURSOR));
+  await fire(pillOf('dataviz'), 'click');
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  const reply = { status: 200, json: answer({ ...TIGHT, skills }, CODEX, CURSOR) };
+  queue(draftUrl({ dataviz: 'off' }), reply);
+  queue(draftUrl({ dataviz: 'off', loop: 'name-only' }), reply);
+  state.view = 'context';
+  await fire(buttonIn(drawer, 'Off'), 'click');
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual([sent.kind, sent.targets, sent.params], ['skill.rule', [{ client: 'claude_code', built_in: 'dataviz' }], { scope: 'all', state: 'off' }]);
+  // The draft names the skill, so the server's estimate leaves it out.
+  assert.equal(asked.some((a) => a.url === draftUrl({ dataviz: 'off' })), true);
+  // Another built-in skill has a row of its own.
+  await fire(pillOf('loop'), 'click');
+  await fire(buttonIn(drawer, 'Name only'), 'click');
+  await flush();
+  assert.equal(tray.rows.length, 2);
+});
+
+test('a skill that is off stands under Turned off, and its Details turn it on again', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  // One kept out of the last list; one turned off after it, which that list still had.
+  const gone = skill('dataviz', 0, null, { ...BUILT_IN, state: 'off', note: 'Off: your next chat does not list it.' });
+  const late = skill('beta', 1990, 0, { state: 'off' });
+  show(answer({ ...TIGHT, skills: [TIGHT.skills[0], late, TIGHT.skills[2], gone] }, CODEX, CURSOR));
+  const [off] = byClass(main, 'ctx-off');
+  assert.equal(text(byClass(off, 'ctx-off-head')[0]), 'Turned off');
+  assert.deepEqual(pills(off).map((p) => p.dataset.skill), ['dataviz']);
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'beta'], ['gamma']]);
+  await fire(pillOf('dataviz'), 'click');
+  assert.match(text(drawer), /Off: your next chat does not list it\./);
+  queue(PREVIEW, previewed('c1'));
+  queue(draftUrl({ dataviz: 'on' }), { status: 200, json: answer(TIGHT, CODEX, CURSOR) });
+  await fire(buttonIn(drawer, 'On'), 'click');
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual(sent.params, { scope: 'all', state: 'on' });
+});
+
+test('nothing turned off draws no Turned off', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(TIGHT, CODEX, CURSOR));
+  assert.deepEqual(byClass(main, 'ctx-off'), []);
 });

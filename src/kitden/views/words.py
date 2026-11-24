@@ -145,6 +145,7 @@ CODEX_SKILLS_NOT_TABLES = "Codex's skills settings are not a list of tables; Kit
 NO_SKILL_MERGE = (
     "Claude Code may not merge skill settings across files; turn it off for all projects instead."
 )
+PROJECT_BUILT_IN = "Kitden turns a built-in skill off for all projects, not for one."
 OWN_SKILL_SETTINGS = "{folder} has its own skill settings; it may keep this skill on."
 # checked 2026-10-27 (code.claude.com/docs/en/settings): Claude Code adds
 # `**/.claude/settings.local.json` to the global git excludes the first time it writes the file;
@@ -306,9 +307,9 @@ SOURCE_PROJECT = "Project {}"
 SOURCE_OWN = "Your skills"
 # One skill's Details line.
 NOTE_BUILT_IN = (
-    "Claude Code always sends built-in skills in full. "
-    "Kitden cannot turn them off: they are not files on this computer."
+    "Kitden has not checked that Claude Code can turn this skill off, so it has no switch here."
 )
+NOTE_OFF = "Off: your next chat does not list it."
 NOTE_PLUGIN = "A plugin's skill follows its plugin. Turn the plugin off in the Library."
 NOTE_FREES = "Name only frees {n} characters. The agent no longer sees when to use it."
 NOTE_NO_ROOM = "No room for its description."

@@ -21,6 +21,7 @@ from kitden.views.words import (
     NO_CLAUDE_FOLDER,
     NO_SKILL_MERGE,
     PLUGIN_NO_NAME_ONLY,
+    PROJECT_BUILT_IN,
     PROJECT_SKILL_ALL,
     REPO_RULE,
     REPO_RULE_OUT,
@@ -678,3 +679,48 @@ def test_an_odd_shared_value_does_not_break_the_review(tmp_path):
             rule = _rule("claude_code", item, "project", _project(page, app), state="on")
             (row,) = _preview(page, rule).json()["rows"]
             assert row["after"][0]["state"] == "on"
+
+
+# Skills built into Claude Code: no file and no item, so the target is a name.
+
+
+def _built_in(name, state):
+    rule = _rule("claude_code", None, state=state)
+    return {**rule, "targets": [{"client": "claude_code", "built_in": name}]}
+
+
+def test_a_built_in_skill_is_turned_off_by_name_and_undo_restores(tmp_path):
+    home, _, _ = _home(tmp_path)
+    settings = home / ".claude/settings.json"
+    with _page(home) as page:
+        change, _, undo = _round_trip(page, _built_in("dataviz", "off"))
+        (row,) = change["rows"]
+        assert row["after"] == [{"client": "claude_code", "state": "off", "word": "Off"}]
+        assert change["target"]["scope"] == "all"
+        assert json.loads(settings.read_text())["skillOverrides"] == {"dataviz": "off"}
+        assert undo()["state"] == "undone"
+    assert settings.read_text() == USER
+
+
+def test_a_built_in_skill_goes_back_on_by_taking_its_key_out(tmp_path):
+    user = '{\n  "skillOverrides": {\n    "dataviz": "off"\n  }\n}\n'
+    home, _, _ = _home(tmp_path, user=user)
+    with _page(home) as page:
+        _round_trip(page, _built_in("dataviz", "on"))
+    assert json.loads((home / ".claude/settings.json").read_text()) == {"skillOverrides": {}}
+
+
+def test_a_built_in_rule_takes_only_a_known_name_for_all_projects_in_claude_code(tmp_path):
+    home, app, _ = _home(tmp_path)
+    with _page(home) as page:
+        # `schedule` is built in, but nobody checked that a rule reaches it; `deploy` is a file.
+        for name in ("schedule", "deploy", "no-such-skill"):
+            answer = _preview(page, _built_in(name, "off"))
+            assert answer.json()["detail"] == "Choose a known skill."
+        rule = _built_in("dataviz", "off")
+        rule["params"] |= {"scope": "project", "project": _project(page, app)}
+        assert _preview(page, rule).json()["detail"] == PROJECT_BUILT_IN
+        rule = _built_in("dataviz", "off")
+        rule["targets"] = [{"client": "codex", "built_in": "dataviz"}]
+        assert _preview(page, rule).json()["detail"] == "Choose a known skill."
+    assert (home / ".claude/settings.json").read_text() == USER
