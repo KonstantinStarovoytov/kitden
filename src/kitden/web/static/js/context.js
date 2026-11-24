@@ -725,7 +725,8 @@ function openLimit(client) {
   const param = limit.param || "fraction";
   const choices = [limit.offer, limit.back].filter(Boolean);
   const actions = choices.map((choice) => ({ node: limitButton(client, choice, choice === limit.offer, param) }));
-  // The server's quiet lines when the numbers are a count, not a replay of the chat's list.
+  // The server's quiet lines: the numbers are a count, not a replay of the chat's list, or skills
+  // the chat did not list are counted too.
   let text = null;
   if (limit.counted && limit.counted.length) {
     text = el("section", "ctx-desc");

@@ -513,7 +513,8 @@ class _Fits:
     # it cannot say which descriptions a lower limit keeps.
     at: Callable[[int], ClaudeFit | None]
     not_needed: str  # why there is nothing to raise when everything fits already
-    counted: list[str]  # Details' lines on the count; none by the rule
+    lines: list[str]  # Details' quiet lines on what was counted
+    counted: bool  # by a count, not by the rule
 
 
 def _claude_steps(
@@ -578,8 +579,8 @@ def _claude_limit(
         return limit | {"why": words.LIMIT_NOT_ESTIMATED}
     budget = claude_budget(*pair, share)
     limit["now"] = words.LIMIT_NOW.format(share=_percent(share), n=f"{budget:,}")
-    if fits.counted:
-        limit["counted"] = fits.counted
+    if fits.lines:
+        limit["counted"] = fits.lines
     skills, now = fits.skills, fits.at(budget)
     wanted = {s.name for s in skills if not s.name_only}
     if now is not None and wanted <= now.full:
@@ -686,11 +687,13 @@ def _claude_count(
 
 
 def _claude_counted(
-    rows, states, budget: int, used: int, sent: frozenset[str], changed: bool, cap: int
+    rows, extras, states, budget: int, used: int, sent: frozenset[str], changed: bool, cap: int
 ) -> _Fits:
     """`_Fits` by count, at today's limit `budget`. `used`: what the chat's list used. `sent`: the
     skills it sent inside its limit, when no setting changed since: it shows that they fit.
-    `changed`: the limit was changed after the chat."""
+    `extras`: the skills that were not in its list. `changed`: the limit was changed after it."""
+    listed = {r.name for r in rows}
+    rows = [*rows, *extras]
     skills, _ = _claude_count(rows, states, budget, cap)
     wanted = frozenset(s.name for s in skills if not s.name_only)
 
@@ -704,14 +707,21 @@ def _claude_counted(
         r.sent is None and r.full is None and states[r.name] not in ("off", "name-only")
         for r in rows
     )
-    counted = [words.LIMIT_COUNTED]
+    lines = [words.LIMIT_COUNTED]
     if unknown:
         line = _many(unknown, words.LIMIT_COUNTED_ONE, words.LIMIT_COUNTED_MANY)
-        counted.append(line.format(n=unknown, cap=f"{cap:,}"))
-    all_sent = wanted <= {r.name for r in rows if r.sent is not None}
+        lines.append(line.format(n=unknown, cap=f"{cap:,}"))
+    lines += _added_lines(extras, states)
+    all_sent = wanted & listed <= {r.name for r in rows if r.sent is not None}
     why = words.LIMIT_NOT_NEEDED if changed or all_sent else words.LIMIT_NOT_WHY
     # The limit does not count the skills added during the chat, so the list may have used more.
-    return _Fits(skills, min(used, budget), at, why, counted)
+    return _Fits(skills, min(used, budget), at, why, lines, True)
+
+
+def _added_lines(extras, states) -> list[str]:
+    """Details' line on the skills the next chat lists and the last chat did not."""
+    n = sum(states[r.name] != "off" for r in extras)
+    return [_many(n, words.LIMIT_ADDED_ONE, words.LIMIT_ADDED_MANY).format(n=n)] if n else []
 
 
 def _claude_weights(home: Path, at_ms: int) -> dict[str, float]:
@@ -941,9 +951,22 @@ def _claude(
         item = by_name.get(name)
         full = _description(item.source.path) if item else _app_description(home, name)
         rows.append(_Row(name, text, item, full, added=name in found.added))
-    states = {r.name: _state(r.item) for r in rows}
+    # The skills there that the last chat's list does not hold: the next chat lists them, unless
+    # they are off or only asked for.
+    listed = {r.name for r in rows}
+    extras = [
+        _Row(name, None, item, _description(item.source.path))
+        for name, item in by_name.items()
+        if name not in listed
+    ]
+    states = {r.name: _state(r.item) for r in [*rows, *extras]}
+    off = _not_loaded(inventory, client, found.folder, by_name)
+    off |= {name for name, state in states.items() if state in ASKED}
+    # What the next chats list: today's skills, in today's states (`rows_now`).
+    states_now = states | {name: "off" for name in states if name in off}
     # Checked against each chat: a wrong name here and the rule no longer rebuilds the list.
     rows = [replace(r, built_in=r.item is None and r.name in CLAUDE_ALWAYS_FULL) for r in rows]
+    rows_now = [*rows, *extras]
     weights = _claude_weights(home, at_ms)
 
     files = _claude_files(home, found.folder)
@@ -957,7 +980,7 @@ def _claude(
     model = CLAUDE_WINDOWS.get(found.model or "")
     window = model[0] if model else None
     budget = setting if setting is not None else (claude_budget(*model, share) if model else None)
-    base = _claude_run(rows, states, weights, budget, cap=cap) if budget else None
+    base = _claude_run(rows_now, states_now, weights, budget, cap=cap) if budget else None
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
     as_sent = _claude_run(rows, states, weights, budget, as_sent=True, cap=cap) if budget else None
     checked = as_sent is not None and as_sent[1].full == sent_full
@@ -989,7 +1012,7 @@ def _claude(
             budget = None if two_limits else claude_budget(*fits[0], share)
             pair = None if two_limits else fits[0]
             # None when a size is not known: the window is sure, an estimate is not.
-            base = _claude_run(rows, states, weights, budget, cap=cap) if budget else None
+            base = _claude_run(rows_now, states_now, weights, budget, cap=cap) if budget else None
             checked = base is not None
 
     # The limit the chat was sent under: today's, the share found above, or not known when the
@@ -1021,9 +1044,6 @@ def _claude(
         source = words.WORKED_OUT if worked_out else None
         models = " · ".join(p for p in (_model_name(found.model), found.surface, source) if p)
     windows = [_window_card(title, models, _tag(date), then_budget, fact)]
-    # Turned off since the chat (or its plugin was): not in the next chats' list, so not counted.
-    off = _not_loaded(inventory, client, found.folder, by_name)
-    states_now = states | {name: "off" for name in states if name in off}
     # What the next chats get at each limit: by the rule, or by a count when the rule does not
     # rebuild the chat (or cannot run) but its limit is known.
     fits = None
@@ -1034,19 +1054,22 @@ def _claude(
                 base[1].used,
                 lambda limit: claude_rule(base[0], limit, cap),
                 words.LIMIT_NOT_NEEDED,
-                [],
+                _added_lines(extras, states_now),
+                False,
             )
         else:
             # What the chat sent inside its limit, when no setting changed since.
             late = {r.name for r in rows if r.added or _longer_now(r, cap)}
             known = frozenset() if moved else sent_full - late
             is_new = then_share is not None
-            fits = _claude_counted(rows, states_now, budget, fact["used"], known, is_new, cap)
-    counted = fits is not None and bool(fits.counted)
+            fits = _claude_counted(
+                rows, extras, states_now, budget, fact["used"], known, is_new, cap
+            )
+    counted = fits is not None and fits.counted
 
     def count_says(states: dict[str, str], limit: int, frame: str) -> dict:
         """The estimate for a limit by a count: `result` is None where not everything fits."""
-        skills, fit = _claude_count(rows, states, limit, cap)
+        skills, fit = _claude_count(rows_now, states, limit, cap)
         if fit is None:
             say = frame.format(words.CLAUDE_WOULD_NOT_FIT.format(on=_on(window)))
             return {"say": say, "result": None, "full": frozenset()}
@@ -1086,7 +1109,7 @@ def _claude(
             budget_after = claude_budget(*pair, new_share)
         else:
             budget_after = budget
-        run = _claude_run(rows, states | changes, weights, budget_after, cap=cap)
+        run = _claude_run(rows_now, states_now | changes, weights, budget_after, cap=cap)
         if run is not None and base is not None:
             skills, fit = run
             full = base[1].full
@@ -1125,15 +1148,10 @@ def _claude(
             _seen(r.full, r.sent, side, None if r.added else _cap_then(cap, r.sent)),
         )
         skills.append(_skill(client, r.name, r.item, size, side, note, r.built_in, text, seen))
-    listed = {r.name for r in rows}
-    for item in items:
-        if _name(client, item) not in listed:
-            extra = _Row(_name(client, item), None, item, _description(item.source.path))
-            note = _claude_note(extra, _state(item), None, 0)
-            size = len(extra.full or "")
-            skills.append(
-                _skill(client, extra.name, item, size, None, note, description=extra.full)
-            )
+    for r in extras:
+        note = _claude_note(r, states[r.name], None, 0)
+        size = len(r.full or "")
+        skills.append(_skill(client, r.name, r.item, size, None, note, description=r.full))
 
     version = f" {found.version}" if found.version else ""
     surface = f" {found.surface}" if found.surface else ""

@@ -391,6 +391,9 @@ LIMIT_COUNTED_MANY = (
     "{n} skills have no description Kitden can find; they are counted at the longest, {cap} "
     "characters."
 )
+# Skills the next chat lists and the last chat did not: the limit has to hold them too.
+LIMIT_ADDED_ONE = "{n} skill was not in this chat's list; it is counted too."
+LIMIT_ADDED_MANY = "{n} skills were not in this chat's list; they are counted too."
 LIMIT_KEEPS_CHOSEN = "Skills set to Name only stay as they are."
 # Under the last chat's verdict when the share changed after that chat; an estimate follows.
 LIMIT_CHANGED = (

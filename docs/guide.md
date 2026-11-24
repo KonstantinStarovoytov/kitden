@@ -95,6 +95,9 @@ ones it would keep. The details say that it is a count, and how many skills have
 Kitden can find: those count at the longest a description can be (1,536 characters, or your
 `skillListingMaxDescChars`), so the share may be a step higher than you need.
 
+The share is for your next chats, so skills you added or turned on after the last chat are
+counted too, and the details say how many.
+
 Codex's line works the same way, in tokens: when Codex cut descriptions short or left skills
 out, drag it in steps of 500 tokens, up to 10,000, the most Codex allows; it snaps to the
 smallest limit at which no description is cut and no skill is left out. Kitden writes

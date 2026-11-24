@@ -441,6 +441,94 @@ def test_a_description_written_longer_after_the_chat_counts_as_it_is_now(home):
     assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.015
 
 
+ADDED = "1 skill was not in this chat's list; it is counted too."
+
+
+def near_chat(home):
+    """As counted_chat, with all ten at exactly 12,000 characters: 1.5% fits them."""
+    counted_chat(home)
+    skill(home / ".claude/skills", "j", TEXT[: 1200 - 59])
+
+
+def test_a_skill_added_after_the_chat_moves_the_counted_offer_up(home):
+    near_chat(home)
+    assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.015
+    # 5 + 4 + 1,536 + 1 characters more: 13,546.
+    skill(home / ".claude/skills", "later", "y" * 2_000)
+    cc = view(home)["claude_code"]
+    limit = cc["limit"]
+    assert limit["offer"]["fraction"] == 0.02
+    assert limit["offer"]["say"] == "2%: all 11 skills get their description"
+    assert limit["steps"][2]["say"].startswith("2% · all 11 fit · ")
+    assert limit["counted"] == [REPLAY, ADDED] and ADDED in cc["how"]
+    # It is still no skill of the chat.
+    assert cc["windows"][0]["result"]["say"].startswith("In your last chat on Nov 6, 4 of 10 ")
+    # Turned off in the tray, it is not in the next list.
+    draft = {"claude_code": {"later": "off"}, "limits": {"claude_code": 0.015}}
+    after = view(home, draft=draft)["claude_code"]["after"]
+    assert "every skill would keep its description" in after["say"]
+    assert "later" not in after["result"]["sent"]
+
+
+@pytest.mark.parametrize("state", ["off", "user-invocable-only"])
+def test_a_skill_added_after_the_chat_that_is_not_listed_changes_nothing(home, state):
+    near_chat(home)
+    skill(home / ".claude/skills", "later", "y" * 2_000)
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"later": state}})
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["offer"]["fraction"] == 0.015
+    assert limit["offer"]["say"] == "1.5%: all 10 skills get their description"
+    assert limit["counted"] == [REPLAY]
+
+
+def test_an_added_skill_that_asks_to_be_named_by_the_person_changes_nothing(home):
+    near_chat(home)
+    asked = "disable-model-invocation: true\n"
+    skill(home / ".claude/skills", "later", "y" * 2_000, extra=asked)
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["offer"]["fraction"] == 0.015 and limit["counted"] == [REPLAY]
+
+
+def test_an_added_skill_set_to_name_only_counts_as_a_name(home):
+    counted_chat(home)
+    # 12,059 - 67 = 11,992 characters, and 5 + 2 + 1 for the name: 12,000.
+    skill(home / ".claude/skills", "j", TEXT[: 1200 - 67])
+    skill(home / ".claude/skills", "later", "y" * 2_000)
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"later": "name-only"}})
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["offer"]["fraction"] == 0.015
+    assert limit["offer"]["say"] == "1.5%: all 10 skills get their description"
+    assert limit["counted"] == [REPLAY, ADDED]
+
+
+def test_skills_added_after_a_chat_the_rule_rebuilds_move_its_offer_too(home):
+    cut_chat(home)
+    for n in "123":
+        skill(home / ".claude/skills", f"later{n}", TEXT)
+    cc = view(home, draft={"limits": {"claude_code": 0.015}})["claude_code"]
+    # 8,446 + 3 x (6 + 4 + 1,200 + 1) = 12,079 characters, over 12,000.
+    assert cc["checked"] and cc["windows"][0]["result"]["misfit"]["n"] == 1
+    limit = cc["limit"]
+    assert limit["offer"]["fraction"] == 0.02
+    assert limit["offer"]["say"] == "2%: all 10 skills get their description"
+    assert limit["steps"][0]["say"] == "1% now · 4 of 10 show only a name"
+    assert limit["counted"] == ["3 skills were not in this chat's list; they are counted too."]
+    # The estimate after Apply agrees with the place on the line.
+    assert limit["steps"][1]["say"].startswith("1.5% · 1 of 10 show only a name")
+    assert "1 of 10 skills would show only a name" in cc["after"]["say"]
+
+
+def test_skills_added_after_a_chat_that_fitted_can_call_for_a_higher_limit(home):
+    for name in NAMES[:-1]:
+        skill(home / ".claude/skills", name, TEXT)
+    claude_chat(home, dict.fromkeys(NAMES[:-1], TEXT), model="claude-sonnet-4-6")
+    cc = view(home)["claude_code"]
+    assert cc["checked"] and cc["limit"]["why"] == words.LIMIT_NOT_NEEDED
+    skill(home / ".claude/skills", "later", TEXT)
+    cc = view(home)["claude_code"]
+    assert cc["checked"] and cc["limit"]["offer"]["fraction"] == 0.015
+
+
 def test_a_chat_the_rule_rebuilds_says_nothing_of_a_count(home):
     cut_chat(home)
     cc = view(home)["claude_code"]
