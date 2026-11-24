@@ -6,7 +6,7 @@ from math import ceil
 from kitden.context.tables import (
     CLAUDE_DESCRIPTION_CAP,
     CLAUDE_SHARE,
-    CLAUDE_SHARE_STEPS,
+    CLAUDE_SHARES,
     CODEX_DESCRIPTION_CAP,
     CODEX_INTRO,
     CODEX_INTRO_ROOTS,
@@ -42,18 +42,21 @@ def claude_budget(window: int, per_token: int, share: float = CLAUDE_SHARE) -> i
     return int(window * per_token * share)
 
 
-def on_share_grid(value: object) -> bool:
-    """A share of the window Kitden may write: a number (not true or false) above 0, at most 1,
-    in steps of half a percent."""
-    if not isinstance(value, int | float) or isinstance(value, bool) or not 0 < value <= 1:
-        return False
-    steps = value * CLAUDE_SHARE_STEPS
-    return abs(steps - round(steps)) < 1e-6
+def same_share(a: float, b: float) -> bool:
+    """Two shares are the same share, whatever the float noise (0.1 * 0.11 and 0.011)."""
+    return abs(a - b) < 1e-9
 
 
-def grid_share(steps: int) -> float:
-    """The share of `steps` half percents, as Kitden writes it: 3 is 0.015."""
-    return round(steps / CLAUDE_SHARE_STEPS, 4)
+def listed_share(value: object) -> float | None:
+    """The share on Kitden's list that `value` is (a number, not true or false), else None."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return None
+    return next((share for share in CLAUDE_SHARES if same_share(value, share)), None)
+
+
+def shares_above(share: float) -> list[float]:
+    """The shares on the list above `share`, smallest first. `share` need not be on the list."""
+    return [listed for listed in CLAUDE_SHARES if listed > share and not same_share(listed, share)]
 
 
 def claude_weight(count: float, last_used_ms: float, at_ms: int) -> float:

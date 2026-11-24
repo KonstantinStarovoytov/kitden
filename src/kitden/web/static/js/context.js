@@ -31,9 +31,14 @@ const HOW = "How this is counted";
 const LIMIT = { kind: "Setting", title: "Skill list limit", now: "Now", offer: "Suggested", cost: "Cost", next: "Next chats", today: "Limit now" };
 // The pointer snaps to the suggested place within SNAP of it, in % of the bar. The places past the
 // furthest one the bar is drawn to (`reach`) share the bar's last part, not to scale: each sends
-// the same list, and the readout gives their numbers.
+// the same list, and the readout gives their numbers. Each of them has at least PAST_GAP % of the
+// bar (about 15 px at 800 px, a little more than the handle is wide), so the twelve places of the
+// list stay apart; the bar is drawn wider than `reach` by `roomFor` to make that room.
 const SNAP = 2;
 const PAST_ROOM = 1.3;
+const PAST_MOST = 1.5;
+const PAST_GAP = 3;
+const PAST_END = 98;
 // How far a press on the handle moves before it is a drag: less is a press that opens Details.
 const DRAG_START = 4;
 // The skill list's slice of the window strip, in %: a drawing, not a measure.
@@ -192,7 +197,7 @@ function zoom(card, w, r, at, heat, control = null) {
   // With the limit control, the bar also has room for the place that fits everything and for the
   // new limit, so the line can be dragged there; a place further right is past the bar's end.
   const reach = control ? control.reach : 0;
-  const scale = Math.max(top + total(over), reach * (control && control.beyond ? PAST_ROOM : 1.04)) || 1;
+  const scale = Math.max(top + total(over), reach * roomFor(control ? control.beyond : 0)) || 1;
   const pct = (n) => (n / scale) * 100;
   const spots = new Map();
   const place = (node, key, from, size) => {
@@ -596,10 +601,18 @@ export function stepAt(control, x, pct) {
   return best;
 }
 
+// How much wider than `reach` the bar is drawn, with `beyond` places past it: 4% more for a picture
+// of the place itself, else PAST_ROOM, or more to give each place past it PAST_GAP % of the bar
+// (up to PAST_MOST: Codex's twenty places keep most of the bar to scale).
+export function roomFor(beyond) {
+  if (!beyond) return 1.04;
+  return Math.min(PAST_MOST, Math.max(PAST_ROOM, 100 / (PAST_END - PAST_GAP * beyond)));
+}
+
 // Where each place is, in % of the bar: to scale up to `reach`, then spread evenly up to 98%.
-function placesOf(control, pct) {
+export function placesOf(control, pct) {
   const from = pct(control.reach);
-  const room = Math.max(0, 98 - from);
+  const room = Math.max(0, PAST_END - from);
   let past = 0;
   return control.steps.map((s) => (s.limit <= control.reach ? pct(s.limit) : from + (room * ++past) / control.beyond));
 }

@@ -473,7 +473,7 @@ TOKENS = "{n} tokens"
 # A `skill.limit` row the server refuses.
 LIMIT_CLAUDE_ONLY = "Kitden changes the skill list limit for Claude Code and Codex only."
 CODEX_LIMIT_BAD = "Codex's skill list limit must be in steps of 500 tokens, up to 10,000."
-LIMIT_BAD_SHARE = "The skill list limit must be a share of the window in steps of 0.5%, up to 100%."
+LIMIT_BAD_SHARE = "The skill list limit must be one of the shares Kitden offers, or the default."
 # The review's line for Claude Code after a `skill.limit` change.
 LIMIT_AFTER = "Limit {share}"
 LIMIT_AFTER_DEFAULT = "Limit {share}, the default"

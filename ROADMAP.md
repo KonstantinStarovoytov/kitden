@@ -15,8 +15,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   where it comes from and why (#193).
 - **Raise Claude Code's skill list limit from the Context page:** when skills showed only a
   name because the list ran out of room, drag the limit line on the skill list's bar (or use
-  the arrow keys) to see what each step gives, snap to the smallest share that fits every
-  description, and set it with a preview, a backup and Undo; its label opens the details. It
+  the arrow keys) to see what each step gives (1% up to 4%, in twelve places, finer while the
+  list is small), snap to the first share that fits every description, and set it with a preview, a backup and Undo; its label opens the details. It
   works also when Kitden cannot replay the last chat's list: it then counts what all
   descriptions need and says so.
   Codex's line does the same in tokens, for `[skills] max_context_tokens`.

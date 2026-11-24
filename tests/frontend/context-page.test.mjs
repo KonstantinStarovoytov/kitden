@@ -111,7 +111,7 @@ const quietly = async (fn) => {
   try { return await fn(); } finally { console.error = log; }
 };
 
-const { renderContext } = await import('../../src/kitden/web/static/js/context.js');
+const { controlOf, placesOf, renderContext, roomFor, stepAt } = await import('../../src/kitden/web/static/js/context.js');
 const { arrival, data, loadContext, reload, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { cancelTray, CONTEXT_NOTE, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { closePanel } = await import('../../src/kitden/web/static/js/panel.js');
@@ -709,6 +709,87 @@ test('keys move the handle place by place; Enter commits, Esc cancels, Enter wit
   await fire(handle, 'keydown', { key: 'Enter' });
   await flush();
   assert.deepEqual(asked.find((a) => a.url === PREVIEW).body.requests[0].params, { fraction: 0.015 });
+});
+
+// The real list of shares (CLAUDE_SHARES in kitden.context.tables) on TIGHT's window: 1% is 8,000
+// characters, so a share is its percent times 800,000.
+const SHARES = [0.01, 0.011, 0.012, 0.013, 0.014, 0.015, 0.017, 0.02, 0.025, 0.03, 0.035, 0.04];
+const SAY = (share, n) => `${Number((share * 100).toFixed(2))}%`;
+const LIST_STEPS = SHARES.map((value, i) => ({
+  value,
+  limit: Math.round(value * 800000),
+  short: i === 0 ? 1 : 0,
+  say: i === 0 ? '1% now · 1 of 3 show only a name' : `${SAY(value)} · all 3 fit · about 3,000 more characters per chat`,
+  ...(i === 0 ? { now: true } : {}),
+}));
+const LIST_LIMIT = { ...LIMIT, offer: { ...LIMIT.offer, fraction: 0.011, label: 'Set to 1.1%', say: '1.1%: all 3 skills get their description' }, steps: LIST_STEPS };
+// The bar of TIGHT with this list: the suggested place is 1.1% (8,800), ten places lie past it.
+const LIST_SCALE = Math.max(11000, 8800 * roomFor(10));
+const listSpots = () => placesOf(controlOf({ client: 'claude_code', limit: LIST_LIMIT }), (n) => (n / LIST_SCALE) * 100);
+
+test('the twelve places of the list are read out in order, 1.1% and 1.7% among them', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, limit: LIST_LIMIT }, CODEX, CURSOR));
+  const handle = grip();
+  const said = [];
+  for (let n = 0; n < 11; n += 1) {
+    await fire(handle, 'keydown', { key: 'ArrowRight' });
+    said.push(text(readout()));
+  }
+  assert.deepEqual(said.map((say) => say.split(' ')[0]), ['1.1%', '1.2%', '1.3%', '1.4%', '1.5%', '1.7%', '2%', '2.5%', '3%', '3.5%', '4%']);
+  assert.equal(said[0], '1.1% · all 3 fit · about 3,000 more characters per chat');
+  assert.equal(said[5], '1.7% · all 3 fit · about 3,000 more characters per chat');
+  assert.equal(handle.getAttribute('aria-valuenow'), '32000');
+  // The last place is the end of the list: another key moves nothing.
+  await fire(handle, 'keydown', { key: 'ArrowRight' });
+  assert.equal(handle.getAttribute('aria-valuenow'), '32000');
+  await fire(handle, 'keydown', { key: 'Escape', stopPropagation() {} });
+});
+
+test('a drag goes through the first three places and releases on the third; one on 1.7% adds that row', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, limit: LIST_LIMIT }, CODEX, CURSOR));
+  const spots = listSpots();
+  const handle = grip();
+  await fire(handle, 'pointerdown', at(spots[0]));
+  const said = [];
+  for (const spot of [spots[0] + 2, spots[1], spots[2]]) {
+    await fire(handle, 'pointermove', at(spot));
+    said.push(text(readout()).split(' · ')[0]);
+  }
+  assert.deepEqual(said, ['1% now', '1.1%', '1.2%']);
+  // Further, to the place of 1.7%.
+  await fire(handle, 'pointermove', at(spots[6]));
+  assert.equal(text(readout()), '1.7% · all 3 fit · about 3,000 more characters per chat');
+  queue(PREVIEW, previewed('c1'));
+  queue(`/api/context?draft=${encodeURIComponent(JSON.stringify({ limits: { claude_code: 0.017 } }))}`, { status: 200, json: answer({ ...TIGHT, limit: LIST_LIMIT, after: LIMIT_AFTER }, CODEX, CURSOR) });
+  await fire(handle, 'pointerup', { ...at(spots[6]), type: 'pointerup' });
+  await flush();
+  assert.deepEqual(asked.find((a) => a.url === PREVIEW).body.requests[0].params, { fraction: 0.017 });
+  assert.equal(text(byClass(main, 'ctx-next-tag')[0]), 'Next chats: 13,600 characters');
+});
+
+test('the places stay apart on the bar whichever place is suggested, and the snap keeps the suggested one', () => {
+  // A 600 px bar: 2.3 % is 14 px, wider than the handle (12 px).
+  for (const offered of [1, 4, 11]) {
+    const reach = LIST_STEPS[offered].limit;
+    const beyond = LIST_STEPS.filter((step) => step.limit > reach).length;
+    const scale = Math.max(11000, reach * roomFor(beyond));
+    const control = { steps: LIST_STEPS, here: 0, at: 0, offered, reach, beyond };
+    const spots = placesOf(control, (n) => (n / scale) * 100);
+    const gaps = spots.slice(1).map((spot, i) => spot - spots[i]);
+    assert.ok(Math.min(...gaps) >= 2.3, `offered ${offered}: ${gaps.map((gap) => gap.toFixed(2))}`);
+    assert.ok(spots.at(-1) <= 98 + 1e-9 && spots[0] > 0);
+    // At the suggested place's own spot and within SNAP of it, the suggested place.
+    assert.equal(stepAt(control, spots[offered], (n) => (n / scale) * 100), offered);
+    assert.equal(stepAt(control, spots[offered] + 1.9, (n) => (n / scale) * 100), offered);
+    // The places on both sides can be had with the pointer.
+    for (const i of [offered - 1, offered + 1].filter((n) => n >= 0 && n < 12)) {
+      assert.equal(stepAt(control, spots[i], (n) => (n / scale) * 100), i);
+    }
+  }
 });
 
 test('with a share above the default, the line drags back to 1% and adds the Back row; a changed limit is said under the verdict', async () => {

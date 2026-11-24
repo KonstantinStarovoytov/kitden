@@ -8,7 +8,8 @@ import os
 
 import pytest
 
-from kitden.context.rules import on_share_grid
+from kitden.context.rules import listed_share, same_share, shares_above
+from kitden.context.tables import CLAUDE_SHARE, CLAUDE_SHARES
 from kitden.views import words
 from tests.unit.test_context_claude_log import assistant, list_entry, write_chat
 from tests.unit.test_context_view import LONG, claude_chat, skill, usage, view, write_json
@@ -36,7 +37,7 @@ def cut_chat(home, **kw):
     claude_chat(home, sent, model="claude-sonnet-4-6", **kw)
 
 
-def test_the_page_offers_the_smallest_half_percent_that_fits_every_description(home):
+def test_the_page_offers_the_first_share_on_the_list_that_fits_every_description(home):
     cut_chat(home)
     cc = view(home)["claude_code"]
     assert cc["checked"] and cc["windows"][0]["result"]["misfit"]["n"] == 1
@@ -45,9 +46,9 @@ def test_the_page_offers_the_smallest_half_percent_that_fits_every_description(h
     assert cc["limit"] == {
         "now": "1% of the context window: 8,000 characters",
         "offer": {
-            "fraction": 0.015,
-            "label": "Set to 1.5%",
-            "say": "1.5%: all 7 skills get their description",
+            "fraction": 0.011,
+            "label": "Set to 1.1%",
+            "say": "1.1%: all 7 skills get their description",
             # 8,446 - 7,239 characters, at 4 characters per token
             "cost": "About 1,200 more characters in every chat (about 300 tokens)",
         },
@@ -59,8 +60,8 @@ def test_the_page_offers_the_smallest_half_percent_that_fits_every_description(h
         "why": None,
     }
     assert not any(line.startswith("Kitden does not offer") for line in cc["how"])
-    # The limit line's places: today's, then each 0.5% up to 5%, with what each gives.
-    assert [s["value"] for s in steps] == [0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
+    # The limit line's places: today's, then each share on the list up to 4%, with what each gives.
+    assert [s["value"] for s in steps] == list(CLAUDE_SHARES)
     assert steps[0] == {
         "value": 0.01,
         "limit": 8_000,
@@ -69,24 +70,84 @@ def test_the_page_offers_the_smallest_half_percent_that_fits_every_description(h
         "now": True,
     }
     assert steps[1] == {
-        "value": 0.015,
-        "limit": 12_000,
+        "value": 0.011,
+        "limit": 8_800,
         "short": 0,
-        "say": "1.5% · all 7 fit · about 1,200 more characters per chat",
+        "say": "1.1% · all 7 fit · about 1,200 more characters per chat",
     }
-    assert steps[-1]["limit"] == 40_000 and steps[-1]["short"] == 0
+    assert steps[-1]["limit"] == 32_000 and steps[-1]["short"] == 0
 
 
 def test_a_share_above_the_default_offers_the_next_step_and_back(home):
     cut_chat(home)
     write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.0105})
     cc = view(home)["claude_code"]
-    # 0.0105 of 800,000 is 8,400: the same list as the chat, so the check holds.
+    # 0.0105 of 800,000 is 8,400: the same list as the chat, so the check holds. It is off the
+    # list, and 1.1% (8,800) is the first share above it.
     assert cc["checked"]
     limit = cc["limit"]
     assert limit["now"] == "1.05% of the context window: 8,400 characters"
-    assert limit["offer"]["fraction"] == 0.015
+    assert limit["offer"]["fraction"] == 0.011
     assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
+    assert [s["value"] for s in limit["steps"]] == ["default", 0.0105, *CLAUDE_SHARES[1:]]
+
+
+def manifold_chat(home, names):
+    """`names` skills of 1,200 characters on a 200K window (8,000 characters at 1%); the six most
+    used got their description. All of them take about 1,207 characters each."""
+    for name in names:
+        skill(home / ".claude/skills", name, TEXT)
+    usage(home, {name: 100 - i for i, name in enumerate(names)})
+    sent = {name: TEXT if i < 6 else None for i, name in enumerate(names)}
+    claude_chat(home, sent, model="claude-sonnet-4-6")
+
+
+def test_a_share_off_the_list_still_works_and_offers_the_list_values_above_it(home):
+    # 25 skills take about 30,200 characters: 3.5% (28,000) is not enough, 4% (32,000) is.
+    manifold_chat(home, [f"s{i:02}" for i in range(25)])
+    # 0.0375 is not on the list (an older build or a hand wrote it): it is the limit now.
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.0375})
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["now"] == "3.75% of the context window: 30,000 characters"
+    assert limit["offer"]["fraction"] == 0.04
+    assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
+    values = [s["value"] for s in limit["steps"]]
+    assert values == ["default", 0.0375, 0.04]
+    assert [s["now"] for s in limit["steps"] if s.get("now")] == [True]
+
+
+def test_a_share_of_four_and_a_half_percent_is_read_and_offers_only_back(home):
+    # 0.045 was a valid share before the list had a ceiling of 4%; it is read, never refused.
+    manifold_chat(home, [f"s{i:02}" for i in range(40)])
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.045})
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["now"] == "4.5% of the context window: 36,000 characters"
+    assert limit["offer"] is None
+    assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
+    assert [s["value"] for s in limit["steps"]] == ["default", 0.045]
+    assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="4.5%")
+
+
+def test_a_share_of_five_percent_is_above_the_ceiling_with_nothing_to_raise(home):
+    manifold_chat(home, [f"s{i:02}" for i in range(40)])
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.05})
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["now"] == "5% of the context window: 40,000 characters"
+    assert limit["offer"] is None
+    assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
+    assert [s["value"] for s in limit["steps"]] == ["default", 0.05]
+    assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="5%")
+
+
+def test_a_share_above_the_ceiling_that_fits_everything_offers_only_back(home):
+    cut_chat(home)
+    for share, now in ((0.045, "4.5%"), (0.05, "5%")):
+        write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": share})
+        limit = view(home)["claude_code"]["limit"]
+        assert limit["now"].startswith(f"{now} of the context window")
+        assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+        assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
+        assert [s["value"] for s in limit["steps"]] == ["default", share]
 
 
 def test_name_only_skills_keep_their_state_in_the_suggestion(home):
@@ -102,7 +163,7 @@ def test_name_only_skills_keep_their_state_in_the_suggestion(home):
     claude_chat(home, sent, model="claude-sonnet-4-6")
     cc = view(home)["claude_code"]
     offer = cc["limit"]["offer"]
-    assert offer["say"] == "1.5%: all 7 skills get their description"
+    assert offer["say"] == "1.1%: all 7 skills get their description"
     assert cc["limit"]["note"].startswith("Skills set to Name only stay as they are. ")
 
 
@@ -173,26 +234,91 @@ def test_not_offered_when_the_window_is_not_known(home):
     )
 
 
-def test_not_offered_past_five_percent(home):
-    names = [f"s{i:02}" for i in range(40)]
-    for name in names:
-        skill(home / ".claude/skills", name, TEXT)
-    usage(home, {name: 100 - i for i, name in enumerate(names)})
-    # 8,000 characters fit 6 descriptions; all 40 take about 48,000, past 5% (40,000).
-    sent = {name: TEXT if i < 6 else None for i, name in enumerate(names)}
-    claude_chat(home, sent, model="claude-sonnet-4-6")
+def test_not_offered_past_four_percent(home):
+    # 8,000 characters fit 6 descriptions; all 40 take about 48,000, past 4% (32,000).
+    manifold_chat(home, [f"s{i:02}" for i in range(40)])
     cc = view(home)["claude_code"]
     assert cc["checked"]
     assert cc["limit"]["why"] == (
-        "Kitden does not offer a new skill list limit: even 5% of the window would not fit every "
+        "Kitden does not offer a new skill list limit: even 4% of the window would not fit every "
         "description. Set some skills to Name only or Off."
     )
 
 
-def test_the_share_grid():
-    assert on_share_grid(0.015) and on_share_grid(0.05) and on_share_grid(1)
-    for bad in (True, False, 0, -0.005, 0.0123, 1.005, "0.015", None, float("nan")):
-        assert not on_share_grid(bad), bad
+@pytest.mark.parametrize(
+    ("length", "sent", "share"),
+    [
+        (1091, 27, 0.011),  # 32,969 characters: 1.1% (33,000) is enough
+        (1392, 21, 0.014),  # 41,999: just under 1.4% (42,000)
+        (1393, 21, 0.015),  # 42,029: just over it, so 1.5%
+    ],
+)
+def test_the_suggestion_is_the_first_share_that_holds_the_whole_list(home, length, sent, share):
+    # 30 skills of "s00" to "s29", each a 3-character name, `length` characters of description,
+    # 4 characters of ": " and the dash, and 29 line breaks: 239 + 30 x length. A 1M window at
+    # 3 characters per token (30,000 characters at 1%); the chat gave the first `sent` a
+    # description, and the rest only a name.
+    names = [f"s{i:02}" for i in range(30)]
+    text = "x" * length
+    for name in names:
+        skill(home / ".claude/skills", name, text)
+    usage(home, {name: 100 - i for i, name in enumerate(names)})
+    claude_chat(home, {name: text if i < sent else None for i, name in enumerate(names)})
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["now"] == "1% of the context window: 30,000 characters"
+    assert limit["offer"]["fraction"] == share
+    assert limit["offer"]["say"] == f"{words.percent(share)}: all 30 skills get their description"
+    fits = {step["value"]: step["short"] for step in limit["steps"]}
+    assert all(short for value, short in fits.items() if value < share)
+    assert fits[share] == 0
+
+
+def test_the_share_list():
+    # The one list: exact values, smallest first, the default first, 4% the most.
+    assert CLAUDE_SHARES == (
+        0.01,
+        0.011,
+        0.012,
+        0.013,
+        0.014,
+        0.015,
+        0.017,
+        0.02,
+        0.025,
+        0.03,
+        0.035,
+        0.04,
+    )
+    assert list(CLAUDE_SHARES) == sorted(set(CLAUDE_SHARES))
+    assert CLAUDE_SHARES[0] == CLAUDE_SHARE
+    assert [words.percent(share) for share in CLAUDE_SHARES] == [
+        "1%",
+        "1.1%",
+        "1.2%",
+        "1.3%",
+        "1.4%",
+        "1.5%",
+        "1.7%",
+        "2%",
+        "2.5%",
+        "3%",
+        "3.5%",
+        "4%",
+    ]
+
+
+def test_a_share_is_on_the_list_or_it_is_not():
+    for share in CLAUDE_SHARES:
+        assert listed_share(share) == share
+    # Float noise is the same share; the list's own value comes back.
+    assert listed_share(0.011 + 1e-12) == 0.011 and listed_share(0.1 * 0.17) == 0.017
+    for bad in (True, False, 0, -0.01, 0.016, 0.045, 0.05, 1, 1.5, "0.015", None, float("nan")):
+        assert listed_share(bad) is None, bad
+    assert same_share(0.011, 0.011 + 1e-12) and not same_share(0.011, 0.012)
+    assert shares_above(0.01) == list(CLAUDE_SHARES[1:])
+    assert shares_above(0.0105) == list(CLAUDE_SHARES[1:])
+    assert shares_above(0.0150000000001) == list(CLAUDE_SHARES[6:])
+    assert shares_above(0.04) == [] and shares_above(0.05) == []
 
 
 # The change itself
@@ -240,7 +366,7 @@ def test_back_to_the_default_takes_the_key_out(home):
 def test_the_server_refuses_a_share_it_would_not_offer(home):
     write_json(home / ".claude/settings.json", {})
     with _page(home) as page:
-        for bad in (True, 1.5, 0, 0.0123, "0.015", None):
+        for bad in (True, 1, 1.5, 0, 0.016, 0.045, 0.05, 0.0123, "0.015", None):
             answer = _preview(page, _limit(bad))
             assert answer.status_code == 422
             assert answer.json() == {"detail": words.LIMIT_BAD_SHARE, "row": "r1"}, bad
@@ -248,6 +374,22 @@ def test_the_server_refuses_a_share_it_would_not_offer(home):
         assert answer.json() == {"detail": words.LIMIT_CLAUDE_ONLY, "row": "r1"}
         # Taking out a key that is not there changes nothing.
         assert _preview(page, _limit("default")).status_code == 422
+
+
+def test_the_server_accepts_every_share_on_the_list(home):
+    write_json(home / ".claude/settings.json", {})
+    with _page(home) as page:
+        for share in CLAUDE_SHARES:
+            answer = _preview(page, _limit(share))
+            assert answer.status_code == 200, (share, answer.text)
+
+
+def test_a_share_a_hair_off_the_list_is_written_as_the_lists_own_value(home):
+    settings = home / ".claude/settings.json"
+    write_json(settings, {})
+    with _page(home) as page:
+        _round_trip(page, _limit(0.017 + 1e-12))
+        assert json.loads(settings.read_text()) == {"skillListingBudgetFraction": 0.017}
 
 
 def test_a_bad_limit_in_the_draft_is_refused(home):
@@ -334,9 +476,11 @@ def test_a_hand_written_true_is_replaced_and_undo_puts_it_back(home):
     before = '{\n  "skillListingBudgetFraction": true\n}\n'
     settings.write_text(before)
     with _page(home) as page:
-        # In Python True == 1: the change must still write 1, not say there is nothing to change.
-        _, _, undo = _round_trip(page, _limit(1))
-        assert json.loads(settings.read_text()) == {"skillListingBudgetFraction": 1}
+        # A hand-written `true` is no share: it is replaced by one on the list. 1 (100%) is no
+        # longer on the list, and in Python True == 1 must not get it through.
+        assert _preview(page, _limit(1)).status_code == 422
+        _, _, undo = _round_trip(page, _limit(0.011))
+        assert json.loads(settings.read_text()) == {"skillListingBudgetFraction": 0.011}
         assert undo()["state"] == "undone"
     assert settings.read_text() == before
 
@@ -393,30 +537,36 @@ def test_a_chat_the_rule_does_not_rebuild_gets_the_first_share_that_fits_the_cou
     assert limit["now"] == "1% of the context window: 8,000 characters"
     assert limit["why"] is None
     assert limit["offer"] == {
-        "fraction": 0.02,  # 16,000; 1.5% is 12,000, under 12,059
-        "label": "Set to 2%",
-        "say": "2%: all 10 skills get their description",
+        "fraction": 0.017,  # 13,600; 1.5% is 12,000, under 12,059
+        "label": "Set to 1.7%",
+        "say": "1.7%: all 10 skills get their description",
         # 12,059 - 7,251 characters, at 4 characters per token
         "cost": "About 4,800 more characters in every chat (about 1,200 tokens)",
     }
     # A count cannot say which skills a lower limit keeps.
-    assert limit["steps"][:3] == [
-        {
-            "value": 0.01,
-            "limit": 8_000,
-            "short": None,
-            "say": "1% now · not all fit",
-            "now": True,
-        },
-        {"value": 0.015, "limit": 12_000, "short": None, "say": "1.5% · not all fit"},
-        {
-            "value": 0.02,
-            "limit": 16_000,
-            "short": 0,
-            "say": "2% · all 10 fit · about 4,800 more characters per chat",
-        },
-    ]
-    assert [s["short"] for s in limit["steps"][2:]] == [0] * 7
+    places = {step["value"]: step for step in limit["steps"]}
+    assert list(places) == list(CLAUDE_SHARES)
+    assert places[0.01] == {
+        "value": 0.01,
+        "limit": 8_000,
+        "short": None,
+        "say": "1% now · not all fit",
+        "now": True,
+    }
+    assert places[0.015] == {
+        "value": 0.015,
+        "limit": 12_000,
+        "short": None,
+        "say": "1.5% · not all fit",
+    }
+    assert places[0.017] == {
+        "value": 0.017,
+        "limit": 13_600,
+        "short": 0,
+        "say": "1.7% · all 10 fit · about 4,800 more characters per chat",
+    }
+    assert [places[share]["short"] for share in CLAUDE_SHARES[:6]] == [None] * 6
+    assert [places[share]["short"] for share in CLAUDE_SHARES[6:]] == [0] * 6
     assert limit["counted"] == [REPLAY] and REPLAY in cc["how"]
     assert not any(line.startswith("Kitden does not offer") for line in cc["how"])
 
@@ -427,7 +577,7 @@ def test_a_count_that_is_exactly_the_limit_fits_and_one_character_more_does_not(
     skill(home / ".claude/skills", "j", TEXT[: 1200 - 59])
     assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.015
     skill(home / ".claude/skills", "j", TEXT[: 1200 - 58])
-    assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.02
+    assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.017
 
 
 def command_chat(home):
@@ -451,7 +601,7 @@ def test_the_count_holds_the_commands_the_list_shows_after_names(home):
     assert (offer["fraction"], offer["say"]) == (0.015, "1.5%: all 10 skills get their description")
     skill(home / ".claude/skills", "j", TEXT[: 1200 - 68])
     offer = view(home)["claude_code"]["limit"]["offer"]
-    assert (offer["fraction"], offer["say"]) == (0.02, "2%: all 10 skills get their description")
+    assert (offer["fraction"], offer["say"]) == (0.017, "1.7%: all 10 skills get their description")
 
 
 def test_the_place_where_a_list_ends_counts_the_commands_after_names(home):
@@ -468,7 +618,7 @@ def test_a_description_written_longer_after_the_chat_counts_as_it_is_now(home):
     skill(home / ".claude/skills", "j", TEXT[: 1200 - 59])
     # 12,000 in all at 1.5%; b's file, sent with 1,200 characters, has 1,290 now.
     skill(home / ".claude/skills", "b", LONG)
-    assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.02
+    assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.017
     # A shorter file counts as what was sent: the worst case.
     skill(home / ".claude/skills", "b", TEXT[:100])
     assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.015
@@ -490,9 +640,11 @@ def test_a_skill_added_after_the_chat_moves_the_counted_offer_up(home):
     skill(home / ".claude/skills", "later", "y" * 2_000)
     cc = view(home)["claude_code"]
     limit = cc["limit"]
-    assert limit["offer"]["fraction"] == 0.02
-    assert limit["offer"]["say"] == "2%: all 11 skills get their description"
-    assert limit["steps"][2]["say"].startswith("2% · all 11 fit · ")
+    assert limit["offer"]["fraction"] == 0.017
+    assert limit["offer"]["say"] == "1.7%: all 11 skills get their description"
+    assert next(s for s in limit["steps"] if s["value"] == 0.017)["say"].startswith(
+        "1.7% · all 11 fit · "
+    )
     assert limit["counted"] == [REPLAY, ADDED] and ADDED in cc["how"]
     # It is still no skill of the chat.
     assert cc["windows"][0]["result"]["say"].startswith("In your last chat on Nov 6, 4 of 10 ")
@@ -542,12 +694,13 @@ def test_skills_added_after_a_chat_the_rule_rebuilds_move_its_offer_too(home):
     # 8,446 + 3 x (6 + 4 + 1,200 + 1) = 12,079 characters, over 12,000.
     assert cc["checked"] and cc["windows"][0]["result"]["misfit"]["n"] == 1
     limit = cc["limit"]
-    assert limit["offer"]["fraction"] == 0.02
-    assert limit["offer"]["say"] == "2%: all 10 skills get their description"
+    assert limit["offer"]["fraction"] == 0.017
+    assert limit["offer"]["say"] == "1.7%: all 10 skills get their description"
     assert limit["steps"][0]["say"] == "1% now · 4 of 10 show only a name"
     assert limit["counted"] == ["3 skills were not in this chat's list; they are counted too."]
     # The estimate after Apply agrees with the place on the line.
-    assert limit["steps"][1]["say"].startswith("1.5% · 1 of 10 show only a name")
+    step = next(s for s in limit["steps"] if s["value"] == 0.015)
+    assert step["say"].startswith("1.5% · 1 of 10 show only a name")
     assert "1 of 10 skills would show only a name" in cc["after"]["say"]
 
 
@@ -559,7 +712,7 @@ def test_skills_added_after_a_chat_that_fitted_can_call_for_a_higher_limit(home)
     assert cc["checked"] and cc["limit"]["why"] == words.LIMIT_NOT_NEEDED
     skill(home / ".claude/skills", "later", TEXT)
     cc = view(home)["claude_code"]
-    assert cc["checked"] and cc["limit"]["offer"]["fraction"] == 0.015
+    assert cc["checked"] and cc["limit"]["offer"]["fraction"] == 0.011
 
 
 def test_a_chat_the_rule_rebuilds_says_nothing_of_a_count(home):
@@ -591,7 +744,7 @@ def test_a_chat_with_one_skill_of_unknown_size_gets_an_offer(home):
     sent = dict.fromkeys(NAMES[:-1], TEXT) | {"g": None, "ghost": None}
     claude_chat(home, sent, model="claude-sonnet-4-6")
     limit = view(home)["claude_code"]["limit"]
-    assert limit["offer"]["fraction"] == 0.015  # 8,446 + 1,546 = 9,992
+    assert limit["offer"]["fraction"] == 0.013  # 8,446 + 1,546 = 9,992; 1.2% is 9,600
     assert limit["counted"][1] == (
         "1 skill has no description Kitden can find; it is counted at the longest, 1,536 "
         "characters."
@@ -604,12 +757,12 @@ def test_the_count_leaves_out_skills_set_to_name_only_or_off(home):
     write_json(home / ".claude/settings.json", overrides)
     limit = view(home)["claude_code"]["limit"]
     # 8 x 1,205 + 3 + 8 = 9,651 characters.
-    assert limit["offer"]["fraction"] == 0.015
-    assert limit["offer"]["say"] == "1.5%: all 8 skills get their description"
+    assert limit["offer"]["fraction"] == 0.013  # 1.2% is 9,600
+    assert limit["offer"]["say"] == "1.3%: all 8 skills get their description"
     assert limit["note"].startswith("Skills set to Name only stay as they are. ")
 
 
-def test_the_count_never_passes_five_percent(home):
+def test_the_count_never_passes_four_percent(home):
     names = [f"s{i:02}" for i in range(40)]
     for name in names:
         skill(home / ".claude/skills", name, TEXT)
@@ -618,7 +771,7 @@ def test_the_count_never_passes_five_percent(home):
     claude_chat(home, sent, model="claude-sonnet-4-6")
     cc = view(home)["claude_code"]
     assert not cc["checked"] and cc["limit"]["offer"] is None and cc["limit"]["steps"] == []
-    assert cc["limit"]["why"] == words.LIMIT_NOT_ENOUGH.format(share="5%")
+    assert cc["limit"]["why"] == words.LIMIT_NOT_ENOUGH.format(share="4%")
 
 
 def test_a_count_that_fits_already_does_not_promise_that_a_higher_limit_helps(home):
@@ -653,7 +806,7 @@ def test_a_chat_that_sent_everything_does_not_show_that_a_longer_file_fits(home)
     claude_chat(home, dict.fromkeys(names, TEXT), model="claude-sonnet-4-6")
     skill(home / ".claude/skills", "s00", LONG)
     limit = view(home)["claude_code"]["limit"]
-    assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="5%")
+    assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="4%")
 
 
 def test_skills_added_during_the_chat_do_not_show_that_everything_fits(home):
@@ -665,7 +818,7 @@ def test_skills_added_during_the_chat_do_not_show_that_everything_fits(home):
     # Sent whole, outside the limit: the next chat's list has to hold it too.
     write_chat(home, "p", "chat", [first, late, assistant("claude-sonnet-4-6")], 100)
     limit = view(home)["claude_code"]["limit"]
-    assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="5%")
+    assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="4%")
 
 
 def test_a_dropped_skill_of_unknown_size_does_not_place_the_chats_limit(home):
@@ -698,7 +851,7 @@ def test_a_huge_cap_does_not_make_a_huge_count(home):
     counted_chat(home, {"ghost": None})
     write_json(home / ".claude/settings.json", {"skillListingMaxDescChars": 10**12})
     limit = view(home)["claude_code"]["limit"]
-    assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="5%")
+    assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="4%")
 
 
 def test_after_apply_of_a_share_that_fits_the_count(home):
@@ -762,7 +915,7 @@ def test_after_a_share_that_fits_not_all_the_counted_chat_offers_the_next(home):
     assert cc["windows"][0]["budget"] == 8_000
     assert cc["changed"][1] == "Estimate: On a 200K window, not all descriptions would fit."
     limit = cc["limit"]
-    assert limit["offer"]["fraction"] == 0.02
+    assert limit["offer"]["fraction"] == 0.017
     assert [s["say"] for s in limit["steps"][:2]] == [
         "1%, the default · not all fit",
         "1.5% now · not all fit",
@@ -786,12 +939,13 @@ def test_after_apply_a_chat_with_a_skill_of_unknown_size_keeps_its_own_limit(hom
 
 def test_a_share_set_after_a_higher_one_finds_the_chats_share(home):
     counted_chat(home)
-    # Sent at 1.5% (12,000): nine descriptions, but not a's, the most used.
+    # Sent at 1.5% (12,000): nine descriptions, but not a's, the most used. They take 10,857, so
+    # 1.4% (11,200) gives the same list: the first share on the list that does is the chat's.
     sent = {name: None if name == "a" else TEXT for name in TEN}
     claude_chat(home, sent, model="claude-sonnet-4-6")
     write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.02})
     cc = view(home)["claude_code"]
-    assert cc["windows"][0]["budget"] == 12_000
+    assert cc["windows"][0]["budget"] == 11_200
     assert cc["changed"][0].startswith("The limit was changed after this chat: it is 2% now.")
 
 
@@ -820,7 +974,7 @@ def test_another_settings_change_keeps_the_counted_chats_limit(home):
     cc = view(home)["claude_code"]
     # The chat's list still ends at today's limit, so that is its line; nothing is said to change.
     assert cc["windows"][0]["budget"] == 8_000 and cc["changed"] == []
-    assert cc["limit"]["offer"]["fraction"] == 0.02
+    assert cc["limit"]["offer"]["fraction"] == 0.017
 
 
 def test_set_back_and_undo_from_a_counted_chat(home):
@@ -836,12 +990,12 @@ def test_set_back_and_undo_from_a_counted_chat(home):
         _, _, undo = _round_trip(page, _limit(offer["fraction"]))
         assert json.loads(settings.read_text()) == {
             "theme": "dark",
-            "skillListingBudgetFraction": 0.02,
+            "skillListingBudgetFraction": 0.017,
         }
         cc = page.get("/api/context").json()["clients"][0]
-        assert cc["changed"][0].startswith("The limit was changed after this chat: it is 2% now.")
+        assert cc["changed"][0].startswith("The limit was changed after this chat: it is 1.7% now.")
         assert cc["windows"][0]["budget"] == 8_000
         assert undo()["state"] == "undone"
         cc = page.get("/api/context").json()["clients"][0]
-        assert cc["changed"] == [] and cc["limit"]["offer"]["fraction"] == 0.02
+        assert cc["changed"] == [] and cc["limit"]["offer"]["fraction"] == 0.017
     assert settings.read_text() == before

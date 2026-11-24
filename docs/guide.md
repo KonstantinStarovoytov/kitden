@@ -78,18 +78,22 @@ last chat in any folder and names that folder; with `--project` it stays with th
 
 When some Claude Code skills showed only a name because the list ran out of room, the limit
 line on the skill list's bar has a handle. Drag it to the right: a second line, for your next
-chats, moves in steps of 0.5% of the window, and a note beside it says what each step gives,
-such as "1.5% · all 20 fit · about 650 more characters per chat". It snaps to the step where
+chats, moves from share to share of the window (1%, 1.1%, 1.2%, 1.3%, 1.4%, 1.5%, 1.7%, 2%,
+2.5%, 3%, 3.5% and 4%, the most Kitden offers), and a note beside it says what each step gives,
+such as "1.4% · all 20 fit · about 650 more characters per chat". It snaps to the step where
 every description fits, which a small mark shows. Let go to add the change to the preview, or
 press Esc to leave it. Drag it back to where it started to take the change out. With the
 keyboard, Tab to the handle, use the arrow keys and press Enter. Click the line's label (or the
 handle, or press Enter on it without moving) for the details: the share of the context window
-now, the smallest share at which every description fits (skills you set to Name only or Off
+now, the first share above it at which every description fits (skills you set to Name only or Off
 stay as they are), and about how many more characters and tokens every chat then costs, with
-**Set to 1.5%** (or the share shown). When your user settings set a share above 1%, drag the
+**Set to 1.4%** (or the share shown). When your user settings set a share above 1%, drag the
 line back to 1% or press **Back to 1%** to take it out again. After Apply, the last chat keeps
 the limit it was sent under, the next chats' line shows the new one, and the page says the
-limit changed and what Kitden expects from your next chat.
+limit changed and what Kitden expects from your next chat. A share in your settings that is not
+on the list, such as 4.5% from an earlier Kitden or one you wrote by hand, still works: Kitden
+shows it as the limit now, offers the shares of the list above it (none above 4%), and **Back to
+1%**.
 
 The line also works when Kitden cannot replay the last chat's list exactly: a newer Claude Code
 may choose other descriptions, or a listed skill may have no file Kitden can find. Then Kitden
@@ -112,7 +116,7 @@ settings (`~/.claude/settings.json`), for all projects, with a backup and Undo. 
 shows the real list. Kitden does not offer it when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when
 a project's own settings file sets the share, when the limit of the last chat is not known, when
 everything fits, when by its count everything fits although the chat left descriptions out, or
-when even 5% would not fit every description; "How this is counted" then says which. For
+when even 4% would not fit every description; "How this is counted" then says which. For
 Codex: when there is no estimate, when everything fits, or when even 10,000 tokens would not fit
 every description.
 
