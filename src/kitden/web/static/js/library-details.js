@@ -10,7 +10,7 @@ import { IN_PREVIEW, previewLook } from "./details.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { initLibraryAdd } from "./library-add.js";
 import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
-import { copyBodies, offBodies, onBodies, removeBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
+import { copyBodies, offBodies, onBodies, removeBodies } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, SKILL_STATE_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
@@ -26,22 +26,16 @@ const USE_SHARED = "Use the shared rule…";
 const OFF_COPY = "Turn off this copy in Codex…";
 // A project row of the checklist whose own settings turn the skill off already.
 const ALREADY_OFF = "Already off there";
-// Why a project's own Claude Code skill has no "Turn off in this project…": the guard of
-// changes/actions.py (NO_SKILL_MERGE), in words that offer nothing Kitden refuses.
-const NO_MERGE = "Claude Code may not merge skill settings across files, so Kitden cannot turn it off in this project.";
 const FOLLOWS = "Follows its plugin.";
 const NO_PLUGIN = "None, a skill on its own";
 const NO_PROJECT_SWITCH = "Codex has no switch for one project.";
 const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";
 const SOME_WHY = "This turns it off in Claude Code. Codex and Cursor have no switch for one project.";
 // Why a project cannot take a one-project skill rule (library_map.py `skill_rules`).
-const PROJECT_LINES = { own: "Has its own skill settings", new: "No Claude Code settings yet" };
+const PROJECT_LINES = { new: "No Claude Code settings yet" };
 // A project whose rule file sits where Kitden does not write (`skill_rules.outside`: the folder,
 // the engine's own test): no rule there, and one quiet line says why.
 const outsideWords = (folder) => `Claude Code keeps this project's local settings in ${folder}, where Kitden does not write.`;
-// Why a tray cannot take both a skill rule for all projects and one for a project in Claude Code.
-const ALL_FIRST = "Apply the rule for all projects first";
-const SOME_FIRST = "Apply the project rules in preview first; then Claude Code can turn it off for all projects.";
 // What a plugin holds, by its key in the answer: the word for one and for more.
 const INSIDE_WORDS = [["skills", "skill", "skills"], ["commands", "command", "commands"], ["agents", "agent", "agents"], ["hooks", "hook", "hooks"], ["mcp_servers", "MCP server", "MCP servers"]];
 const KIND_ICONS = { plugin: "puzzle", skill: "sparkles", hook: "webhook", file: "file-text" };
@@ -74,7 +68,7 @@ const verb = (clients, one, more) => (clients.length > 1 ? more : one);
 // What a card is drawn for: the answer, the picked project (its id and folder) and the rules of
 // where a one-project skill rule can go.
 export function context(answer, project = state.project, folder = folderName(projectPath())) {
-  return { answer, project, folder, rules: { outside: {}, ...((answer && answer.skill_rules) || { some: false, projects: {} }) } };
+  return { answer, project, folder, rules: { outside: {}, ...((answer && answer.skill_rules) || { projects: {} }) } };
 }
 
 // "3 skills · 1 command", from what Kitden read inside a plugin; null when it read nothing.
@@ -146,8 +140,7 @@ export function projectBody(item, project) {
 // the plugin on there; else null.
 export function hereBody(item, c) {
   const on = (item.by || {}).claude_code === "on" && (item.items || {}).claude_code;
-  const can = c.rules.projects[c.project];
-  return c.project && on && (can === "ok" || can === "own") ? projectBody(item, c.project) : null;
+  return c.project && on && c.rules.projects[c.project] === "ok" ? projectBody(item, c.project) : null;
 }
 
 // A skill of all projects, not only of the picked one.
@@ -159,7 +152,7 @@ const shared = (item) => item.source !== ORIGIN_WORDS.project;
 export function skillHereBody(item, c) {
   const on = (item.by || {}).claude_code === "on" && (item.items || {}).claude_code;
   const decides = !shared(item) || decidedHere(item, "claude_code");
-  return c.project && on && decides && c.rules.some && c.rules.projects[c.project] === "ok" ? projectBody(item, c.project) : null;
+  return c.project && on && decides && c.rules.projects[c.project] === "ok" ? projectBody(item, c.project) : null;
 }
 
 // "Use the shared rule…": in a project whose local settings decide for Claude Code (`can.local`),
@@ -170,40 +163,27 @@ export function sharedBody(item, c) {
   return c.project && local && target ? { action: "skill.rule", targets: [{ client: "claude_code", item: target }], params: { scope: "project", project: c.project, off: false } } : null;
 }
 
-// Why a project's own Claude Code skill gets no "Turn off in this project…": a file with skill
-// settings blocks the rule (as changes/actions.py refuses it); else null.
-function mergeLine(item, c) {
-  const can = c.rules.projects[c.project];
-  const blocked = (!c.rules.some || can === "own") && can !== "outside";
-  return c.project && !shared(item) && (item.by || {}).claude_code === "on" && blocked ? el("p", "muted", NO_MERGE) : null;
-}
-
-// "Turn off in some projects…" for a skill of all projects that Claude Code has, while the user
-// settings hold no skillOverrides (`rules.some`) and some project can take the rule.
+// "Turn off in some projects…" for a skill of all projects that Claude Code has, while some
+// project can take the rule.
 export function offersSome(item, c) {
-  return Boolean(shared(item) && (item.items || {}).claude_code && c.rules.some && Object.values(c.rules.projects).includes("ok"));
+  return Boolean(shared(item) && (item.items || {}).claude_code && Object.values(c.rules.projects).includes("ok"));
 }
 
-// A button that adds every row of `bodies` (a list, or a function that gives the list now) to the
-// tray, one after the other. While they all wait there it says "In preview" and takes no press, as
-// a preview button does (details.js); with none to add now it hides.
+// A button that adds every row of `bodies` to the tray, one after the other. While they all wait
+// there it says "In preview" and takes no press, as a preview button does (details.js).
 function rowsButton(label, bodies, look = "btn") {
-  const list = typeof bodies === "function" ? bodies : () => bodies;
   const words = el("span", "cut", label);
   const node = el("button", look);
   node.type = "button";
   node.title = label;
   node.dataset.focus = `action:${label}`;
   node.append(words);
-  const waiting = () => list().every(queued);
+  const waiting = () => bodies.every(queued);
   pressOnce(node, async () => {
     if (waiting()) return;
-    for (const body of list()) if (!queued(body)) await review(body);
+    for (const body of bodies) if (!queued(body)) await review(body);
   });
-  followTray(node, keyFor(list()[0] || {}), () => {
-    node.hidden = !list().length;
-    previewLook(node, words, label, waiting());
-  });
+  followTray(node, keyFor(bodies[0] || {}), () => previewLook(node, words, label, waiting()));
   return node;
 }
 
@@ -211,16 +191,6 @@ function rowsButton(label, bodies, look = "btn") {
 export function queued(body) {
   const row = trayRow(keyFor(body));
   return Boolean(row) && ruleState(row.body.params) === ruleState(body.params);
-}
-
-// Words in a quiet line that show while `when()` holds, after every change of the tray.
-function trayNote(words, when) {
-  const node = el("p", "muted");
-  followTray(node, "skill-rules", () => {
-    node.textContent = when() ? words : "";
-    node.hidden = !node.textContent;
-  });
-  return node;
 }
 
 // The cards ---------------------------------------------------------------------------------------
@@ -310,9 +280,9 @@ export function skillCard(item, c, { someStep = () => {} } = {}) {
   const own = SKILL_STATE_WORDS[item.skill_state];
   if (own) facts.splice(2, 0, { label: "Loads", value: own, text: own });
   const actions = [];
-  if (offBodies(item).length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, () => skillOffBodies(item, c.answer)) });
+  if (offBodies(item).length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, offBodies(item)) });
   const here = skillHereBody(item, c);
-  if (here) actions.push({ label: OFF_HERE, node: rowsButton(OFF_HERE, () => (skillRuleWaits("all", c.answer) ? [] : [here])) });
+  if (here) actions.push({ label: OFF_HERE, node: rowsButton(OFF_HERE, [here]) });
   const back = sharedBody(item, c);
   if (back) actions.push({ label: USE_SHARED, node: rowsButton(USE_SHARED, [back]) });
   const copy = copyBodies(item);
@@ -322,8 +292,7 @@ export function skillCard(item, c, { someStep = () => {} } = {}) {
   if (shared(item) && (item.by || {}).codex === "on") notes.push(NO_PROJECT_SWITCH);
   if ((item.by || {}).cursor === "on") notes.push(NO_CURSOR_SWITCH);
   const why = [loadsSay(item, { folder: c.project ? c.folder : "", noun: "this skill" }), ...notes].join(" ");
-  const claude = ((item.can && item.can.off) || []).includes("claude_code");
-  const after = afterOf(projectLine(item, c), outsideLine(item, c), mergeLine(item, c), claude ? trayNote(SOME_FIRST, () => skillRuleWaits("project", c.answer)) : null);
+  const after = afterOf(projectLine(item, c), outsideLine(item, c));
   return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
 }
 
@@ -587,19 +556,18 @@ function addStep(id, dir = "fwd") {
 
 // "Turn off <name> in the projects you pick": the Gateway's project checklist (D13), one row per
 // project whose folder is there; a project that turns it off already ("Already off there", `off_in`),
-// one with skill settings of its own, or none yet, cannot be ticked, nor can any while a Claude Code
-// skill rule for all projects waits in the tray. Each tick is one skill.rule row for Claude Code.
+// or one with no Claude Code settings yet, cannot be ticked. Each tick is one skill.rule row for
+// Claude Code.
 export function someNodes(item, c, back) {
   const known = (data.projects || []).filter((p) => c.rules.projects[p.id]);
   const rows = menuItems(known, "").filter((p) => p.id).map((p) => {
     const can = c.rules.projects[p.id];
     const body = projectBody(item, p.id);
     const ticked = () => queued(body);
-    const waits = () => !ticked() && skillRuleWaits("all", c.answer);
     const already = (item.off_in || []).includes(p.id);
     const away = can === "outside" ? outsideWords(c.rules.outside[p.id]) : null;
-    const line = () => (already ? ALREADY_OFF : away || PROJECT_LINES[can] || (waits() ? ALL_FIRST : ""));
-    return { id: p.id, name: p.name, line, off: () => already || can !== "ok" || waits(), body, ticked };
+    const line = () => (already ? ALREADY_OFF : away || PROJECT_LINES[can] || "");
+    return { id: p.id, name: p.name, line, off: () => already || can !== "ok", body, ticked };
   });
   return projectChecklist({ crumb: `Skill · ${item.name}`, title: `Turn off ${item.name} in the projects you pick`, why: SOME_WHY, rows, back });
 }

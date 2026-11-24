@@ -26,7 +26,7 @@ from kitden.clients.base import (
     SKILL_REMOVE,
     ClientAdapter,
 )
-from kitden.clients.claude_code import holds, rule_file
+from kitden.clients.claude_code import holds
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
 from kitden.context.rules import grid_share, on_share_grid
 from kitden.context.tables import (
@@ -66,14 +66,12 @@ from kitden.views.catalog import known_refusal, market_entry
 from kitden.views.setup_server import is_own_entry
 from kitden.views.words import (
     APP_SET_UP,
-    CHANGE_UNREAD,
     CODEX_LIMIT_BAD,
     CODEX_NO_NAME_ONLY,
     CODEX_NO_PROJECT,
     CURSOR_NO_SKILL_SWITCH,
     LIMIT_BAD_SHARE,
     LIMIT_CLAUDE_ONLY,
-    NO_SKILL_MERGE,
     PLUGIN_ALL_PROJECTS,
     PLUGIN_NO_NAME_ONLY,
     PLUGIN_SKILL,
@@ -1364,18 +1362,6 @@ def add_server_steps(
 ON_NEEDS_PROJECT = "Pick a project to use the shared rule there."
 
 
-def skill_rules_in(path: Path) -> bool:
-    """The Claude Code settings file has `skillOverrides` with at least one key."""
-    try:
-        data = json.loads(path.read_text())
-    except FileNotFoundError:
-        return False
-    except (OSError, ValueError):
-        raise ValueError(CHANGE_UNREAD.format(path.name)) from None
-    rules = data.get("skillOverrides") if isinstance(data, dict) else None
-    return bool(rules)
-
-
 def _claude_rule_steps(
     adapter: ClientAdapter, home: Path, item: Item, project: str | None, state: str
 ) -> list[Step]:
@@ -1403,18 +1389,6 @@ def _claude_rule_steps(
     real = os.path.realpath
     if item.scope is Scope.PROJECT and project and real(str(item.project)) != real(project):
         raise ValueError("This skill is in another project.")
-    if project is not None and state != "on":
-        # The docs do not confirm that `skillOverrides` merges key by key (claude_code.py). If a
-        # higher file replaces the whole object, a new key in the local file would drop the
-        # rules of the user's file, and of the project's shared file, in that project.
-        folder = Path(project) / ".claude"
-        files = [home / ".claude/settings.json", folder / "settings.json"]
-        # A rule in the repository root's local file: the starting folder's own local file (an
-        # earlier Claude Code wrote there) is read beside it (clients/claude_code.py git_root).
-        if rule_file(Path(project), home) != folder / "settings.local.json":
-            files.append(folder / "settings.local.json")
-        if any(skill_rules_in(f) for f in files):
-            raise ValueError(NO_SKILL_MERGE)
     return adapter.skill_rule_steps(item.name, project, state)
 
 

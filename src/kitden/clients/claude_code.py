@@ -146,9 +146,8 @@ def is_trusted(projects: dict, folder: Path, home: Path) -> bool:
 # checked 2026-10-26 (code.claude.com/docs/en/skills, "Override skill visibility from settings"):
 # `skillOverrides` maps a skill name to "on", "name-only", "user-invocable-only" or "off"; a
 # skill that is not listed is "on". Only "off" turns a skill off. Plugin skills are not affected.
-# The docs do not say how `skillOverrides` merges across settings files (their precedence list,
-# checked 2026-10-26 at /en/settings, is project local > shared project > user, for a key as a
-# whole). Kitden merges it key by key, the most specific file winning: not confirmed by the docs.
+# It merges key by key across the files, the most specific one winning: the docs do not say so,
+# Claude Code was seen to do it (2026-11-24, docs/clients.md).
 SKILL_STATES = ("on", "name-only", "user-invocable-only", "off")
 
 
@@ -387,8 +386,7 @@ class ClaudeCodeAdapter(ClientAdapter):
 
     # checked 2026-10-26 (code.claude.com/docs/en/settings-reference, `skillOverrides`): any
     # settings file may hold it, and "off" hides the skill from Claude and from `/`. The
-    # `/skills` menu saves it to `.claude/settings.local.json`. The docs still do not say whether
-    # the object merges key by key across files (also /en/settings and /en/skills, same day).
+    # `/skills` menu saves it to `.claude/settings.local.json`.
     # checked 2026-11-09 (code.claude.com/docs/en/skills, `skillOverrides`): "on", "name-only"
     # (name listed, no description), "user-invocable-only" and "off"; a missing key is "on".
     def skill_rule_steps(self, name: str, project: str | None, state: str) -> list[Step]:

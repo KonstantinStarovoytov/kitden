@@ -19,7 +19,6 @@ from kitden.views.words import (
     CURSOR_NO_SKILL_SWITCH,
     NEW_LOCAL_FILE,
     NO_CLAUDE_FOLDER,
-    NO_SKILL_MERGE,
     PLUGIN_NO_NAME_ONLY,
     PROJECT_BUILT_IN,
     PROJECT_SKILL_ALL,
@@ -168,31 +167,43 @@ def test_turn_off_in_one_project_writes_the_local_settings_and_undo(tmp_path):
     assert path.read_text() == local
 
 
-def test_one_project_waits_while_the_user_settings_have_skill_overrides(tmp_path):
-    user = {"skillOverrides": {"other": "off"}}
+# Claude Code merges `skillOverrides` key by key, the project's local file winning
+# (docs/clients.md), so a one-project rule drops no rule of another file.
+
+
+def test_one_project_takes_a_rule_beside_the_users_own_rules_and_undo(tmp_path):
+    user = '{\n  "skillOverrides": {\n    "deploy": "name-only",\n    "other": "off"\n  }\n}\n'
     home, app, _ = _home(tmp_path, user=user)
+    path = app / ".claude/settings.local.json"
     with _page(home) as page:
         rule = _rule(
             "claude_code", _item(page, "claude_code", "deploy"), "project", _project(page, app)
         )
-        answer = _preview(page, rule)
-    assert answer.status_code == 422
-    assert answer.json() == {"detail": NO_SKILL_MERGE, "row": "r1"}
-    assert NO_SKILL_MERGE == (
-        "Claude Code may not merge skill settings across files; turn it off for all projects "
-        "instead."
-    )
+        _, _, undo = _round_trip(page, rule)
+        assert json.loads(path.read_text())["skillOverrides"] == {"deploy": "off"}
+        assert (home / ".claude/settings.json").read_text() == user
+        assert undo()["state"] == "undone"
 
 
-def test_one_project_waits_while_its_shared_file_has_skill_overrides(tmp_path):
+def test_one_project_takes_a_rule_beside_its_shared_files_rules(tmp_path):
     home, _, other = _home(tmp_path, user={}, site={"skillOverrides": {"tidy": "off"}})
+    shared = other / ".claude/settings.json"
+    before = shared.read_text()
     with _page(home) as page:
         item = _item(page, "claude_code", "deploy")
-        answer = _preview(page, _rule("claude_code", item, "project", _project(page, other)))
-        assert answer.json() == {"detail": NO_SKILL_MERGE, "row": "r1"}
-        # A project with no .claude folder gets no new folder: Kitden writes one file only.
-        (other / ".claude/settings.json").unlink()
-        (other / ".claude").rmdir()
+        rule = _rule("claude_code", item, "project", _project(page, other), state="name-only")
+        _round_trip(page, rule)
+    local = json.loads((other / ".claude/settings.local.json").read_text())
+    assert local == {"skillOverrides": {"deploy": "name-only"}}
+    assert shared.read_text() == before
+
+
+def test_a_project_with_no_claude_folder_gets_no_new_folder(tmp_path):
+    home, _, other = _home(tmp_path, user={}, site={})
+    (other / ".claude/settings.json").unlink()
+    (other / ".claude").rmdir()
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
         answer = _preview(page, _rule("claude_code", item, "project", _project(page, other)))
     assert answer.json() == {"detail": NO_CLAUDE_FOLDER.format(folder="site"), "row": "r1"}
 
@@ -259,7 +270,7 @@ def test_cursor_is_refused_with_its_reason(tmp_path):
 
 
 def test_an_all_projects_change_names_a_project_that_keeps_its_own_rule(tmp_path):
-    # app's local file keeps deploy on; site's shared file has rules for other skills only.
+    # app's local file keeps deploy on; site's rules for other skills say nothing about deploy.
     local = {"skillOverrides": {"deploy": "on"}}
     home, _, _ = _home(tmp_path, local=local, site={"skillOverrides": {"tidy": "off"}})
     with _page(home) as page:
@@ -267,10 +278,7 @@ def test_an_all_projects_change_names_a_project_that_keeps_its_own_rule(tmp_path
     assert answer.status_code == 200, answer.text
     (after,) = answer.json()["rows"][0]["after"]
     assert after["word"] == "Off"
-    assert after["note"] == (
-        "It stays on in app, which has its own rule. "
-        "site has its own skill settings; it may keep this skill on."
-    )
+    assert after["note"] == "It stays on in app, which has its own rule."
 
 
 def _row(row_id, rule):
@@ -324,15 +332,23 @@ def test_a_codex_file_kitden_cannot_read_is_named(tmp_path):
     assert answer.json() == {"detail": CHANGE_UNREAD.format("config.toml"), "row": "r1"}
 
 
-def test_a_tray_never_writes_skill_rules_in_the_user_and_a_project_file(tmp_path):
+def test_a_tray_writes_skill_rules_in_the_user_and_a_project_file_in_any_order(tmp_path):
     home, app, _ = _home(tmp_path)
+    user, local = home / ".claude/settings.json", app / ".claude/settings.local.json"
     with _page(home) as page:
         item = _item(page, "claude_code", "deploy")
         everywhere = _row("a", _rule("claude_code", item))
-        here = _row("b", _rule("claude_code", item, "project", _project(page, app)))
+        here = _row(
+            "b", _rule("claude_code", item, "project", _project(page, app), state="name-only")
+        )
         for first, then in ((everywhere, here), (here, everywhere)):
             answer = page.post("/api/batch/check", json={"requests": [first, then]}, headers=POST)
-            assert answer.json() == {"ok": False, "reason": NO_SKILL_MERGE, "row": then["id"]}
+            assert answer.json()["ok"] is True
+            _, _, undo = _round_trip(page, first, then)
+            assert json.loads(user.read_text())["skillOverrides"] == {"deploy": "off"}
+            assert json.loads(local.read_text())["skillOverrides"] == {"deploy": "name-only"}
+            assert undo()["state"] == "undone"
+            assert user.read_text() == USER
 
 
 def test_a_project_only_skill_is_never_turned_off_in_the_users_file(tmp_path):
@@ -498,21 +514,20 @@ def test_turn_off_this_copy_in_codex_for_a_skill_in_one_project(tmp_path):
     assert config.read_text() == before
 
 
-def test_a_rule_at_the_root_waits_while_the_projects_own_local_file_has_skill_overrides(tmp_path):
+def test_a_rule_at_the_root_goes_beside_the_projects_own_local_file(tmp_path):
     # Before v2.1.211 the /skills menu wrote the starting folder's local file; Claude Code still
-    # reads it beside the root's, and may not merge the two (docs checked 2026-10-27).
+    # reads it beside the root's and merges the two, the root's winning (docs/clients.md).
     home, _, _ = _home(tmp_path)
     repo, web = _in_repository(home)
-    _write(web / ".claude/settings.local.json", {"skillOverrides": {"tidy": "off"}})
+    own = web / ".claude/settings.local.json"
+    _write(own, {"skillOverrides": {"tidy": "off"}})
+    before = own.read_text()
     with _page(home) as page:
         item = _item(page, "claude_code", "deploy")
-        answer = _preview(page, _rule("claude_code", item, "project", _project(page, web)))
-        assert answer.json() == {"detail": NO_SKILL_MERGE, "row": "r1"}
-        # Taking a rule out is not refused by it.
-        _write(web / ".claude/settings.local.json", {"skillOverrides": {"deploy": "off"}})
-        rule = _rule("claude_code", item, "project", _project(page, web), off=False)
-        assert _preview(page, rule).status_code == 200
-    assert not (repo / ".claude/settings.local.json").exists()
+        _round_trip(page, _rule("claude_code", item, "project", _project(page, web)))
+    root = json.loads((repo / ".claude/settings.local.json").read_text())
+    assert root == {"skillOverrides": {"deploy": "off"}}
+    assert own.read_text() == before
 
 
 def test_a_root_with_no_claude_folder_takes_the_rule_in_the_projects_own_file(tmp_path):
@@ -621,14 +636,6 @@ def test_on_for_all_projects_with_no_key_in_the_users_file_is_refused(tmp_path):
         for client, name in (("claude_code", "deploy"), ("codex", "lint-fix")):
             answer = _preview(page, _rule(client, _item(page, client, name), state="on"))
             assert answer.json()["detail"] == "Pick a project to use the shared rule there."
-
-
-def test_name_only_in_a_project_waits_for_shared_skill_overrides(tmp_path):
-    home, _, other = _home(tmp_path, user={}, site={"skillOverrides": {"tidy": "off"}})
-    with _page(home) as page:
-        item = _item(page, "claude_code", "deploy")
-        rule = _rule("claude_code", item, "project", _project(page, other), state="name-only")
-        assert _preview(page, rule).json() == {"detail": NO_SKILL_MERGE, "row": "r1"}
 
 
 def test_codex_refuses_name_only(tmp_path):

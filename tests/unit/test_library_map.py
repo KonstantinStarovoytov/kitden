@@ -540,19 +540,16 @@ def test_skill_rules_say_where_one_project_can_turn_a_skill_off(tmp_path):
     inventory, adapters = _read(home)
     ids = {Path(p.path).name: p.id for p in inventory.projects}
     rules = library_map(inventory, adapters, None)["skill_rules"]
-    assert rules["some"] is True
+    assert set(rules) == {"projects", "outside"}
     # Only projects whose folder is there; one with no Claude Code settings yet cannot take a rule.
     assert rules["projects"][ids["website"]] == "ok"
     assert rules["projects"][ids["atlas"]] == "new"
     assert ids["old-app"] not in rules["projects"]
-    # A project whose shared settings hold skillOverrides keeps its own rules.
+    # Rules in the project's shared settings or the user's stop none: Claude Code merges them.
     _write(home / "work/website/.claude/settings.json", {"skillOverrides": {"x": "off"}})
-    rules = _map(home)["skill_rules"]
-    assert rules["projects"][ids["website"]] == "own"
-    # The user settings with skillOverrides: no one-project rule anywhere (it may not merge).
     settings = home / ".claude/settings.json"
     _write(settings, {**json.loads(settings.read_text()), "skillOverrides": {"y": "off"}})
-    assert _map(home)["skill_rules"]["some"] is False
+    assert _map(home)["skill_rules"]["projects"][ids["website"]] == "ok"
 
 
 def test_details_of_a_skill_turned_off_in_one_project_say_so(tmp_path):
@@ -638,10 +635,10 @@ def test_skill_rules_for_a_project_in_a_repository_subfolder(tmp_path):
     (atlas / "web/.claude").mkdir()
     # The root has no .claude folder: the rule goes in web's own file, so web is not "new".
     assert _map(home)["skill_rules"]["projects"][web] == "ok"
-    # The rule would go in the root's file while web's own local file holds skillOverrides.
+    # The rule goes in the root's file; rules in web's own local file do not stop it.
     (atlas / ".claude").mkdir()
     _write(atlas / "web/.claude/settings.local.json", {"skillOverrides": {"x": "off"}})
-    assert _map(home)["skill_rules"]["projects"][web] == "own"
+    assert _map(home)["skill_rules"]["projects"][web] == "ok"
 
 
 def test_a_project_whose_rule_file_kitden_does_not_write_is_outside(tmp_path):
@@ -675,7 +672,7 @@ def test_a_project_whose_rule_file_kitden_does_not_write_is_outside(tmp_path):
     state.write_text(json.dumps(data))
     inventory, adapters = _read(home)
     rules = library_map(inventory, adapters, None)["skill_rules"]
-    assert rules["projects"][ids[str(api)]] == "own"  # api's own local file holds skillOverrides
+    assert rules["projects"][ids[str(api)]] == "ok"
     assert rules["outside"] == {}
 
 

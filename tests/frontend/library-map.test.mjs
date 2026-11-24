@@ -968,12 +968,12 @@ test("a client→skill link's × turns it off in Claude Code or Codex, and remov
   }
 });
 
-test("Claude Code's skill × waits for a skill rule of a project in the tray, as Details does", async () => {
+test("Claude Code's skill × stays beside a skill rule of a project in the tray", async () => {
   const x = linkX();
   try {
     addToTray({ action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-rn' }], params: { scope: 'project', project: 'atlas', off: true } });
     await flush();
-    assert.equal(x.tip('client:claude_code>item:s1'), null);
+    assert.equal(x.tip('client:claude_code>item:s1'), 'Turn off release-notes in Claude Code');
     assert.equal(x.tip('client:codex>item:s1'), 'Turn off release-notes in Codex');
   } finally {
     await cancelTray();
@@ -1017,8 +1017,8 @@ test('plugin→inside, Cursor plugin, faint, Unknown and hook links have no ×',
     assert.equal(x.del('client:cursor>item:p6').defaultPrevented, false);
     assert.equal(tray.rows.length, 0);
     // None of them can be removed from the helper either.
-    assert.equal(linkRemoval(X_SAMPLE.groups[0].items[2], 'cursor', X_SAMPLE), null);
-    assert.equal(linkRemoval(X_SAMPLE.groups[0].items[0], 'cursor', X_SAMPLE), null);
+    assert.equal(linkRemoval(X_SAMPLE.groups[0].items[2], 'cursor'), null);
+    assert.equal(linkRemoval(X_SAMPLE.groups[0].items[0], 'cursor'), null);
   } finally {
     await cancelTray();
   }

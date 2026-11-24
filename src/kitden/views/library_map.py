@@ -8,7 +8,6 @@ and follow the plugin, so the map never says "N of M on". Paths are only under `
 
 from pathlib import Path
 
-from kitden.changes.actions import skill_rules_in
 from kitden.changes.engine import writable, writable_roots
 from kitden.clients.base import (
     PLUGIN_DISABLE,
@@ -274,22 +273,12 @@ def _skill_offers(inventory, adapters) -> dict[str, dict]:
 
 
 def _skill_rules(inventory, adapters, found) -> dict:
-    """Where a one-project skill rule can go (Claude Code only): `some` while the user settings
-    hold no `skillOverrides` (Claude Code may not merge them across files), and per project whose
-    folder is there "ok", "own" (its shared settings hold `skillOverrides`, or its own local file
-    does while the rule would go in its repository root's), "new" (no `.claude` folder where its
-    rule could go: Kitden makes no folder) or "outside" (its rule file is where Kitden does not
-    write, the engine's own test; `outside` names that folder). The same rules as
-    changes/actions.py."""
+    """Where a one-project skill rule can go (Claude Code only), per project whose folder is
+    there: "ok", "new" (no `.claude` folder where its rule could go: Kitden makes no folder) or
+    "outside" (its rule file is where Kitden does not write, the engine's own test; `outside`
+    names that folder). The same rules as changes/actions.py."""
     if "claude_code" not in found or "claude_code" not in adapters:
-        return {"some": False, "projects": {}, "outside": {}}
-
-    def holds(path: Path) -> bool:
-        try:
-            return skill_rules_in(path)
-        except ValueError:
-            return True  # a file Kitden cannot read may hold them
-
+        return {"projects": {}, "outside": {}}
     home = adapters["claude_code"].home
     projects: dict[str, str] = {}
     outside: dict[str, str] = {}
@@ -298,18 +287,14 @@ def _skill_rules(inventory, adapters, found) -> dict:
         if not folder.is_dir():
             continue
         target = rule_file(folder, home)
-        own = folder / ".claude/settings.local.json"
-        # A rule in the repository root's file is read beside the project's own local file.
-        files = [folder / ".claude/settings.json", *([own] if target != own else [])]
         if target is None:
             projects[project.id] = "new"
         elif not _writable(target, home, inventory):
             projects[project.id] = "outside"
             outside[project.id] = target.parent.parent.name
         else:
-            projects[project.id] = "own" if any(holds(f) for f in files) else "ok"
-    some = not holds(home / ".claude/settings.json")
-    return {"some": some, "projects": projects, "outside": outside}
+            projects[project.id] = "ok"
+    return {"projects": projects, "outside": outside}
 
 
 def _writable(path: Path, home: Path, inventory) -> bool:
