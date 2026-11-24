@@ -1583,7 +1583,7 @@ def test_a_skill_rule_says_what_it_turns_off_and_where():
     assert "`${short} uses the shared rule`" in review
     assert '"skill.rule": "Turned off"' in review and '"skill.rule": "Changed how"' in parts
     assert '`${verb} ${names.join(", ")} loads${place} · ${clients.join(", ")}`' in parts
-    key = '`skill:${one.client}:${one.item}@${params.project || ""}`;'
+    key = '`skill:${one.client}:${one.built_in || one.item}@${params.project || ""}`;'
     assert f'if (action === "skill.rule") return {key}' in tray
     assert AFTER_WORDS["skill.rule"] == ("off", STATE_WORDS["off"])
     assert CURSOR_NO_SKILL_SWITCH == "Cursor has no switch to turn off one skill."

@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-11-23
+Last updated: 2026-11-24
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Turn off more skills from the Context page:** 13 skills built into Claude Code have the same
+  switch as your own, and a plugin's skill can turn its whole plugin off there. Skills that are
+  off wait under Turned off. A skill Kitden cannot switch, such as one the Claude app adds, says
+  where it comes from and why.
 - **Raise Claude Code's skill list limit from the Context page:** when skills showed only a
   name because the list ran out of room, drag the limit line on the skill list's bar (or use
   the arrow keys) to see what each step gives, snap to the smallest share that fits every
