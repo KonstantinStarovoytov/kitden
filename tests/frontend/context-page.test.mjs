@@ -1006,15 +1006,169 @@ test('Details counts characters as Python does, so an emoji does not move the gr
   assert.deepEqual(byClass(box, 'ctx-cut').map(text), ['bc']);
 });
 
-test('a built-in skill says so on its pill, and that Kitden cannot turn it off', async () => {
+const draftUrl = (states) => `/api/context?draft=${encodeURIComponent(JSON.stringify({ claude_code: states }))}`;
+const BUILT_IN = { item: null, source: 'Built into Claude Code', built_in: true };
+
+test('a built-in skill says so on its pill', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };
-  const dataviz = skill('dataviz', 1436, 0, { item: null, source: 'Built into Claude Code', switch: [], built_in: true });
-  show(answer({ ...TIGHT, skills: [...TIGHT.skills, dataviz] }, CODEX, CURSOR));
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills, skill('dataviz', 1436, 0, BUILT_IN)] }, CODEX, CURSOR));
   const pill = pillOf('dataviz');
   assert.equal(text(pill), 'datavizbuilt-in1,436');
   assert.equal(pill.classList.contains('builtin'), true);
-  assert.match(pill.getAttribute('title'), /Built into Claude Code\. Kitden cannot turn it off\./);
+  assert.equal(pill.getAttribute('title'), 'Built into Claude Code');
   assert.equal(pillOf('alpha').classList.contains('builtin'), false);
   assert.equal(pillOf('alpha').getAttribute('title'), null);
+});
+
+test('a built-in skill is switched by its name, and the tray change asks for the estimate', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const skills = [...TIGHT.skills, skill('dataviz', 1436, 0, BUILT_IN), skill('loop', 336, 0, BUILT_IN)];
+  show(answer({ ...TIGHT, skills }, CODEX, CURSOR));
+  await fire(pillOf('dataviz'), 'click');
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  const reply = { status: 200, json: answer({ ...TIGHT, skills }, CODEX, CURSOR) };
+  queue(draftUrl({ dataviz: 'off' }), reply);
+  queue(draftUrl({ dataviz: 'off', loop: 'name-only' }), reply);
+  state.view = 'context';
+  await fire(buttonIn(drawer, 'Off'), 'click');
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual([sent.kind, sent.targets, sent.params], ['skill.rule', [{ client: 'claude_code', built_in: 'dataviz' }], { scope: 'all', state: 'off' }]);
+  // The draft names the skill, so the server's estimate leaves it out.
+  assert.equal(asked.some((a) => a.url === draftUrl({ dataviz: 'off' })), true);
+  // Another built-in skill has a row of its own.
+  await fire(pillOf('loop'), 'click');
+  await fire(buttonIn(drawer, 'Name only'), 'click');
+  await flush();
+  assert.equal(tray.rows.length, 2);
+});
+
+test('a skill that is off stands under Turned off, and its Details turn it on again', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  // One kept out of the last list; one turned off after it, which that list still had.
+  const gone = skill('dataviz', 0, null, { ...BUILT_IN, state: 'off', note: 'Off: your next chat does not list it.' });
+  const late = skill('beta', 1990, 0, { state: 'off' });
+  show(answer({ ...TIGHT, skills: [TIGHT.skills[0], late, TIGHT.skills[2], gone] }, CODEX, CURSOR));
+  const [off] = byClass(main, 'ctx-off');
+  assert.equal(text(byClass(off, 'ctx-off-head')[0]), 'Turned off');
+  assert.deepEqual(pills(off).map((p) => p.dataset.skill), ['dataviz']);
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'beta'], ['gamma']]);
+  await fire(pillOf('dataviz'), 'click');
+  assert.match(text(drawer), /Off: your next chat does not list it\./);
+  queue(PREVIEW, previewed('c1'));
+  queue(draftUrl({ dataviz: 'on' }), { status: 200, json: answer(TIGHT, CODEX, CURSOR) });
+  await fire(buttonIn(drawer, 'On'), 'click');
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual(sent.params, { scope: 'all', state: 'on' });
+});
+
+test('nothing turned off draws no Turned off', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(TIGHT, CODEX, CURSOR));
+  assert.equal(byClass(main, 'ctx-off').length, 0);
+});
+
+const PLUG = { item: 'p1', action: 'plugin.disable', label: 'Turn off plug', say: 'Turns off all of plug: 2 skills and 1 command. About 59 fewer characters in the list.' };
+
+test("a plugin's skill turns its plugin off from Details, and a second press takes the row out", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const tool = skill('plug:tool', 10, 0, { plugin: 'plug', shown: 'tool', switch: [], source: 'Plugin plug', plugin_switch: PLUG });
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills, tool] }, CODEX, CURSOR));
+  await fire(pillOf('plug:tool'), 'click');
+  assert.match(text(drawer), /Turns off all of plug: 2 skills and 1 command\. About 59 fewer characters in the list\./);
+  assert.deepEqual(walk(drawer).filter((n) => n.dataset && n.dataset.state), []);
+  queue(PREVIEW, previewed('c1'));
+  await fire(buttonIn(drawer, 'Turn off plug'), 'click');
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual([sent.kind, sent.targets, sent.params], ['plugin.disable', [{ item: 'p1' }], {}]);
+  assert.equal(tray.rows[0].note, CONTEXT_NOTE);
+  syncTray();
+  assert.equal(buttonIn(drawer, 'Turn off plug').getAttribute('aria-pressed'), 'true');
+  assert.equal(buttonIn(drawer, 'Turn off plug').classList.contains('pending'), true);
+  await fire(buttonIn(drawer, 'Turn off plug'), 'click');
+  await flush();
+  assert.equal(tray.rows.length, 0);
+});
+
+test('a skill with no plugin switch draws no plugin button', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills, skill('venture:review', 588, 0, { plugin: 'venture', shown: 'review', switch: [], source: 'venture', plugin_switch: null })] }, CODEX, CURSOR));
+  await fire(pillOf('venture:review'), 'click');
+  assert.deepEqual(byClass(drawer, 'ctx-plugin'), []);
+});
+
+test('on an estimate a skill turned off since the chat stands under Turned off', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  // The estimate leaves it out; the last chat's window still lists it.
+  const other = window('1M window', '', 'Estimate', 'All 2 would be sent', 'Estimate: On a 1M window, every skill would keep its description.', { budget: 30000 });
+  other.result.sent = { alpha: 4000, gamma: 3000 };
+  const skills = [TIGHT.skills[0], skill('beta', 1990, 0, { state: 'off' }), TIGHT.skills[2]];
+  show(answer({ ...TIGHT, windows: [...TIGHT.windows, other], skills }, CODEX, CURSOR));
+  assert.equal(byClass(main, 'ctx-off').length, 0);
+  await fire(cards()[1], 'click');
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'gamma'], []]);
+  assert.deepEqual(pills(byClass(main, 'ctx-off')[0]).map((p) => p.dataset.skill), ['beta']);
+  await fire(cards()[0], 'click');
+});
+
+// dataviz is off and in no list; the tray turns it on (`to`), and the server answers with `after`.
+async function turnOn(to, after, extra = {}) {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const card = { ...TIGHT, skills: [...TIGHT.skills, skill('dataviz', 0, null, { ...BUILT_IN, state: 'off' })], ...extra };
+  show(answer(card, CODEX, CURSOR));
+  await fire(pillOf('dataviz'), 'click');
+  queue(PREVIEW, previewed('c1'));
+  queue(draftUrl({ dataviz: to }), { status: 200, json: answer({ ...card, after }, CODEX, CURSOR) });
+  state.view = 'context';
+  await fire(buttonIn(drawer, to === 'on' ? 'On' : 'Name only'), 'click');
+  await flush();
+  await flush();
+}
+// The pills on no side, outside Turned off.
+const apart = () => byClass(main, 'ctx-apart').filter((n) => !n.classList.contains('ctx-off')).flatMap((n) => pills(n).map((p) => p.dataset.skill));
+const placed = () => sides().map((n) => pills(n).map((p) => p.dataset.skill));
+const BACK = { ...AFTER, loses: [], result: { ...AFTER.result, sent: { alpha: 4000, beta: 2000, dataviz: 900 }, over: { gamma: 3000 } } };
+
+test('a skill the tray turns on leaves Turned off for its side in the estimate', async () => {
+  await turnOn('on', BACK);
+  assert.equal(byClass(main, 'ctx-off').length, 0);
+  assert.deepEqual(placed(), [['alpha', 'beta', 'dataviz'], ['gamma']]);
+  assert.equal(pillOf('dataviz').classList.contains('chg'), true);
+});
+
+test('a skill the tray sets to Name only leaves Turned off for that side', async () => {
+  const { dataviz, ...sent } = BACK.result.sent;
+  await turnOn('name-only', { ...BACK, result: { ...BACK.result, sent } });
+  assert.equal(byClass(main, 'ctx-off').length, 0);
+  assert.deepEqual(placed(), [['alpha', 'beta'], ['gamma', 'dataviz']]);
+});
+
+test('with no estimate a skill the tray turns on stands apart, not under Turned off', async () => {
+  await turnOn('on', null);
+  assert.equal(byClass(main, 'ctx-off').length, 0);
+  assert.deepEqual(placed(), [['alpha', 'beta'], ['gamma']]);
+  assert.deepEqual(apart(), ['dataviz']);
+  assert.equal(byClass(main, 'ctx-off').length, 0);
+  assert.equal(pillOf('dataviz').classList.contains('chg'), true);
+});
+
+test("another window's estimate knows nothing of the tray: the skill stands apart there", async () => {
+  const other = window('1M window', '', 'Estimate', 'All 3 would be sent', 'Estimate: On a 1M window, every skill would keep its description.', { budget: 30000 });
+  other.result.sent = { alpha: 4000, beta: 2000, gamma: 3000 };
+  await turnOn('on', BACK, { windows: [...TIGHT.windows, other] });
+  await fire(cards()[1], 'click');
+  assert.deepEqual(placed(), [['alpha', 'beta', 'gamma'], []]);
+  assert.deepEqual(apart(), ['dataviz']);
+  assert.equal(byClass(main, 'ctx-off').length, 0);
+  await fire(cards()[0], 'click');
 });

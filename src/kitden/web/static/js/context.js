@@ -168,7 +168,7 @@ export function renderContext(main, { again = false } = {}) {
   const planned = after ? after.result : null;
   const result = shown ? planned || shown.result : null;
   const estimate = Boolean(planned) || index > 0;
-  const heat = heatOf(card, result, estimate);
+  const heat = heatOf(card, result, estimate, Boolean(planned));
   // The chat's own limit line stays where it is; a new limit shows as a second line (limitControl).
   if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`, heat, index === 0 ? controlOf(card) : null));
   if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
@@ -303,21 +303,27 @@ function moveFrom(at, spots) {
 // A skill's side: on the last chat's window, the server's; on an estimate (another window, or
 // after Apply), from that estimate (Claude Code: a skill whose description is sent; Codex: one
 // with nothing cut off). A skill on no side (not in the last list, or Kitden cannot tell) stays
-// apart.
-function sideOf(card, skill, result, estimate) {
-  if (skill.side === null || skill.side === undefined || !estimate) return skill.side;
+// apart; one the tray turns on (`back`) has a side in the estimate after Apply, and none in another
+// window's, which knows nothing of the tray.
+function sideOf(card, skill, result, estimate, back = false, planned = false) {
+  if (back && estimate && !planned) return null;
+  const none = skill.side === null || skill.side === undefined;
+  if (!estimate || (none && !back)) return skill.side;
   if (card.client === "codex") return skill.name in (result.over || {}) ? 1 : 0;
   return skill.name in (result.sent || {}) ? 0 : 1;
 }
 
 // How warm each skill on the first side is, grey to orange: its size against the largest there,
 // "0.00" to "1.00". The sizes to weigh at a glance; the other side stays grey.
-function heatOf(card, result, estimate) {
+function heatOf(card, result, estimate, planned) {
   const states = draftFrom(current("context"))[card.client] || {};
-  const first = card.skills.filter((s) => states[s.name] !== "off" && sideOf(card, s, result, estimate) === 0);
+  const first = card.skills.filter((s) => states[s.name] !== "off" && sideOf(card, s, result, estimate, turnedOn(s, states), planned) === 0);
   const top = Math.max(0, ...first.map((s) => s.size));
   return new Map(first.map((s) => [s.name, (top ? s.size / top : 0).toFixed(2)]));
 }
+
+// An off skill that the tray sets to On or Name only.
+const turnedOn = (skill, states) => skill.state === "off" && skill.name in states && states[skill.name] !== "off";
 
 function sidesFor(card, result, after, estimate, heat) {
   const states = draftFrom(current("context"))[card.client] || {};
@@ -333,11 +339,16 @@ function sidesFor(card, result, after, estimate, heat) {
     return cloud;
   });
   const apart = el("div", "ctx-cloud ctx-apart");
+  const off = el("div", "ctx-cloud");
   for (const skill of card.skills) {
     // A skill the tray turns off leaves the list.
     if (states[skill.name] === "off") continue;
-    const side = sideOf(card, skill, result, estimate);
-    (clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
+    const back = turnedOn(skill, states);
+    const side = sideOf(card, skill, result, estimate, back, Boolean(after && after.result));
+    // Off, and not in this list (an estimate leaves it out): it waits under Turned off, so it can
+    // come back.
+    const out = skill.state === "off" && !back && (estimate || !clouds[side]);
+    (out ? off : clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
   }
   const wrap = el("div");
   // What the number on a pill is: the same for every client (the Codex limit is in tokens, a pill's
@@ -345,6 +356,12 @@ function sidesFor(card, result, after, estimate, heat) {
   if (card.skills.some((s) => s.size)) wrap.append(el("p", "ctx-pillnote", PILL_NUMBERS));
   wrap.append(box);
   if (apart.children.length) wrap.append(apart);
+  if (off.children.length) {
+    const shelf = el("section", "ctx-off ctx-apart");
+    shelf.setAttribute("aria-label", "Turned off");
+    shelf.append(el("p", "ctx-off-head", "Turned off"), off);
+    wrap.append(shelf);
+  }
   return wrap;
 }
 
@@ -363,10 +380,10 @@ function pillFor(card, skill, states, after, heat, result) {
     node.setAttribute("title", skill.name);
   }
   node.append(el("span", null, skill.shown));
-  // Built into Claude Code: no file, so no Library item and no switch. Said on the pill.
+  // Built into Claude Code: no file, so no Library item. Said on the pill.
   if (skill.built_in) {
     node.classList.add("builtin");
-    node.setAttribute("title", `${skill.source || "Built into Claude Code"}. Kitden cannot turn it off.`);
+    node.setAttribute("title", skill.source || "Built into Claude Code");
     node.append(el("i", "ctx-tag", "built-in"));
   }
   const kept = result && result.kept ? result.kept[skill.name] : undefined;
@@ -424,7 +441,7 @@ function openSkill(client, name) {
   const facts = [];
   if (skill.size) facts.push({ label: "Size", value: `${fmt(skill.size)} characters` });
   if (skill.source) facts.push({ label: "Source", value: skill.source });
-  const list = skill.switch.length ? switchFor(card, skill) : null;
+  const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(skill.plugin_switch) : null;
   const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: skill.note, text: describe(skill) });
   openPanel(content);
   panelState.current = { type: "context-skill", client, name };
@@ -458,7 +475,27 @@ function describe(skill) {
 // project (Claude Code takes it only there).
 function ruleBody(card, skill, value) {
   const params = skill.project ? { scope: "project", project: skill.project, state: value } : { scope: "all", state: value };
-  return { action: "skill.rule", targets: [{ client: card.client, item: skill.item }], params };
+  // A built-in skill has no item: the target is its name.
+  const which = skill.built_in ? { built_in: skill.name } : { item: skill.item };
+  return { action: "skill.rule", targets: [{ client: card.client, ...which }], params };
+}
+
+// A plugin skill's plugin: the server's sentence on what goes with it, and one button that adds the
+// Library's own row for the plugin (a second press takes it out).
+function pluginSwitch(offer) {
+  const box = el("div", "ctx-plugin");
+  const body = { action: offer.action, targets: [{ item: offer.item }], params: {} };
+  const key = keyFor(body);
+  const node = button(offer.label, () => (trayRow(key) ? takeOut(key) : addToTray(body, { note: CONTEXT_NOTE })), "btn");
+  node.dataset.focus = `plugin:${offer.item}`;
+  followTray(node, key, () => {
+    const waits = Boolean(trayRow(key));
+    node.setAttribute("aria-pressed", String(waits));
+    node.classList.toggle("pending", waits);
+  });
+  if (offer.say) box.append(el("p", "why", offer.say));
+  box.append(node);
+  return box;
 }
 
 // The skill's states, the pressed one as the tray will leave it. A press adds the row (one row per
@@ -767,7 +804,7 @@ function draftFrom(model) {
     if (body.action !== "skill.rule") continue;
     for (const target of body.targets || []) {
       const card = model && model.clients.find((c) => c.client === target.client);
-      const skill = card && card.skills.find((s) => s.item && s.item === target.item);
+      const skill = card && card.skills.find((s) => (target.built_in ? s.built_in && s.name === target.built_in : s.item && s.item === target.item));
       if (skill) (draft[target.client] ||= {})[skill.name] = ruleState(body.params);
     }
   }

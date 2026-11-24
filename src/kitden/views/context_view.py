@@ -16,8 +16,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypeGuard
 
-from kitden.clients.base import Reader, found_columns, from_plugin
-from kitden.clients.claude_code import LIMIT_KEY, local_files
+from kitden.clients.base import (
+    PLUGIN_DISABLE,
+    PLUGIN_ENABLE,
+    Reader,
+    found_columns,
+    from_plugin,
+)
+from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, ClaudeCodeAdapter, local_files
 from kitden.clients.versions import highest_version
 from kitden.context.claude_log import Unreadable, last_claude_list
 from kitden.context.codex_log import codex_window, codex_windows, last_codex_list
@@ -39,9 +45,11 @@ from kitden.context.rules import (
 )
 from kitden.context.tables import (
     CLAUDE_ALWAYS_FULL,
+    CLAUDE_BUILT_IN,
     CLAUDE_CANDIDATES,
     CLAUDE_DESCRIPTION_CAP,
     CLAUDE_OTHER_WINDOW,
+    CLAUDE_RULED,
     CLAUDE_SHARE,
     CLAUDE_SHARE_MOST,
     CLAUDE_SHARE_STEPS,
@@ -51,11 +59,12 @@ from kitden.context.tables import (
     CODEX_MAX_LIMIT,
 )
 from kitden.local_gateway.settings import as_dict
-from kitden.model import CLIENT_WORDS, Item, ItemKind, Project, Scope
+from kitden.model import CLIENT_WORDS, Enabled, Item, ItemKind, Project, Scope
 from kitden.system import claude_desktop_dir
 from kitden.views import words
 from kitden.views.after import home_path
-from kitden.views.effective import effective_view
+from kitden.views.catalog import installed_inside
+from kitden.views.effective import effective_view, in_project
 from kitden.views.match import plugin_of
 from kitden.views.skills import read_skill
 
@@ -87,7 +96,8 @@ class _Row:
     path: str = ""  # Codex: the `file:` path of its line
     shown: str = ""  # Claude Code: the name as the list shows it, where that is more than the name
     added: bool = False  # Claude Code: added during the chat, sent whole outside the limit
-    built_in: bool = False  # Claude Code: built in, keeps its description whatever the limit
+    built_in: bool = False  # Claude Code: built in, so no file
+    always_full: bool = False  # Claude Code: built in, keeps its description whatever the limit
     moved: bool = False  # Codex: read from its plugin's newer version, the chat's one is gone
     # Codex: the newer version's description is another text than the chat sent, so the size it
     # had in the chat is not known.
@@ -179,7 +189,22 @@ def _name(client: str, item: Item) -> str:
 
 
 def _state(item: Item | None) -> str:
+    # A plugin that is off takes its skills with it.
+    if item is not None and from_plugin(item) and item.enabled is Enabled.OFF:
+        return "off"
     return (item.skill_state if item else None) or "on"
+
+
+def _off_skills(inventory, client: str, folder: str | None) -> dict[str, Item]:
+    """The skills that are off there, by name: the effective view leaves them out."""
+    found: dict[str, Item] = {}
+    for item in inventory.items:
+        here = item.client == client and item.project in (None, folder)
+        if here and item.kind is ItemKind.SKILL:
+            item = in_project(item, folder)
+            if item.enabled is Enabled.OFF:
+                found.setdefault(_name(client, item), item)
+    return found
 
 
 def _description(path: str | None) -> str | None:
@@ -242,10 +267,17 @@ def _skill(
     built_in: bool = False,
     description: str | None = None,
     seen: int | None = None,
+    state: str | None = None,
+    plugin_switch: dict | None = None,
+    source: str | None = None,
+    held: bool = False,
 ) -> dict:
+    """`state` and `source`: of a skill with no item to say them. `held`: a project's own settings
+    set it, so the user's file cannot change it there."""
     # Claude Code's skillOverrides does not touch a plugin's skills (spec "Switches per client").
     plugin = client == "claude_code" and item is not None and from_plugin(item)
-    switch = [] if item is None or plugin else SWITCHES.get(client, [])
+    ruled = item is not None or (built_in and name in CLAUDE_RULED)
+    switch = SWITCHES.get(client, []) if ruled and not plugin and not held else []
     # Claude Code takes a rule for a project's own skill only in that project (changes/actions.py).
     project = item.project if client == "claude_code" and item and not plugin else None
     return {
@@ -256,13 +288,15 @@ def _skill(
         "plugin": name.rpartition(":")[0] or None,
         "item": item.id if item else None,
         "project": Project(project, True).id if project else None,
-        "source": _source(item, built_in),
-        # Not a file on this computer: no Library item, no switch.
+        "source": source or _source(item, built_in),
+        # Not a file on this computer: no Library item.
         "built_in": built_in,
         "size": size,
         "side": side,
-        "state": _state(item),
+        "state": state or _state(item),
         "switch": list(switch),
+        # Claude Code: the plugin's own switch, for a skill that follows its plugin.
+        "plugin_switch": plugin_switch,
         "note": note,
         "description": description,
         "seen": seen,
@@ -422,6 +456,137 @@ def _claude_setting(files: list[Path]) -> int | None:
             value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
         )
     return None
+
+
+def _built_in_rules(files: list[Path]) -> dict[str, tuple[str, bool]]:
+    """The `skillOverrides` state of each built-in skill it is known to reach, key by key, the
+    winning file last, and whether a project's file sets it (checked 2026-11-24, Claude Code
+    2.1.330: the files merge key by key)."""
+    read = Reader("claude_code")
+    rules: dict[str, tuple[str, bool]] = {}
+    for i, path in enumerate(files):
+        found = as_dict(as_dict(read.json(path)).get("skillOverrides"))
+        rules |= {
+            n: (s, i > 0) for n, s in found.items() if n in CLAUDE_RULED and s in SKILL_STATES
+        }
+    return rules
+
+
+def _tagged(row: _Row) -> _Row:
+    """Whether the row is a skill built into Claude Code, by its name: such a skill has no file."""
+    own = row.item is None
+    full = own and row.name in CLAUDE_ALWAYS_FULL
+    return replace(row, built_in=own and row.name in CLAUDE_BUILT_IN, always_full=full)
+
+
+def _ruled(row: _Row) -> bool:
+    """A built-in skill that a skill rule is known to reach."""
+    return row.built_in and row.name in CLAUDE_RULED
+
+
+@dataclass
+class _Plugins:
+    """Claude Code's plugins, and what each one holds."""
+
+    items: list[Item]
+    inside: dict[str, dict]
+
+    def named(self, name: str) -> list[Item]:
+        return [p for p in self.items if p.name.split("@")[0] == name]
+
+    def of(self, row: _Row) -> Item | None:
+        """The plugin a row follows, for all projects; None when it has none, Kitden cannot tell
+        which, or a project has an entry of its own for it."""
+        prefix = row.name.rpartition(":")[0]
+        found = self.named(prefix) if prefix else []
+        if row.item is not None:
+            found = [p for p in found if p.name == plugin_of(row.item)]
+        return found[0] if len(found) == 1 and found[0].scope is Scope.USER else None
+
+    def switch(self, row: _Row, rows: list[_Row]) -> dict | None:
+        """The plugin's own switch: the change it adds to the tray, what it says, and, to turn it
+        off, what goes with it and about how much shorter the last list would be."""
+        item = self.of(row)
+        action = next(
+            (a for a in (PLUGIN_DISABLE, PLUGIN_ENABLE) if item and a in item.actions), None
+        )
+        if item is None or action is None:
+            return None
+        name = item.name.split("@")[0]
+        offer = {"item": item.id, "action": action}
+        if action == PLUGIN_ENABLE:
+            return offer | {"label": words.PLUGIN_TURN_ON.format(name), "say": None}
+        held = self.inside.get(item.name, {})
+        parts = [
+            f"{len(held[key])} {_many(len(held[key]), one, many)}"
+            for key, one, many in words.PLUGIN_PARTS
+            if held.get(key)
+        ]
+        say = []
+        if parts:
+            say.append(words.PLUGIN_GOES.format(plugin=name, parts=words.join_words(parts)))
+        # Each line of the list, with the break after it.
+        lines = [r for r in rows if self.of(r) is item]
+        size = sum(
+            len(r.shown or r.name) + (2 if r.sent is None else 4 + len(r.sent)) + 1 for r in lines
+        )
+        if size:
+            say.append(words.PLUGIN_FREES.format(n=f"{size:,}"))
+        label = words.PLUGIN_TURN_OFF.format(name)
+        return offer | {"label": label, "say": " ".join(say) or None}
+
+
+def _row_state(row: _Row, rules: dict[str, tuple[str, bool]], plugins: _Plugins) -> str:
+    if _ruled(row):
+        return rules.get(row.name, ("on", False))[0]
+    plugin = plugins.of(row) if row.item is None else None
+    if plugin is not None and plugin.enabled is Enabled.OFF:
+        return "off"  # a plugin's command goes with it
+    return _state(row.item)
+
+
+def _held(row: _Row, rules: dict[str, tuple[str, bool]]) -> bool:
+    """A project's own settings set this skill, over the user's file."""
+    if _ruled(row):
+        return rules.get(row.name, ("on", False))[1]
+    item = row.item
+    return (
+        item is not None
+        and item.project is None
+        and item.state_scope in (Scope.PROJECT, Scope.LOCAL)
+    )
+
+
+def _claude_plugins(inventory, home: Path, folder: str | None) -> _Plugins:
+    """Those Claude Code installed, for all projects or in `folder`; not an account's."""
+    items = [
+        i
+        for i in inventory.items
+        if i.client == "claude_code"
+        and i.kind is ItemKind.PLUGIN
+        and i.scope is not Scope.ACCOUNT
+        and i.project in (None, folder)
+    ]
+    return _Plugins(items, installed_inside({"claude_code": ClaudeCodeAdapter(home)}))
+
+
+def _plugin_note(note: str | None, offer: dict | None) -> str | None:
+    return words.NOTE_PLUGIN_SWITCH if offer and note == words.NOTE_PLUGIN else note
+
+
+def _outside(row: _Row, plugins: _Plugins) -> tuple[str | None, str | None]:
+    """The source and the note of a listed skill with a prefix and no item: a part of a plugin
+    Kitden knows, a skill of the Claude app, or of a plugin Kitden does not know."""
+    prefix = row.name.rpartition(":")[0]
+    if row.item is not None or not prefix:
+        return None, None
+    if plugins.named(prefix):
+        return words.SOURCE_PLUGIN.format(prefix), words.NOTE_PLUGIN
+    # checked 2026-11-24 (code.claude.com/docs/en/skills): the name is reserved for skills synced
+    # from claude.ai, which the Claude app may give to Claude Code as a plugin.
+    if prefix == "anthropic-skills":
+        return words.SOURCE_APP, words.NOTE_APP
+    return prefix, words.NOTE_OTHER_PLUGIN.format(prefix)
 
 
 def _claude_key(files: list[Path], key: str):
@@ -757,7 +922,7 @@ def _claude_run(
         ClaudeSkill(
             r.name,
             r.sent if r.sent is not None else r.full if r.full is not None else unknown,
-            r.built_in,
+            r.always_full,
             states[r.name] == "name-only",
             weights.get(r.name, 0.0),
             r.shown,
@@ -906,13 +1071,15 @@ def _claude_note(
 ) -> str | None:
     """`explained`: the limit rebuilds the list, so it is why a description is missing.
     `can_free`: some skill with a description has a switch."""
-    if row.item is None:
-        return words.NOTE_BUILT_IN if row.built_in else None
+    if state == "off":
+        return words.NOTE_OFF
+    if row.item is None and not _ruled(row):
+        return words.NOTE_BUILT_IN if row.built_in else words.NOTE_NO_ITEM
     if state in ASKED:
         return words.NOTE_ONLY_ASKED
     if side is None:
         return words.NOTE_NOT_LISTED
-    if from_plugin(row.item):
+    if row.item is not None and from_plugin(row.item):
         return words.NOTE_PLUGIN
     if state == "name-only":
         return words.NOTE_NAME_ONLY
@@ -947,7 +1114,10 @@ def _claude(
     date, at_ms = _when(found.at)
     # The chat's own folder: its project's skills were in its list.
     items = _skills(inventory, client, found.folder)
-    by_name = {_name(client, i): i for i in items}
+    loaded = {_name(client, i): i for i in items}
+    turned_off = _off_skills(inventory, client, found.folder)
+    by_name = turned_off | loaded
+    plugins = _claude_plugins(inventory, home, found.folder)
     rows = []
     for name, text in found.skills:
         item = by_name.get(name)
@@ -960,20 +1130,41 @@ def _claude(
     listed = {r.name for r in rows}
     extras = [
         _Row(name, None, item, _description(item.source.path))
-        for name, item in by_name.items()
+        for name, item in loaded.items()
         if name not in listed
     ]
-    states = {r.name: _state(r.item) for r in [*rows, *extras]}
-    off = _not_loaded(inventory, client, found.folder, by_name)
+    files = _claude_files(home, found.folder)
+    rules = _built_in_rules(files)
+    # `always_full` is checked against each chat: a wrong name here and the rule no longer
+    # rebuilds the list.
+    rows = [_tagged(r) for r in rows]
+    # Off before the chat, so in no list: they wait on the page, and count once the tray turns one
+    # on. Your own skills, and the built-in ones a setting keeps out; a plugin's come back with it.
+    waiting = [
+        _Row(name, None, item, _description(item.source.path))
+        for name, item in turned_off.items()
+        if name not in listed and name not in loaded and not from_plugin(item)
+    ]
+    waiting += [
+        _tagged(_Row(name, None, None, None))
+        for name, (state, _) in rules.items()
+        if state in ("off", *ASKED) and name not in listed and name not in by_name
+    ]
+    rows_now = [*rows, *extras, *waiting]
+    # Today's states; and those of the chat as far as its list tells: what it lists was not off,
+    # and what it sent with a description was not Name only.
+    states = {r.name: _row_state(r, rules, plugins) for r in rows_now}
+    then = states | {
+        r.name: "on"
+        for r in rows
+        if states[r.name] == "off" or (states[r.name] == "name-only" and r.sent is not None)
+    }
+    off = _not_loaded(inventory, client, found.folder, loaded)
     off |= {name for name, state in states.items() if state in ASKED}
     # What the next chats list: today's skills, in today's states (`rows_now`).
     states_now = states | {name: "off" for name in states if name in off}
-    # Checked against each chat: a wrong name here and the rule no longer rebuilds the list.
-    rows = [replace(r, built_in=r.item is None and r.name in CLAUDE_ALWAYS_FULL) for r in rows]
-    rows_now = [*rows, *extras]
     weights = _claude_weights(home, at_ms)
 
-    files = _claude_files(home, found.folder)
     setting = _claude_setting(files)
     fraction = _claude_fraction(files)
     # checked 2026-11-24 (Claude Code 2.1.311): with both set, the fixed budget is the limit; the
@@ -986,7 +1177,7 @@ def _claude(
     budget = setting if setting is not None else (claude_budget(*model, share) if model else None)
     base = _claude_run(rows_now, states_now, weights, budget, cap=cap) if budget else None
     sent_full = frozenset(r.name for r in rows if r.sent is not None)
-    as_sent = _claude_run(rows, states, weights, budget, as_sent=True, cap=cap) if budget else None
+    as_sent = _claude_run(rows, then, weights, budget, as_sent=True, cap=cap) if budget else None
     checked = as_sent is not None and as_sent[1].full == sent_full
     # Settings changed after the chat: the share may differ from the one the chat was sent
     # under. When another share rebuilds the chat's list, the chat's card shows that limit, and
@@ -994,7 +1185,7 @@ def _claude(
     moved = not _unchanged(files, at_ms)
     then_share = None
     if setting is None and model and not checked and moved:
-        then_share = _share_then(rows, states, weights, model, share, sent_full, cap)
+        then_share = _share_then(rows, then, weights, model, share, sent_full, cap)
         checked = then_share is not None and base is not None
     # The log does not say the window: take the only one whose limit rebuilds the list.
     worked_out = two_limits = False
@@ -1005,9 +1196,7 @@ def _claude(
         fits = [
             candidate
             for candidate in CLAUDE_CANDIDATES
-            if _claude_gives(
-                rows, states, weights, claude_budget(*candidate, share), sent_full, cap
-            )
+            if _claude_gives(rows, then, weights, claude_budget(*candidate, share), sent_full, cap)
         ]
         if len({size for size, _ in fits}) == 1:
             worked_out = True
@@ -1023,18 +1212,18 @@ def _claude(
     # settings changed since and nothing rebuilds the chat's list (then no limit line is drawn).
     then_budget = budget
     unsure = moved and not checked and then_share is None and pair is not None
-    if unsure and budget is not None and not _list_ends_at(rows, states, budget, cap):
+    if unsure and budget is not None and not _list_ends_at(rows, then, budget, cap):
         # The rule cannot say; the place where the chat's list stops can (`_list_ends_at`). When
         # the settings have a share it does not stop at, and it stops at another share's limit,
         # that share was set since. (A window worked out from the list gives it at today's.)
         then_budget = None
         if by_fraction and not worked_out and model:
-            then_share = _share_counted(rows, states, model, share, cap)
+            then_share = _share_counted(rows, then, model, share, cap)
     if then_share is not None and model:
         then_budget = claude_budget(*model, then_share)
     when = _on_date(date)
     settled = bool(date) and not moved
-    chosen, now = _chosen(rows, states, weights, then_budget, checked, settled, cap)
+    chosen, now = _chosen(rows, then, weights, then_budget, checked, settled, cap)
     fact = _claude_fact(rows, when, chosen, now, cap)
     misfit = fact["misfit"] is not None
     if checked and not misfit and then_budget is not None:
@@ -1136,12 +1325,13 @@ def _claude(
 
     explained = checked or two_limits
     can_free = any(
-        r.item is not None
-        and r.sent is not None
+        r.sent is not None
         and states[r.name] == "on"
-        and not from_plugin(r.item)
+        and not _held(r, rules)
+        and (_ruled(r) or (r.item is not None and not from_plugin(r.item)))
         for r in rows
     )
+    project_rule = words.NOTE_PROJECT_RULE.format(Path(found.folder or "").name)
     skills = []
     for r in rows:
         side = 0 if r.sent is not None else 1
@@ -1151,11 +1341,49 @@ def _claude(
             r.full if r.full is not None else r.sent,
             _seen(r.full, r.sent, side, None if r.added else _cap_then(cap, r.sent)),
         )
-        skills.append(_skill(client, r.name, r.item, size, side, note, r.built_in, text, seen))
-    for r in extras:
+        source, outside = _outside(r, plugins)
+        held = _held(r, rules)
+        if held:
+            note = project_rule
+        elif states[r.name] == "off":
+            outside = None  # off says more than where it comes from
+        offer = plugins.switch(r, rows)
+        skills.append(
+            _skill(
+                client,
+                r.name,
+                r.item,
+                size,
+                side,
+                _plugin_note(outside or note, offer),
+                r.built_in,
+                text,
+                seen,
+                states[r.name],
+                offer,
+                source,
+                held,
+            )
+        )
+    for r in [*extras, *waiting]:
         note = _claude_note(r, states[r.name], None, 0)
-        size = len(r.full or "")
-        skills.append(_skill(client, r.name, r.item, size, None, note, description=r.full))
+        offer = plugins.switch(r, rows)
+        held = _held(r, rules)
+        skills.append(
+            _skill(
+                client,
+                r.name,
+                r.item,
+                len(r.full or ""),
+                None,
+                project_rule if held else _plugin_note(note, offer),
+                r.built_in,
+                description=r.full,
+                state=states[r.name],
+                plugin_switch=offer,
+                held=held,
+            )
+        )
 
     version = f" {found.version}" if found.version else ""
     surface = f" {found.surface}" if found.surface else ""

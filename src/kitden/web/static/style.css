@@ -1357,6 +1357,7 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-side.calm h3 i { background: none; box-shadow: inset 0 0 0 1px var(--link); }
 .ctx-cloud { display: flex; flex-wrap: wrap; gap: 5px; }
 .ctx-apart { max-width: 900px; margin-top: 10px; }
+.ctx-off-head { margin: 0 0 6px; font-size: 11px; color: var(--ink-3); }
 .ctx-pill { display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border: 1px solid color-mix(in oklab, var(--brand) calc(var(--heat, 0) * 100%), var(--wire)); border-radius: 7px; background: color-mix(in oklab, var(--brand) calc(var(--heat, 0) * var(--heat-fill)), var(--panel-raised)); color: var(--ink); font: inherit; font-size: 11.5px; white-space: nowrap; cursor: pointer; transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease; }
 .ctx-pill .ctx-plug { margin-right: -7px; color: var(--ink-3); }
 .ctx-pillnote { max-width: 900px; margin: 0 0 8px; font-size: 11px; color: var(--ink-3); }

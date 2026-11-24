@@ -53,6 +53,31 @@ CLAUDE_ALWAYS_FULL = frozenset(
     }
 )
 
+# checked 2026-11-24 (Claude Code 2.1.330, `claude -p` in a sandbox home with a stand-in API
+# server): `skillOverrides` in the user settings takes each of these built-in skills out of the
+# list ("off") or leaves only its name ("name-only"). The other built-in skills were not in that
+# list, so nobody checked them.
+CLAUDE_RULED = frozenset(
+    {
+        "claude-api",
+        "code-review",
+        "dataviz",
+        "fewer-permission-prompts",
+        "init",
+        "keybindings-help",
+        "loop",
+        "plugin-authoring",
+        "run",
+        "security-review",
+        "simplify",
+        "update-config",
+        "workflow-authoring",
+    }
+)
+# checked 2026-11-24 (Claude Code 2.1.330): `ship-local` and `steward` are names in the program
+# and have no file in ~/.claude.
+CLAUDE_BUILT_IN = CLAUDE_ALWAYS_FULL | CLAUDE_RULED | {"ship-local", "steward"}
+
 # checked 2026-11-07 (Claude Code 2.1.311, two test chats): the skill list may use 1% of the
 # window, and one description is cut at 1536 characters.
 CLAUDE_SHARE = 0.01

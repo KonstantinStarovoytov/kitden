@@ -592,12 +592,291 @@ def test_plugin_skills_have_no_switch_in_claude_code(home):
     assert "plugin" in rows["plug:tool"]["note"]
     assert rows["own"]["switch"] == ["on", "name-only", "off"]
     assert rows["dataviz"]["item"] is None
-    assert rows["dataviz"]["switch"] == []
-    assert rows["dataviz"]["note"] == words.NOTE_BUILT_IN
-    assert "cannot turn" in rows["dataviz"]["note"]
+    assert rows["dataviz"]["switch"] == ["on", "name-only", "off"]
+    assert rows["dataviz"]["note"] == (
+        "Name only frees 9 characters. The agent no longer sees when to use it."
+    )
     assert rows["dataviz"]["built_in"] is True
     assert rows["own"]["built_in"] is False
     assert rows["plug:tool"]["built_in"] is False
+
+
+def test_a_built_in_skill_shows_the_state_its_settings_give_it(home):
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"dataviz": "name-only"}})
+    claude_chat(home, {"dataviz": None, "loop": "Loops.", "schedule": "Runs later."})
+    rows = {s["name"]: s for s in view(home)["claude_code"]["skills"]}
+    assert (rows["dataviz"]["state"], rows["loop"]["state"]) == ("name-only", "on")
+    assert rows["dataviz"]["note"] == words.NOTE_NAME_ONLY
+    # Built in, but nobody checked that a rule reaches it: no switch, and the note says so.
+    assert (rows["schedule"]["switch"], rows["schedule"]["built_in"]) == ([], True)
+    assert rows["schedule"]["note"] == words.NOTE_BUILT_IN
+
+
+def test_a_project_file_decides_a_built_in_skills_state_over_the_users(home):
+    project = home / "work/a"
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"dataviz": "off"}})
+    write_json(project / ".claude/settings.local.json", {"skillOverrides": {"dataviz": "on"}})
+    claude_chat(home, {"dataviz": "Charts."}, folder=str(project))
+    rows = {s["name"]: s for s in view(home)["claude_code"]["skills"]}
+    assert rows["dataviz"]["state"] == "on"
+
+
+def test_a_built_in_skill_that_is_off_stays_on_the_page_after_a_new_chat(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    rules = {"dataviz": "off", "loop": "name-only", "no-such-skill": "off", "schedule": "off"}
+    write_json(home / ".claude/settings.json", {"skillOverrides": rules})
+    claude_chat(home, {"alpha": "Does alpha."})
+    rows = {s["name"]: s for s in view(home)["claude_code"]["skills"]}
+    # Only what a switch here can turn on again; a rule for another name is not a skill we know.
+    assert set(rows) == {"alpha", "dataviz"}
+    off = rows["dataviz"]
+    assert (off["side"], off["state"], off["built_in"]) == (None, "off", True)
+    assert off["switch"] == ["on", "name-only", "off"]
+    assert off["note"] == words.NOTE_OFF
+
+
+def test_a_skill_off_in_settings_but_in_the_last_list_says_it_is_off(home):
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"dataviz": "off"}})
+    claude_chat(home, {"dataviz": "Charts."})
+    (row,) = view(home)["claude_code"]["skills"]
+    assert (row["side"], row["state"], row["note"]) == (0, "off", words.NOTE_OFF)
+
+
+def test_a_built_in_set_to_name_only_in_the_tray_is_in_the_estimate(home):
+    skill(home / ".claude/skills", "alpha", LONG[:1000])
+    built_in = ("dataviz", "simplify", "loop", "run", "code-review")
+    claude_chat(
+        home, dict.fromkeys(built_in, "x" * 1536) | {"alpha": None}, model="claude-sonnet-4-6"
+    )
+    draft = {"claude_code": {"dataviz": "name-only"}}
+    cc = view(home, draft=draft)["claude_code"]
+    assert cc["checked"] is True
+    assert cc["after"]["gets"] == ["alpha"]
+
+
+def plugin(home, name="plug", market="market", *, on=True, skills=("tool",), enabled=None):
+    """An installed user plugin with skills, a command, an agent and a server."""
+    key = f"{name}@{market}"
+    folder = home / ".claude/plugins/cache" / market / name / "1.0"
+    for one in skills:
+        skill(folder / "skills", one, f"Does {one}.")
+    for part in ("commands/start.md", "agents/helper.md"):
+        (folder / part).parent.mkdir(parents=True, exist_ok=True)
+        (folder / part).write_text("---\ndescription: Starts.\n---\n")
+    write_json(folder / ".mcp.json", {"mcpServers": {"docs": {"command": "docs"}}})
+    path = home / ".claude/plugins/installed_plugins.json"
+    known = json.loads(path.read_text())["plugins"] if path.exists() else {}
+    write_json(path, {"plugins": known | {key: [{"installPath": str(folder)}]}})
+    settings = home / ".claude/settings.json"
+    data = json.loads(settings.read_text()) if settings.exists() else {}
+    data["enabledPlugins"] = data.get("enabledPlugins", {}) | {key: on}
+    write_json(settings, data)
+    return key
+
+
+def rows_of(home, **kw):
+    return {s["name"]: s for s in view(home, **kw)["claude_code"]["skills"]}
+
+
+def test_your_own_skill_that_is_off_is_not_lost(home):
+    # In the last list, and turned off since.
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    # Off before the last chat.
+    skill(home / ".claude/skills", "beta", "Does beta.")
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"alpha": "off", "beta": "off"}})
+    claude_chat(home, {"alpha": "Does alpha.", "dataviz": "Charts."})
+    rows = rows_of(home)
+    for name, side in (("alpha", 0), ("beta", None)):
+        row = rows[name]
+        assert (row["side"], row["state"], row["note"]) == (side, "off", words.NOTE_OFF)
+        assert row["item"] is not None and row["switch"] == ["on", "name-only", "off"]
+        assert row["source"] == "Your skills"
+
+
+def test_a_skill_turned_off_after_the_chat_keeps_the_chats_check(home):
+    eight_skills(home, model="claude-sonnet-4-6")
+    assert view(home)["claude_code"]["checked"] is True
+    before = view(home)["claude_code"]["windows"][0]["result"]
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"s1": "off"}})
+    cc = view(home)["claude_code"]
+    # The chat listed it, so it was not off then: the rule still rebuilds that list.
+    assert cc["checked"] is True
+    assert cc["windows"][0]["result"] == before
+
+
+def test_a_skill_set_to_name_only_after_the_chat_keeps_the_chats_check(home):
+    eight_skills(home, model="claude-sonnet-4-6")
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"s1": "name-only"}})
+    cc = view(home)["claude_code"]
+    # The chat sent its description, so it was not Name only then.
+    assert cc["checked"] is True
+    # The limit now has room for the one that had none.
+    assert cc["windows"][0]["budget"] == 8_000
+
+
+def test_a_rule_in_a_projects_file_is_not_one_this_switch_can_change(home):
+    project = home / "work/a"
+    skill(home / ".claude/skills", "beta", "Does beta.")
+    skill(home / ".claude/skills", "gamma", "Does gamma.")
+    rules = {"dataviz": "off", "beta": "off", "loop": "on"}
+    write_json(project / ".claude/settings.local.json", {"skillOverrides": rules})
+    write_json(home / ".claude.json", {"projects": {str(project): {}}})
+    claude_chat(home, {"loop": "Loops.", "gamma": "Does gamma."}, folder=str(project))
+    rows = rows_of(home, folder=str(project))
+    for name in ("dataviz", "beta", "loop"):
+        assert rows[name]["switch"] == []
+        assert rows[name]["note"] == words.NOTE_PROJECT_RULE.format("a")
+    assert rows["gamma"]["switch"] == ["on", "name-only", "off"]
+
+
+def test_a_command_of_a_plugin_that_is_off_is_off(home):
+    plugin(home, on=False)
+    claude_chat(home, {"plug:start": "Starts."})
+    row = rows_of(home)["plug:start"]
+    assert (row["state"], row["note"]) == ("off", words.NOTE_OFF)
+    assert row["plugin_switch"]["action"] == "plugin.enable"
+
+
+def test_your_own_skill_turned_on_again_is_in_the_estimate(home):
+    for name in ("alpha", "beta"):
+        skill(home / ".claude/skills", name, f"Does {name}.")
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"beta": "off"}})
+    claude_chat(home, {"alpha": "Does alpha."})
+    # Off, it counts for nothing.
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is True
+    assert cc["windows"][1]["result"]["short"] == "All 1 would fit"
+    cc = view(home, draft={"claude_code": {"beta": "on"}})["claude_code"]
+    assert set(cc["after"]["result"]["sent"]) == {"alpha", "beta"}
+
+
+def test_a_built_in_skill_turned_on_again_gives_no_estimate_that_leaves_it_out(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    skill(home / ".claude/skills", "beta", "Does beta.")
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"dataviz": "off"}})
+    claude_chat(home, {"alpha": "Does alpha.", "beta": "Does beta."})
+    draft = {"beta": "name-only"}
+    assert view(home, draft={"claude_code": draft})["claude_code"]["after"] is not None
+    # Its description is in no file, so its size is not known.
+    draft |= {"dataviz": "on"}
+    assert view(home, draft={"claude_code": draft})["claude_code"]["after"] is None
+    # By name only its size is known.
+    draft |= {"dataviz": "name-only"}
+    after = view(home, draft={"claude_code": draft})["claude_code"]["after"]
+    assert (
+        after["result"]["used"] == len("alpha") + 4 + 11 + len("beta") + 2 + len("dataviz") + 2 + 2
+    )
+
+
+def test_a_plugins_command_names_its_plugin(home):
+    plugin(home)
+    claude_chat(home, {"plug:tool": "Does tool.", "plug:start": "Starts."})
+    rows = rows_of(home)
+    assert rows["plug:tool"]["source"] == rows["plug:start"]["source"] == "Plugin plug"
+    assert rows["plug:start"]["item"] is None
+    assert rows["plug:start"]["note"] == rows["plug:tool"]["note"] == words.NOTE_PLUGIN_SWITCH
+
+
+def test_a_skill_from_outside_says_where_it_comes_from_and_why_it_has_no_switch(home):
+    sent = {"venture:review": "Reviews.", "anthropic-skills:pdf": "PDF.", "mystery": "What."}
+    claude_chat(home, sent | {"ship-local": None, "security-review": None})
+    rows = rows_of(home)
+    assert rows["venture:review"]["source"] == "venture"
+    assert rows["venture:review"]["note"] == words.NOTE_OTHER_PLUGIN.format("venture")
+    assert rows["anthropic-skills:pdf"]["source"] == words.SOURCE_APP
+    assert rows["anthropic-skills:pdf"]["note"] == words.NOTE_APP
+    assert (rows["mystery"]["source"], rows["mystery"]["note"]) == (None, words.NOTE_NO_ITEM)
+    assert (
+        rows["ship-local"]["source"]
+        == rows["security-review"]["source"]
+        == ("Built into Claude Code")
+    )
+    assert rows["ship-local"]["switch"] == []
+    assert rows["security-review"]["switch"] == ["on", "name-only", "off"]
+    # Every skill with no switch says why.
+    assert all(r["note"] for r in rows.values() if not r["switch"])
+
+
+def test_a_plugins_skill_offers_to_turn_its_plugin_off_and_says_what_goes(home):
+    plugin(home, skills=("tool", "other"))
+    claude_chat(home, {"plug:tool": "Does tool.", "plug:other": None, "plug:start": "Starts."})
+    inventory = build_inventory(home)
+    (item,) = [i for i in inventory.items if i.name == "plug@market" and i.client == "claude_code"]
+    rows = rows_of(home)
+    offer = rows["plug:tool"]["plugin_switch"]
+    assert offer == rows["plug:start"]["plugin_switch"]
+    assert offer == {
+        "item": item.id,
+        "action": "plugin.disable",
+        "label": "Turn off plug",
+        # The three lines of the last list: 24, 13 and 22 characters.
+        "say": "Turns off all of plug: 2 skills, 1 command, 1 agent and 1 MCP server. "
+        "About 59 fewer characters in the list.",
+    }
+    assert rows["plug:tool"]["switch"] == []
+
+
+def test_a_plugin_turned_off_after_the_chat_is_turned_on_again_from_its_skill(home):
+    plugin(home, on=False)
+    claude_chat(home, {"plug:tool": "Does tool."})
+    row = rows_of(home)["plug:tool"]
+    assert (row["side"], row["state"], row["source"]) == (0, "off", "Plugin plug")
+    assert row["plugin_switch"]["action"] == "plugin.enable"
+    assert row["plugin_switch"]["label"] == "Turn on plug"
+    assert row["plugin_switch"]["say"] is None
+    assert row["note"] == words.NOTE_OFF
+
+
+def test_an_off_plugins_skills_are_not_listed_after_a_new_chat(home):
+    plugin(home, on=False)
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"alpha": "Does alpha."})
+    assert set(rows_of(home)) == {"alpha"}
+
+
+def test_two_plugins_with_one_name_offer_no_switch_for_a_command(home):
+    plugin(home, market="one")
+    plugin(home, market="two")
+    claude_chat(home, {"plug:start": "Starts."})
+    row = rows_of(home)["plug:start"]
+    assert row["plugin_switch"] is None
+    assert (row["source"], row["note"]) == ("Plugin plug", words.NOTE_PLUGIN)
+
+
+def test_a_plugin_a_project_turns_on_itself_has_no_switch_for_all_projects(home):
+    plugin(home)
+    project = home / "work/a"
+    write_json(project / ".claude/settings.json", {"enabledPlugins": {"plug@market": True}})
+    write_json(home / ".claude.json", {"projects": {str(project): {}}})
+    claude_chat(home, {"plug:tool": "Does tool."}, folder=str(project))
+    row = rows_of(home, folder=str(project))["plug:tool"]
+    assert (row["plugin_switch"], row["note"]) == (None, words.NOTE_PLUGIN)
+
+
+def test_a_plugin_of_the_account_is_not_one_the_library_can_turn_off(home):
+    write_json(home / ".claude/settings.json", {"enabledPlugins": {"venture@synced": True}})
+    claude_chat(home, {"venture:review": "Reviews."})
+    row = rows_of(home)["venture:review"]
+    assert row["note"] == words.NOTE_OTHER_PLUGIN.format("venture")
+    assert row["plugin_switch"] is None
+
+
+def test_a_plugins_skill_that_was_not_listed_has_its_switch_too(home):
+    plugin(home)
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"alpha": "Does alpha."})
+    row = rows_of(home)["plug:tool"]
+    assert row["side"] is None
+    assert row["plugin_switch"]["label"] == "Turn off plug"
+    assert "fewer characters" not in row["plugin_switch"]["say"]
+
+
+def test_other_skills_and_clients_have_no_plugin_switch(home):
+    codex_home(home)
+    skill(home / ".claude/skills", "own", "Does own.")
+    claude_chat(home, {"own": "Does own.", "dataviz": "Charts."})
+    cards = view(home)
+    assert all(s["plugin_switch"] is None for c in cards.values() for s in c["skills"])
 
 
 def test_a_skill_not_in_the_last_list_is_shown_apart(home):
@@ -1325,13 +1604,21 @@ def test_a_missing_description_the_limit_does_not_explain_is_not_blamed_on_room(
 def test_no_room_gives_advice_only_when_a_skill_can_be_switched(home):
     skill(home / ".claude/skills", "alpha", LONG[:1000])
     built_in = ("dataviz", "simplify", "loop", "schedule", "run", "code-review")
-    # Only built-in skills have a description here, and they have no switch.
     sent = dict.fromkeys(built_in, "x" * 1536) | {"alpha": None}
     claude_chat(home, sent, model="claude-sonnet-4-6")
     cc = view(home)["claude_code"]
     assert cc["checked"] is True
     notes = {s["name"]: s["note"] for s in cc["skills"]}
-    assert notes["alpha"] == "No room for its description."
+    # A built-in skill can be switched too.
+    assert notes["alpha"] == f"{words.NOTE_NO_ROOM} {words.NOTE_FREE_ROOM}"
+    # Nobody checked that a rule reaches these three, so none of them can free room.
+    unchecked = ("artifact-design", "artifact-capabilities", "schedule")
+    sent = dict.fromkeys(unchecked, "x" * 2000) | {"alpha": None}
+    write_json(home / ".claude/settings.json", {"skillListingMaxDescChars": 3000})
+    claude_chat(home, sent, model="claude-sonnet-4-6", at="2026-11-07T12:00:00Z")
+    cc = view(home)["claude_code"]
+    notes = {s["name"]: s["note"] for s in cc["skills"]}
+    assert "Set a skill" not in notes["alpha"]
 
 
 def test_no_room_with_a_skill_to_switch_keeps_the_advice(home):

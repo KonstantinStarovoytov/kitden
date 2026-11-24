@@ -64,10 +64,14 @@ whose descriptions are sent go from grey to orange with the length of their desc
 few that take most of the list stand out. A skill's **Details** shows its description, with
 the part the agent did not get in grey. There you can also
 switch it to **On**, **Name only** (Claude Code) or **Off** where the client
-allows it; built-in skills, Claude Code plugin skills and Cursor have no switch. A skill built
-into Claude Code, such as `dataviz`, is marked **built-in**: it is not a file, so the Library
-does not list it and Kitden cannot turn it off. The change goes through preview,
-**Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
+allows it; Cursor has no switch. A skill built into Claude Code, such as `dataviz`, is marked
+**built-in**: it is not a file, so the Library does not list it, but most have the same switch,
+for all projects. A skill of a plugin that Claude Code installed follows its plugin: its Details
+say what the plugin holds and offer **Turn off** for the whole plugin. When Kitden has no switch
+for a skill, such as one the Claude app adds, its Details say so and why. Your own and built-in
+Claude Code skills that are off, and so were not in the last list, wait under **Turned off**,
+where you can turn them on again. A skill that a project's own settings set has no switch here.
+The change goes through preview, **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
 did not fit. `kitden show context`, which the plugin's `context` skill runs, also prints each
 skill's description, so your agent sees it too. With no chat in the current folder, it shows the
 last chat in any folder and names that folder; with `--project` it stays with that folder.

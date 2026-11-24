@@ -145,6 +145,7 @@ CODEX_SKILLS_NOT_TABLES = "Codex's skills settings are not a list of tables; Kit
 NO_SKILL_MERGE = (
     "Claude Code may not merge skill settings across files; turn it off for all projects instead."
 )
+PROJECT_BUILT_IN = "Kitden turns a built-in skill off for all projects, not for one."
 OWN_SKILL_SETTINGS = "{folder} has its own skill settings; it may keep this skill on."
 # checked 2026-10-27 (code.claude.com/docs/en/settings): Claude Code adds
 # `**/.claude/settings.local.json` to the global git excludes the first time it writes the file;
@@ -308,10 +309,34 @@ SOURCE_PROJECT = "Project {}"
 SOURCE_OWN = "Your skills"
 # One skill's Details line.
 NOTE_BUILT_IN = (
-    "Claude Code always sends built-in skills in full. "
-    "Kitden cannot turn them off: they are not files on this computer."
+    "Kitden has not checked that Claude Code can turn this skill off, so it has no switch here."
 )
+# A skill of Claude Code's list that is no item here.
+SOURCE_APP = "The Claude app or your Claude account"
+NOTE_APP = "The Claude app or your Claude account adds this skill. Kitden has no switch for it."
+NOTE_OTHER_PLUGIN = (
+    "{} is not a plugin Claude Code installed, so it has no switch here. "
+    "The Claude app or your Claude account can add plugins of their own."
+)
+NOTE_NO_ITEM = "Kitden did not find this skill's file, so it has no switch here."
+# The switch of a skill's plugin, in the skill's Details.
+PLUGIN_TURN_OFF = "Turn off {}"
+PLUGIN_TURN_ON = "Turn on {}"
+PLUGIN_GOES = "Turns off all of {plugin}: {parts}."
+PLUGIN_FREES = "About {n} fewer characters in the list."
+PLUGIN_PARTS = (
+    ("skills", "skill", "skills"),
+    ("commands", "command", "commands"),
+    ("agents", "agent", "agents"),
+    ("hooks", "hook", "hooks"),
+    ("mcp_servers", "MCP server", "MCP servers"),
+)
+# A rule in a project's own settings wins over the user's file, which the switch here writes.
+NOTE_PROJECT_RULE = "{}'s own settings set this skill, so it has no switch here."
+NOTE_OFF = "Off: your next chat does not list it."
 NOTE_PLUGIN = "A plugin's skill follows its plugin. Turn the plugin off in the Library."
+# The same, when its Details offer the plugin's own switch.
+NOTE_PLUGIN_SWITCH = "A plugin's skill follows its plugin: it has no switch of its own."
 NOTE_FREES = "Name only frees {n} characters. The agent no longer sees when to use it."
 NOTE_NO_ROOM = "No room for its description."
 # After NOTE_NO_ROOM, when a skill with a description has a switch.
