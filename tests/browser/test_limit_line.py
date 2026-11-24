@@ -392,7 +392,7 @@ class TestCounted:
     ):
         before = settings(demo.home)
         handle = open_context(page)
-        expect(handle).to_have_attribute("aria-valuetext", "1% now · not all fit")
+        expect(handle).to_have_attribute("aria-valuetext", "1% now · 4 of 20 show only a name")
         main = page.get_by_role("main")
         expect(main).to_contain_text("4 of 20 skills showed only a name")
         page.locator(".ctx-flag").click()

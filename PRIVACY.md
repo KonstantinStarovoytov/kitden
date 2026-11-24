@@ -14,10 +14,11 @@ nothing from it.
 - For the context check, what the client sent in your last chats, from the client's own chat
   files, and the skills the Claude app gives Claude Code, from the app's own folder. For Codex, also
   its model list (`models_cache.json`), for the size of its context window, and the skill files of a
-  plugin's newest version when the chat's version was removed by an update. Kitden uses them to size
-  the skill list and keeps none of it. The page, `kitden show context` and `kitden scan` all do
-  this check. `kitden scan` prints in your terminal one line about each skill list, the names of
-  the first five skills that did not fit, and nothing else from the chats. When the folder you run
+  plugin's newest version when the chat's version was removed by an update. For a skill built into
+  Claude Code, which has no file, the description an earlier chat sent, from the newest chat files.
+  Kitden uses them to size the skill list and keeps none of it. The page, `kitden show context`
+  and `kitden scan` all do this check. `kitden scan` prints in your terminal one line about each
+  skill list, the names of the first five skills that did not fit, and nothing else from the chats. When the folder you run
   it in has no chat, it reads the client's last chat in any folder and also prints that folder's
   path. `kitden show context` does the same, unless you give `--project`.
 - A skill's description, from its `SKILL.md`. The page shows it in the skill's Details, and

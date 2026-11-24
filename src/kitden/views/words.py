@@ -412,6 +412,12 @@ LIMIT_COUNTED_MANY = (
     "{n} skills have no description Kitden can find; they are counted at the longest, {cap} "
     "characters."
 )
+LIMIT_EARLIER_ONE = (
+    "{n} built-in skill has no file; its description is counted as an earlier chat sent it."
+)
+LIMIT_EARLIER_MANY = (
+    "{n} built-in skills have no file; their descriptions are counted as an earlier chat sent them."
+)
 # Skills the next chat lists and the last chat did not: the limit has to hold them too.
 LIMIT_ADDED_ONE = "{n} skill was not in this chat's list; it is counted too."
 LIMIT_ADDED_MANY = "{n} skills were not in this chat's list; they are counted too."

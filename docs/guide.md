@@ -101,7 +101,12 @@ counts what all descriptions need. A step that has room for all of them says "al
 step that does not says only "not all fit", because without the replay Kitden cannot tell which
 ones it would keep. The details say that it is a count, and how many skills have no description
 Kitden can find: those count at the longest a description can be (1,536 characters, or your
-`skillListingMaxDescChars`), so the share may be a step higher than you need.
+`skillListingMaxDescChars`), so the share may be a step higher than you need. A skill built into
+Claude Code has no file: when an earlier chat's list sent its description, it counts at that
+length, and the details say how many count so. The place of today says how many skills showed
+only a name ("1.3% now · 2 of 92 show only a name") when the last chat was sent under today's
+limit and no skill joined since. When the limit was changed after the last chat, the cost is
+measured from what the list uses at today's limit, not from what that chat used.
 
 The share is for your next chats, so skills you added or turned on after the last chat are
 counted too, and the details say how many.

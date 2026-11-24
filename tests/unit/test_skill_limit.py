@@ -543,14 +543,15 @@ def test_a_chat_the_rule_does_not_rebuild_gets_the_first_share_that_fits_the_cou
         # 12,059 - 7,251 characters, at 4 characters per token
         "cost": "About 4,800 more characters in every chat (about 1,200 tokens)",
     }
-    # A count cannot say which skills a lower limit keeps.
+    # A count cannot say which skills a lower limit keeps. The chat, sent under today's limit,
+    # says it for today's.
     places = {step["value"]: step for step in limit["steps"]}
     assert list(places) == list(CLAUDE_SHARES)
     assert places[0.01] == {
         "value": 0.01,
         "limit": 8_000,
-        "short": None,
-        "say": "1% now · not all fit",
+        "short": 4,
+        "say": "1% now · 4 of 10 show only a name",
         "now": True,
     }
     assert places[0.015] == {
@@ -565,7 +566,7 @@ def test_a_chat_the_rule_does_not_rebuild_gets_the_first_share_that_fits_the_cou
         "short": 0,
         "say": "1.7% · all 10 fit · about 4,800 more characters per chat",
     }
-    assert [places[share]["short"] for share in CLAUDE_SHARES[:6]] == [None] * 6
+    assert [places[share]["short"] for share in CLAUDE_SHARES[1:6]] == [None] * 5
     assert [places[share]["short"] for share in CLAUDE_SHARES[6:]] == [0] * 6
     assert limit["counted"] == [REPLAY] and REPLAY in cc["how"]
     assert not any(line.startswith("Kitden does not offer") for line in cc["how"])
@@ -646,6 +647,8 @@ def test_a_skill_added_after_the_chat_moves_the_counted_offer_up(home):
         "1.7% · all 11 fit · "
     )
     assert limit["counted"] == [REPLAY, ADDED] and ADDED in cc["how"]
+    # The chat's list does not hold the new skill, so it does not say what today's limit gives.
+    assert limit["steps"][0]["say"] == "1% now · not all fit"
     # It is still no skill of the chat.
     assert cc["windows"][0]["result"]["say"].startswith("In your last chat on Nov 6, 4 of 10 ")
     # Turned off in the tray, it is not in the next list.
@@ -916,10 +919,16 @@ def test_after_a_share_that_fits_not_all_the_counted_chat_offers_the_next(home):
     assert cc["changed"][1] == "Estimate: On a 200K window, not all descriptions would fit."
     limit = cc["limit"]
     assert limit["offer"]["fraction"] == 0.017
+    # The chat was sent under 1%: its 7,251 characters are not what the list uses at 12,000. The
+    # count's run at 12,000 keeps nine descriptions, 10,857 characters: 12,059 is 1,202 more.
+    assert limit["offer"]["cost"] == "About 1,200 more characters in every chat (about 300 tokens)"
+    # The chat's list was sent under another limit: the place of today cannot say more.
     assert [s["say"] for s in limit["steps"][:2]] == [
         "1%, the default · not all fit",
         "1.5% now · not all fit",
     ]
+    step = next(s for s in limit["steps"] if s["value"] == 0.017)
+    assert step["say"] == "1.7% · all 10 fit · about 1,200 more characters per chat"
 
 
 def test_after_apply_a_chat_with_a_skill_of_unknown_size_keeps_its_own_limit(home):
@@ -999,3 +1008,101 @@ def test_set_back_and_undo_from_a_counted_chat(home):
         cc = page.get("/api/context").json()["clients"][0]
         assert cc["changed"] == [] and cc["limit"]["offer"]["fraction"] == 0.017
     assert settings.read_text() == before
+
+
+# A built-in skill has no file: the count takes its description from an earlier chat's list
+
+EARLIER_TWO = (
+    "2 built-in skills have no file; their descriptions are counted as an earlier chat sent them."
+)
+EARLIER_ONE = "1 built-in skill has no file; its description is counted as an earlier chat sent it."
+INIT, REVIEW = "i" * 59, "r" * 71
+
+
+def built_in_chat(home):
+    """As a real chat of 2026-11-24, on a 200K window (8,000 characters at 1%): six skills of
+    1,200 characters and h of 700 get their description; init and security-review, built in,
+    show only a name. The list takes 7,966 characters: at its limit, as no other description
+    fits. With init's real 59 characters and security-review's 71 it takes 8,100; at the cap,
+    1,536 each, 11,042."""
+    for name in "abcdef":
+        skill(home / ".claude/skills", name, TEXT)
+    skill(home / ".claude/skills", "h", "h" * 700)
+    sent = dict.fromkeys("abcdef", TEXT) | {"h": "h" * 700, "init": None, "security-review": None}
+    claude_chat(home, sent, model="claude-sonnet-4-6")
+
+
+def earlier_chat(home, sent: dict[str, str]):
+    """An older chat, in another folder, whose list sent these built-in skills with their text."""
+    content = "\n".join(f"- {name}: {text}" for name, text in sent.items())
+    entry = list_entry(list(sent), content, folder="/work/b", at="2026-11-01T10:00:00Z")
+    write_chat(home, "b", "older", [entry, assistant("claude-sonnet-4-6")], 50)
+
+
+def test_built_in_skills_count_as_an_earlier_chat_sent_them(home):
+    built_in_chat(home)
+    earlier_chat(home, {"init": INIT, "security-review": REVIEW})
+    cc = view(home)["claude_code"]
+    assert not cc["checked"] and cc["windows"][0]["budget"] == 8_000
+    limit = cc["limit"]
+    # 8,100 characters: 1.1% (8,800) holds them, not 1.4% as at the cap.
+    assert limit["offer"]["fraction"] == 0.011
+    assert limit["offer"]["say"] == "1.1%: all 9 skills get their description"
+    # 8,100 - 7,966 characters, at 4 characters per token
+    assert limit["offer"]["cost"] == "About 130 more characters in every chat (about 34 tokens)"
+    assert limit["counted"] == [REPLAY, EARLIER_TWO] and EARLIER_TWO in cc["how"]
+    assert limit["steps"][0]["say"] == "1% now · 2 of 9 show only a name"
+    assert limit["steps"][1]["say"] == "1.1% · all 9 fit · about 130 more characters per chat"
+    # Only the count uses them: the page shows no description for either skill.
+    rows = {s["name"]: s for s in cc["skills"]}
+    assert not rows["init"]["description"] and not rows["security-review"]["description"]
+
+
+def test_built_in_skills_no_earlier_chat_sent_count_at_the_cap(home):
+    built_in_chat(home)
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["offer"]["fraction"] == 0.014  # 11,042; 1.3% is 10,400
+    assert limit["offer"]["cost"].startswith("About 3,100 more characters in every chat")
+    assert limit["counted"] == [
+        REPLAY,
+        "2 skills have no description Kitden can find; they are counted at the longest, 1,536 "
+        "characters.",
+    ]
+
+
+def test_one_built_in_skill_from_an_earlier_chat_and_one_at_the_cap(home):
+    built_in_chat(home)
+    # An earlier chat sent init with its text, and security-review by name only.
+    content = f"- init: {INIT}\n- security-review"
+    entry = list_entry(["init", "security-review"], content, at="2026-11-01T10:00:00Z")
+    write_chat(home, "b", "older", [entry], 50)
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["offer"]["fraction"] == 0.012  # 7,966 + 61 + 1,538 = 9,565; 1.2% is 9,600
+    assert limit["counted"] == [
+        REPLAY,
+        "1 skill has no description Kitden can find; it is counted at the longest, 1,536 "
+        "characters.",
+        EARLIER_ONE,
+    ]
+
+
+def test_a_built_in_skill_set_to_name_only_or_off_is_in_no_line(home):
+    built_in_chat(home)
+    earlier_chat(home, {"init": INIT, "security-review": REVIEW})
+    overrides = {"init": "name-only", "security-review": "off"}
+    write_json(home / ".claude/settings.json", {"skillOverrides": overrides})
+    assert view(home)["claude_code"]["limit"]["counted"] == [REPLAY]
+
+
+def test_an_earlier_chat_does_not_change_a_chat_the_rule_rebuilds(home):
+    cut_chat(home)
+    # init is off, so in no list: it waits on the page, and its size is not known.
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"init": "off"}})
+    draft = {"claude_code": {"init": "on"}}
+    before = view(home)["claude_code"], view(home, draft=draft)["claude_code"]
+    earlier_chat(home, {"init": INIT})
+    after = view(home)["claude_code"], view(home, draft=draft)["claude_code"]
+    assert before[0]["checked"] and after[0]["checked"]
+    assert after[0]["limit"] == before[0]["limit"] and "counted" not in after[0]["limit"]
+    # Turned on in the tray, its size is still not known to the rule: no estimate.
+    assert before[1]["after"] is None and after[1]["after"] is None
