@@ -276,6 +276,75 @@ def _latest_list(path: Path, folder: str | None) -> float | None:
     return latest
 
 
+EARLIER_LOGS = 40  # the newest logs `earlier_descriptions` reads, at most
+
+
+def _listed(line: bytes) -> tuple[tuple[str, str | None], ...]:
+    """The skills of one log line that holds a list, read as `_read_chat` reads them; none when
+    the line is no list Kitden can read."""
+    try:
+        entry = json.loads(line)
+    except ValueError:  # a line still being written, or not text
+        return ()
+    attachment = entry.get("attachment") if isinstance(entry, dict) else None
+    if not isinstance(attachment, dict) or attachment.get("type") != "skill_listing":
+        return ()
+    if not _known_shape(attachment) or attachment.get("skillCount") != len(attachment["names"]):
+        return ()
+    return _split(attachment["names"], attachment["content"])[0]
+
+
+def _earlier_in(path: Path, wanted: set[str], found: dict[str, str]) -> None:
+    """Adds to `found` the descriptions of the `wanted` skills this log's lists sent, its last list
+    first. Only the lines with a list are parsed, found by a search of the raw file."""
+    with path.open("rb") as file:
+        try:
+            data = mmap.mmap(file.fileno(), 0, access=mmap.ACCESS_READ)
+        except ValueError:  # an empty file cannot be mapped
+            return
+        with data:
+            at = data.rfind(LISTING)
+            while at != -1 and not found.keys() >= wanted:
+                start = data.rfind(b"\n", 0, at) + 1
+                end = data.find(b"\n", at)
+                end = len(data) if end == -1 else end
+                at = data.rfind(LISTING, 0, start)
+                for name, text in _listed(data[start:end]):
+                    if name in wanted and name not in found and text is not None:
+                        found[name] = text
+
+
+def earlier_descriptions(home: Path, names: Iterable[str]) -> dict[str, str]:
+    """For each of these skills, the description the newest list in the chat logs sent with it;
+    only the skills found. For a skill built into Claude Code, which has no file: a list that
+    shows its name only says nothing of its size, and a built-in skill is the same in every
+    folder, so the lists of every folder count. The newest logs are read first, at most
+    `EARLIER_LOGS` of them, and reading stops once every skill is found.
+
+    # checked 2026-11-24 (real logs, 549 lists): `init` came with a description of 59 characters
+    # in 446 of them and `security-review` with 71 characters in 432; in a list sent at its limit
+    # both came by name only.
+    """
+    wanted = set(names)
+    found: dict[str, str] = {}
+    if not wanted:
+        return found
+    files = []
+    for path in (home / ".claude/projects").glob("*/*.jsonl"):  # not */*/subagents/*
+        try:
+            files.append((path.stat().st_mtime, path))
+        except OSError:  # gone since the folder was listed
+            continue
+    for _, path in sorted(files, reverse=True)[:EARLIER_LOGS]:
+        try:
+            _earlier_in(path, wanted, found)
+        except OSError:  # removed or unreadable: this log only
+            continue
+        if found.keys() >= wanted:
+            break
+    return found
+
+
 def last_claude_list(home: Path, folder: str | None) -> SentList | Unreadable | None:
     """The newest list sent in a chat. With a folder, only that folder's chats."""
     chats = (home / ".claude/projects").glob("*/*.jsonl")  # not */*/subagents/*

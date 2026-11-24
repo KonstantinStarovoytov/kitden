@@ -25,7 +25,7 @@ from kitden.clients.base import (
 )
 from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, ClaudeCodeAdapter, local_files
 from kitden.clients.versions import highest_version
-from kitden.context.claude_log import Unreadable, last_claude_list
+from kitden.context.claude_log import Unreadable, earlier_descriptions, last_claude_list
 from kitden.context.codex_log import codex_window, codex_windows, last_codex_list
 from kitden.context.rules import (
     ClaudeFit,
@@ -102,6 +102,9 @@ class _Row:
     # Codex: the newer version's description is another text than the chat sent, so the size it
     # had in the chat is not known.
     changed: bool = False
+    # Claude Code: the description an earlier chat's list sent, for a built-in skill (no file).
+    # Only the count uses it: `full` is what is on disk.
+    earlier: str | None = None
 
     @property
     def then(self) -> str | None:
@@ -681,6 +684,10 @@ class _Fits:
     not_needed: str  # why there is nothing to raise when everything fits already
     lines: list[str]  # Details' quiet lines on what was counted
     counted: bool  # by a count, not by the rule
+    # By a count, when the chat was sent under today's limit and the next chat adds no skill: how
+    # many of its skills showed only a name, and are not Name only or Off now. The place of today
+    # says it where the count cannot.
+    short_now: int | None = None
 
 
 def _claude_steps(
@@ -696,6 +703,8 @@ def _claude_steps(
 
     def point(value, at: float, fit: ClaudeFit | None, head: str, here: bool = False) -> tuple:
         short = len(wanted - fit.full) if fit is not None else None
+        if here and fit is None:
+            short = fits.short_now
         used = fit.used if fit is not None else None
         return (value, claude_budget(*pair, at), short, used, head, here)
 
@@ -796,7 +805,8 @@ def _share_then(
 def _list_ends_at(rows, states, budget: int, cap: int) -> bool:
     """The chat's list stops at this limit, whatever the order descriptions are dropped in: the
     room left is less than every description that was not sent. False when it dropped none whose
-    size is known: then the list says nothing of the limit.
+    size is known: then the list says nothing of the limit. A description's size is its file's;
+    with no file, that of the text an earlier chat sent (`earlier`, a built-in skill).
 
     # checked 2026-11-24 (real log, Claude Code 2.1.330): the client let a list of 30,009
     # characters through 30,000. So up to 0.2% over is still at the limit.
@@ -807,9 +817,11 @@ def _list_ends_at(rows, states, budget: int, cap: int) -> bool:
     # An empty description has nothing to drop. One longer than the default cap (the cap is a
     # setting) counts at that: a huge one would have no room at several limits.
     dropped = [
-        min(len(r.full), cap, CLAUDE_DESCRIPTION_CAP)
+        min(len(text), cap, CLAUDE_DESCRIPTION_CAP)
         for r in listed
-        if r.sent is None and states[r.name] != "name-only" and r.full
+        if r.sent is None
+        and states[r.name] != "name-only"
+        and (text := r.full if r.full is not None else r.earlier)
     ]
     return bool(dropped) and -(budget // 500) <= budget - used < min(dropped) + 2
 
@@ -839,26 +851,56 @@ def _claude_count(
     holds also when the rule does not rebuild the chat. The count and the comparison are the
     rule's own (`size <= budget` in claude_rule), with no margin: the client let 30,009 through
     30,000 (see `_list_ends_at`), but Kitden claims no fit its own count is over.
-    A description counts as the chat sent it, or as its file is now when that is longer. One that
-    Kitden cannot find counts at the cap, the worst case; it stops just past the limit, as in
-    `_claude_gives`."""
-    rows = [replace(r, sent=r.full) if _longer_now(r, cap) else r for r in rows]
-    run = _claude_run(rows, states, {}, budget, "x" * min(cap, budget + 1), cap=cap)
-    assert run is not None  # every size is given
-    skills, fit = run
+    A description counts as the chat sent it, or as its file is now when that is longer. A
+    built-in skill's that the chat did not send counts as an earlier chat sent it (`earlier`).
+    One that Kitden cannot find counts at the cap, the worst case; it stops just past the limit,
+    as in `_claude_gives`."""
+    skills, fit = _claude_count_run(rows, states, budget, cap)
     return skills, fit if fit.size <= budget else None
 
 
+def _as_counted(row: _Row, cap: int) -> _Row:
+    """The row with the description the count takes for it (see `_claude_count`)."""
+    if _longer_now(row, cap):
+        return replace(row, sent=row.full)
+    if row.sent is None and row.full is None and row.earlier is not None:
+        return replace(row, sent=row.earlier)
+    return row
+
+
+def _claude_count_run(rows, states, budget: int, cap: int) -> tuple[list[ClaudeSkill], ClaudeFit]:
+    """The rule's run that `_claude_count` judges, also where not everything fits."""
+    rows = [_as_counted(r, cap) for r in rows]
+    run = _claude_run(rows, states, {}, budget, "x" * min(cap, budget + 1), cap=cap)
+    assert run is not None  # every size is given
+    return run
+
+
 def _claude_counted(
-    rows, extras, states, budget: int, used: int, sent: frozenset[str], changed: bool, cap: int
+    rows,
+    extras,
+    states,
+    budget: int,
+    used: int,
+    sent: frozenset[str],
+    changed: bool,
+    cap: int,
+    same_limit: bool,
 ) -> _Fits:
     """`_Fits` by count, at today's limit `budget`. `used`: what the chat's list used. `sent`: the
     skills it sent inside its limit, when no setting changed since: it shows that they fit.
-    `extras`: the skills that were not in its list. `changed`: the limit was changed after it."""
+    `extras`: the skills that were not in its list. `changed`: the limit was changed after it.
+    `same_limit`: the chat was sent under today's limit."""
     listed = {r.name for r in rows}
+    chat = rows
     rows = [*rows, *extras]
-    skills, _ = _claude_count(rows, states, budget, cap)
+    skills, run = _claude_count_run(rows, states, budget, cap)
     wanted = frozenset(s.name for s in skills if not s.name_only)
+    # What the list uses at today's limit: the chat's own number when it was sent under it (the
+    # limit does not count the skills added during the chat, so the list may have used more).
+    # Else the count's estimate: which descriptions the limit keeps is not known, but what the
+    # list uses is within one description of the limit.
+    now_used = min(used, budget) if same_limit else run.used
 
     def at(limit: int) -> ClaudeFit | None:
         fit = _claude_count(rows, states, limit, cap)[1]
@@ -866,19 +908,29 @@ def _claude_counted(
             return ClaudeFit(wanted, frozenset(s.name for s in skills) - wanted, used, used)
         return fit
 
-    unknown = sum(
-        r.sent is None and r.full is None and states[r.name] not in ("off", "name-only")
+    bare = [
+        r
         for r in rows
-    )
+        if r.sent is None and r.full is None and states[r.name] not in ("off", "name-only")
+    ]
+    unknown = sum(r.earlier is None for r in bare)
+    earlier = len(bare) - unknown
     lines = [words.LIMIT_COUNTED]
     if unknown:
         line = _many(unknown, words.LIMIT_COUNTED_ONE, words.LIMIT_COUNTED_MANY)
         lines.append(line.format(n=unknown, cap=f"{cap:,}"))
+    if earlier:
+        line = _many(earlier, words.LIMIT_EARLIER_ONE, words.LIMIT_EARLIER_MANY)
+        lines.append(line.format(n=earlier))
     lines += _added_lines(extras, states)
     all_sent = wanted & listed <= {r.name for r in rows if r.sent is not None}
     why = words.LIMIT_NOT_NEEDED if changed or all_sent else words.LIMIT_NOT_WHY
-    # The limit does not count the skills added during the chat, so the list may have used more.
-    return _Fits(skills, min(used, budget), at, why, lines, True)
+    # The chat's own list says how many show only a name at today's limit, while no skill joins.
+    short_now = None
+    if same_limit and not any(states[r.name] != "off" for r in extras):
+        names = sum(r.sent is None and states[r.name] not in ("off", "name-only") for r in chat)
+        short_now = names or None
+    return _Fits(skills, now_used, at, why, lines, True, short_now)
 
 
 def _added_lines(extras, states) -> list[str]:
@@ -1205,6 +1257,15 @@ def _claude(
             base = _claude_run(rows_now, states_now, weights, budget, cap=cap) if budget else None
             checked = base is not None
 
+    # A built-in skill has no file: when the rule cannot rebuild the chat, the place its list
+    # stops at and the count take its description from an earlier chat's list. Not in `full`,
+    # which is what is on disk: the rule stays exact and never reads it.
+    if setting is None and not (checked and base is not None):
+        bare = [r for r in (*rows, *waiting) if r.built_in and r.full is None and r.sent is None]
+        found_earlier = earlier_descriptions(home, {r.name for r in bare})
+        for r in bare:
+            r.earlier = found_earlier.get(r.name)
+
     # The limit the chat was sent under: today's, the share found above, or not known when the
     # settings changed since and nothing rebuilds the chat's list (then no limit line is drawn).
     then_budget = budget
@@ -1252,8 +1313,9 @@ def _claude(
             late = {r.name for r in rows if r.added or _longer_now(r, cap)}
             known = frozenset() if moved else sent_full - late
             is_new = then_share is not None
+            same = then_budget == budget
             fits = _claude_counted(
-                rows, extras, states_now, budget, fact["used"], known, is_new, cap
+                rows, extras, states_now, budget, fact["used"], known, is_new, cap, same
             )
     counted = fits is not None and fits.counted
 

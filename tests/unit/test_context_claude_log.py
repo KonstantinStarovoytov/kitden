@@ -7,7 +7,12 @@ from datetime import datetime
 from pathlib import Path
 
 from kitden.context import claude_log
-from kitden.context.claude_log import SentList, Unreadable, last_claude_list
+from kitden.context.claude_log import (
+    SentList,
+    Unreadable,
+    earlier_descriptions,
+    last_claude_list,
+)
 
 
 def list_entry(
@@ -423,3 +428,89 @@ def test_a_list_with_no_answer_yet_takes_the_model_before_it(tmp_path):
     entries = [assistant("claude-sonnet-4-6"), list_entry(["a"], "- a: Does A.")]
     write_chat(tmp_path, "p", "chat", entries, 100)
     assert last_claude_list(tmp_path, None).model == "claude-sonnet-4-6"
+
+
+# A built-in skill's description from an earlier chat's list
+
+
+def test_the_newest_list_with_a_description_wins(tmp_path):
+    old = list_entry(["init"], "- init: Old.", at="2026-11-01T10:00:00Z")
+    write_chat(tmp_path, "p", "old", [old], 50)
+    first = list_entry(["init"], "- init: Older in this chat.", at="2026-11-02T10:00:00Z")
+    last = list_entry(["init", "a"], "- init: New.\n- a: Does A.", at="2026-11-03T10:00:00Z")
+    write_chat(tmp_path, "q", "new", [first, assistant(), last], 100)
+    assert earlier_descriptions(tmp_path, ["init"]) == {"init": "New."}
+
+
+def test_a_list_that_shows_the_skill_by_name_only_is_passed_over(tmp_path):
+    write_chat(tmp_path, "p", "old", [list_entry(["init"], "- init: Sets up.")], 50)
+    # The newest lists, in another folder, show it by name only: the older one counts.
+    named = list_entry(["init", "a"], "- init\n- a: Does A.", folder="/work/b")
+    write_chat(tmp_path, "q", "new", [named, named], 100)
+    assert earlier_descriptions(tmp_path, ["init", "missing"]) == {"init": "Sets up."}
+
+
+def test_a_skill_shown_with_its_command_is_read_by_its_name(tmp_path):
+    entry = list_entry(["ship-local", "init"], "- ship-local (ship): Ships it.\n- init: Sets up.")
+    write_chat(tmp_path, "p", "chat", [entry], 100)
+    assert earlier_descriptions(tmp_path, ["ship-local", "init"]) == {
+        "ship-local": "Ships it.",
+        "init": "Sets up.",
+    }
+
+
+def spy_reads(monkeypatch) -> list[str]:
+    """The logs `earlier_descriptions` reads, by file name."""
+    read = []
+    real = claude_log._earlier_in
+
+    def spy(path, wanted, found):
+        read.append(path.stem)
+        real(path, wanted, found)
+
+    monkeypatch.setattr(claude_log, "_earlier_in", spy)
+    return read
+
+
+def test_reading_stops_once_every_skill_is_found(tmp_path, monkeypatch):
+    write_chat(tmp_path, "p", "old", [list_entry(["init"], "- init: Old.")], 50)
+    write_chat(tmp_path, "p", "mid", [list_entry(["code-review"], "- code-review: Reviews.")], 70)
+    write_chat(tmp_path, "p", "new", [list_entry(["init"], "- init: New.")], 100)
+    read = spy_reads(monkeypatch)
+    assert earlier_descriptions(tmp_path, ["init"]) == {"init": "New."}
+    assert read == ["new"]
+    read.clear()
+    got = earlier_descriptions(tmp_path, ["init", "code-review"])
+    assert got == {"init": "New.", "code-review": "Reviews."} and read == ["new", "mid"]
+
+
+def test_only_the_forty_newest_logs_are_read(tmp_path, monkeypatch):
+    write_chat(tmp_path, "p", "oldest", [list_entry(["init"], "- init: Sets up.")], 10)
+    for i in range(40):
+        write_chat(tmp_path, "p", f"chat{i:02}", [list_entry(["a"], "- a: Does A.")], 100 + i)
+    read = spy_reads(monkeypatch)
+    assert earlier_descriptions(tmp_path, ["init"]) == {}
+    assert len(read) == 40 and "oldest" not in read
+
+
+def test_a_log_or_a_line_kitden_cannot_read_is_passed_over(tmp_path):
+    good = list_entry(["init"], "- init: Sets up.")
+    bad_shape = list_entry(["init"], "- init: Wrong.", isInitial="yes")
+    cut = list_entry(["init"], "- init: Cut.", skillCount=2)
+    broken = '{"type": "attachment", "attachment": {"type": "skill_listing", "con'
+    write_chat(tmp_path, "p", "chat", [good, bad_shape, cut], 50, raw_tail=broken)
+    # Not text, an empty log, and a folder with a log's name.
+    path = tmp_path / ".claude/projects/p/binary.jsonl"
+    path.write_bytes(b'\xff\xfe"skill_listing"\xff\n')
+    os.utime(path, (60, 60))
+    empty = tmp_path / ".claude/projects/p/empty.jsonl"
+    empty.write_text("")
+    os.utime(empty, (70, 70))
+    (tmp_path / ".claude/projects/p/folder.jsonl").mkdir()
+    assert earlier_descriptions(tmp_path, ["init"]) == {"init": "Sets up."}
+
+
+def test_no_names_reads_nothing(tmp_path, monkeypatch):
+    write_chat(tmp_path, "p", "chat", [list_entry(["init"], "- init: Sets up.")], 100)
+    read = spy_reads(monkeypatch)
+    assert earlier_descriptions(tmp_path, []) == {} and read == []
