@@ -10,7 +10,10 @@ nothing from it.
   `skillListingMaxDescChars`). Kitden uses them to size the skill list and keeps none of it.
   When you set the skill list limit on the Context page and press Apply, Kitden writes
   `skillListingBudgetFraction` in `~/.claude/settings.json`, or for Codex
-  `[skills] max_context_tokens` in its `config.toml`, with a backup you can undo.
+  `[skills] max_context_tokens` in its `config.toml`, with a backup you can undo. When you turn
+  a Claude Code skill off, or to Name only, and press Apply, Kitden writes `skillOverrides` in
+  a Claude Code settings file the same way; for a skill built into Claude Code, only in
+  `~/.claude/settings.json`.
 - For the context check, what the client sent in your last chats, from the client's own chat
   files, and the skills the Claude app gives Claude Code, from the app's own folder. For Codex, also
   its model list (`models_cache.json`), for the size of its context window, and the skill files of a
