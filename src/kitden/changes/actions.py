@@ -28,10 +28,9 @@ from kitden.clients.base import (
 )
 from kitden.clients.claude_code import holds
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
-from kitden.context.rules import grid_share, on_share_grid
+from kitden.context.rules import listed_share
 from kitden.context.tables import (
     CLAUDE_RULED,
-    CLAUDE_SHARE_STEPS,
     CODEX_LIMIT_STEP,
     CODEX_MAX_LIMIT,
 )
@@ -1473,8 +1472,9 @@ def skill_limit_steps(
 ) -> list[Step]:
     """The skill list's limit for one client, in its user settings (specs skill-list-limit and
     limit-line-control). Claude Code: `skillListingBudgetFraction`, `params.fraction` a share on
-    the half-percent grid. Codex: `[skills] max_context_tokens`, `params.tokens` a whole number
-    of tokens in steps of 500 up to 10,000. "default" takes the key out. One target, {client}."""
+    Kitden's list (`CLAUDE_SHARES`). Codex: `[skills] max_context_tokens`, `params.tokens` a
+    whole number of tokens in steps of 500 up to 10,000. "default" takes the key out. One
+    target, {client}."""
     one = targets[0] if len(targets) == 1 and isinstance(targets[0], dict) else {}
     client = one.get("client")
     adapter = adapters.get(str(client))
@@ -1492,7 +1492,7 @@ def skill_limit_steps(
     value = params.get("fraction")
     if value == "default":
         return [adapter.skill_limit_step(json_splice.ABSENT)]
-    if not on_share_grid(value):
+    share = listed_share(value)
+    if share is None:
         raise ValueError(LIMIT_BAD_SHARE)
-    assert isinstance(value, int | float)  # on_share_grid took only numbers
-    return [adapter.skill_limit_step(grid_share(round(value * CLAUDE_SHARE_STEPS)))]
+    return [adapter.skill_limit_step(share)]

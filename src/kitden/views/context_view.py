@@ -41,7 +41,8 @@ from kitden.context.rules import (
     codex_rule,
     codex_table,
     codex_tokens,
-    grid_share,
+    same_share,
+    shares_above,
 )
 from kitden.context.tables import (
     CLAUDE_ALWAYS_FULL,
@@ -51,8 +52,7 @@ from kitden.context.tables import (
     CLAUDE_OTHER_WINDOW,
     CLAUDE_RULED,
     CLAUDE_SHARE,
-    CLAUDE_SHARE_MOST,
-    CLAUDE_SHARE_STEPS,
+    CLAUDE_SHARES,
     CLAUDE_WINDOWS,
     CODEX_DESCRIPTION_CAP,
     CODEX_LIMIT_STEP,
@@ -723,11 +723,11 @@ def _claude_limit(
     pair: tuple[int, int] | None,
     fits: _Fits | None,
 ) -> dict:
-    """Details' "Skill list limit" (spec skill-list-limit): the limit now, the smallest share in
-    steps of 0.5% above it at which every description the limit cut fits, by the same rule as the
-    verdict or else by a count (see `_Fits`), and what that costs; Back to the default when the
-    user file has a higher share. `why`: why there is no suggestion. Skills set to Name only or
-    Off stay as they are."""
+    """Details' "Skill list limit" (spec skill-list-limit): the limit now, the first share on
+    Kitden's list (`CLAUDE_SHARES`) above it at which every description the limit cut fits, by
+    the same rule as the verdict or else by a count (see `_Fits`), and what that costs; Back to
+    the default when the user file has a higher share. `why`: why there is no suggestion. Skills
+    set to Name only or Off stay as they are."""
     holder = _limit_file(files)
     user = files[0]
     above = fraction is not None and fraction > CLAUDE_SHARE
@@ -752,19 +752,18 @@ def _claude_limit(
     if now is not None and wanted <= now.full:
         steps = _claude_steps(pair, share, fits, True, []) if back else []
         return limit | {"why": fits.not_needed, "steps": steps}
-    # Every share above today's up to the ceiling, as the line can be dragged there. Once all
-    # fit, a higher share sends the same list: the rule runs no more.
+    # Every share on the list above today's, as the line can be dragged there. Once all fit, a
+    # higher share sends the same list: the rule runs no more. Today's share may be off the list.
     ups: list[tuple[float, ClaudeFit | None]] = []
     found = None
-    first = int(share * CLAUDE_SHARE_STEPS + 1e-9) + 1
-    for steps in range(first, CLAUDE_SHARE_MOST + 1):
-        at = grid_share(steps)
+    for at in shares_above(share):
         fit = found[1] if found else fits.at(claude_budget(*pair, at))
         ups.append((at, fit))
         if found is None and fit is not None and wanted <= fit.full:
             found = (at, fit)
     if found is None:
-        most = words.percent(grid_share(CLAUDE_SHARE_MOST))
+        # Nothing on the list fits: the ceiling, or today's share when that is higher still.
+        most = words.percent(max(CLAUDE_SHARES[-1], share))
         steps = _claude_steps(pair, share, fits, True, []) if back else []
         return limit | {"why": words.LIMIT_NOT_ENOUGH.format(share=most), "steps": steps}
     offered, fit = found
@@ -786,9 +785,8 @@ def _share_then(
 ) -> float | None:
     """The share the chat was sent under, when today's does not give its list: the default, or
     a share Kitden offers, whose limit rebuilds what the chat sent. None when none does."""
-    shares = [CLAUDE_SHARE, *(grid_share(n) for n in range(1, CLAUDE_SHARE_MOST + 1))]
-    for then in dict.fromkeys(shares):
-        if abs(then - share) < 1e-9:
+    for then in CLAUDE_SHARES:
+        if same_share(then, share):
             continue
         if _claude_gives(rows, states, weights, claude_budget(*model, then), sent_full, cap):
             return then
@@ -818,9 +816,8 @@ def _list_ends_at(rows, states, budget: int, cap: int) -> bool:
 
 def _share_counted(rows, states, model: tuple[int, int], share: float, cap: int) -> float | None:
     """As `_share_then`, for a chat no limit rebuilds: the share at whose limit its list ends."""
-    shares = [CLAUDE_SHARE, *(grid_share(n) for n in range(1, CLAUDE_SHARE_MOST + 1))]
-    for then in dict.fromkeys(shares):
-        if abs(then - share) < 1e-9:
+    for then in CLAUDE_SHARES:
+        if same_share(then, share):
             continue
         if _list_ends_at(rows, states, claude_budget(*model, then), cap):
             return then

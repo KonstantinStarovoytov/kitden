@@ -1571,7 +1571,7 @@ def test_a_skill_limit_says_the_share_everywhere_it_shows():
     assert said.CODEX_LIMIT_STEP_SHORT == "{short} of {n} cut short or left out"
     assert said.CODEX_AFTER_DEFAULT == "Limit 2% of the window, the default"
     assert said.LIMIT_BAD_SHARE == (
-        "The skill list limit must be a share of the window in steps of 0.5%, up to 100%."
+        "The skill list limit must be one of the shares Kitden offers, or the default."
     )
 
 

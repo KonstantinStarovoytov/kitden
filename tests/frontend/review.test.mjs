@@ -222,6 +222,9 @@ test('a skill list limit says the share it sets, for all projects', () => {
   });
   assert.equal(changeWords(limit, { params: { fraction: 0.02 } }).title, 'Set the skill list limit of Claude Code to 2% for all projects');
   assert.equal(changeWords(limit, { params: { fraction: 'default' } }).title, 'Set the skill list limit of Claude Code back to 1% for all projects');
+  // Every share on the list is printed without float noise: 0.017 * 100 is 1.7000000000000002.
+  const said = [0.01, 0.011, 0.012, 0.013, 0.014, 0.015, 0.017, 0.02, 0.025, 0.03, 0.035, 0.04].map((fraction) => changeWords(limit, { params: { fraction } }).title.split(' to ')[1].split(' for ')[0]);
+  assert.deepEqual(said, ['1%', '1.1%', '1.2%', '1.3%', '1.4%', '1.5%', '1.7%', '2%', '2.5%', '3%', '3.5%', '4%']);
   // With no row body (an older record), it does not invent a share.
   assert.equal(changeWords(limit).title, 'Set the skill list limit of Claude Code for all projects');
 });
