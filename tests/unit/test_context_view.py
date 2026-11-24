@@ -737,6 +737,37 @@ def test_a_command_of_a_plugin_that_is_off_is_off(home):
     assert row["plugin_switch"]["action"] == "plugin.enable"
 
 
+def test_your_own_skill_turned_on_again_is_in_the_estimate(home):
+    for name in ("alpha", "beta"):
+        skill(home / ".claude/skills", name, f"Does {name}.")
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"beta": "off"}})
+    claude_chat(home, {"alpha": "Does alpha."})
+    # Off, it counts for nothing.
+    cc = view(home)["claude_code"]
+    assert cc["checked"] is True
+    assert cc["windows"][1]["result"]["short"] == "All 1 would fit"
+    cc = view(home, draft={"claude_code": {"beta": "on"}})["claude_code"]
+    assert set(cc["after"]["result"]["sent"]) == {"alpha", "beta"}
+
+
+def test_a_built_in_skill_turned_on_again_gives_no_estimate_that_leaves_it_out(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    skill(home / ".claude/skills", "beta", "Does beta.")
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"dataviz": "off"}})
+    claude_chat(home, {"alpha": "Does alpha.", "beta": "Does beta."})
+    draft = {"beta": "name-only"}
+    assert view(home, draft={"claude_code": draft})["claude_code"]["after"] is not None
+    # Its description is in no file, so its size is not known.
+    draft |= {"dataviz": "on"}
+    assert view(home, draft={"claude_code": draft})["claude_code"]["after"] is None
+    # By name only its size is known.
+    draft |= {"dataviz": "name-only"}
+    after = view(home, draft={"claude_code": draft})["claude_code"]["after"]
+    assert (
+        after["result"]["used"] == len("alpha") + 4 + 11 + len("beta") + 2 + len("dataviz") + 2 + 2
+    )
+
+
 def test_a_plugins_command_names_its_plugin(home):
     plugin(home)
     claude_chat(home, {"plug:tool": "Does tool.", "plug:start": "Starts."})

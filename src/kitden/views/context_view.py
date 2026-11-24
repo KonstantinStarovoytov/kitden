@@ -1138,7 +1138,19 @@ def _claude(
     # `always_full` is checked against each chat: a wrong name here and the rule no longer
     # rebuilds the list.
     rows = [_tagged(r) for r in rows]
-    rows_now = [*rows, *extras]
+    # Off before the chat, so in no list: they wait on the page, and count once the tray turns one
+    # on. Your own skills, and the built-in ones a setting keeps out; a plugin's come back with it.
+    waiting = [
+        _Row(name, None, item, _description(item.source.path))
+        for name, item in turned_off.items()
+        if name not in listed and name not in loaded and not from_plugin(item)
+    ]
+    waiting += [
+        _tagged(_Row(name, None, None, None))
+        for name, (state, _) in rules.items()
+        if state in ("off", *ASKED) and name not in listed and name not in by_name
+    ]
+    rows_now = [*rows, *extras, *waiting]
     # Today's states; and those of the chat as far as its list tells: what it lists was not off,
     # and what it sent with a description was not Name only.
     states = {r.name: _row_state(r, rules, plugins) for r in rows_now}
@@ -1353,20 +1365,8 @@ def _claude(
                 held,
             )
         )
-    # A built-in skill that its setting keeps out of the list: shown, so it can come back.
-    for name, (state, held) in rules.items():
-        if state in ("off", *ASKED) and name not in listed and name not in by_name:
-            extra = _tagged(_Row(name, None, None, None))
-            note = project_rule if held else _claude_note(extra, state, None, 0)
-            skills.append(_skill(client, name, None, 0, None, note, True, state=state, held=held))
-    # Your own skills that are off wait on the page too; a plugin's come back with the plugin.
-    waiting = [
-        _Row(name, None, item, _description(item.source.path))
-        for name, item in turned_off.items()
-        if name not in listed and name not in loaded and not from_plugin(item)
-    ]
     for r in [*extras, *waiting]:
-        note = _claude_note(r, _state(r.item), None, 0)
+        note = _claude_note(r, states[r.name], None, 0)
         offer = plugins.switch(r, rows)
         held = _held(r, rules)
         skills.append(
@@ -1377,7 +1377,9 @@ def _claude(
                 len(r.full or ""),
                 None,
                 project_rule if held else _plugin_note(note, offer),
+                r.built_in,
                 description=r.full,
+                state=states[r.name],
                 plugin_switch=offer,
                 held=held,
             )
