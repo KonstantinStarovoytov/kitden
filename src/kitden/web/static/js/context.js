@@ -142,7 +142,7 @@ export function renderContext(main, { again = false } = {}) {
   if (off) main.append(off);
   main.append(clients);
   riseHead(head, lede, clients, { again });
-  // With the check failed there is no estimate: only the last chat's window, and no After Apply.
+  // With the check failed there is no estimate of another window: only the last chat's.
   const windows = card.checked ? card.windows : card.windows.slice(0, 1);
   const index = Math.min(page.windows[card.client] || 0, Math.max(0, windows.length - 1));
   if (windows.length) {
@@ -151,8 +151,10 @@ export function renderContext(main, { again = false } = {}) {
     main.append(wins);
   }
   const shown = windows[index];
-  // The estimate after Apply is for the last chat's window, the first.
-  const after = card.checked && index === 0 && shown ? card.after : null;
+  // The estimate after Apply is for the last chat's window, the first. With the check failed the
+  // server may still count what all descriptions need (`limit.counted`).
+  const counted = Boolean(card.limit && card.limit.counted && card.limit.counted.length);
+  const after = (card.checked || counted) && index === 0 && shown ? card.after : null;
   // The verdict: the shown window's sentence (after Apply, the estimate), or the client's message
   // when it has no window. The room left (an estimate on the last chat's window) comes under it.
   main.append(sentence(shown ? (after ? after.say : shown.result.say) : card.message || "", "ctx-verdict"));
@@ -161,8 +163,11 @@ export function renderContext(main, { again = false } = {}) {
   if (shown && shown.result.room && !after) main.append(sentence(shown.result.room, "ctx-room"));
   // A message beside windows (the estimate could not be checked) is a note under the verdict.
   if (windows.length && card.message) main.append(el("p", "ctx-note", card.message));
-  const result = shown ? (after ? after.result : shown.result) : null;
-  const estimate = Boolean(after) || index > 0;
+  // A count that does not fit everything cannot say which skills do: no result of its own, so the
+  // picture and the sides stay the last chat's.
+  const planned = after ? after.result : null;
+  const result = shown ? planned || shown.result : null;
+  const estimate = Boolean(planned) || index > 0;
   const heat = heatOf(card, result, estimate);
   // The chat's own limit line stays where it is; a new limit shows as a second line (limitControl).
   if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`, heat, index === 0 ? controlOf(card) : null));
@@ -720,8 +725,14 @@ function openLimit(client) {
   const param = limit.param || "fraction";
   const choices = [limit.offer, limit.back].filter(Boolean);
   const actions = choices.map((choice) => ({ node: limitButton(client, choice, choice === limit.offer, param) }));
+  // The server's quiet lines when the numbers are a count, not a replay of the chat's list.
+  let text = null;
+  if (limit.counted && limit.counted.length) {
+    text = el("section", "ctx-desc");
+    text.append(...limit.counted.map((line) => el("p", "ctx-desc-note ctx-counted", line)));
+  }
   // With nothing to raise, only the limit now and Back.
-  const content = detailsCard({ kind: LIMIT.kind, title: LIMIT.title, facts, why: limit.offer ? limit.note : null, actions });
+  const content = detailsCard({ kind: LIMIT.kind, title: LIMIT.title, facts, why: limit.offer ? limit.note : null, text, actions });
   openPanel(content);
   panelState.current = { type: "context-limit", client };
   keepFrom(() => openLimit(client), content);

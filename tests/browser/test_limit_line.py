@@ -303,6 +303,70 @@ class TestBackToTheDefault:
         assert "skillListingBudgetFraction" not in settings(demo.home)
 
 
+class TestCounted:
+    """A chat the rule cannot rebuild: the sample's chat, with the skills it showed by name the
+    most used since, so the rule gives another list. Kitden counts what all descriptions need."""
+
+    @pytest.fixture
+    def before_start(self):
+        def write(home):
+            path = home / ".claude.json"
+            data = json.loads(path.read_text())
+            usage = data["skillUsage"]
+            # The least used were dropped: turned round, they would be the first to fit.
+            counts = [use["usageCount"] for use in usage.values()]
+            most = max(counts)
+            for use in usage.values():
+                use["usageCount"] = most + min(counts) - use["usageCount"]
+            path.write_text(json.dumps(data))
+
+        return write
+
+    def test_the_line_drags_to_the_share_that_fits_the_count_and_the_page_after_apply(
+        self, page, demo
+    ):
+        before = settings(demo.home)
+        handle = open_context(page)
+        expect(handle).to_have_attribute("aria-valuetext", "1% now · not all fit")
+        main = page.get_by_role("main")
+        expect(main).to_contain_text("4 of 20 skills showed only a name")
+        page.locator(".ctx-flag").click()
+        details = page.get_by_role("complementary", name="Details")
+        expect(details).to_contain_text("Suggested1.5%: all 20 skills get their description")
+        expect(details).to_contain_text(
+            "Kitden could not replay this chat's list exactly, so it counts what all "
+            "descriptions need."
+        )
+        details.get_by_role("button", name="Close").click()
+        hold = bar_box(page)
+        reads = api_reads(page)
+        seen = drag_to(page, handle, hold["x"] + hold["width"] * 0.99, steps=40)
+        assert reads == [], "a drag reads nothing from the server"
+        suggested = next(s for s in seen if s.startswith("1.5% · all 20 fit · about "))
+        mark_x, _ = center(page.locator(".ctx-mark"))
+        page.mouse.move(mark_x, center(handle)[1])
+        assert readout(page) == suggested
+        page.mouse.up()
+        dock = page.locator("#dock")
+        expect(dock).to_contain_text("Set the skill list limit of Claude Code to 1.5%")
+        expect(main).to_contain_text(
+            "After Apply, estimate: On a 200K window, every skill would keep its description."
+        )
+        dock.get_by_role("button", name="Apply").click()
+        undo = page.get_by_role("button", name="Undo")
+        expect(undo).to_be_visible()
+        assert settings(demo.home)["skillListingBudgetFraction"] == 0.015
+        expect(main).to_contain_text("The limit was changed after this chat: it is 1.5% now.")
+        expect(main).to_contain_text("Estimate: On a 200K window, every skill would keep")
+        # The chat's own limit line stays at 8,000; the next chats' line is at 12,000.
+        expect(page.locator(".ctx-flag")).to_have_text("Limit: 8,000 characters")
+        expect(page.locator(".ctx-next-tag")).to_have_text("Next chats: 12,000 characters")
+        expect(handle).to_have_attribute("aria-valuetext", "1.5% now · all 20 fit")
+        undo.click()
+        wait_until(lambda: settings(demo.home) == before, seconds=10)
+        expect(main).not_to_contain_text("The limit was changed after this chat")
+
+
 class TestCodex:
     """Stage 2: the same control on the Codex card. The medium sample's Codex chat fits, so a
     newer Codex chat is written into the sample before the page starts: the cut-short chat of

@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-11-23
+Last updated: 2026-11-24
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -12,7 +12,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Raise Claude Code's skill list limit from the Context page:** when skills showed only a
   name because the list ran out of room, drag the limit line on the skill list's bar (or use
   the arrow keys) to see what each step gives, snap to the smallest share that fits every
-  description, and set it with a preview, a backup and Undo; its label opens the details.
+  description, and set it with a preview, a backup and Undo; its label opens the details. It
+  works also when Kitden cannot replay the last chat's list: it then counts what all
+  descriptions need and says so.
   Codex's line does the same in tokens, for `[skills] max_context_tokens`.
 
 ### 0.11.1
