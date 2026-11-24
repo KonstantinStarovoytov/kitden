@@ -22,7 +22,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   Codex's line does the same in tokens, for `[skills] max_context_tokens`.
 - **Turn a Claude Code skill off in one project beside your other skill rules:** Kitden refused
   this while your settings, or the project's, already held a skill rule; now one preview can hold
-  rules for all projects and for one.
+  rules for all projects and for one (#194).
 - **A skill listed with its command is read right:** Claude Code lists a skill as `name (command)`
   when you type another word to run it. Kitden took such a skill for name only and added its line
   to the skill before it; now both are read and counted as sent (#192).
