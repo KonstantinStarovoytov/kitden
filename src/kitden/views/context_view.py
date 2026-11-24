@@ -636,10 +636,10 @@ def _list_ends_at(rows, states, budget: int, cap: int) -> bool:
     size is known: then the list says nothing of the limit.
 
     # checked 2026-11-24 (real log, Claude Code 2.1.330): the client let a list of 30,009
-    # characters, 30,022 by this count, through 30,000. So up to 0.2% over is still at the limit.
+    # characters through 30,000. So up to 0.2% over is still at the limit.
     """
     listed = [r for r in rows if not r.added]
-    used = sum(len(r.name) + (2 if r.sent is None else 4 + len(r.sent)) for r in listed)
+    used = sum(len(r.shown or r.name) + (2 if r.sent is None else 4 + len(r.sent)) for r in listed)
     used += max(0, len(listed) - 1)
     # An empty description has nothing to drop. One longer than the default cap (the cap is a
     # setting) counts at that: a huge one would have no room at several limits.
@@ -675,8 +675,8 @@ def _claude_count(
 
     Whether everything fits does not depend on the order descriptions are dropped in, so this
     holds also when the rule does not rebuild the chat. The count and the comparison are the
-    rule's own (`size <= budget` in claude_rule), with no margin: the client let 30,022 through
-    30,000 by this count (see `_list_ends_at`), but Kitden claims no fit its own count is over.
+    rule's own (`size <= budget` in claude_rule), with no margin: the client let 30,009 through
+    30,000 (see `_list_ends_at`), but Kitden claims no fit its own count is over.
     A description counts as the chat sent it, or as its file is now when that is longer. One that
     Kitden cannot find counts at the cap, the worst case; it stops just past the limit, as in
     `_claude_gives`."""

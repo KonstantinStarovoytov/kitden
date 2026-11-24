@@ -430,6 +430,39 @@ def test_a_count_that_is_exactly_the_limit_fits_and_one_character_more_does_not(
     assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.02
 
 
+def command_chat(home):
+    """As counted_chat, with b (sent whole) and a (name only) listed with a command in brackets:
+    `b (go)` and `a (it)` are 10 characters more in all, so 12,069 and 7,261."""
+    counted_chat(home)
+    shown = {"a": "a (it)", "b": "b (go)"}
+    lines = [f"- {shown.get(n, n)}" + (f": {TEXT}" if n in "bcdefg" else "") for n in TEN]
+    entry = list_entry(list(TEN), "\n".join(lines), at="2026-11-06T12:00:00Z")
+    write_chat(home, "p", "chat", [entry, assistant("claude-sonnet-4-6")], 100)
+
+
+def test_the_count_holds_the_commands_the_list_shows_after_names(home):
+    command_chat(home)
+    cc = view(home)["claude_code"]
+    assert not cc["checked"] and cc["limit"]["counted"] == [REPLAY]
+    assert cc["windows"][0]["result"]["used"] == 7_261
+    # 69 characters less in j: 12,000 in all, the limit at 1.5%.
+    skill(home / ".claude/skills", "j", TEXT[: 1200 - 69])
+    offer = view(home)["claude_code"]["limit"]["offer"]
+    assert (offer["fraction"], offer["say"]) == (0.015, "1.5%: all 10 skills get their description")
+    skill(home / ".claude/skills", "j", TEXT[: 1200 - 68])
+    offer = view(home)["claude_code"]["limit"]["offer"]
+    assert (offer["fraction"], offer["say"]) == (0.02, "2%: all 10 skills get their description")
+
+
+def test_the_place_where_a_list_ends_counts_the_commands_after_names(home):
+    command_chat(home)
+    # 7,261 characters were sent: 7,256 is 5 under that (it may be 14), 7,240 is 21.
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.00907})
+    assert view(home)["claude_code"]["windows"][0]["budget"] == 7_256
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.00905})
+    assert view(home)["claude_code"]["windows"][0]["budget"] == 8_000
+
+
 def test_a_description_written_longer_after_the_chat_counts_as_it_is_now(home):
     counted_chat(home)
     skill(home / ".claude/skills", "j", TEXT[: 1200 - 59])
