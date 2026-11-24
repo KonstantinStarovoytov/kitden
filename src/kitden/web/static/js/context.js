@@ -427,7 +427,7 @@ function openSkill(client, name) {
   const facts = [];
   if (skill.size) facts.push({ label: "Size", value: `${fmt(skill.size)} characters` });
   if (skill.source) facts.push({ label: "Source", value: skill.source });
-  const list = skill.switch.length ? switchFor(card, skill) : null;
+  const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(skill.plugin_switch) : null;
   const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: skill.note, text: describe(skill) });
   openPanel(content);
   panelState.current = { type: "context-skill", client, name };
@@ -464,6 +464,24 @@ function ruleBody(card, skill, value) {
   // A built-in skill has no item: the target is its name.
   const which = skill.built_in ? { built_in: skill.name } : { item: skill.item };
   return { action: "skill.rule", targets: [{ client: card.client, ...which }], params };
+}
+
+// A plugin skill's plugin: the server's sentence on what goes with it, and one button that adds the
+// Library's own row for the plugin (a second press takes it out).
+function pluginSwitch(offer) {
+  const box = el("div", "ctx-plugin");
+  const body = { action: offer.action, targets: [{ item: offer.item }], params: {} };
+  const key = keyFor(body);
+  const node = button(offer.label, () => (trayRow(key) ? takeOut(key) : addToTray(body, { note: CONTEXT_NOTE })), "btn");
+  node.dataset.focus = `plugin:${offer.item}`;
+  followTray(node, key, () => {
+    const waits = Boolean(trayRow(key));
+    node.setAttribute("aria-pressed", String(waits));
+    node.classList.toggle("pending", waits);
+  });
+  if (offer.say) box.append(el("p", "why", offer.say));
+  box.append(node);
+  return box;
 }
 
 // The skill's states, the pressed one as the tray will leave it. A press adds the row (one row per

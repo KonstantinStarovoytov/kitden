@@ -1011,3 +1011,35 @@ test('nothing turned off draws no Turned off', async () => {
   show(answer(TIGHT, CODEX, CURSOR));
   assert.deepEqual(byClass(main, 'ctx-off'), []);
 });
+
+const PLUG = { item: 'p1', action: 'plugin.disable', label: 'Turn off plug', say: 'Turns off all of plug: 2 skills and 1 command. About 59 fewer characters in the list.' };
+
+test("a plugin's skill turns its plugin off from Details, and a second press takes the row out", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const tool = skill('plug:tool', 10, 0, { plugin: 'plug', shown: 'tool', switch: [], source: 'Plugin plug', plugin_switch: PLUG });
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills, tool] }, CODEX, CURSOR));
+  await fire(pillOf('plug:tool'), 'click');
+  assert.match(text(drawer), /Turns off all of plug: 2 skills and 1 command\. About 59 fewer characters in the list\./);
+  assert.deepEqual(walk(drawer).filter((n) => n.dataset && n.dataset.state), []);
+  queue(PREVIEW, previewed('c1'));
+  await fire(buttonIn(drawer, 'Turn off plug'), 'click');
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual([sent.kind, sent.targets, sent.params], ['plugin.disable', [{ item: 'p1' }], {}]);
+  assert.equal(tray.rows[0].note, CONTEXT_NOTE);
+  syncTray();
+  assert.equal(buttonIn(drawer, 'Turn off plug').getAttribute('aria-pressed'), 'true');
+  assert.equal(buttonIn(drawer, 'Turn off plug').classList.contains('pending'), true);
+  await fire(buttonIn(drawer, 'Turn off plug'), 'click');
+  await flush();
+  assert.equal(tray.rows.length, 0);
+});
+
+test('a skill with no plugin switch draws no plugin button', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, skills: [...TIGHT.skills, skill('venture:review', 588, 0, { plugin: 'venture', shown: 'review', switch: [], source: 'venture', plugin_switch: null })] }, CODEX, CURSOR));
+  await fire(pillOf('venture:review'), 'click');
+  assert.deepEqual(byClass(drawer, 'ctx-plugin'), []);
+});

@@ -309,8 +309,30 @@ SOURCE_OWN = "Your skills"
 NOTE_BUILT_IN = (
     "Kitden has not checked that Claude Code can turn this skill off, so it has no switch here."
 )
+# A skill of Claude Code's list that is no item here.
+SOURCE_APP = "The Claude app or your Claude account"
+NOTE_APP = "The Claude app or your Claude account adds this skill. Kitden has no switch for it."
+NOTE_OTHER_PLUGIN = (
+    "Kitden did not find {} among Claude Code's plugins, so it has no switch here. "
+    "The Claude app can add plugins of its own."
+)
+NOTE_NO_ITEM = "Kitden did not find this skill's file, so it has no switch here."
+# The switch of a skill's plugin, in the skill's Details.
+PLUGIN_TURN_OFF = "Turn off {}"
+PLUGIN_TURN_ON = "Turn on {}"
+PLUGIN_GOES = "Turns off all of {plugin}: {parts}."
+PLUGIN_FREES = "About {n} fewer characters in the list."
+PLUGIN_PARTS = (
+    ("skills", "skill", "skills"),
+    ("commands", "command", "commands"),
+    ("agents", "agent", "agents"),
+    ("hooks", "hook", "hooks"),
+    ("mcp_servers", "MCP server", "MCP servers"),
+)
 NOTE_OFF = "Off: your next chat does not list it."
 NOTE_PLUGIN = "A plugin's skill follows its plugin. Turn the plugin off in the Library."
+# The same, when its Details offer the plugin's own switch.
+NOTE_PLUGIN_SWITCH = "A plugin's skill follows its plugin: it has no switch of its own."
 NOTE_FREES = "Name only frees {n} characters. The agent no longer sees when to use it."
 NOTE_NO_ROOM = "No room for its description."
 # After NOTE_NO_ROOM, when a skill with a description has a switch.
