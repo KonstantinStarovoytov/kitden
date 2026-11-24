@@ -90,7 +90,7 @@ needs no other test. The table lists those written so far, in product order:
 | 11 | Two changes in the tray, "Apply all" | `test_apply_all.py` |
 | 12 | Undo, then "Redo…" from Changes | `test_redo.py` |
 | 13 | Update to a new version | `test_update.py` |
-| 14 | Context: set the skill list limit by its line (drag, keys, Details), Apply, Undo; Claude Code and Codex | `test_limit_line.py` |
+| 14 | Context: set the skill list limit by its line (drag, keys, Details), Apply, Undo; Claude Code (also with a chat Kitden cannot replay) and Codex | `test_limit_line.py` |
 
 Flows 3 to 5 and 13 use the `sample` fixture: the demo's sample, not in demo mode, with the
 stand-ins of `tests/offline.py` and the network guard on, so a test that tries to go online

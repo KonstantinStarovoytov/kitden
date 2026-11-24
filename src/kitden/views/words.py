@@ -266,6 +266,8 @@ CLAUDE_WOULD_DROP = (
     "{on}, {bad} of {n} {skills} would show only a name. The agent may not use {them}."
 )
 CLAUDE_WOULD_KEEP = "{on}, every skill would keep its description."
+# By a count, when the rule cannot say which descriptions a limit keeps.
+CLAUDE_WOULD_NOT_FIT = "{on}, not all descriptions would fit."
 CLAUDE_WOULD_KEEP_CHOSEN = "{on}, everything would fit. {chosen} only a name, as you chose."
 CODEX_WOULD_LEAVE_OUT = "{on}, {out} of {n} {skills} would be left out and no description sent."
 CODEX_WOULD_CUT = "{on}, {bad} of {n} {descriptions} would be cut to about {cap} {characters}."
@@ -403,6 +405,20 @@ LIMIT_NOTE = (
     "Kitden writes it in your Claude Code user settings, for all projects. Your next chat will "
     "show the real list."
 )
+# Quiet lines in Details when the suggestion is a count, not a replay of the chat's list.
+LIMIT_COUNTED = (
+    "Kitden could not replay this chat's list exactly, so it counts what all descriptions need."
+)
+LIMIT_COUNTED_ONE = (
+    "{n} skill has no description Kitden can find; it is counted at the longest, {cap} characters."
+)
+LIMIT_COUNTED_MANY = (
+    "{n} skills have no description Kitden can find; they are counted at the longest, {cap} "
+    "characters."
+)
+# Skills the next chat lists and the last chat did not: the limit has to hold them too.
+LIMIT_ADDED_ONE = "{n} skill was not in this chat's list; it is counted too."
+LIMIT_ADDED_MANY = "{n} skills were not in this chat's list; they are counted too."
 LIMIT_KEEPS_CHOSEN = "Skills set to Name only stay as they are."
 # Under the last chat's verdict when the share changed after that chat; an estimate follows.
 LIMIT_CHANGED = (
@@ -422,6 +438,11 @@ LIMIT_NOT_ESTIMATED = (
     "Kitden does not offer a new skill list limit: there is no estimate for this chat, so it "
     "cannot tell what would fit."
 )
+# By a count: everything fits, yet the chat did not send it all.
+LIMIT_NOT_WHY = (
+    "Kitden does not offer a new skill list limit: by its count every description fits, so a "
+    "higher limit may not help."
+)
 LIMIT_NOT_NEEDED = "Kitden does not offer a new skill list limit: every description fits."
 LIMIT_NOT_ENOUGH = (
     "Kitden does not offer a new skill list limit: even {share} of the window would not fit "
@@ -433,6 +454,8 @@ LIMIT_STEP_NOW = "{share} now"
 LIMIT_STEP_DEFAULT = "{share}, the default"
 LIMIT_STEP_ALL = "all {n} fit"
 LIMIT_STEP_SHORT = "{short} of {n} show only a name"
+# A place a count cannot say more of: which descriptions it keeps is not known.
+LIMIT_STEP_NOT_ALL = "not all fit"
 LIMIT_STEP_MORE = "about {n} more {unit} per chat"
 LIMIT_STEP_LESS = "about {n} fewer {unit} per chat"
 # The same for Codex (`[skills] max_context_tokens` in config.toml), in tokens, its own unit.

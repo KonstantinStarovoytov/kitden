@@ -120,6 +120,27 @@ def test_claude_everything_fits_is_a_fact_and_the_room_is_an_estimate(home):
     )
 
 
+def test_the_command_in_brackets_counts_in_the_size_of_the_list(home):
+    # Claude Code sends `alpha-local (alpha)`: Kitden counts the text it sent, name only or not.
+    for name in ("alpha-local", "beta"):
+        skill(home / ".claude/skills", name, f"Does {name}.")
+    entry = "- alpha-local (alpha): Does alpha-local."
+    content = f"{entry}\n- beta: Does beta."
+    write_chat(home, "p", "chat", [list_entry(["alpha-local", "beta"], content), assistant()], 100)
+    fact, other = view(home)["claude_code"]["windows"]
+    assert (fact["result"]["sent"]["alpha-local"], fact["result"]["used"]) == (
+        len(entry),
+        len(content),
+    )
+    assert (other["result"]["sent"]["alpha-local"], other["result"]["used"]) == (
+        len(entry),
+        len(content),
+    )
+    content = "- alpha-local (alpha)\n- beta: Does beta."
+    write_chat(home, "p", "chat", [list_entry(["alpha-local", "beta"], content), assistant()], 100)
+    assert view(home)["claude_code"]["windows"][0]["result"]["used"] == len(content)
+
+
 def test_claude_too_many_names_the_count(home):
     own = home / ".claude/skills"
     for name in ("alpha", "beta", "gamma", "delta"):

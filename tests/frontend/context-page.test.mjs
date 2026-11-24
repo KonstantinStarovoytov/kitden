@@ -761,6 +761,67 @@ test('with no limit line for the chat, the control stands at today\'s limit; Det
   assert.match(text(drawer), /Skill list limit/);
 });
 
+// The check failed, so the server counts what all descriptions need: it cannot say how many a limit
+// that does not fit them all would still cut (`short` is null).
+const COUNTED = {
+  ...LIMIT,
+  offer: { fraction: 0.02, label: 'Set to 2%', say: '2%: all 3 skills get their description', cost: 'About 3,000 more characters in every chat (about 750 tokens)' },
+  counted: [
+    "Kitden could not replay this chat's list exactly, so it counts what all descriptions need.",
+    '1 skill has no description Kitden can find; it is counted at the longest, 1,536 characters.',
+  ],
+  steps: steps(
+    { value: 0.01, limit: 8000, short: null, say: '1% now · not all fit', now: true },
+    { value: 0.015, limit: 12000, short: null, say: '1.5% · not all fit' },
+    { value: 0.02, limit: 16000, short: 0, say: '2% · all 3 fit · about 3,000 more characters per chat' },
+  ),
+};
+const UNCHECKED = { ...TIGHT, checked: false, limit: COUNTED };
+
+test('a place whose count of cut skills is not known says so in the readout and to a screen reader', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(UNCHECKED, CODEX, CURSOR));
+  const handle = grip();
+  assert.equal(handle.getAttribute('aria-valuetext'), '1% now · not all fit');
+  await fire(handle, 'keydown', { key: 'ArrowRight' });
+  assert.equal(text(readout()), '1.5% · not all fit');
+  assert.equal(handle.getAttribute('aria-valuetext'), '1.5% · not all fit');
+  assert.equal(handle.getAttribute('aria-valuenow'), '12000');
+  await fire(handle, 'keydown', { key: 'ArrowRight' });
+  assert.equal(handle.getAttribute('aria-valuetext'), '2% · all 3 fit · about 3,000 more characters per chat');
+  await fire(handle, 'keydown', { key: 'Escape', stopPropagation() {} });
+  // Details say it is a count, one quiet line each.
+  await fire(byClass(main, 'ctx-flag')[0], 'click');
+  assert.deepEqual(byClass(drawer, 'ctx-counted').map(text), COUNTED.counted);
+  closePanel({ instant: true });
+  show(answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR));
+  await fire(byClass(main, 'ctx-flag')[0], 'click');
+  assert.equal(byClass(drawer, 'ctx-counted').length, 0);
+});
+
+test('After Apply by a count: where all fit the picture follows it, else only its sentence shows', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const fits = {
+    say: 'After Apply, estimate: On a 200K window, every skill would keep its description. gamma gets a description.',
+    gets: ['gamma'], loses: [], budget: 16000,
+    result: { short: '', say: '', sent: { alpha: 4000, beta: 2000, gamma: 3000 }, over: {}, used: 9100, size: 9100, room: null, misfit: null },
+  };
+  show(answer({ ...UNCHECKED, after: fits }, CODEX, CURSOR));
+  assert.equal(text(verdict()), fits.say);
+  assert.equal(text(byClass(verdict(), 'ctx-est')[0]), 'After Apply, estimate:');
+  assert.equal(pillOf('gamma').classList.contains('back'), true);
+  assert.notEqual(pieceOf('gamma'), undefined);
+  const not = { say: 'After Apply, estimate: On a 200K window, not all descriptions would fit.', gets: [], loses: [], budget: 12000, result: null };
+  show(answer({ ...UNCHECKED, after: not }, CODEX, CURSOR));
+  assert.equal(text(verdict()), not.say);
+  // No claim about which skills fit: the picture and the sides stay the last chat's.
+  assert.equal(pieceOf('gamma'), undefined);
+  assert.notEqual(pieceOf('gamma', 'over'), undefined);
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'beta'], ['gamma']]);
+});
+
 // Codex's limit, in tokens: today's 5,440 (2% of a 272K window), 5,500 fits all, 6,000 more.
 const CODEX_LIMIT = {
   now: '2% of the context window: 5,440 tokens',
