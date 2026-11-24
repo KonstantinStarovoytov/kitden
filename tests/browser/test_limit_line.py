@@ -64,10 +64,17 @@ def api_reads(page) -> list[str]:
     return seen
 
 
+def still_center(locator) -> tuple[float, float]:
+    """The middle of the element once it stands still: the limit line's parts glide 160 ms to a
+    new place and move 240 ms with the bar when it is drawn again."""
+    box = still_box(locator)
+    return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+
+
 def drag_to(page, handle, target_x: float, steps: int = 20) -> list[str]:
     """Press on the handle and move to target_x in steps, as a person moves the mouse; the
     readout after each move. The button stays down."""
-    x, y = center(handle)
+    x, y = still_center(handle)
     page.mouse.move(x, y)
     page.mouse.down()
     seen = []
@@ -138,14 +145,14 @@ def test_a_drag_moves_place_by_place_snaps_and_a_release_adds_the_row_with_no_re
     ]
     assert reads == [], "a drag reads nothing from the server"
     # Back near the suggested place, a little past it: it snaps there, the mark shows it.
-    mark_x, _ = center(page.locator(".ctx-mark"))
+    mark_x, _ = still_center(page.locator(".ctx-mark"))
     page.mouse.move(mark_x + hold["width"] * 0.015, center(handle)[1])
     assert readout(page) == SUGGESTED
     page.mouse.up()
     dock = page.locator("#dock")
     expect(dock).to_contain_text("Set the skill list limit of Claude Code to 1.1%")
     # Dragged back to today's place, the row is gone.
-    line_x, _ = center(page.locator(".ctx-limit"))
+    line_x, _ = still_center(page.locator(".ctx-limit"))
     drag_to(page, page.get_by_role("slider", name="Skill list limit"), line_x)
     assert readout(page) == TODAY
     page.mouse.up()
@@ -279,6 +286,24 @@ def test_drag_steps_are_measured_and_fast(page):
     assert sum(steps) / len(steps) < 50, steps
 
 
+def test_the_handle_glides_to_the_next_place_and_ends_there(page):
+    handle = open_context(page)
+    hold = bar_box(page)
+    assert "left" in handle.evaluate("node => getComputedStyle(node).transitionProperty")
+    handle.focus()
+    page.keyboard.press("ArrowRight")
+    # The words change at once; the handle is on its way.
+    expect(handle).to_have_attribute("aria-valuetext", SUGGESTED)
+    assert readout(page) == SUGGESTED
+    # It ends where the place is: its left, in % of the bar.
+    box = still_box(handle)
+    left = float(handle.evaluate("node => node.style.left").rstrip("%"))
+    expected = hold["x"] + hold["width"] * left / 100
+    assert abs(box["x"] + box["width"] / 2 - expected) < 1, (box, expected)
+    assert handle.evaluate("node => node.getAnimations().length") == 0
+    page.keyboard.press("Escape")
+
+
 @pytest.fixture
 def narrow(browser, demo):
     """A tab 800 px wide, with reduced motion."""
@@ -304,6 +329,20 @@ def test_at_800_px_with_reduced_motion_the_drag_gives_the_same_places(narrow):
     assert box is not None and box["x"] >= 0 and box["x"] + box["width"] <= 800
     narrow.keyboard.press("Escape")
     narrow.mouse.up()
+
+
+def test_with_reduced_motion_the_line_lands_on_each_place_at_once(narrow):
+    handle = open_context(narrow)
+    parts = ".ctx-grip, .ctx-next, .ctx-next-tag, .ctx-readout"
+    nodes = f"[...document.querySelectorAll({parts!r})]"
+    said = narrow.evaluate(f"{nodes}.map(n => getComputedStyle(n).transitionProperty)")
+    assert said and all(p == "none" for p in said), said
+    handle.focus()
+    narrow.keyboard.press("ArrowRight")
+    expect(handle).to_have_attribute("aria-valuetext", SUGGESTED)
+    moving = narrow.evaluate(f"{nodes}.flatMap(n => n.getAnimations()).length")
+    assert moving == 0
+    narrow.keyboard.press("Escape")
 
 
 def test_at_800_px_the_twelve_places_are_apart_and_each_can_be_had_with_the_pointer(narrow):
@@ -357,7 +396,7 @@ class TestBackToTheDefault:
         main = page.get_by_role("main")
         expect(main).to_contain_text("The limit was changed after this chat: it is 1.5% now.")
         expect(handle).to_have_attribute("aria-valuetext", "1.5% now · all 20 fit")
-        line_x, _ = center(page.locator(".ctx-limit"))
+        line_x, _ = still_center(page.locator(".ctx-limit"))
         drag_to(page, handle, line_x)
         assert readout(page).startswith("1%, the default · 4 of 20 show only a name")
         page.mouse.up()
@@ -490,3 +529,76 @@ class TestCodex:
         expect(main).to_contain_text("The limit was changed after this chat: it is 500 tokens now.")
         undo.click()
         wait_until(lambda: (config.read_bytes() if config.exists() else None) == before, seconds=10)
+
+
+class TestLowerPlace:
+    """A share of 1.3% in the user settings, where every description fits already: the line also
+    goes down to 1.2%, 1.1% and the default. A lower place is set like any other, and while its row
+    waits every place up to today's stays where it was."""
+
+    @pytest.fixture
+    def before_start(self):
+        def write(home):
+            path = home / ".claude/settings.json"
+            data = json.loads(path.read_text()) if path.exists() else {}
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({**data, "skillListingBudgetFraction": 0.013}))
+
+        return write
+
+    def test_a_drag_down_to_1_2_percent_applies_and_undo_puts_1_3_back(self, page, demo):
+        handle = open_context(page)
+        expect(handle).to_have_attribute("aria-valuetext", "1.3% now · all 20 fit")
+        line_x, _ = still_center(page.locator(".ctx-limit"))
+        now_x, y = still_center(handle)
+        reads = api_reads(page)
+        # From today's place to the chat's line (1%): every place on the way, smallest last.
+        seen = drag_to(page, handle, line_x, steps=40)
+        assert reads == [], "a drag reads nothing from the server"
+        assert [p.split(" · ")[0] for p in dict.fromkeys(seen)] == [
+            "1.3% now",
+            "1.2%",
+            "1.1%",
+            "1%, the default",
+        ]
+        # Back to 1.2%, a third of the way from today's place (10,400 characters) to 1% (8,000).
+        page.mouse.move(now_x - (now_x - line_x) / 3, y)
+        assert readout(page) == "1.2% · all 20 fit"
+        dropped = still_center(handle)[0]
+        page.mouse.up()
+        dock = page.locator("#dock")
+        expect(dock).to_contain_text("Set the skill list limit of Claude Code to 1.2%")
+        expect(page.locator(".ctx-next-tag")).to_have_text("Next chats: 9,600 characters")
+        # While the row waits, the bar keeps its scale: the handle stays where it was let go and
+        # the chat's line where it was.
+        again = page.get_by_role("slider", name="Skill list limit")
+        assert abs(still_center(again)[0] - dropped) < 1
+        assert abs(still_center(page.locator(".ctx-limit"))[0] - line_x) < 1
+        before = settings(demo.home)
+        dock.get_by_role("button", name="Apply").click()
+        undo = page.get_by_role("button", name="Undo")
+        expect(undo).to_be_visible()
+        assert settings(demo.home)["skillListingBudgetFraction"] == 0.012
+        undo.click()
+        wait_until(lambda: settings(demo.home) == before, seconds=10)
+        assert settings(demo.home)["skillListingBudgetFraction"] == 0.013
+
+    def test_keys_down_to_1_1_percent_apply_and_undo(self, page, demo):
+        handle = open_context(page)
+        handle.focus()
+        page.keyboard.press("ArrowLeft")
+        expect(handle).to_have_attribute("aria-valuetext", "1.2% · all 20 fit")
+        page.keyboard.press("ArrowLeft")
+        expect(handle).to_have_attribute("aria-valuetext", "1.1% · all 20 fit")
+        page.keyboard.press("Enter")
+        dock = page.locator("#dock")
+        expect(dock).to_contain_text("Set the skill list limit of Claude Code to 1.1%")
+        expect(handle).to_be_focused()
+        dock.get_by_role("button", name="Apply").click()
+        undo = page.get_by_role("button", name="Undo")
+        expect(undo).to_be_visible()
+        assert settings(demo.home)["skillListingBudgetFraction"] == 0.011
+        undo.click()
+        wait_until(
+            lambda: settings(demo.home).get("skillListingBudgetFraction") == 0.013, seconds=10
+        )

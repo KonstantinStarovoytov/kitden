@@ -235,3 +235,54 @@ def test_a_limit_below_the_default_keeps_the_places_in_order_so_a_key_only_goes_
     assert values[:2] == [budget // 2, "default"]
     assert [s["limit"] for s in steps] == sorted(s["limit"] for s in steps)
     assert steps[0]["now"] is True and "now" not in steps[1]
+
+
+def _card(limit, skills, now_fits=True):
+    """The card on a 272K window (the default is 2%: 5,440 tokens), with config.toml at `limit`."""
+    budget = limit if limit is not None else 5_440
+    rerun = lambda b: codex_rule(skills, b)  # noqa: E731
+    base = (skills, rerun(budget)) if now_fits else None
+    lengths = {s.name: len(s.description) for s in skills}
+    return _codex_limit_card(272_000, limit, budget, base, now_fits, lengths, rerun)
+
+
+def test_a_limit_above_the_default_has_the_steps_of_500_between_them(home):
+    # 60 long skills: nothing up to 10,000 fits them all, so only Back is offered.
+    many = [CodexSkill(f"s{i:02}", "x" * 1024, f"/s{i:02}/SKILL.md") for i in range(60)]
+    card = _card(7_000, many)
+    assert card["offer"] is None and card["back"]["tokens"] == "default"
+    steps = card["steps"]
+    assert [s["value"] for s in steps] == ["default", 5_500, 6_000, 6_500, 7_000]
+    assert steps[-1]["now"] is True
+    # A lower place gives what the rule gives there, and how much less it sends.
+    assert steps[1]["short"] == 60
+    assert steps[1]["say"].startswith("5,500 tokens · 60 of 60 cut short or left out · about ")
+    assert steps[1]["say"].endswith(" fewer tokens per chat")
+    # Everything fits: the places below are there too, with Back.
+    few = [CodexSkill(f"s{i}", "Does a thing.", f"/s{i}/SKILL.md") for i in range(3)]
+    fits = _card(7_000, few)
+    assert fits["why"] == words.LIMIT_NOT_NEEDED
+    assert [s["value"] for s in fits["steps"]] == ["default", 5_500, 6_000, 6_500, 7_000]
+    assert fits["steps"][1]["say"] == "5,500 tokens · all 3 fit"
+    # With no estimate the places stand, and say nothing of what fits.
+    unknown = _card(7_000, few, now_fits=False)
+    assert unknown["why"] == words.LIMIT_NOT_ESTIMATED
+    assert [s["value"] for s in unknown["steps"]] == ["default", 5_500, 6_000, 6_500, 7_000]
+    lower = {"value": 5_500, "limit": 5_500, "short": None, "say": "5,500 tokens"}
+    assert unknown["steps"][1] == lower
+
+
+def test_a_limit_above_the_default_with_an_offer_has_the_places_below_too():
+    # 30 skills of 1,024 characters need about 8,000 tokens: more than 7,000, less than 10,000.
+    skills = [CodexSkill(f"s{i:02}", "x" * 1024, f"/s{i:02}/SKILL.md") for i in range(30)]
+    card = _card(7_000, skills)
+    assert card["offer"] is not None
+    values = [s["value"] for s in card["steps"]]
+    assert values[:5] == ["default", 5_500, 6_000, 6_500, 7_000]
+    assert values[5:] == list(range(7_500, 10_001, 500))
+
+
+def test_a_limit_below_the_default_has_no_places_between():
+    few = [CodexSkill(f"s{i}", "Does a thing.", f"/s{i}/SKILL.md") for i in range(3)]
+    card = _card(3_000, few)
+    assert [s["value"] for s in card["steps"]] == [3_000, "default"]

@@ -1331,7 +1331,10 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 /* The limit line as a control (spec limit-line-control): a handle on the line (grab, then
    grabbing while it moves; the route tint on hover), the flag that opens Details, and while it
    moves a dashed "next chats" line with its readout under the bar and a mark under the place that
-   fits everything. No motion: the line jumps place by place. */
+   fits everything. The handle, the line, its tag and the readout glide from place to place in
+   160 ms --calm; a new place mid-glide takes over from where they are. The readout's words change
+   at once, and its flip to the left of the line past 60% glides with it. A part that shows (it was
+   hidden) or a card drawn the first time does not glide: it is in place at once. */
 .ctx-chip.after { transform: translateY(-50%); }
 .ctx-grip { position: absolute; top: 28px; z-index: 2; width: 12px; height: 26px; transform: translate(-50%, -50%); border: 1px solid var(--ink); border-radius: 6px; background: var(--panel-raised); box-shadow: 0 1px 3px rgb(0 0 0 / .25); cursor: grab; touch-action: none; }
 .ctx-grip::before { content: ""; position: absolute; inset: 7px 3px; border-left: 1px solid var(--ink-3); border-right: 1px solid var(--ink-3); }
@@ -1340,8 +1343,9 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-flag.act { pointer-events: auto; cursor: pointer; text-decoration: underline dotted var(--ink-3); text-underline-offset: 3px; }
 .ctx-flag.act:hover { color: var(--route); text-decoration-color: var(--route); }
 .ctx-next { position: absolute; top: -5px; bottom: -5px; width: 0; margin-left: -1px; border-left: 2px dashed var(--route); pointer-events: none; }
+.ctx-grip, .ctx-next { transition: left 160ms var(--calm); }
 .ctx-next.pending { border-left-color: var(--preview-line); }
-.ctx-next-tag, .ctx-readout { position: absolute; top: calc(100% + 6px); transform: translateX(-50%); font-size: 11px; white-space: nowrap; pointer-events: none; }
+.ctx-next-tag, .ctx-readout { position: absolute; top: calc(100% + 6px); transform: translateX(-50%); font-size: 11px; white-space: nowrap; pointer-events: none; transition: left 160ms var(--calm), transform 160ms var(--calm); }
 .ctx-next-tag { color: var(--route); font-weight: 500; }
 .ctx-readout { z-index: 3; padding: 2px 8px; border: 1px solid var(--wire); border-radius: 6px; background: var(--panel); color: var(--ink); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; box-shadow: var(--shadow); }
 .ctx-readout.end, .ctx-next-tag.end { transform: translateX(-100%); }
@@ -1394,6 +1398,8 @@ html.map-entrance::view-transition-new(page) { animation: none; }
   .topbar.progress::after { transition: none; }
   /* A stack's strips stay put on hover. */
   div.map .block.stack:hover > .stack-strip { translate: none; }
+  /* The limit line lands on each place at once. */
+  .ctx-grip, .ctx-next, .ctx-next-tag, .ctx-readout { transition: none !important; }
   *, *::before, *::after { animation: none !important; transition-property: opacity, color, background-color !important; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

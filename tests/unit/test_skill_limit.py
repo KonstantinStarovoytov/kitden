@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from kitden.context.rules import listed_share, same_share, shares_above
+from kitden.context.rules import listed_share, same_share, shares_above, shares_below
 from kitden.context.tables import CLAUDE_SHARE, CLAUDE_SHARES
 from kitden.views import words
 from tests.unit.test_context_claude_log import assistant, list_entry, write_chat
@@ -112,7 +112,8 @@ def test_a_share_off_the_list_still_works_and_offers_the_list_values_above_it(ho
     assert limit["offer"]["fraction"] == 0.04
     assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
     values = [s["value"] for s in limit["steps"]]
-    assert values == ["default", 0.0375, 0.04]
+    # The default, every share on the list below 3.75%, today's, then 4%.
+    assert values == ["default", *CLAUDE_SHARES[1:-1], 0.0375, 0.04]
     assert [s["now"] for s in limit["steps"] if s.get("now")] == [True]
 
 
@@ -124,7 +125,7 @@ def test_a_share_of_four_and_a_half_percent_is_read_and_offers_only_back(home):
     assert limit["now"] == "4.5% of the context window: 36,000 characters"
     assert limit["offer"] is None
     assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
-    assert [s["value"] for s in limit["steps"]] == ["default", 0.045]
+    assert [s["value"] for s in limit["steps"]] == ["default", *CLAUDE_SHARES[1:], 0.045]
     assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="4.5%")
 
 
@@ -135,7 +136,7 @@ def test_a_share_of_five_percent_is_above_the_ceiling_with_nothing_to_raise(home
     assert limit["now"] == "5% of the context window: 40,000 characters"
     assert limit["offer"] is None
     assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
-    assert [s["value"] for s in limit["steps"]] == ["default", 0.05]
+    assert [s["value"] for s in limit["steps"]] == ["default", *CLAUDE_SHARES[1:], 0.05]
     assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="5%")
 
 
@@ -147,7 +148,7 @@ def test_a_share_above_the_ceiling_that_fits_everything_offers_only_back(home):
         assert limit["now"].startswith(f"{now} of the context window")
         assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
         assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
-        assert [s["value"] for s in limit["steps"]] == ["default", share]
+        assert [s["value"] for s in limit["steps"]] == ["default", *CLAUDE_SHARES[1:], share]
 
 
 def test_name_only_skills_keep_their_state_in_the_suggestion(home):
@@ -319,6 +320,12 @@ def test_a_share_is_on_the_list_or_it_is_not():
     assert shares_above(0.0105) == list(CLAUDE_SHARES[1:])
     assert shares_above(0.0150000000001) == list(CLAUDE_SHARES[6:])
     assert shares_above(0.04) == [] and shares_above(0.05) == []
+    # Between the default and a share, neither of them: the places below today's.
+    assert shares_below(0.013) == [0.011, 0.012]
+    assert shares_below(0.1 * 0.13) == [0.011, 0.012]
+    assert shares_below(0.0125) == [0.011, 0.012]
+    assert shares_below(0.01) == [] and shares_below(0.0105) == [] and shares_below(0.005) == []
+    assert shares_below(0.05) == list(CLAUDE_SHARES[1:])
 
 
 # The change itself
@@ -489,7 +496,8 @@ def test_the_line_drags_back_to_the_default_when_the_user_file_has_a_higher_shar
     cut_chat(home)
     write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.015})
     steps = view(home)["claude_code"]["limit"]["steps"]
-    # Nothing to raise: 1%, the default, and today's 1.5%; nothing further right.
+    # Nothing to raise: 1%, the default, the shares between it and today's 1.5%, and today's;
+    # nothing further right. From 1.1% on all fit, as today: no characters fewer.
     assert steps == [
         {
             "value": "default",
@@ -499,8 +507,60 @@ def test_the_line_drags_back_to_the_default_when_the_user_file_has_a_higher_shar
                 "1%, the default · 1 of 7 show only a name · about 1,200 fewer characters per chat"
             ),
         },
+        {"value": 0.011, "limit": 8_800, "short": 0, "say": "1.1% · all 7 fit"},
+        {"value": 0.012, "limit": 9_600, "short": 0, "say": "1.2% · all 7 fit"},
+        {"value": 0.013, "limit": 10_400, "short": 0, "say": "1.3% · all 7 fit"},
+        {"value": 0.014, "limit": 11_200, "short": 0, "say": "1.4% · all 7 fit"},
         {"value": 0.015, "limit": 12_000, "short": 0, "say": "1.5% now · all 7 fit", "now": True},
     ]
+
+
+def test_a_share_above_the_default_has_the_places_below_it_and_above_it(home):
+    # 25 skills need 4%: at 1.3% the suggestion is 4%, and the line also goes down to 1.1%, 1.2%
+    # and the default.
+    manifold_chat(home, [f"s{i:02}" for i in range(25)])
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.013})
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["offer"]["fraction"] == 0.04 and limit["back"]["fraction"] == "default"
+    steps = limit["steps"]
+    assert [s["value"] for s in steps] == ["default", 0.011, 0.012, 0.013, *CLAUDE_SHARES[4:]]
+    assert [s["limit"] for s in steps] == sorted(s["limit"] for s in steps)
+    assert [s.get("now", False) for s in steps].index(True) == 3
+    # A lower place says what it gives, by the rule, and how much less it sends.
+    assert steps[1] == {
+        "value": 0.011,
+        "limit": 8_800,
+        "short": 18,
+        "say": "1.1% · 18 of 25 show only a name · about 1,200 fewer characters per chat",
+    }
+    assert steps[3]["say"] == "1.3% now · 17 of 25 show only a name"
+
+
+def test_a_share_off_the_list_has_the_list_places_below_it(home):
+    manifold_chat(home, [f"s{i:02}" for i in range(25)])
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.0125})
+    steps = view(home)["claude_code"]["limit"]["steps"]
+    assert [s["value"] for s in steps][:4] == ["default", 0.011, 0.012, 0.0125]
+    assert steps[3]["now"] is True
+
+
+def test_the_default_set_by_hand_has_no_places_below_and_no_back(home):
+    cut_chat(home)
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.01})
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["back"] is None
+    assert [s["value"] for s in limit["steps"]] == list(CLAUDE_SHARES)
+    assert limit["steps"][0]["now"] is True
+
+
+def test_a_lower_place_is_written_and_undo_puts_the_share_back(home):
+    settings = home / ".claude/settings.json"
+    write_json(settings, {"skillListingBudgetFraction": 0.015})
+    with _page(home) as page:
+        _, _, undo = _round_trip(page, _limit(0.012))
+        assert json.loads(settings.read_text()) == {"skillListingBudgetFraction": 0.012}
+        assert undo()["state"] == "undone"
+    assert json.loads(settings.read_text()) == {"skillListingBudgetFraction": 0.015}
 
 
 def test_no_places_when_nothing_is_offered(home):
@@ -904,8 +964,16 @@ def test_after_the_limit_was_set_the_counted_chat_keeps_its_own_limit(home):
     assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
     assert limit["now"] == "2% of the context window: 16,000 characters"
     assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
+    # A count says only where everything fits: from 1.7% (13,600 of the 12,059 needed).
+    unknown = [
+        {"value": at, "limit": round(at * 800_000), "short": None, "say": f"{p} · not all fit"}
+        for at, p in ((0.011, "1.1%"), (0.012, "1.2%"), (0.013, "1.3%"), (0.014, "1.4%"))
+    ]
     assert limit["steps"] == [
         {"value": "default", "limit": 8_000, "short": None, "say": "1%, the default · not all fit"},
+        *unknown,
+        {"value": 0.015, "limit": 12_000, "short": None, "say": "1.5% · not all fit"},
+        {"value": 0.017, "limit": 13_600, "short": 0, "say": "1.7% · all 10 fit"},
         {"value": 0.02, "limit": 16_000, "short": 0, "say": "2% now · all 10 fit", "now": True},
     ]
     assert limit["counted"] == [REPLAY]
@@ -923,8 +991,12 @@ def test_after_a_share_that_fits_not_all_the_counted_chat_offers_the_next(home):
     # count's run at 12,000 keeps nine descriptions, 10,857 characters: 12,059 is 1,202 more.
     assert limit["offer"]["cost"] == "About 1,200 more characters in every chat (about 300 tokens)"
     # The chat's list was sent under another limit: the place of today cannot say more.
-    assert [s["say"] for s in limit["steps"][:2]] == [
+    assert [s["say"] for s in limit["steps"][:6]] == [
         "1%, the default · not all fit",
+        "1.1% · not all fit",
+        "1.2% · not all fit",
+        "1.3% · not all fit",
+        "1.4% · not all fit",
         "1.5% now · not all fit",
     ]
     step = next(s for s in limit["steps"] if s["value"] == 0.017)
@@ -1141,7 +1213,12 @@ def test_a_chat_at_its_limit_by_built_in_skills_finds_its_share_after_a_change(h
     # 8,100 characters fit in 12,000: nothing to raise; the steps are measured from today's.
     limit = cc["limit"]
     assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+    # The 8,100 characters fit from 1.1% (8,800) on.
     assert [s["say"] for s in limit["steps"]] == [
         "1%, the default · not all fit",
+        "1.1% · all 9 fit",
+        "1.2% · all 9 fit",
+        "1.3% · all 9 fit",
+        "1.4% · all 9 fit",
         "1.5% now · all 9 fit",
     ]

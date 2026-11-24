@@ -59,6 +59,18 @@ def shares_above(share: float) -> list[float]:
     return [listed for listed in CLAUDE_SHARES if listed > share and not same_share(listed, share)]
 
 
+def shares_below(share: float) -> list[float]:
+    """The shares on the list above the default and below `share`, smallest first: the places
+    between the default and today's share. `share` need not be on the list."""
+    return [
+        listed
+        for listed in CLAUDE_SHARES
+        if CLAUDE_SHARE < listed < share
+        and not same_share(listed, CLAUDE_SHARE)
+        and not same_share(listed, share)
+    ]
+
+
 def claude_weight(count: float, last_used_ms: float, at_ms: int) -> float:
     # A use after the chat (or a time in other units) counts as fresh: no huge power.
     days = max(0.0, (at_ms - last_used_ms) / 86_400_000)

@@ -88,7 +88,9 @@ handle, or press Enter on it without moving) for the details: the share of the c
 now, the first share above it at which every description fits (skills you set to Name only or Off
 stay as they are), and about how many more characters and tokens every chat then costs, with
 **Set to 1.4%** (or the share shown). When your user settings set a share above 1%, drag the
-line back to 1% or press **Back to 1%** to take it out again. After Apply, the last chat keeps
+line back to 1% or press **Back to 1%** to take it out again. You can also drag it down to any
+share of the list between 1% and the one you have, such as 1.2% from 1.3%; Codex's line does the
+same in steps of 500 tokens. After Apply, the last chat keeps
 the limit it was sent under, the next chats' line shows the new one, and the page says the
 limit changed and what Kitden expects from your next chat. A share in your settings that is not
 on the list, such as 4.5% from an earlier Kitden or one you wrote by hand, still works: Kitden

@@ -49,8 +49,9 @@ const SLICE = 2;
 // closed). `open`: the skill whose Details show ({ client, name }). `hot`: the skill lit by the
 // pointer. `marks`: name -> its pill and pieces. `draft`: the tray's skill states the last read
 // asked with, as JSON. `bar`: where each piece of the picture was, to move it from there. `how`:
-// "How this is counted" is open.
-const page = { windows: {}, client: null, open: null, hot: null, marks: new Map(), draft: "{}", bar: { at: "", spots: new Map() }, how: false };
+// "How this is counted" is open. `line`: where the limit line's parts stood last, to move them from
+// there as the bar's pieces move.
+const page = { windows: {}, client: null, open: null, hot: null, marks: new Map(), draft: "{}", bar: { at: "", spots: new Map() }, line: { at: "", lefts: new Map() }, how: false };
 
 const fmt = (n) => n.toLocaleString("en-US");
 
@@ -115,7 +116,7 @@ function sentence(say, className) {
 }
 
 export function renderContext(main, { again = false } = {}) {
-  if (!again) Object.assign(page, { client: null, bar: { at: "", spots: new Map() } });
+  if (!again) Object.assign(page, { client: null, bar: { at: "", spots: new Map() }, line: { at: "", lefts: new Map() } });
   page.marks = new Map();
   // The title, with "Choose clients…" at its right, as the Library's head.
   const head = el("div", "page-head");
@@ -266,10 +267,10 @@ function zoom(card, w, r, at, heat, control = null) {
     // Room left gets its word when there is room for the word.
     else if (limit - r.used > limit * 0.08) chips.push(chip(PICTURE.free, (pct(r.used) + 100) / 2));
     hold.append(line, ...chips, flag);
-    if (control) limitControl(card, control, hold, pct, flag, limit);
+    if (control) limitControl(card, control, { hold, pct, flag, chatLimit: limit, chatLine: line, at });
   } else if (control) {
     // No limit line for the chat (its limit is not known): the control stands at today's limit.
-    limitControl(card, control, hold, pct, null, null);
+    limitControl(card, control, { hold, pct, flag: null, chatLimit: null, chatLine: null, at });
   }
   box.append(hold);
   moveFrom(at, spots);
@@ -574,7 +575,8 @@ function limitButton(client, choice, primary, param) {
 
 // What the limit control of a card works with, or null when the server offers nothing to change
 // (the line then is only a picture). `steps`: the places, left to right; `at`: the place the new
-// limit has now (the tray's row, else today's); `reach`: the limit the bar must have room for.
+// limit has now (the tray's row, else today's); `reach`: the limit the bar must have room for, never
+// less than today's limit and the chat's own, so every place up to them is to scale.
 export function controlOf(card) {
   const limit = card.limit;
   if (!limit || !(limit.offer || limit.back)) return null;
@@ -585,7 +587,9 @@ export function controlOf(card) {
   const asked = steps.findIndex((s) => s.value === rowValue(row, param));
   const at = asked >= 0 ? asked : here;
   const offered = limit.offer ? steps.findIndex((s) => s.value === limit.offer[param]) : -1;
-  const reach = Math.max(steps[at] ? steps[at].limit : 0, offered >= 0 ? steps[offered].limit : 0);
+  const chat = (card.windows && card.windows[0] && card.windows[0].budget) || 0;
+  const limits = [at, offered, here].map((i) => (steps[i] ? steps[i].limit : 0));
+  const reach = Math.max(chat, ...limits);
   const beyond = steps.filter((s) => s.limit > reach).length;
   return { client: card.client, param, steps, here, at, offered, reach, beyond, waits: Boolean(row) };
 }
@@ -621,8 +625,11 @@ export function placesOf(control, pct) {
 // until there is a new one), the flag beside it that opens Details, and while it moves a second line,
 // "next chats", with the server's words for that place. Pointer and keys move it place by place; a
 // release or Enter adds the row (or takes it out at today's limit); Esc puts it back. Nothing is read
-// from the server meanwhile and the page is not drawn again: only these parts change.
-function limitControl(card, control, hold, pct, flag, chatLimit) {
+// from the server meanwhile and the page is not drawn again: only these parts change. While it
+// moves, the handle, the line, its tag and the readout glide to each place (style.css); when the bar
+// is drawn again for the same window, they and the chat's line move from where they stood, in 240 ms
+// as the bar's pieces do. `chatLine`: the chat's own limit line; `at`: the window drawn.
+function limitControl(card, control, { hold, pct, flag, chatLimit, chatLine, at }) {
   const { steps } = control;
   const spot = (i) => (steps[i] ? Math.min(placesOf(control, pct)[i], 100) : 100);
   const grip = el("span", "ctx-grip");
@@ -657,6 +664,19 @@ function limitControl(card, control, hold, pct, flag, chatLimit) {
   // `shown`: the place drawn now; `moving`: a drag or keys moved it since the last commit.
   let shown = control.at;
   let moving = false;
+  // Where each part stands, for the next time the bar is drawn; a hidden part, or the flag at the
+  // bar's right end, stands nowhere and just shows then. `carried`: a carry from the last draw runs.
+  const parts = { grip, next, tag, readout, ...(chatLine ? { line: chatLine } : {}), ...(flag && !flag.style.right ? { flag } : {}) };
+  const before = page.line.at === at ? page.line.lefts : new Map();
+  const lefts = new Map();
+  page.line = { at, lefts };
+  const note = () => {
+    for (const [key, node] of Object.entries(parts)) {
+      if (node.hidden) lefts.delete(key);
+      else lefts.set(key, node.style.left);
+    }
+  };
+  let carried = false;
   const differs = (i) => steps[i] && (chatLimit === null || steps[i].limit !== chatLimit);
   const draw = (i, live) => {
     const started = performance.now();
@@ -680,9 +700,23 @@ function limitControl(card, control, hold, pct, flag, chatLimit) {
     }
     mark.hidden = !live || control.offered < 0;
     next.classList.toggle("pending", control.waits && !live);
+    if (live && carried) {
+      // A move cuts the carry short, so the handle follows the pointer at once. A CSS transition
+      // (the glide) has a transitionProperty; the carry does not.
+      carried = false;
+      for (const node of Object.values(parts)) for (const move of node.getAnimations?.() || []) if (!move.transitionProperty) move.cancel();
+    }
+    note();
     if (live) performance.measure("kitden:limit-step", { start: started, end: performance.now() });
   };
   draw(control.at, false);
+  for (const [key, node] of Object.entries(parts)) {
+    const was = before.get(key);
+    const now = node.style.left;
+    if (node.hidden || was === undefined || was === now) continue;
+    animateTo(node, [{ left: was }, { left: now }], { dur: 240 });
+    carried = true;
+  }
 
   // A release or Enter on place `i`: today's place takes the row out (or leaves it out), another
   // place adds its row unless that row waits already.

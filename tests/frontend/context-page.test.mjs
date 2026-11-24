@@ -830,6 +830,92 @@ test('with a share above the default, the line drags back to 1% and adds the Bac
   assert.deepEqual(asked.find((a) => a.url === PREVIEW).body.requests[0].params, { fraction: 'default' });
 });
 
+// Today 1.3% of the 200K window (10,400 characters), as the chat had it; the line also goes down to
+// 1.2%, 1.1% and the default. Nothing is suggested: only Back.
+const LOWER = {
+  ...LIMIT, now: '1.3% of the context window: 10,400 characters', offer: null, back: { fraction: 'default', label: 'Back to 1%' }, note: null,
+  why: 'Kitden does not offer a new skill list limit: every description fits.',
+  steps: [
+    { value: 'default', limit: 8000, short: 1, say: '1%, the default · 1 of 3 show only a name · about 3,000 fewer characters per chat' },
+    { value: 0.011, limit: 8800, short: 1, say: '1.1% · 1 of 3 show only a name · about 3,000 fewer characters per chat' },
+    { value: 0.012, limit: 9600, short: 0, say: '1.2% · all 3 fit' },
+    { value: 0.013, limit: 10400, short: 0, say: '1.3% now · all 3 fit', now: true },
+  ],
+};
+const LOWER_CARD = { ...TIGHT, windows: [{ ...TIGHT.windows[0], budget: 10400 }], limit: LOWER };
+
+test('the places below today\'s limit are to scale, and stay so while a lower place waits in the tray', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  // The chat's limit (10,400) plus what was cut (3,000): the bar's scale, all to scale.
+  const spotOf = (limit) => (limit / 13400) * 100;
+  const pct = (n) => (n / 13400) * 100;
+  show(answer(LOWER_CARD, CODEX, CURSOR));
+  const control = controlOf(LOWER_CARD);
+  assert.deepEqual([control.here, control.at, control.offered, control.reach, control.beyond], [3, 3, -1, 10400, 0]);
+  assert.deepEqual(placesOf(control, pct), [8000, 8800, 9600, 10400].map(spotOf));
+  // The pointer on a lower place gives that place.
+  for (const i of [0, 1, 2, 3]) assert.equal(stepAt(control, spotOf(LOWER.steps[i].limit), pct), i);
+  assert.equal(grip().style.left, `${spotOf(10400)}%`);
+  // Keys down to 1.1%, then Enter: its row goes to the tray.
+  const handle = grip();
+  await fire(handle, 'keydown', { key: 'ArrowLeft' });
+  await fire(handle, 'keydown', { key: 'ArrowLeft' });
+  assert.equal(text(readout()), '1.1% · 1 of 3 show only a name · about 3,000 fewer characters per chat');
+  assert.equal(handle.style.left, `${spotOf(8800)}%`);
+  queue(PREVIEW, previewed('c1'));
+  queue(`/api/context?draft=${encodeURIComponent(JSON.stringify({ limits: { claude_code: 0.011 } }))}`, { status: 200, json: answer(LOWER_CARD, CODEX, CURSOR) });
+  await fire(handle, 'keydown', { key: 'Enter' });
+  await flush();
+  assert.deepEqual(asked.find((a) => a.url === PREVIEW).body.requests[0].params, { fraction: 0.011 });
+  // With 1.1% waiting and nothing suggested, the bar still has room up to today's limit: today's
+  // place is on the chat's own line, and every place up to it is to scale.
+  const waiting = controlOf(LOWER_CARD);
+  assert.deepEqual([waiting.at, waiting.reach, waiting.beyond, waiting.waits], [1, 10400, 0, true]);
+  assert.deepEqual(placesOf(waiting, pct), [8000, 8800, 9600, 10400].map(spotOf));
+  assert.equal(byClass(main, 'ctx-limit')[0].style.left, `${spotOf(10400)}%`);
+  assert.equal(grip().style.left, `${spotOf(8800)}%`);
+  assert.equal(nextLine().style.left, `${spotOf(8800)}%`);
+  assert.equal(text(byClass(main, 'ctx-next-tag')[0]), 'Next chats: 8,800 characters');
+});
+
+test('reach is never below the chat\'s own limit line, even when today\'s limit is lower', () => {
+  // The chat was sent at 1.5% (12,000); today is 1.3%. The places up to 12,000 are to scale.
+  const card = { ...LOWER_CARD, windows: [{ ...TIGHT.windows[0], budget: 12000 }] };
+  const control = controlOf(card);
+  assert.equal(control.reach, 12000);
+  assert.equal(control.beyond, 0);
+  const pct = (n) => n / 150;
+  assert.deepEqual(placesOf(control, pct), [8000, 8800, 9600, 10400].map(pct));
+});
+
+test('the limit line\'s parts move with the bar when it is drawn again, and not on its first draw', async () => {
+  await fresh();
+  reduced = false;
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer({ ...TIGHT, limit: LIMIT }, CODEX, CURSOR));
+  // The first draw: in place at once.
+  assert.equal(grip().animations.length, 0);
+  assert.equal(byClass(main, 'ctx-limit')[0].animations.length, 0);
+  const was = grip().style.left;
+  // Drawn again for the same window with a bar of another scale (no place past the suggested one
+  // now): the handle and the chat's line move from where they stood, in 240 ms.
+  const narrower = { ...LIMIT, steps: LIMIT.steps.slice(0, 2) };
+  show(answer({ ...TIGHT, limit: narrower }, CODEX, CURSOR), { again: true });
+  const moved = grip().animations;
+  assert.equal(moved.length, 1);
+  assert.deepEqual(moved[0].keyframes, [{ left: was }, { left: grip().style.left }]);
+  assert.equal(moved[0].options.duration, 240);
+  assert.equal(byClass(main, 'ctx-limit')[0].animations.length, 1);
+  // The next-chats line was hidden and stays hidden: it does not move.
+  assert.equal(nextLine().animations.length, 0);
+  // A key cuts the carry short, so the handle follows at once.
+  await fire(grip(), 'keydown', { key: 'ArrowRight' });
+  assert.equal(moved[0].cancelled, true);
+  await fire(grip(), 'keydown', { key: 'Escape', stopPropagation() {} });
+  reduced = true;
+});
+
 test('with no limit line for the chat, the control stands at today\'s limit; Details still work', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };
