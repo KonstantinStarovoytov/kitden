@@ -630,9 +630,12 @@ def _share_then(
 
 def _list_ends_at(rows, states, budget: int, cap: int) -> bool:
     """The chat's list stops at this limit, whatever the order descriptions are dropped in: the
-    room left (or what Kitden counts over the limit: 30,022 of 30,000 was seen 2026-11-24, Claude
-    Code 2.1.330) is less than every description that was not sent. False when it dropped none
-    whose size is known: then the list says nothing of the limit."""
+    room left is less than every description that was not sent. False when it dropped none whose
+    size is known: then the list says nothing of the limit.
+
+    # checked 2026-11-24 (real log, Claude Code 2.1.330): the client let a list of 30,009
+    # characters, 30,022 by this count, through 30,000. So up to 0.2% over is still at the limit.
+    """
     listed = [r for r in rows if not r.added]
     used = sum(len(r.name) + (2 if r.sent is None else 4 + len(r.sent)) for r in listed)
     used += max(0, len(listed) - 1)
@@ -643,7 +646,7 @@ def _list_ends_at(rows, states, budget: int, cap: int) -> bool:
         for r in listed
         if r.sent is None and states[r.name] != "name-only" and r.full
     ]
-    return bool(dropped) and abs(budget - used) < min(dropped) + 2
+    return bool(dropped) and -(budget // 500) <= budget - used < min(dropped) + 2
 
 
 def _share_counted(rows, states, model: tuple[int, int], share: float, cap: int) -> float | None:
@@ -657,6 +660,12 @@ def _share_counted(rows, states, model: tuple[int, int], share: float, cap: int)
     return None
 
 
+def _longer_now(row: _Row, cap: int) -> bool:
+    """The skill's file has a longer description than the chat sent (changed since, or the cap
+    was raised)."""
+    return bool(row.full and row.sent is not None and min(len(row.full), cap) > len(row.sent))
+
+
 def _claude_count(
     rows, states, budget: int, cap: int
 ) -> tuple[list[ClaudeSkill], ClaudeFit | None]:
@@ -666,8 +675,10 @@ def _claude_count(
     holds also when the rule does not rebuild the chat. The count and the comparison are the
     rule's own (`size <= budget` in claude_rule), with no margin: the client let 30,022 through
     30,000 by this count (see `_list_ends_at`), but Kitden claims no fit its own count is over.
-    A description Kitden cannot find counts at the cap, the worst case; it stops just past the
-    limit, as in `_claude_gives`."""
+    A description counts as the chat sent it, or as its file is now when that is longer. One that
+    Kitden cannot find counts at the cap, the worst case; it stops just past the limit, as in
+    `_claude_gives`."""
+    rows = [replace(r, sent=r.full) if _longer_now(r, cap) else r for r in rows]
     run = _claude_run(rows, states, {}, budget, "x" * min(cap, budget + 1), cap=cap)
     assert run is not None  # every size is given
     skills, fit = run
@@ -1027,7 +1038,7 @@ def _claude(
             )
         else:
             # What the chat sent inside its limit, when no setting changed since.
-            late = {r.name for r in rows if r.added}
+            late = {r.name for r in rows if r.added or _longer_now(r, cap)}
             known = frozenset() if moved else sent_full - late
             is_new = then_share is not None
             fits = _claude_counted(rows, states_now, budget, fact["used"], known, is_new, cap)

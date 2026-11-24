@@ -430,6 +430,17 @@ def test_a_count_that_is_exactly_the_limit_fits_and_one_character_more_does_not(
     assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.02
 
 
+def test_a_description_written_longer_after_the_chat_counts_as_it_is_now(home):
+    counted_chat(home)
+    skill(home / ".claude/skills", "j", TEXT[: 1200 - 59])
+    # 12,000 in all at 1.5%; b's file, sent with 1,200 characters, has 1,290 now.
+    skill(home / ".claude/skills", "b", LONG)
+    assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.02
+    # A shorter file counts as what was sent: the worst case.
+    skill(home / ".claude/skills", "b", TEXT[:100])
+    assert view(home)["claude_code"]["limit"]["offer"]["fraction"] == 0.015
+
+
 def test_a_chat_the_rule_rebuilds_says_nothing_of_a_count(home):
     cut_chat(home)
     cc = view(home)["claude_code"]
@@ -512,6 +523,16 @@ def test_a_chat_that_sent_everything_needs_no_higher_limit_whatever_the_count_sa
     limit = cc["limit"]
     assert not cc["checked"] and cc["windows"][0]["result"]["misfit"] is None
     assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+
+
+def test_a_chat_that_sent_everything_does_not_show_that_a_longer_file_fits(home):
+    names = [f"s{i:02}" for i in range(40)]
+    for name in names:
+        skill(home / ".claude/skills", name, TEXT)
+    claude_chat(home, dict.fromkeys(names, TEXT), model="claude-sonnet-4-6")
+    skill(home / ".claude/skills", "s00", LONG)
+    limit = view(home)["claude_code"]["limit"]
+    assert limit["why"] == words.LIMIT_NOT_ENOUGH.format(share="5%")
 
 
 def test_skills_added_during_the_chat_do_not_show_that_everything_fits(home):
@@ -651,6 +672,25 @@ def test_a_share_set_after_a_higher_one_finds_the_chats_share(home):
     cc = view(home)["claude_code"]
     assert cc["windows"][0]["budget"] == 12_000
     assert cc["changed"][0].startswith("The limit was changed after this chat: it is 2% now.")
+
+
+def test_a_limit_lowered_under_what_the_chat_sent_is_not_its_limit(home):
+    counted_chat(home)
+    # 6,800 characters: 451 under the chat's list, less than any description it dropped.
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.0085})
+    cc = view(home)["claude_code"]
+    assert cc["windows"][0]["budget"] == 8_000
+    assert cc["changed"][0].startswith("The limit was changed after this chat: it is 0.85% now.")
+
+
+def test_a_list_a_few_characters_over_the_limit_by_kitdens_count_still_ends_there(home):
+    counted_chat(home)
+    # 7,251 characters were sent: 7,240 (0.905%) and 7,200 (0.9%) are 11 and 51 under that.
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.00905})
+    cc = view(home)["claude_code"]
+    assert cc["windows"][0]["budget"] == 7_240 and cc["changed"] == []
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.009})
+    assert view(home)["claude_code"]["windows"][0]["budget"] == 8_000
 
 
 def test_another_settings_change_keeps_the_counted_chats_limit(home):
