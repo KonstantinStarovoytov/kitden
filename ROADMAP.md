@@ -7,7 +7,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
-### Not yet released
+### 0.12.0
 
 - **Turn off more skills from the Context page:** 13 skills built into Claude Code have the same
   switch as your own, and a plugin's skill can turn its whole plugin off there. Skills that are
