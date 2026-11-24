@@ -828,8 +828,8 @@ def _claude(
     files = _claude_files(home, found.folder)
     setting = _claude_setting(files)
     fraction = _claude_fraction(files)
-    # A guess: the docs say "or" and not which wins, so the fixed budget is the limit when both
-    # are set (2026-11-23).
+    # checked 2026-11-24 (Claude Code 2.1.311): with both set, the fixed budget is the limit; the
+    # list was the same with and without the share.
     by_fraction = setting is None and fraction is not None
     share = fraction if by_fraction and fraction is not None else CLAUDE_SHARE
     cap = _claude_cap(files)
