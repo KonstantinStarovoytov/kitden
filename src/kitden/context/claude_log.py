@@ -31,6 +31,8 @@ class SentList:
     model: str | None
     folder: str | None
     skills: tuple[tuple[str, str | None], ...]  # name, sent text (None = name only)
+    # name -> as the list shows it, where that is more than the name: `ship-local (ship)`
+    shown: dict[str, str] = field(default_factory=dict)
     added: frozenset[str] = frozenset()  # added during the chat: sent whole, outside the limit
     # When the chat's last full list was sent. `at` moves on with every list of added skills,
     # and the app can add skills to a chat nobody is in; a full list comes when a chat starts
@@ -45,36 +47,49 @@ class Unreadable:
     at: str = field(default="", compare=False)  # when the list Kitden could not read was sent
 
 
-def _find_entry(content: str, name: str, at: int) -> int:
-    """Where `- <name>` starts on its own line, from `at`; -1 if it is not there."""
-    marker = f"- {name}"
-    pos = content.find(marker, at)
-    while pos != -1:
-        starts_line = pos == 0 or content[pos - 1] == "\n"
-        if starts_line and content[pos + len(marker) : pos + len(marker) + 1] in ("", ":", "\n"):
-            return pos
-        pos = content.find(marker, pos + 1)
-    return -1
+def _find_entry(content: str, name: str, at: int) -> re.Match[str] | None:
+    """The `- <name>` that starts a line and ends it or has `:` after it, from `at`; with none,
+    the one with a command in brackets after the name (the plain one goes first: a description
+    can hold a line like the other). None if it is not there.
+
+    # checked 2026-11-24 (Claude Code 2.1.330): a skill whose command is another word than its
+    # name is shown as `name (command)`; 12 lists in real logs have one, with its description.
+    # From the program file: it is shown so without a description too, the word has no spaces and
+    # no brackets, and a skill set to Name only shows no command. `names` holds the name alone.
+    """
+    for command in ("", r" \([^\s()]+\)"):
+        entry = rf"^- (?P<shown>{re.escape(name)}{command})(?=:|\n|\Z)"
+        found = re.compile(entry, re.MULTILINE).search(content, at)
+        if found is not None:
+            return found
+    return None
 
 
-def _split(names: list[str], content: str) -> tuple[tuple[str, str | None], ...]:
-    """Entries start at `- <name>` for each name, in order; a `- ` line in a description stays."""
-    starts = []
+def _split(
+    names: list[str], content: str
+) -> tuple[tuple[tuple[str, str | None], ...], dict[str, str]]:
+    """The skills, and the shown names that are more than the name. Entries start at `- <name>`
+    for each name, in order; a `- ` line in a description stays."""
+    found = []
     at = 0
     for name in names:
-        start = _find_entry(content, name, at)
-        starts.append(start)
-        if start != -1:
-            at = start + len(name) + 2
+        entry = _find_entry(content, name, at)
+        found.append(entry)
+        if entry is not None:
+            at = entry.end()
     skills = []
+    shown = {}
     for i, name in enumerate(names):
-        if starts[i] == -1:
+        entry = found[i]
+        if entry is None:
             skills.append((name, None))
             continue
-        stop = next((s for s in starts[i + 1 :] if s != -1), len(content))
-        rest = content[starts[i] + len(name) + 2 : stop].removesuffix("\n")
+        stop = next((e.start() for e in found[i + 1 :] if e is not None), len(content))
+        rest = content[entry.end() : stop].removesuffix("\n")
         skills.append((name, rest[1:].removeprefix(" ") if rest.startswith(":") else None))
-    return tuple(skills)
+        if entry["shown"] != name:
+            shown[name] = entry["shown"]
+    return tuple(skills), shown
 
 
 def _added(skills: tuple, added: tuple) -> tuple[tuple[str, str | None], ...]:
@@ -144,7 +159,7 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                     continue
                 if attachment.get("skillCount") != len(attachment["names"]):  # cut short
                     continue
-                skills = _split(attachment["names"], attachment["content"])
+                skills, shown = _split(attachment["names"], attachment["content"])
                 if attachment["isInitial"]:
                     result = SentList(
                         CLIENT,
@@ -154,13 +169,19 @@ def _read_chat(path: Path, folder: str | None) -> SentList | Unreadable | None:
                         model,
                         entry.get("cwd"),
                         skills,
+                        shown,
                         full=at,
                     )
                     answered = False
                 elif isinstance(result, SentList):
-                    added = result.added | {name for name, _ in skills}
+                    new = {name for name, _ in skills}
+                    kept = {name: text for name, text in result.shown.items() if name not in new}
                     result = replace(
-                        result, at=at, skills=_added(result.skills, skills), added=added
+                        result,
+                        at=at,
+                        skills=_added(result.skills, skills),
+                        shown=kept | shown,
+                        added=result.added | new,
                     )
             elif '"model"' in line and ASSISTANT.search(line):
                 found = MODEL.search(line)  # a regex: no need to parse a large assistant line

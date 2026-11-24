@@ -48,6 +48,16 @@ def test_claude_built_ins_and_name_only_keep_their_place_then_the_most_used():
     assert fit.size == 25 * 4 + 3 + 4
 
 
+def test_claude_counts_the_command_shown_after_a_name():
+    # "- a-local (a): " + 20 is 35 and "- a-local (a)" is 13. A skill set to Name only shows no
+    # command: "- a-local" is 9.
+    on = ClaudeSkill("a-local", "d" * 20, False, False, 0.0, "a-local (a)")
+    assert claude_rule([on], 100).used == 35
+    assert claude_rule([on], 34).used == 13
+    only = ClaudeSkill("a-local", "d" * 20, False, True, 0.0, "a-local (a)")
+    assert claude_rule([only], 100).used == 9
+
+
 def test_claude_built_ins_alone_can_pass_the_limit():
     skills = [skill("a", full=True), skill("b", full=True), skill("c")]
     fit = claude_rule(skills, 20)

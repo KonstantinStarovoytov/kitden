@@ -22,6 +22,12 @@ class ClaudeSkill:
     always_full: bool
     name_only: bool
     weight: float
+    shown: str = ""  # the name as the list shows it, where that is more than the name
+
+    @property
+    def label(self) -> str:
+        """What stands before the description. Set to Name only, the skill shows only its name."""
+        return self.name if self.name_only else self.shown or self.name
 
 
 @dataclass(frozen=True)
@@ -69,7 +75,7 @@ def claude_rule(
     # built-ins and Name only keep their entry, every other skill shows its name, and
     # descriptions go to the most used.
     def entry(s: ClaudeSkill) -> int:
-        return len(s.name) + 2 if s.name_only else len(s.name) + 4 + _description_size(s, cap)
+        return len(s.label) + (2 if s.name_only else 4 + _description_size(s, cap))
 
     separators = max(0, len(skills) - 1)
     size = sum(entry(s) for s in skills) + separators
@@ -82,7 +88,7 @@ def claude_rule(
     def fixed(s: ClaudeSkill) -> bool:
         return s.always_full or s.name_only
 
-    used = sum(entry(s) if fixed(s) else len(s.name) + 2 for s in skills) + separators
+    used = sum(entry(s) if fixed(s) else len(s.label) + 2 for s in skills) + separators
     full = {s.name for s in skills if s.always_full and not s.name_only}
     # sorted is stable: the order of the skills breaks ties
     for s in sorted((s for s in skills if not fixed(s)), key=lambda s: -s.weight):

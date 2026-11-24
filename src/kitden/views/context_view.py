@@ -85,6 +85,7 @@ class _Row:
     item: Item | None
     full: str | None
     path: str = ""  # Codex: the `file:` path of its line
+    shown: str = ""  # Claude Code: the name as the list shows it, where that is more than the name
     added: bool = False  # Claude Code: added during the chat, sent whole outside the limit
     built_in: bool = False  # Claude Code: built in, keeps its description whatever the limit
     moved: bool = False  # Codex: read from its plugin's newer version, the chat's one is gone
@@ -635,10 +636,10 @@ def _list_ends_at(rows, states, budget: int, cap: int) -> bool:
     size is known: then the list says nothing of the limit.
 
     # checked 2026-11-24 (real log, Claude Code 2.1.330): the client let a list of 30,009
-    # characters, 30,022 by this count, through 30,000. So up to 0.2% over is still at the limit.
+    # characters through 30,000. So up to 0.2% over is still at the limit.
     """
     listed = [r for r in rows if not r.added]
-    used = sum(len(r.name) + (2 if r.sent is None else 4 + len(r.sent)) for r in listed)
+    used = sum(len(r.shown or r.name) + (2 if r.sent is None else 4 + len(r.sent)) for r in listed)
     used += max(0, len(listed) - 1)
     # An empty description has nothing to drop. One longer than the default cap (the cap is a
     # setting) counts at that: a huge one would have no room at several limits.
@@ -674,8 +675,8 @@ def _claude_count(
 
     Whether everything fits does not depend on the order descriptions are dropped in, so this
     holds also when the rule does not rebuild the chat. The count and the comparison are the
-    rule's own (`size <= budget` in claude_rule), with no margin: the client let 30,022 through
-    30,000 by this count (see `_list_ends_at`), but Kitden claims no fit its own count is over.
+    rule's own (`size <= budget` in claude_rule), with no margin: the client let 30,009 through
+    30,000 (see `_list_ends_at`), but Kitden claims no fit its own count is over.
     A description counts as the chat sent it, or as its file is now when that is longer. One that
     Kitden cannot find counts at the cap, the worst case; it stops just past the limit, as in
     `_claude_gives`."""
@@ -759,6 +760,7 @@ def _claude_run(
             r.built_in,
             states[r.name] == "name-only",
             weights.get(r.name, 0.0),
+            r.shown,
         )
         for r in rows
         if states[r.name] != "off" and not (as_sent and r.added)
@@ -834,9 +836,9 @@ def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool, cap: 
     for r in rows:
         if r.sent is not None:
             # The log's own length: the cap may have been another one when the chat was sent.
-            sent[r.name] = len(r.name) + 4 + len(r.sent)
+            sent[r.name] = len(r.shown or r.name) + 4 + len(r.sent)
             continue
-        names += len(r.name) + 2
+        names += len(r.shown or r.name) + 2
         if r.full is not None and r.name not in chosen:
             over[r.name] = min(len(r.full), cap) + 2
     used = sum(sent.values()) + names + max(0, len(rows) - 1)
@@ -873,7 +875,7 @@ def _claude_estimate(
     over = {}
     for s in skills:
         if s.name in fit.full:
-            sent[s.name] = len(s.name) + 4 + min(len(s.description or ""), cap)
+            sent[s.name] = len(s.label) + 4 + min(len(s.description or ""), cap)
         elif not s.name_only:
             over[s.name] = min(len(s.description or ""), cap) + 2
     n = len(skills)
@@ -950,7 +952,9 @@ def _claude(
     for name, text in found.skills:
         item = by_name.get(name)
         full = _description(item.source.path) if item else _app_description(home, name)
-        rows.append(_Row(name, text, item, full, added=name in found.added))
+        rows.append(
+            _Row(name, text, item, full, shown=found.shown.get(name, ""), added=name in found.added)
+        )
     # The skills there that the last chat's list does not hold: the next chat lists them, unless
     # they are off or only asked for.
     listed = {r.name for r in rows}
