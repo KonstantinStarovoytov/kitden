@@ -18,7 +18,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   Codex's line does the same in tokens, for `[skills] max_context_tokens`.
 - **A skill listed with its command is read right:** Claude Code lists a skill as `name (command)`
   when you type another word to run it. Kitden took such a skill for name only and added its line
-  to the skill before it; now both are read and counted as sent (#PRNUM).
+  to the skill before it; now both are read and counted as sent (#192).
 
 ### 0.11.1
 
