@@ -81,6 +81,46 @@ def test_a_name_that_starts_another_name_is_not_mixed_up(tmp_path):
     assert last_claude_list(tmp_path, None).skills == (("ab", "Long."), ("a", "Short."))
 
 
+def test_the_command_in_brackets_after_a_name_is_not_its_description(tmp_path):
+    # Claude Code adds the word you type when it is not the skill's name (seen on 2.1.330).
+    entry = list_entry(["a", "b-local", "c"], "- a: One.\n- b-local (b): Two.\n- c")
+    write_chat(tmp_path, "p", "chat", [entry], 100)
+    got = last_claude_list(tmp_path, None)
+    assert got.skills == (("a", "One."), ("b-local", "Two."), ("c", None))
+    assert got.shown == {"b-local": "b-local (b)"}
+
+
+def test_a_skill_by_name_only_can_have_a_command_in_brackets(tmp_path):
+    for content in ("- a: One.\n- b-local (b)\n- c: Two.", "- a: One.\n- c: Two.\n- b-local (b)"):
+        names = ["a", "b-local", "c"] if content.endswith("Two.") else ["a", "c", "b-local"]
+        write_chat(tmp_path, "p", "chat", [list_entry(names, content)], 100)
+        got = last_claude_list(tmp_path, None)
+        assert dict(got.skills) == {"a": "One.", "b-local": None, "c": "Two."}
+        assert got.shown == {"b-local": "b-local (b)"}
+
+
+def test_a_dash_line_with_other_words_in_brackets_stays_in_its_description(tmp_path):
+    text = "One.\n- b (not a command): no.\n- b (x) and more\n- c (x): not a skill"
+    entry = list_entry(["a", "b"], f"- a: {text}\n- b: Two.")
+    write_chat(tmp_path, "p", "chat", [entry], 100)
+    got = last_claude_list(tmp_path, None)
+    assert got.skills == (("a", text), ("b", "Two."))
+    assert got.shown == {}
+
+
+def test_an_added_skill_keeps_its_command_in_brackets(tmp_path):
+    full = list_entry(["a", "b-local"], "- a: One.\n- b-local (b)")
+    added = list_entry(["c-local"], "- c-local (c): Three.", isInitial=False)
+    write_chat(tmp_path, "p", "chat", [full, added], 100)
+    got = last_claude_list(tmp_path, None)
+    assert got.skills == (("a", "One."), ("b-local", None), ("c-local", "Three."))
+    assert got.shown == {"b-local": "b-local (b)", "c-local": "c-local (c)"}
+    # Sent again with no command, it is shown by its name.
+    again = list_entry(["b-local"], "- b-local: Two.", isInitial=False)
+    write_chat(tmp_path, "p", "chat", [full, added, again], 100)
+    assert last_claude_list(tmp_path, None).shown == {"c-local": "c-local (c)"}
+
+
 def test_skips_subagent_logs_sidechains_and_runs_that_are_not_a_chat(tmp_path):
     plain = list_entry(["a"], "- a: Plain.")
     write_chat(tmp_path, "p", "chat", [plain], 100)

@@ -16,6 +16,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   works also when Kitden cannot replay the last chat's list: it then counts what all
   descriptions need and says so.
   Codex's line does the same in tokens, for `[skills] max_context_tokens`.
+- **A skill listed with its command is read right:** Claude Code lists a skill as `name (command)`
+  when you type another word to run it. Kitden took such a skill for name only and added its line
+  to the skill before it; now both are read and counted as sent (#PRNUM).
 
 ### 0.11.1
 

@@ -85,6 +85,7 @@ class _Row:
     item: Item | None
     full: str | None
     path: str = ""  # Codex: the `file:` path of its line
+    shown: str = ""  # Claude Code: the name as the list shows it, where that is more than the name
     added: bool = False  # Claude Code: added during the chat, sent whole outside the limit
     built_in: bool = False  # Claude Code: built in, keeps its description whatever the limit
     moved: bool = False  # Codex: read from its plugin's newer version, the chat's one is gone
@@ -759,6 +760,7 @@ def _claude_run(
             r.built_in,
             states[r.name] == "name-only",
             weights.get(r.name, 0.0),
+            r.shown,
         )
         for r in rows
         if states[r.name] != "off" and not (as_sent and r.added)
@@ -834,9 +836,9 @@ def _claude_fact(rows: list[_Row], when: str, chosen: set[str], now: bool, cap: 
     for r in rows:
         if r.sent is not None:
             # The log's own length: the cap may have been another one when the chat was sent.
-            sent[r.name] = len(r.name) + 4 + len(r.sent)
+            sent[r.name] = len(r.shown or r.name) + 4 + len(r.sent)
             continue
-        names += len(r.name) + 2
+        names += len(r.shown or r.name) + 2
         if r.full is not None and r.name not in chosen:
             over[r.name] = min(len(r.full), cap) + 2
     used = sum(sent.values()) + names + max(0, len(rows) - 1)
@@ -873,7 +875,7 @@ def _claude_estimate(
     over = {}
     for s in skills:
         if s.name in fit.full:
-            sent[s.name] = len(s.name) + 4 + min(len(s.description or ""), cap)
+            sent[s.name] = len(s.label) + 4 + min(len(s.description or ""), cap)
         elif not s.name_only:
             over[s.name] = min(len(s.description or ""), cap) + 2
     n = len(skills)
@@ -950,7 +952,9 @@ def _claude(
     for name, text in found.skills:
         item = by_name.get(name)
         full = _description(item.source.path) if item else _app_description(home, name)
-        rows.append(_Row(name, text, item, full, added=name in found.added))
+        rows.append(
+            _Row(name, text, item, full, shown=found.shown.get(name, ""), added=name in found.added)
+        )
     # The skills there that the last chat's list does not hold: the next chat lists them, unless
     # they are off or only asked for.
     listed = {r.name for r in rows}
