@@ -17,8 +17,7 @@ const RULES = [
   [/^Turn (off|on) for all projects…$/, () => "Sets the shared rule. A project with a rule of its own keeps it."],
   [/^Turn (off|on) (.+ )?in (this project|.+)…$/, (m) => `A rule for ${m[3] === "this project" ? "this project" : m[3]} only. The shared rule and other projects stay as they are.`],
   [/^Choose clients…$/, () => "Pick which clients Kitden reads. A client that is off is not read, and nothing in its own settings changes."],
-  [/^Raise the limit…$/, () => "Shows the share of the window that fits every description, and what it costs in every chat."],
-  [/^Skill list limit…$/, () => "Shows Claude Code's skill list limit now, and Back to the default."],
+  [/^Skill list limit$/, () => "Drag the line to set the limit for your next chats, or click it for details."],
   [/^Turn it on in (.+)…$/, (m) => `Only ${m[1]} changes. Other clients keep what they have.`],
   [/^Turn strict mode on…$/, () => "Tools without a rule of their own go off, and tools the server adds later start off too."],
   [/^Turn strict mode off…$/, () => "Tools without a rule of their own come back on, and tools the server adds later start on."],
@@ -142,6 +141,17 @@ export function startTips(root = document) {
     // Measured above with opacity 0, so the fade runs from there.
     tip.classList.add("in");
   };
+  // A control that says "quiettip" (the limit handle once a drag or a key moves it: its own readout
+  // and tag take the place of the words) keeps them off until the pointer has left it and comes
+  // back. A redraw replaces the node and gives it the pointer and focus again, so it is known by
+  // its data-focus key. Focus does not show them again until it has gone to another control.
+  let quiet = null; // { key, hovered }
+  const isQuiet = (node) => quiet && node.dataset.focus === quiet.key;
+  root.addEventListener("quiettip", (event) => {
+    hide();
+    const key = event.target.dataset?.focus;
+    quiet = key ? { key, hovered: Boolean(event.target.matches?.(":hover")) } : null;
+  });
   const wait = (node, ms) => {
     clearTimeout(timer);
     if (owner && owner !== node) hide();
@@ -152,12 +162,17 @@ export function startTips(root = document) {
   root.addEventListener("pointerover", (event) => {
     const node = event.target.closest?.(ACTS);
     if (!node || event.pointerType === "touch") return;
+    if (isQuiet(node)) {
+      if (quiet.hovered) return;
+      quiet = null;
+    }
     hold(node);
     wait(node, WAIT_MS);
   });
   root.addEventListener("pointerout", (event) => {
     const node = event.target.closest?.(ACTS);
     if (node && !node.contains(event.relatedTarget)) {
+      if (isQuiet(node)) quiet.hovered = false;
       hide();
       release();
     }
@@ -165,7 +180,8 @@ export function startTips(root = document) {
   // Keyboard focus shows it at once; focus from a press does not.
   root.addEventListener("focusin", (event) => {
     const node = event.target.closest?.(ACTS);
-    if (node && node.matches(":focus-visible")) wait(node, 0);
+    if (node && !isQuiet(node)) quiet = null;
+    if (node && !isQuiet(node) && node.matches(":focus-visible")) wait(node, 0);
   });
   root.addEventListener("focusout", hide);
   root.addEventListener("pointerdown", hide);

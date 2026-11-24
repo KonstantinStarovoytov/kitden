@@ -82,3 +82,7 @@ CODEX_INTRO_ROOTS = (
 )
 # checked 2026-11-06 (Codex docs, skills.max_context_tokens: "up to 10,000 tokens")
 CODEX_MAX_LIMIT = 10_000
+# The limits Kitden suggests for `[skills] max_context_tokens`: steps of 500 tokens up to the most
+# Codex allows. 500 is about a tenth of the default on a 272K window (2%: 5,440), coarse enough to
+# be few places on the bar and fine enough to cost little more than what fits (Kitden's choice).
+CODEX_LIMIT_STEP = 500

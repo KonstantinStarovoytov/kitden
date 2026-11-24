@@ -46,6 +46,7 @@ from kitden.views.effective import effective_view
 from kitden.views.setup_server import kitden_on, setup_server_state
 from kitden.views.words import (
     AFTER_WORDS,
+    CODEX_AFTER_DEFAULT,
     FOLLOWS_SHARED,
     KEEP_THEIR_RULES,
     KEEPS_ITS_RULE,
@@ -59,6 +60,7 @@ from kitden.views.words import (
     REPO_RULE_OUT,
     SKILL_STATE_WORDS,
     STATE_WORDS,
+    TOKENS,
     join_words,
     percent,
 )
@@ -831,13 +833,21 @@ def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
 
 
 def _skill_limit_words(change: Change) -> list[dict]:
-    """Claude Code's skill list limit: the share it is set to, or the default when the key goes."""
+    """The skill list's limit: Claude Code's share or Codex's tokens it is set to, or the default
+    when the key goes."""
     out = []
     for step in change.steps:
         edit = step.edit
         assert edit is not None
+        codex = step.client == "codex"
         if edit.after is ABSENT:
-            word = LIMIT_AFTER_DEFAULT.format(share=percent(CLAUDE_SHARE))
+            word = (
+                CODEX_AFTER_DEFAULT
+                if codex
+                else LIMIT_AFTER_DEFAULT.format(share=percent(CLAUDE_SHARE))
+            )
+        elif codex:
+            word = LIMIT_AFTER.format(share=TOKENS.format(n=f"{edit.after:,}"))
         else:
             word = LIMIT_AFTER.format(share=percent(edit.after))
         out.append({"client": step.client, "state": "on", "word": word})

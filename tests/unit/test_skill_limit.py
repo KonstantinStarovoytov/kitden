@@ -39,6 +39,8 @@ def test_the_page_offers_the_smallest_half_percent_that_fits_every_description(h
     cut_chat(home)
     cc = view(home)["claude_code"]
     assert cc["checked"] and cc["windows"][0]["result"]["misfit"]["n"] == 1
+    steps = cc["limit"].pop("steps")
+    assert cc["limit"].pop("param") == "fraction"
     assert cc["limit"] == {
         "now": "1% of the context window: 8,000 characters",
         "offer": {
@@ -56,6 +58,22 @@ def test_the_page_offers_the_smallest_half_percent_that_fits_every_description(h
         "why": None,
     }
     assert not any(line.startswith("Kitden does not offer") for line in cc["how"])
+    # The limit line's places: today's, then each 0.5% up to 5%, with what each gives.
+    assert [s["value"] for s in steps] == [0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
+    assert steps[0] == {
+        "value": 0.01,
+        "limit": 8_000,
+        "short": 1,
+        "say": "1% now · 1 of 7 show only a name",
+        "now": True,
+    }
+    assert steps[1] == {
+        "value": 0.015,
+        "limit": 12_000,
+        "short": 0,
+        "say": "1.5% · all 7 fit · about 1,200 more characters per chat",
+    }
+    assert steps[-1]["limit"] == 40_000 and steps[-1]["short"] == 0
 
 
 def test_a_share_above_the_default_offers_the_next_step_and_back(home):
@@ -225,7 +243,7 @@ def test_the_server_refuses_a_share_it_would_not_offer(home):
             answer = _preview(page, _limit(bad))
             assert answer.status_code == 422
             assert answer.json() == {"detail": words.LIMIT_BAD_SHARE, "row": "r1"}, bad
-        answer = _preview(page, _limit(0.015, client="codex"))
+        answer = _preview(page, _limit(0.015, client="cursor"))
         assert answer.json() == {"detail": words.LIMIT_CLAUDE_ONLY, "row": "r1"}
         # Taking out a key that is not there changes nothing.
         assert _preview(page, _limit("default")).status_code == 422
@@ -317,3 +335,28 @@ def test_a_hand_written_true_is_replaced_and_undo_puts_it_back(home):
         assert json.loads(settings.read_text()) == {"skillListingBudgetFraction": 1}
         assert undo()["state"] == "undone"
     assert settings.read_text() == before
+
+
+def test_the_line_drags_back_to_the_default_when_the_user_file_has_a_higher_share(home):
+    cut_chat(home)
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.015})
+    steps = view(home)["claude_code"]["limit"]["steps"]
+    # Nothing to raise: 1%, the default, and today's 1.5%; nothing further right.
+    assert steps == [
+        {
+            "value": "default",
+            "limit": 8_000,
+            "short": 1,
+            "say": (
+                "1%, the default · 1 of 7 show only a name · about 1,200 fewer characters per chat"
+            ),
+        },
+        {"value": 0.015, "limit": 12_000, "short": 0, "say": "1.5% now · all 7 fit", "now": True},
+    ]
+
+
+def test_no_places_when_nothing_is_offered(home):
+    for name in "abc":
+        skill(home / ".claude/skills", name, f"Does {name}.")
+    claude_chat(home, {name: f"Does {name}." for name in "abc"})
+    assert view(home)["claude_code"]["limit"]["steps"] == []

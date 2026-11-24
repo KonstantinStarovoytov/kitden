@@ -402,12 +402,38 @@ LIMIT_NOT_ENOUGH = (
     "Kitden does not offer a new skill list limit: even {share} of the window would not fit "
     "every description. Set some skills to Name only or Off."
 )
+# The readout by the limit line while it is dragged: one place, its parts joined by " · "
+# (spec limit-line-control), for example "1.5% · all 20 fit · about 650 more characters per chat".
+LIMIT_STEP_NOW = "{share} now"
+LIMIT_STEP_DEFAULT = "{share}, the default"
+LIMIT_STEP_ALL = "all {n} fit"
+LIMIT_STEP_SHORT = "{short} of {n} show only a name"
+LIMIT_STEP_MORE = "about {n} more {unit} per chat"
+LIMIT_STEP_LESS = "about {n} fewer {unit} per chat"
+# The same for Codex (`[skills] max_context_tokens` in config.toml), in tokens, its own unit.
+CODEX_LIMIT_NOW_DEFAULT = "2% of the context window: {n} tokens"
+CODEX_LIMIT_NOW_SET = "Set in config.toml: {n} tokens"
+CODEX_LIMIT_FITS = "{limit}: no description is cut and no skill is left out"
+CODEX_LIMIT_COST = "About {tokens} more tokens in every chat"
+CODEX_LIMIT_NOTE = (
+    "Kitden writes it in your Codex config.toml, for all projects. Your next chat will show the "
+    "real list."
+)
+CODEX_LIMIT_BACK = "Back to the default"
+CODEX_LIMIT_NOT_ENOUGH = (
+    "Kitden does not offer a new skill list limit: even {n} tokens, the most Codex allows, would "
+    "not fit every description. Turn some skills off."
+)
+CODEX_LIMIT_STEP_SHORT = "{short} of {n} cut short or left out"
+TOKENS = "{n} tokens"
 # A `skill.limit` row the server refuses.
-LIMIT_CLAUDE_ONLY = "Kitden changes the skill list limit for Claude Code only."
+LIMIT_CLAUDE_ONLY = "Kitden changes the skill list limit for Claude Code and Codex only."
+CODEX_LIMIT_BAD = "Codex's skill list limit must be in steps of 500 tokens, up to 10,000."
 LIMIT_BAD_SHARE = "The skill list limit must be a share of the window in steps of 0.5%, up to 100%."
 # The review's line for Claude Code after a `skill.limit` change.
 LIMIT_AFTER = "Limit {share}"
 LIMIT_AFTER_DEFAULT = "Limit {share}, the default"
+CODEX_AFTER_DEFAULT = "Limit 2% of the window, the default"
 HOW_CLAUDE_REST = "The rest of the window (system prompt, tools, MCP, the chat) is not measured."
 HOW_CODEX_LIST = "Last chat: the list Codex{version} sent{when}, read from its chat log."
 HOW_CODEX_RULE = (

@@ -3,8 +3,9 @@
 // window, the verdict, the zoom picture of the skill list, the two sides of skill pills, Details
 // with a skill's switch, and "How this is counted". Every sentence and number comes from
 // /api/context; the page only places them and names the parts of the picture. A switch only adds
-// a `skill.rule` row to the tray, and Raise the limit… a `skill.limit` row with the share the
-// server suggests; the server then answers with the estimate after Apply.
+// a `skill.rule` row to the tray, and the limit line on the skill list's bar, dragged or pressed,
+// a `skill.limit` row with a place the server offers; the server then answers with the estimate
+// after Apply.
 import { detailsCard, followTray, keepFrom } from "./details.js";
 import { chooseButton, offLine } from "./clients-choice.js";
 import { button, el, reportError } from "./dom.js";
@@ -25,9 +26,16 @@ const PICTURE = { window: "Context window", rest: "Rest of the window", list: "S
 const OVER = { claude_code: "Over the limit: not sent", codex: "Over the limit: cut off" };
 const STATES = { on: "On", "name-only": "Name only", off: "Off" };
 const HOW = "How this is counted";
-// Claude Code's skill list limit (spec skill-list-limit): the button under the verdict and its
-// Details. The sentences and the shares are the server's.
-const LIMIT = { raise: "Raise the limit…", open: "Skill list limit…", kind: "Setting", title: "Skill list limit", now: "Now", offer: "Suggested", cost: "Cost" };
+// The skill list limit (specs skill-list-limit and limit-line-control): the limit line on the bar is
+// its control, and Details explain it. The sentences, the places and their numbers are the server's.
+const LIMIT = { kind: "Setting", title: "Skill list limit", now: "Now", offer: "Suggested", cost: "Cost", next: "Next chats", today: "Limit now" };
+// The pointer snaps to the suggested place within SNAP of it, in % of the bar. The places past the
+// furthest one the bar is drawn to (`reach`) share the bar's last part, not to scale: each sends
+// the same list, and the readout gives their numbers.
+const SNAP = 2;
+const PAST_ROOM = 1.3;
+// How far a press on the handle moves before it is a drag: less is a press that opens Details.
+const DRAG_START = 4;
 // The skill list's slice of the window strip, in %: a drawing, not a measure.
 const SLICE = 2;
 
@@ -150,19 +158,14 @@ export function renderContext(main, { again = false } = {}) {
   main.append(sentence(shown ? (after ? after.say : shown.result.say) : card.message || "", "ctx-verdict"));
   // The limit changed after the last chat: said under its verdict, with what Kitden expects now.
   if (index === 0 && !after) for (const line of card.changed || []) main.append(sentence(line, "ctx-room"));
-  // The skill list limit's button, on its own line under the last chat's verdict: Raise the
-  // limit… when the server has a share to offer, else Skill list limit… when it offers Back.
-  const limit = card.limit;
-  if (limit && (limit.offer || limit.back) && index === 0) main.append(limitRow(card));
   if (shown && shown.result.room && !after) main.append(sentence(shown.result.room, "ctx-room"));
   // A message beside windows (the estimate could not be checked) is a note under the verdict.
   if (windows.length && card.message) main.append(el("p", "ctx-note", card.message));
   const result = shown ? (after ? after.result : shown.result) : null;
   const estimate = Boolean(after) || index > 0;
   const heat = heatOf(card, result, estimate);
-  // After Apply with a new limit in the tray, the limit line moves to it.
-  const drawn = after && after.budget ? { ...shown, budget: after.budget } : shown;
-  if (shown) main.append(zoom(card, drawn, result, `${card.client}:${index}`, heat));
+  // The chat's own limit line stays where it is; a new limit shows as a second line (limitControl).
+  if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`, heat, index === 0 ? controlOf(card) : null));
   if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
   if (card.how.length) main.append(howFor(card.how));
   markAll();
@@ -175,13 +178,16 @@ export function renderContext(main, { again = false } = {}) {
 // per skill as wide as what was sent, the names' characters as one piece, then past the limit
 // line, hatched, what was not sent (Codex: cut off). The scale is the limit (or what was sent,
 // when it is larger) plus what did not fit. A sent piece takes its skill's heat.
-function zoom(card, w, r, at, heat) {
+function zoom(card, w, r, at, heat, control = null) {
   const sent = r.sent || {};
   const over = r.over || {};
   const total = (part) => Object.values(part).reduce((sum, n) => sum + n, 0);
   const limit = w.budget || r.used;
   const top = Math.max(limit, r.used);
-  const scale = top + total(over) || 1;
+  // With the limit control, the bar also has room for the place that fits everything and for the
+  // new limit, so the line can be dragged there; a place further right is past the bar's end.
+  const reach = control ? control.reach : 0;
+  const scale = Math.max(top + total(over), reach * (control && control.beyond ? PAST_ROOM : 1.04)) || 1;
   const pct = (n) => (n / scale) * 100;
   const spots = new Map();
   const place = (node, key, from, size) => {
@@ -237,10 +243,23 @@ function zoom(card, w, r, at, heat) {
       return node;
     };
     const chips = [chip(PICTURE.sent, pct(Math.min(r.used, limit)) / 2)];
-    if (total(over)) chips.push(chip(OVER[card.client] || OVER.claude_code, (pct(top) + 100) / 2));
+    if (total(over)) {
+      // Past the limit line, clear of the handle: with the control, right after the hatched part
+      // (the bar has room there); else in the middle of what is past the line.
+      const node = chip(OVER[card.client] || OVER.claude_code, (pct(top) + 100) / 2);
+      if (control && pct(top + total(over)) < 70) {
+        node.style.left = `calc(${pct(top + total(over))}% + 8px)`;
+        node.classList.add("after");
+      }
+      chips.push(node);
+    }
     // Room left gets its word when there is room for the word.
     else if (limit - r.used > limit * 0.08) chips.push(chip(PICTURE.free, (pct(r.used) + 100) / 2));
     hold.append(line, ...chips, flag);
+    if (control) limitControl(card, control, hold, pct, flag, limit);
+  } else if (control) {
+    // No limit line for the chat (its limit is not known): the control stands at today's limit.
+    limitControl(card, control, hold, pct, null, null);
   }
   box.append(hold);
   moveFrom(at, spots);
@@ -475,48 +494,216 @@ function choose(card, skill, value) {
 
 // The skill list limit ---------------------------------------------------------------------------
 
-// While a limit row waits in the tray the button shows it pressed, in the preview's look, as a
-// skill's switch shows a pending state: not a second call to act.
-function limitRow(card) {
-  const row = el("div", "ctx-limit-row");
-  const node = button(card.limit.offer ? LIMIT.raise : LIMIT.open, () => openLimit(card.client), "btn ctx-raise");
-  node.dataset.focus = `limit:${card.client}`;
-  const key = keyFor(limitBody(card.client, null));
-  followTray(node, key, () => {
-    const waits = Boolean(trayRow(key));
-    node.setAttribute("aria-pressed", String(waits));
-    node.classList.toggle("pending", waits);
-  });
-  row.append(node);
-  return row;
+// The row a place adds: a value the server offered (a share, or "default", which takes the key out).
+// `param` names it as the server's `limit.param` does.
+export function limitBody(client, value, param = "fraction") {
+  return { action: "skill.limit", targets: [{ client }], params: { [param]: value } };
 }
 
-// The row a share adds: the share the server offered, or "default", which takes the key out.
-export function limitBody(client, fraction) {
-  return { action: "skill.limit", targets: [{ client }], params: { fraction } };
-}
+// The value a row asks for, or undefined.
+const rowValue = (row, param) => (row ? (row.body.params || {})[param] : undefined);
 
-// One row per client, whatever its share: a press adds it (or puts this share in place of the
-// other); a second press of the same share takes it out.
-export function pickLimit(body) {
+// One row per client, whatever its value: a press adds it (or puts this value in place of the
+// other); a second press of the same value takes it out.
+export function pickLimit(body, param = "fraction") {
   const key = keyFor(body);
   const row = trayRow(key);
-  if (row && row.body.params.fraction === body.params.fraction) return takeOut(key);
+  if (row && rowValue(row, param) === body.params[param]) return takeOut(key);
   return addToTray(body, { note: CONTEXT_NOTE });
 }
 
-function limitButton(client, choice, primary) {
-  const body = limitBody(client, choice.fraction);
+function limitButton(client, choice, primary, param) {
+  const body = limitBody(client, choice[param], param);
   const key = keyFor(body);
-  const node = button(choice.label, () => pickLimit(body), primary ? "btn primary" : "btn");
-  node.dataset.focus = `limit:${choice.fraction}`;
+  const node = button(choice.label, () => pickLimit(body, param), primary ? "btn primary" : "btn");
+  node.dataset.focus = `limit:${choice[param]}`;
   followTray(node, key, () => {
-    const row = trayRow(key);
-    const on = Boolean(row && row.body.params.fraction === choice.fraction);
+    const on = rowValue(trayRow(key), param) === choice[param];
     node.setAttribute("aria-pressed", String(on));
     node.classList.toggle("pending", on);
   });
   return node;
+}
+
+// What the limit control of a card works with, or null when the server offers nothing to change
+// (the line then is only a picture). `steps`: the places, left to right; `at`: the place the new
+// limit has now (the tray's row, else today's); `reach`: the limit the bar must have room for.
+export function controlOf(card) {
+  const limit = card.limit;
+  if (!limit || !(limit.offer || limit.back)) return null;
+  const param = limit.param || "fraction";
+  const steps = limit.steps || [];
+  const here = Math.max(0, steps.findIndex((s) => s.now));
+  const row = trayRow(keyFor(limitBody(card.client, null, param)));
+  const asked = steps.findIndex((s) => s.value === rowValue(row, param));
+  const at = asked >= 0 ? asked : here;
+  const offered = limit.offer ? steps.findIndex((s) => s.value === limit.offer[param]) : -1;
+  const reach = Math.max(steps[at] ? steps[at].limit : 0, offered >= 0 ? steps[offered].limit : 0);
+  const beyond = steps.filter((s) => s.limit > reach).length;
+  return { client: card.client, param, steps, here, at, offered, reach, beyond, waits: Boolean(row) };
+}
+
+// The place a pointer leads to. `x`: the pointer in % of the bar. Within SNAP of the suggested place,
+// the suggested place, unless today's place (or the default) is nearer: those can always be had.
+export function stepAt(control, x, pct) {
+  const spots = placesOf(control, pct);
+  let best = 0;
+  for (let i = 1; i < spots.length; i += 1) if (Math.abs(spots[i] - x) < Math.abs(spots[best] - x)) best = i;
+  const fixed = control.steps[best] && (control.steps[best].now || control.steps[best].value === "default");
+  if (!fixed && control.offered >= 0 && Math.abs(spots[control.offered] - x) <= SNAP) return control.offered;
+  return best;
+}
+
+// Where each place is, in % of the bar: to scale up to `reach`, then spread evenly up to 98%.
+function placesOf(control, pct) {
+  const from = pct(control.reach);
+  const room = Math.max(0, 98 - from);
+  let past = 0;
+  return control.steps.map((s) => (s.limit <= control.reach ? pct(s.limit) : from + (room * ++past) / control.beyond));
+}
+
+// The limit line as a control: a handle on the line where the new limit is (on the chat's own line
+// until there is a new one), the flag beside it that opens Details, and while it moves a second line,
+// "next chats", with the server's words for that place. Pointer and keys move it place by place; a
+// release or Enter adds the row (or takes it out at today's limit); Esc puts it back. Nothing is read
+// from the server meanwhile and the page is not drawn again: only these parts change.
+function limitControl(card, control, hold, pct, flag, chatLimit) {
+  const { steps } = control;
+  const spot = (i) => (steps[i] ? Math.min(placesOf(control, pct)[i], 100) : 100);
+  const grip = el("span", "ctx-grip");
+  grip.setAttribute("role", "slider");
+  grip.setAttribute("tabindex", "0");
+  grip.setAttribute("aria-label", LIMIT.title);
+  grip.dataset.tip = "";
+  grip.dataset.focus = `limit:${card.client}`;
+  if (steps.length) {
+    grip.setAttribute("aria-valuemin", String(steps[0].limit));
+    grip.setAttribute("aria-valuemax", String(steps.at(-1).limit));
+  }
+  const next = el("i", "ctx-next");
+  const tag = el("span", "ctx-next-tag");
+  const readout = el("span", "ctx-readout");
+  readout.setAttribute("aria-hidden", "true");
+  const mark = el("i", "ctx-mark");
+  if (control.offered >= 0) mark.style.left = `${spot(control.offered)}%`;
+  // Without a line of the chat's own, the flag says today's limit and goes where it is.
+  if (!flag) {
+    const today = steps[control.here];
+    flag = el("span", "ctx-flag", today ? `${LIMIT.today}: ${fmt(today.limit)} ${card.unit}` : LIMIT.title);
+    flag.style.left = `calc(${spot(control.here)}% + 8px)`;
+    if (spot(control.here) > 70) Object.assign(flag.style, { left: "", right: "0" });
+    hold.append(flag);
+  }
+  flag.classList.add("act");
+  flag.addEventListener("click", () => openLimit(card.client));
+  hold.classList.add("ctl");
+  hold.append(next, tag, mark, readout, grip);
+
+  // `shown`: the place drawn now; `moving`: a drag or keys moved it since the last commit.
+  let shown = control.at;
+  let moving = false;
+  const differs = (i) => steps[i] && (chatLimit === null || steps[i].limit !== chatLimit);
+  const draw = (i, live) => {
+    const started = performance.now();
+    shown = i;
+    const left = `${spot(i)}%`;
+    grip.style.left = left;
+    const line = differs(i);
+    next.hidden = !line;
+    next.style.left = left;
+    tag.hidden = !line || live;
+    if (line) tag.textContent = `${LIMIT.next}: ${fmt(steps[i].limit)} ${card.unit}`;
+    tag.style.left = left;
+    tag.classList.toggle("end", spot(i) > 60);
+    readout.hidden = !live || !steps[i];
+    if (steps[i]) {
+      readout.textContent = steps[i].say;
+      readout.style.left = left;
+      readout.classList.toggle("end", spot(i) > 60);
+      grip.setAttribute("aria-valuenow", String(steps[i].limit));
+      grip.setAttribute("aria-valuetext", steps[i].say);
+    }
+    mark.hidden = !live || control.offered < 0;
+    next.classList.toggle("pending", control.waits && !live);
+    if (live) performance.measure("kitden:limit-step", { start: started, end: performance.now() });
+  };
+  draw(control.at, false);
+
+  // A release or Enter on place `i`: today's place takes the row out (or leaves it out), another
+  // place adds its row unless that row waits already.
+  const commit = (i) => {
+    moving = false;
+    const step = steps[i];
+    draw(i, false);
+    const key = keyFor(limitBody(card.client, null, control.param));
+    if (!step || step.now) return trayRow(key) ? takeOut(key) : null;
+    if (rowValue(trayRow(key), control.param) === step.value) return null;
+    return addToTray(limitBody(card.client, step.value, control.param), { note: CONTEXT_NOTE });
+  };
+  const cancel = () => {
+    moving = false;
+    draw(control.at, false);
+  };
+
+  let press = null;
+  grip.addEventListener("pointerdown", (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    event.preventDefault();
+    grip.focus();
+    try { grip.setPointerCapture(event.pointerId); } catch { /* a pointer that is gone */ }
+    press = { x: event.clientX, dragging: false };
+  });
+  grip.addEventListener("pointermove", (event) => {
+    if (!press || !steps.length) return;
+    if (!press.dragging && Math.abs(event.clientX - press.x) < DRAG_START) return;
+    if (!press.dragging) {
+      document.documentElement.classList.add("grabbing");
+      // The tag takes the place under the handle where its hover words were: they stay off until
+      // the pointer has left the handle and come back (tips.js).
+      grip.dispatchEvent?.(new Event("quiettip", { bubbles: true }));
+    }
+    press.dragging = true;
+    moving = true;
+    const box = hold.getBoundingClientRect();
+    const x = ((event.clientX - box.left) / (box.right - box.left)) * 100;
+    const i = stepAt(control, x, pct);
+    if (i !== shown || readout.hidden) draw(i, true);
+  });
+  const release = (event) => {
+    if (!press) return;
+    const was = press;
+    press = null;
+    document.documentElement.classList.remove("grabbing");
+    if (event.type !== "pointerup") return cancel();
+    if (!was.dragging) return openLimit(card.client);
+    if (moving) commit(shown);
+  };
+  grip.addEventListener("pointerup", release);
+  grip.addEventListener("pointercancel", release);
+  grip.addEventListener("keydown", (event) => {
+    const move = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[event.key];
+    if (move && steps.length) {
+      event.preventDefault();
+      // The readout takes the place under the handle where its hover words were: they stay off, as
+      // for a drag.
+      if (!moving) grip.dispatchEvent?.(new Event("quiettip", { bubbles: true }));
+      const i = Math.min(steps.length - 1, Math.max(0, shown + move));
+      moving = moving || i !== control.at;
+      draw(i, true);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (moving && shown !== control.at) commit(shown);
+      else if (!moving) openLimit(card.client);
+      else cancel();
+    } else if (event.key === "Escape" && (moving || press)) {
+      event.preventDefault();
+      event.stopPropagation();
+      press = null;
+      document.documentElement.classList.remove("grabbing");
+      cancel();
+    }
+  });
+  grip.addEventListener("blur", () => { if (moving && !press) cancel(); });
 }
 
 // Details of the skill list limit: the limit now, the share that fits every description and its
@@ -530,8 +717,9 @@ function openLimit(client) {
   const facts = [];
   if (limit.now) facts.push({ label: LIMIT.now, value: limit.now });
   if (limit.offer) facts.push({ label: LIMIT.offer, value: limit.offer.say }, { label: LIMIT.cost, value: limit.offer.cost });
+  const param = limit.param || "fraction";
   const choices = [limit.offer, limit.back].filter(Boolean);
-  const actions = choices.map((choice) => ({ node: limitButton(client, choice, choice === limit.offer) }));
+  const actions = choices.map((choice) => ({ node: limitButton(client, choice, choice === limit.offer, param) }));
   // With nothing to raise, only the limit now and Back.
   const content = detailsCard({ kind: LIMIT.kind, title: LIMIT.title, facts, why: limit.offer ? limit.note : null, actions });
   openPanel(content);
@@ -554,12 +742,14 @@ function howFor(lines) {
 // The estimate after Apply ---------------------------------------------------------------------
 
 // The tray's skill rules for the clients of `model`: client -> skill name -> state; and its
-// skill list limits under `limits`: client -> share (or "default").
+// skill list limits under `limits`: client -> Claude Code's share or Codex's tokens (or "default").
 function draftFrom(model) {
   const draft = {};
   for (const { body } of tray.rows) {
     if (body.action === "skill.limit") {
-      for (const target of body.targets || []) (draft.limits ||= {})[target.client] = (body.params || {}).fraction;
+      const params = body.params || {};
+      const value = "tokens" in params ? params.tokens : params.fraction;
+      for (const target of body.targets || []) (draft.limits ||= {})[target.client] = value;
       continue;
     }
     if (body.action !== "skill.rule") continue;

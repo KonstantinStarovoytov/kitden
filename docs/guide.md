@@ -72,19 +72,33 @@ did not fit. `kitden show context`, which the plugin's `context` skill runs, als
 skill's description, so your agent sees it too. With no chat in the current folder, it shows the
 last chat in any folder and names that folder; with `--project` it stays with that folder.
 
-When some Claude Code skills showed only a name because the list ran out of room, **Raise the
-limit…** beside the verdict opens the skill list limit: its share of the context window now,
-the smallest share in steps of 0.5% at which every description fits (skills you set to Name only
-or Off stay as they are), and about how many more characters and tokens every chat then costs.
-**Set to 1.5%** (or the share shown) adds the change to the preview, and the page shows the
-estimate after Apply; a second press takes it out. When your user settings set a share above
-1%, **Back to 1%** takes it out again; with nothing to raise, the button reads **Skill list
-limit…**. After Apply, the last chat keeps the limit it was sent under, and the page says the
-limit changed and what Kitden expects from your next chat. Kitden writes `skillListingBudgetFraction` in your user
+When some Claude Code skills showed only a name because the list ran out of room, the limit
+line on the skill list's bar has a handle. Drag it to the right: a second line, for your next
+chats, moves in steps of 0.5% of the window, and a note beside it says what each step gives,
+such as "1.5% · all 20 fit · about 650 more characters per chat". It snaps to the step where
+every description fits, which a small mark shows. Let go to add the change to the preview, or
+press Esc to leave it. Drag it back to where it started to take the change out. With the
+keyboard, Tab to the handle, use the arrow keys and press Enter. Click the line's label (or the
+handle, or press Enter on it without moving) for the details: the share of the context window
+now, the smallest share at which every description fits (skills you set to Name only or Off
+stay as they are), and about how many more characters and tokens every chat then costs, with
+**Set to 1.5%** (or the share shown). When your user settings set a share above 1%, drag the
+line back to 1% or press **Back to 1%** to take it out again. After Apply, the last chat keeps
+the limit it was sent under, the next chats' line shows the new one, and the page says the
+limit changed and what Kitden expects from your next chat.
+
+Codex's line works the same way, in tokens: when Codex cut descriptions short or left skills
+out, drag it in steps of 500 tokens, up to 10,000, the most Codex allows; it snaps to the
+smallest limit at which no description is cut and no skill is left out. Kitden writes
+`[skills] max_context_tokens` in your Codex `config.toml` (for all projects), with a backup and
+Undo; **Back to the default** takes it out, so Codex uses 2% of the window again. Restart Codex
+for it to take effect. Kitden writes `skillListingBudgetFraction` in your user
 settings (`~/.claude/settings.json`), for all projects, with a backup and Undo. Your next chat
 shows the real list. Kitden does not offer it when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when
 a project's own settings file sets the share, when there is no estimate, when everything fits,
-or when even 5% would not fit every description; "How this is counted" then says which.
+or when even 5% would not fit every description; "How this is counted" then says which. For
+Codex: when there is no estimate, when everything fits, or when even 10,000 tokens would not fit
+every description.
 
 ## Add from the catalogs
 

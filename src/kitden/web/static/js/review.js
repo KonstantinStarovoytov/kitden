@@ -73,11 +73,18 @@ function accessText({ server, field, name, value, added = false }) {
   return { title: `Replace ${name} of ${server}`, done: `Replaced ${name} of ${server}` };
 }
 
-// Claude Code's skill list limit in words: "the skill list limit of Claude Code to 1.5%", or "back
-// to 1%" when the row takes the key out. The share is the one the server offered.
+// The skill list limit in words: "the skill list limit of Claude Code to 1.5%" (a share) or "of
+// Codex to 6,000 tokens", or "back to 1%" and "back to the default" when the row takes the key out.
+// The value is the one the server offered.
 const DEFAULT_SHARE = "1%";
 export function limitWords(params, clients) {
-  const fraction = (params || {}).fraction;
+  const given = params || {};
+  if ("tokens" in given) {
+    if (given.tokens === "default") return `the skill list limit of ${clients} back to the default`;
+    if (typeof given.tokens !== "number") return `the skill list limit of ${clients}`;
+    return `the skill list limit of ${clients} to ${given.tokens.toLocaleString("en-US")} tokens`;
+  }
+  const fraction = given.fraction;
   if (fraction === "default") return `the skill list limit of ${clients} back to ${DEFAULT_SHARE}`;
   if (typeof fraction !== "number") return `the skill list limit of ${clients}`;
   return `the skill list limit of ${clients} to ${Number((fraction * 100).toFixed(2))}%`;
