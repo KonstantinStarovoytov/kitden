@@ -108,6 +108,16 @@ def test_a_dash_line_with_other_words_in_brackets_stays_in_its_description(tmp_p
     assert got.shown == {}
 
 
+def test_a_dash_line_like_a_command_is_not_the_entry_of_a_skill_listed_by_its_name(tmp_path):
+    for line in ("- b (x)", "- b (x): no."):
+        for own, text in (("- b: Two.", "Two."), ("- b", None)):
+            content = f"- a: One.\n{line}\n{own}\n- c (d): Three."
+            write_chat(tmp_path, "p", "chat", [list_entry(["a", "b", "c"], content)], 100)
+            got = last_claude_list(tmp_path, None)
+            assert got.skills == (("a", f"One.\n{line}"), ("b", text), ("c", "Three."))
+            assert got.shown == {"c": "c (d)"}
+
+
 def test_an_added_skill_keeps_its_command_in_brackets(tmp_path):
     full = list_entry(["a", "b-local"], "- a: One.\n- b-local (b)")
     added = list_entry(["c-local"], "- c-local (c): Three.", isInitial=False)

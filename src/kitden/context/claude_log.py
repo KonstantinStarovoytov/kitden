@@ -48,16 +48,21 @@ class Unreadable:
 
 
 def _find_entry(content: str, name: str, at: int) -> re.Match[str] | None:
-    """The `- <name>` that starts a line and ends it or has `:` after it, from `at`; a command in
-    brackets may follow the name. None if it is not there.
+    """The `- <name>` that starts a line and ends it or has `:` after it, from `at`; with none,
+    the one with a command in brackets after the name (the plain one goes first: a description
+    can hold a line like the other). None if it is not there.
 
     # checked 2026-11-24 (Claude Code 2.1.330): a skill whose command is another word than its
     # name is shown as `name (command)`; 12 lists in real logs have one, with its description.
     # From the program file: it is shown so without a description too, the word has no spaces and
     # no brackets, and a skill set to Name only shows no command. `names` holds the name alone.
     """
-    entry = rf"^- (?P<shown>{re.escape(name)}(?: \([^\s()]+\))?)(?=:|\n|\Z)"
-    return re.compile(entry, re.MULTILINE).search(content, at)
+    for command in ("", r" \([^\s()]+\)"):
+        entry = rf"^- (?P<shown>{re.escape(name)}{command})(?=:|\n|\Z)"
+        found = re.compile(entry, re.MULTILINE).search(content, at)
+        if found is not None:
+            return found
+    return None
 
 
 def _split(
