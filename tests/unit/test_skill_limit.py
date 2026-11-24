@@ -1106,3 +1106,42 @@ def test_an_earlier_chat_does_not_change_a_chat_the_rule_rebuilds(home):
     assert after[0]["limit"] == before[0]["limit"] and "counted" not in after[0]["limit"]
     # Turned on in the tray, its size is still not known to the rule: no estimate.
     assert before[1]["after"] is None and after[1]["after"] is None
+
+
+def test_a_chat_at_its_limit_by_built_in_skills_keeps_it_after_a_settings_write(home):
+    built_in_chat(home)
+    earlier_chat(home, {"init": INIT, "security-review": REVIEW})
+    # The settings file is written after the chat, with the same share: the rule cannot say the
+    # chat's limit, the place its list stops at can. 34 characters were left, under init's 61.
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.01})
+    cc = view(home)["claude_code"]
+    assert not cc["checked"] and cc["windows"][0]["budget"] == 8_000 and cc["changed"] == []
+    limit = cc["limit"]
+    assert limit["steps"][0]["say"] == "1% now · 2 of 9 show only a name"
+    # 8,100 - 7,966 characters: from the chat's own number.
+    assert limit["offer"]["cost"] == "About 130 more characters in every chat (about 34 tokens)"
+
+
+def test_with_no_earlier_chat_a_settings_write_leaves_the_chats_limit_unknown(home):
+    built_in_chat(home)
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.01})
+    cc = view(home)["claude_code"]
+    assert cc["windows"][0]["budget"] is None
+    assert cc["limit"]["steps"][0]["say"] == "1% now · not all fit"
+
+
+def test_a_chat_at_its_limit_by_built_in_skills_finds_its_share_after_a_change(home):
+    built_in_chat(home)
+    earlier_chat(home, {"init": INIT, "security-review": REVIEW})
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.015})
+    cc = view(home)["claude_code"]
+    # The list stops at 8,000 (1%), not at today's 12,000.
+    assert cc["windows"][0]["budget"] == 8_000
+    assert cc["changed"][0].startswith("The limit was changed after this chat: it is 1.5% now.")
+    # 8,100 characters fit in 12,000: nothing to raise; the steps are measured from today's.
+    limit = cc["limit"]
+    assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+    assert [s["say"] for s in limit["steps"]] == [
+        "1%, the default · not all fit",
+        "1.5% now · all 9 fit",
+    ]

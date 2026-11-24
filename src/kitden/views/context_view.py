@@ -805,7 +805,8 @@ def _share_then(
 def _list_ends_at(rows, states, budget: int, cap: int) -> bool:
     """The chat's list stops at this limit, whatever the order descriptions are dropped in: the
     room left is less than every description that was not sent. False when it dropped none whose
-    size is known: then the list says nothing of the limit.
+    size is known: then the list says nothing of the limit. A description's size is its file's;
+    with no file, that of the text an earlier chat sent (`earlier`, a built-in skill).
 
     # checked 2026-11-24 (real log, Claude Code 2.1.330): the client let a list of 30,009
     # characters through 30,000. So up to 0.2% over is still at the limit.
@@ -816,9 +817,11 @@ def _list_ends_at(rows, states, budget: int, cap: int) -> bool:
     # An empty description has nothing to drop. One longer than the default cap (the cap is a
     # setting) counts at that: a huge one would have no room at several limits.
     dropped = [
-        min(len(r.full), cap, CLAUDE_DESCRIPTION_CAP)
+        min(len(text), cap, CLAUDE_DESCRIPTION_CAP)
         for r in listed
-        if r.sent is None and states[r.name] != "name-only" and r.full
+        if r.sent is None
+        and states[r.name] != "name-only"
+        and (text := r.full if r.full is not None else r.earlier)
     ]
     return bool(dropped) and -(budget // 500) <= budget - used < min(dropped) + 2
 
@@ -1254,6 +1257,15 @@ def _claude(
             base = _claude_run(rows_now, states_now, weights, budget, cap=cap) if budget else None
             checked = base is not None
 
+    # A built-in skill has no file: when the rule cannot rebuild the chat, the place its list
+    # stops at and the count take its description from an earlier chat's list. Not in `full`,
+    # which is what is on disk: the rule stays exact and never reads it.
+    if setting is None and not (checked and base is not None):
+        bare = [r for r in (*rows, *waiting) if r.built_in and r.full is None and r.sent is None]
+        found_earlier = earlier_descriptions(home, {r.name for r in bare})
+        for r in bare:
+            r.earlier = found_earlier.get(r.name)
+
     # The limit the chat was sent under: today's, the share found above, or not known when the
     # settings changed since and nothing rebuilds the chat's list (then no limit line is drawn).
     then_budget = budget
@@ -1297,14 +1309,6 @@ def _claude(
                 False,
             )
         else:
-            # A built-in skill has no file: the count takes its description from an earlier
-            # chat's list. Not in `full`, which is what is on disk: the rule above stays exact.
-            bare = [
-                r for r in (*rows, *waiting) if r.built_in and r.full is None and r.sent is None
-            ]
-            found_earlier = earlier_descriptions(home, {r.name for r in bare})
-            for r in bare:
-                r.earlier = found_earlier.get(r.name)
             # What the chat sent inside its limit, when no setting changed since.
             late = {r.name for r in rows if r.added or _longer_now(r, cap)}
             known = frozenset() if moved else sent_full - late
