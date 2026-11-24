@@ -50,10 +50,10 @@ It changes nothing until you press Apply, and every change can be undone.</p>
 
 Every chat starts with the list of your skills, and that list has a small budget: 1% of the context window in Claude Code (or the share you set in its settings), 2% in Codex. Past it, Claude Code sends some skills by name
 only and Codex shortens or drops them, so the agent may never reach for them. Kitden reads the
-last chat's log and shows which skills went in whole, so you can turn off the ones you do not
-use. A skill's Details shows its description, with the part the agent did not get in grey. A
-guess for another window is marked Estimate. Cursor gets no verdict: Kitden cannot see what it
-sends.
+last chat's log and shows which skills went in whole. Turn off the ones you do not use, or drag
+the limit line to give the list more room: Kitden shows what each step costs. A skill's Details
+shows its description, with the part the agent did not get in grey. A guess for another window
+is marked Estimate. Cursor gets no verdict: Kitden cannot see what it sends.
 
 <img src="docs/images/readme/context-light.png#gh-light-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Two boxes list the sixteen skills whose description was sent and the four sent by name only.">
 <img src="docs/images/readme/context-dark.png#gh-dark-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Two boxes list the sixteen skills whose description was sent and the four sent by name only.">
