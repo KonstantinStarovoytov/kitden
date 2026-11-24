@@ -11,8 +11,7 @@ from dataclasses import dataclass
 from kitden.changes.backup import hidden
 from kitden.changes.json_splice import ABSENT
 from kitden.local_gateway.settings import CLIENT as KITDEN
-from kitden.model import Change, ChangeState, Scope, Step
-from kitden.views.words import NO_SKILL_MERGE
+from kitden.model import Change, ChangeState, Step
 
 BATCH = "batch"  # the action of a change made of two or more tray rows
 NEEDS = "Each change needs an id, a kind and a title."
@@ -140,16 +139,6 @@ def _removed(step: Step) -> str | None:
     return None
 
 
-def _skill_rules(step: Step) -> str | None:
-    """Which Claude Code settings file a step gives `skillOverrides`: "user", "project" (a
-    project's local file) or None."""
-    edit = step.edit
-    adds = edit is not None and edit.key[:1] == ("skillOverrides",) and edit.after is not ABSENT
-    if step.client != "claude_code" or not adds:
-        return None
-    return "user" if step.scope is Scope.USER else "project" if step.scope is Scope.LOCAL else None
-
-
 def _folder(step: Step) -> str | None:
     """The folder a step copies into or removes."""
     place = step.copy.target if step.copy else step.removal.path if step.removal else None
@@ -179,11 +168,6 @@ def _between(old: Part, new: Part) -> str | None:
     for a, b in pairs:
         if _folder(a) and _folder(a) == _folder(b):
             return SAME.format(other=other, what="folder")
-    # A one-project skill rule waits while the user file has `skillOverrides` (actions.py); a
-    # tray that would write both is refused too, as the docs do not say how they merge.
-    had, adds = {_skill_rules(a) for a in old.steps}, {_skill_rules(b) for b in new.steps}
-    if ("user" in had and "project" in adds) or ("project" in had and "user" in adds):
-        return NO_SKILL_MERGE
     return None
 
 

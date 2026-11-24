@@ -338,13 +338,13 @@ function fileMeta(file, group) {
 // A link whose removal or turning off waits in the tray is drawn leaving, and names its row: a press
 // on it, or its ×, takes the row out. A plugin's removal from a client takes the faint lines through
 // that client with it (Cursor through Claude Code): they draw leaving too, with no × and no row of
-// their own. `answer` is the /api/library-map answer the model is from.
-function withLeaving(model, rows, answer) {
+// their own.
+function withLeaving(model, rows) {
   const byId = new Map(model.blocks.map((b) => [b.id, b]));
   const removed = new Set(); // "<client>>block id" of a waiting plugin removal
   for (const link of model.links.filter((l) => l.kind === "on")) {
     const [from, to] = [byId.get(link.from), byId.get(link.to)];
-    const change = from && from.client && to && to.item && linkRemoval(to.item, from.client, answer);
+    const change = from && from.client && to && to.item && linkRemoval(to.item, from.client);
     const row = change && rows.find((r) => r.key === keyFor(change.body));
     if (!row) continue;
     Object.assign(link, { leaving: true, row: row.key });
@@ -522,7 +522,7 @@ function keepWhatShows(answer, { opens = true } = {}) {
 // The tab's tree, with what waits in the tray on Plugins and skills. Instructions has none.
 function treeOf(answer, rows) {
   if (onMap.tab === "instructions") return instructionsTree(answer);
-  const tree = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows, answer);
+  const tree = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows);
   return { ...tree, blocks: [...tree.blocks, { ...ADD_CARD }] };
 }
 
@@ -614,7 +614,7 @@ function changeOf(link) {
   const byId = onMap.model && new Map(onMap.model.blocks.map((b) => [b.id, b]));
   const [from, to] = byId ? [byId.get(link.from), byId.get(link.to)] : [];
   if (link.kind !== "on" || !from || from.kind !== "client" || !to || !to.item) return null;
-  return linkRemoval(to.item, from.client, onMap.answer);
+  return linkRemoval(to.item, from.client);
 }
 
 // What a link's × says; "" for no ×. A change already in the tray is taken out.

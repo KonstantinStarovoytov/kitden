@@ -55,7 +55,6 @@ from kitden.views.words import (
     LOADS_PLUGINS,
     NEW_LOCAL_FILE,
     NO_GATEWAY_CLIENT,
-    OWN_SKILL_SETTINGS,
     REPO_RULE,
     REPO_RULE_OUT,
     SKILL_STATE_WORDS,
@@ -747,10 +746,9 @@ def _rules(path: Path, key: str) -> dict:
 
 
 def _skill_keepers(inventory, home: Path, name: str) -> str | None:
-    """The projects where a skill turned off for all projects may stay on, in words: a project
-    whose own `skillOverrides` (shared or local, local winning) keeps it on, and a project with
-    skill settings of its own that do not name it (the docs do not say how they merge)."""
-    keeps, may = [], []
+    """The projects where a skill turned off for all projects stays on, in words: each whose own
+    `skillOverrides` (shared or local, local winning) names it and keeps it on."""
+    keeps = []
     for path in dict.fromkeys(p.path for p in inventory.projects):
         root = Path(path)
         if is_home(root, home):
@@ -760,14 +758,10 @@ def _skill_keepers(inventory, home: Path, name: str) -> str | None:
             rules.update(_rules(local, "skillOverrides"))
         if name in rules and rules[name] != "off":
             keeps.append(root.name)
-        elif rules and name not in rules:
-            may.append(root.name)
-    notes = []
-    if keeps:
-        words = KEEPS_ITS_RULE if len(keeps) == 1 else KEEP_THEIR_RULES
-        notes.append(words.format(folders=join_words(keeps)))
-    notes += [OWN_SKILL_SETTINGS.format(folder=folder) for folder in may]
-    return " ".join(notes) or None
+    if not keeps:
+        return None
+    words = KEEPS_ITS_RULE if len(keeps) == 1 else KEEP_THEIR_RULES
+    return words.format(folders=join_words(keeps))
 
 
 def _repo_folder(step) -> Path | None:

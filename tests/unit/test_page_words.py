@@ -16,8 +16,6 @@ from kitden.views.words import (
     NEW_LOCAL_FILE,
     NO_CLAUDE_FOLDER,
     NO_GATEWAY_CLIENT,
-    NO_SKILL_MERGE,
-    OWN_SKILL_SETTINGS,
     PLUGIN_ALL_PROJECTS,
     PLUGIN_SKILL,
     REPO_RULE,
@@ -1587,11 +1585,6 @@ def test_a_skill_rule_says_what_it_turns_off_and_where():
     assert f'if (action === "skill.rule") return {key}' in tray
     assert AFTER_WORDS["skill.rule"] == ("off", STATE_WORDS["off"])
     assert CURSOR_NO_SKILL_SWITCH == "Cursor has no switch to turn off one skill."
-    assert NO_SKILL_MERGE == (
-        "Claude Code may not merge skill settings across files; turn it off for all projects "
-        "instead."
-    )
-    assert OWN_SKILL_SETTINGS == "{folder} has its own skill settings; it may keep this skill on."
     assert CODEX_NO_PROJECT == "Codex has no switch for one project; turn it off for all projects."
     assert FOLLOWS_SHARED == "Follows all projects"
     assert KEEPS_ITS_RULE == "It stays on in {folders}, which has its own rule."
@@ -2708,7 +2701,7 @@ def test_the_library_map_details_words():
         'const NO_PROJECT_SWITCH = "Codex has no switch for one project.";',
         'const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";',
         '"This turns it off in Claude Code. Codex and Cursor have no switch for one project."',
-        'own: "Has its own skill settings", new: "No Claude Code settings yet"',
+        'new: "No Claude Code settings yet"',
         '["skills", "skill", "skills"], ["commands", "command", "commands"]',
         '["mcp_servers", "MCP server", "MCP servers"]',
         '`Add to ${names(clients).join(" or ")}…`',
@@ -2738,9 +2731,6 @@ def test_the_library_map_details_words():
         '{ title: "Plugin folder", path: tech.path }',
         '{ title: "Marketplace", summary: tech.marketplace }',
         '{ title: "Skill file", path:',
-        'const ALL_FIRST = "Apply the rule for all projects first";',
-        '"Apply the project rules in preview first; then Claude Code can turn it off for all '
-        'projects."',
         'value: "None yet"',
         "onLine: IN_PREVIEW",
         '{ title: "Settings file", path:',
@@ -2852,7 +2842,7 @@ def test_a_library_link_x_removes_or_turns_off():
         # One remove row for the × and Details' "Remove from …" (removeBody).
         'item.kind === "plugin" ? "plugin.remove" : "skill.remove", targets: [{ item: target }]',
         "const body = removeBody(item, client);",
-        "skillOffBodies(item, answer).find(",
+        "offBodies(item).find(",
         'action: "skill.rule", targets: [{ client, item: target }], params: { scope: "all", ',
     ):
         assert words in rules, words
@@ -3043,13 +3033,6 @@ def test_the_last_skill_rule_notes_say_what_they_do():
         "writable(path, home, writable_roots(home, inventory))"
         in (STATIC.parents[1] / "views/library_map.py").read_text()
     )
-    # The project-only skill's reason: the server guard, in words that offer nothing refused.
-    reason = (
-        "Claude Code may not merge skill settings across files, so Kitden cannot turn it off in "
-        "this project."
-    )
-    assert f'const NO_MERGE = "{reason}";' in details
-    assert "turn it off for all projects instead" in NO_SKILL_MERGE
     # The quiet line tells the project's local file from its shared, committed one.
     assert (
         "`${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s local settings.`"
