@@ -1043,3 +1043,18 @@ test('a skill with no plugin switch draws no plugin button', async () => {
   await fire(pillOf('venture:review'), 'click');
   assert.deepEqual(byClass(drawer, 'ctx-plugin'), []);
 });
+
+test('on an estimate a skill turned off since the chat stands under Turned off', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  // The estimate leaves it out; the last chat's window still lists it.
+  const other = window('1M window', '', 'Estimate', 'All 2 would be sent', 'Estimate: On a 1M window, every skill would keep its description.', { budget: 30000 });
+  other.result.sent = { alpha: 4000, gamma: 3000 };
+  const skills = [TIGHT.skills[0], skill('beta', 1990, 0, { state: 'off' }), TIGHT.skills[2]];
+  show(answer({ ...TIGHT, windows: [...TIGHT.windows, other], skills }, CODEX, CURSOR));
+  assert.deepEqual(byClass(main, 'ctx-off'), []);
+  await fire(cards()[1], 'click');
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'gamma'], []]);
+  assert.deepEqual(pills(byClass(main, 'ctx-off')[0]).map((p) => p.dataset.skill), ['beta']);
+  await fire(cards()[0], 'click');
+});

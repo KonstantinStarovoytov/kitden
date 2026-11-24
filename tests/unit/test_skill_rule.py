@@ -714,7 +714,7 @@ def test_a_built_in_rule_takes_only_a_known_name_for_all_projects_in_claude_code
     home, app, _ = _home(tmp_path)
     with _page(home) as page:
         # `schedule` is built in, but nobody checked that a rule reaches it; `deploy` is a file.
-        for name in ("schedule", "deploy", "no-such-skill"):
+        for name in ("schedule", "deploy", "no-such-skill", ["dataviz"], {}, None):
             answer = _preview(page, _built_in(name, "off"))
             assert answer.json()["detail"] == "Choose a known skill."
         rule = _built_in("dataviz", "off")

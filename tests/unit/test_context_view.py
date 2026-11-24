@@ -683,6 +683,39 @@ def test_a_skill_turned_off_after_the_chat_keeps_the_chats_check(home):
     assert cc["windows"][0]["result"] == before
 
 
+def test_a_skill_set_to_name_only_after_the_chat_keeps_the_chats_check(home):
+    eight_skills(home, model="claude-sonnet-4-6")
+    write_json(home / ".claude/settings.json", {"skillOverrides": {"s1": "name-only"}})
+    cc = view(home)["claude_code"]
+    # The chat sent its description, so it was not Name only then.
+    assert cc["checked"] is True
+    # The limit now has room for the one that had none.
+    assert cc["windows"][0]["budget"] == 8_000
+
+
+def test_a_rule_in_a_projects_file_is_not_one_this_switch_can_change(home):
+    project = home / "work/a"
+    skill(home / ".claude/skills", "beta", "Does beta.")
+    skill(home / ".claude/skills", "gamma", "Does gamma.")
+    rules = {"dataviz": "off", "beta": "off", "loop": "on"}
+    write_json(project / ".claude/settings.local.json", {"skillOverrides": rules})
+    write_json(home / ".claude.json", {"projects": {str(project): {}}})
+    claude_chat(home, {"loop": "Loops.", "gamma": "Does gamma."}, folder=str(project))
+    rows = rows_of(home, folder=str(project))
+    for name in ("dataviz", "beta", "loop"):
+        assert rows[name]["switch"] == []
+        assert rows[name]["note"] == words.NOTE_PROJECT_RULE.format("a")
+    assert rows["gamma"]["switch"] == ["on", "name-only", "off"]
+
+
+def test_a_command_of_a_plugin_that_is_off_is_off(home):
+    plugin(home, on=False)
+    claude_chat(home, {"plug:start": "Starts."})
+    row = rows_of(home)["plug:start"]
+    assert (row["state"], row["note"]) == ("off", words.NOTE_OFF)
+    assert row["plugin_switch"]["action"] == "plugin.enable"
+
+
 def test_a_plugins_command_names_its_plugin(home):
     plugin(home)
     claude_chat(home, {"plug:tool": "Does tool.", "plug:start": "Starts."})

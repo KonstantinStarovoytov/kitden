@@ -254,12 +254,14 @@ def _skill(
     state: str | None = None,
     plugin_switch: dict | None = None,
     source: str | None = None,
+    held: bool = False,
 ) -> dict:
-    """`state` and `source`: of a skill with no item to say them."""
+    """`state` and `source`: of a skill with no item to say them. `held`: a project's own settings
+    set it, so the user's file cannot change it there."""
     # Claude Code's skillOverrides does not touch a plugin's skills (spec "Switches per client").
     plugin = client == "claude_code" and item is not None and from_plugin(item)
     ruled = item is not None or (built_in and name in CLAUDE_RULED)
-    switch = SWITCHES.get(client, []) if ruled and not plugin else []
+    switch = SWITCHES.get(client, []) if ruled and not plugin and not held else []
     # Claude Code takes a rule for a project's own skill only in that project (changes/actions.py).
     project = item.project if client == "claude_code" and item and not plugin else None
     return {
@@ -440,14 +442,17 @@ def _claude_setting(files: list[Path]) -> int | None:
     return None
 
 
-def _built_in_rules(files: list[Path]) -> dict[str, str]:
+def _built_in_rules(files: list[Path]) -> dict[str, tuple[str, bool]]:
     """The `skillOverrides` state of each built-in skill it is known to reach, key by key, the
-    winning file last (checked 2026-11-24, Claude Code 2.1.330: the files merge key by key)."""
+    winning file last, and whether a project's file sets it (checked 2026-11-24, Claude Code
+    2.1.330: the files merge key by key)."""
     read = Reader("claude_code")
-    rules: dict[str, str] = {}
-    for path in files:
+    rules: dict[str, tuple[str, bool]] = {}
+    for i, path in enumerate(files):
         found = as_dict(as_dict(read.json(path)).get("skillOverrides"))
-        rules |= {n: s for n, s in found.items() if n in CLAUDE_RULED and s in SKILL_STATES}
+        rules |= {
+            n: (s, i > 0) for n, s in found.items() if n in CLAUDE_RULED and s in SKILL_STATES
+        }
     return rules
 
 
@@ -511,6 +516,27 @@ class _Plugins:
             say.append(words.PLUGIN_FREES.format(n=f"{size:,}"))
         label = words.PLUGIN_TURN_OFF.format(name)
         return offer | {"label": label, "say": " ".join(say) or None}
+
+
+def _row_state(row: _Row, rules: dict[str, tuple[str, bool]], plugins: _Plugins) -> str:
+    if _ruled(row):
+        return rules.get(row.name, ("on", False))[0]
+    plugin = plugins.of(row) if row.item is None else None
+    if plugin is not None and plugin.enabled is Enabled.OFF:
+        return "off"  # a plugin's command goes with it
+    return _state(row.item)
+
+
+def _held(row: _Row, rules: dict[str, tuple[str, bool]]) -> bool:
+    """A project's own settings set this skill, over the user's file."""
+    if _ruled(row):
+        return rules.get(row.name, ("on", False))[1]
+    item = row.item
+    return (
+        item is not None
+        and item.project is None
+        and item.state_scope in (Scope.PROJECT, Scope.LOCAL)
+    )
 
 
 def _claude_plugins(inventory, home: Path, folder: str | None) -> _Plugins:
@@ -763,7 +789,8 @@ def _claude_run(
             r.name,
             r.sent if r.sent is not None else r.full if r.full is not None else unknown,
             r.always_full,
-            states[r.name] == "name-only",
+            # A row sent with its description was not Name only in the chat.
+            states[r.name] == "name-only" and not (as_sent and r.sent is not None),
             weights.get(r.name, 0.0),
         )
         for r in rows
@@ -911,12 +938,12 @@ def _claude_note(
 ) -> str | None:
     """`explained`: the limit rebuilds the list, so it is why a description is missing.
     `can_free`: some skill with a description has a switch."""
+    if state == "off":
+        return words.NOTE_OFF
     if row.item is None and not _ruled(row):
         return words.NOTE_BUILT_IN if row.built_in else words.NOTE_NO_ITEM
     if state in ASKED:
         return words.NOTE_ONLY_ASKED
-    if state == "off":
-        return words.NOTE_OFF
     if side is None:
         return words.NOTE_NOT_LISTED
     if row.item is not None and from_plugin(row.item):
@@ -967,7 +994,7 @@ def _claude(
     # `always_full` is checked against each chat: a wrong name here and the rule no longer
     # rebuilds the list.
     rows = [_tagged(r) for r in rows]
-    states = {r.name: rules.get(r.name, "on") if _ruled(r) else _state(r.item) for r in rows}
+    states = {r.name: _row_state(r, rules, plugins) for r in rows}
     weights = _claude_weights(home, at_ms)
 
     setting = _claude_setting(files)
@@ -1083,9 +1110,11 @@ def _claude(
     can_free = any(
         r.sent is not None
         and states[r.name] == "on"
+        and not _held(r, rules)
         and (_ruled(r) or (r.item is not None and not from_plugin(r.item)))
         for r in rows
     )
+    project_rule = words.NOTE_PROJECT_RULE.format(Path(found.folder or "").name)
     skills = []
     for r in rows:
         side = 0 if r.sent is not None else 1
@@ -1096,6 +1125,11 @@ def _claude(
             _seen(r.full, r.sent, side, None if r.added else _cap_then(cap, r.sent)),
         )
         source, outside = _outside(r, plugins)
+        held = _held(r, rules)
+        if held:
+            note = project_rule
+        elif states[r.name] == "off":
+            outside = None  # off says more than where it comes from
         offer = plugins.switch(r, rows)
         skills.append(
             _skill(
@@ -1111,15 +1145,18 @@ def _claude(
                 states[r.name],
                 offer,
                 source,
+                held,
             )
         )
     listed = {r.name for r in rows}
     # A built-in skill that its setting keeps out of the list: shown, so it can come back.
-    for name, state in rules.items():
+    for name, (state, held) in rules.items():
         if state in ("off", *ASKED) and name not in listed and name not in by_name:
             extra = _tagged(_Row(name, None, None, None))
             note = _claude_note(extra, state, None, 0)
-            skills.append(_skill(client, name, None, 0, None, note, True, state=state))
+            if held:
+                note = project_rule
+            skills.append(_skill(client, name, None, 0, None, note, True, state=state, held=held))
     # Your own skills that are off wait on the page too; a plugin's come back with the plugin.
     items += [i for i in off.values() if not from_plugin(i)]
     for item in items:
@@ -1128,6 +1165,9 @@ def _claude(
             note = _claude_note(extra, _state(item), None, 0)
             size = len(extra.full or "")
             offer = plugins.switch(extra, rows)
+            held = _held(extra, rules)
+            if held:
+                note = project_rule
             skills.append(
                 _skill(
                     client,
@@ -1138,6 +1178,7 @@ def _claude(
                     _plugin_note(note, offer),
                     description=extra.full,
                     plugin_switch=offer,
+                    held=held,
                 )
             )
 

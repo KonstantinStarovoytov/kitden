@@ -1423,14 +1423,14 @@ def _built_in_steps(
 ) -> list[Step]:
     """Claude Code: the `skillOverrides` key of a skill built into it, in the user settings. It
     has no file, so no item: the target is its name, one of those the rule is known to reach."""
-    if adapter is None or name not in CLAUDE_RULED:
+    if adapter is None or not isinstance(name, str) or name not in CLAUDE_RULED:
         raise ValueError("Choose a known skill.")
     if project is not None:
         raise ValueError(PROJECT_BUILT_IN)
     user_file = home / ".claude/settings.json"
-    if state == "on" and not holds(user_file, ("skillOverrides", str(name))):
+    if state == "on" and not holds(user_file, ("skillOverrides", name)):
         raise ValueError(ON_NEEDS_PROJECT)
-    return adapter.skill_rule_steps(str(name), None, state)
+    return adapter.skill_rule_steps(name, None, state)
 
 
 def skill_rule_steps(

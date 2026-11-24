@@ -333,8 +333,10 @@ function sidesFor(card, result, after, estimate, heat) {
     // A skill the tray turns off leaves the list.
     if (states[skill.name] === "off") continue;
     const side = sideOf(card, skill, result, estimate);
-    // Not in the last list because it is off: it waits under Turned off, so it can come back.
-    (clouds[side] || (skill.state === "off" ? off : apart)).append(pillFor(card, skill, states, after, heat, result));
+    // Off, and not in this list: it waits under Turned off, so it can come back. An estimate leaves
+    // it out unless the tray turns it on.
+    const out = skill.state === "off" && ((estimate && !(skill.name in states)) || !clouds[side]);
+    (out ? off : clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
   }
   const wrap = el("div");
   // What the number on a pill is: the same for every client (the Codex limit is in tokens, a pill's

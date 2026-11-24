@@ -55,8 +55,8 @@ CLAUDE_ALWAYS_FULL = frozenset(
 
 # checked 2026-11-24 (Claude Code 2.1.330, `claude -p` in a sandbox home with a stand-in API
 # server): `skillOverrides` in the user settings takes each of these built-in skills out of the
-# list ("off"); "name-only" was tried on code-review, claude-api and run. The other built-in
-# skills were not in that list, so nobody checked them.
+# list ("off") or leaves only its name ("name-only"). The other built-in skills were not in that
+# list, so nobody checked them.
 CLAUDE_RULED = frozenset(
     {
         "claude-api",

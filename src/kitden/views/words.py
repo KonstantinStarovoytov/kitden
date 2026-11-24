@@ -313,8 +313,8 @@ NOTE_BUILT_IN = (
 SOURCE_APP = "The Claude app or your Claude account"
 NOTE_APP = "The Claude app or your Claude account adds this skill. Kitden has no switch for it."
 NOTE_OTHER_PLUGIN = (
-    "Kitden did not find {} among Claude Code's plugins, so it has no switch here. "
-    "The Claude app can add plugins of its own."
+    "{} is not a plugin Claude Code installed, so it has no switch here. "
+    "The Claude app or your Claude account can add plugins of their own."
 )
 NOTE_NO_ITEM = "Kitden did not find this skill's file, so it has no switch here."
 # The switch of a skill's plugin, in the skill's Details.
@@ -329,6 +329,8 @@ PLUGIN_PARTS = (
     ("hooks", "hook", "hooks"),
     ("mcp_servers", "MCP server", "MCP servers"),
 )
+# A rule in a project's own settings wins over the user's file, which the switch here writes.
+NOTE_PROJECT_RULE = "{}'s own settings set this skill, so it has no switch here."
 NOTE_OFF = "Off: your next chat does not list it."
 NOTE_PLUGIN = "A plugin's skill follows its plugin. Turn the plugin off in the Library."
 # The same, when its Details offer the plugin's own switch.
