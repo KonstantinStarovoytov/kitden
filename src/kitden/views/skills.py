@@ -389,7 +389,7 @@ def _on_disk(adapters, found: set[str], project: str, folder_name: str) -> dict[
         target = Path(project) / adapter.skills_folder / folder_name
         if not (target.exists() or target.is_symlink()):
             continue
-        for reader in folder_readers(owner, adapters, found):
+        for reader in folder_readers(owner, adapters, found, project):
             if reader == "codex" and not adapters["codex"].trusts(project):
                 continue
             # Codex's folder, .agents/skills, is Cursor's own too.

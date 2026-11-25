@@ -5,6 +5,7 @@ and ignores files the tool itself just wrote.
 """
 
 import asyncio
+import contextlib
 import hashlib
 import inspect
 import os
@@ -39,6 +40,7 @@ SETUP_FILES = {
 INSTRUCTION_FOLDERS = {"commands", "agents", "rules"}
 NOISY_FOLDERS = {"sessions", "archived_sessions", "logs", "log", "shell_snapshots"}
 EXPECT_SECONDS = 10.0  # how long a planned own write is remembered
+LATE_SECONDS = 5.0  # how often a folder that is not there yet is looked for
 
 
 def is_relevant(path: str) -> bool:
@@ -66,7 +68,9 @@ class Watcher:
         flat_folders: Iterable[Path] = (),
     ) -> None:
         """`folders` are watched with subfolders; `flat_folders` (like home) without."""
-        self.folders = [p for p in folders if Path(p).is_dir()]
+        folders = [Path(p) for p in folders]
+        self.folders = [p for p in folders if p.is_dir()]
+        self.late_folders = [p for p in folders if not p.is_dir()]
         self.flat_folders = [p for p in flat_folders if Path(p).is_dir()]
         self.on_change = on_change
         self.debounce_ms = debounce_ms
@@ -100,9 +104,26 @@ class Watcher:
             recursive=recursive,
         ):
             if any(not self._is_own(path) for _change, path in changes):
-                result = self.on_change()
-                if inspect.isawaitable(result):
-                    await result
+                await self._changed()
+
+    async def _changed(self) -> None:
+        result = self.on_change()
+        if inspect.isawaitable(result):
+            await result
+
+    async def _wait_for(self, folder: Path) -> None:
+        """Watch a folder once it is there: a client makes its folder on its first run."""
+        while not folder.is_dir():
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self._stop.wait(), LATE_SECONDS)
+            if self._stop.is_set():
+                return
+        # The loop starts first, so nothing written during the rescan is missed.
+        await asyncio.gather(self._loop([folder], True), self._changed())
 
     async def run(self) -> None:
-        await asyncio.gather(self._loop(self.folders, True), self._loop(self.flat_folders, False))
+        await asyncio.gather(
+            self._loop(self.folders, True),
+            self._loop(self.flat_folders, False),
+            *(self._wait_for(folder) for folder in self.late_folders),
+        )

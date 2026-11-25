@@ -404,3 +404,25 @@ def test_codex_gives_the_picture_its_estimate_when_the_limit_changed(home):
     assert cx["now"]["budget"] == 500
     assert cx["now"]["room"].startswith("Estimate: about ")
     assert cx["now"]["room"].endswith(" tokens left before the limit.")
+
+
+def test_the_setup_now_is_read_from_the_folder_claude_code_uses(home, tmp_path, monkeypatch):
+    cut_chat(home)
+    to = tmp_path / "claude-work"
+    (home / ".claude").rename(to)
+    (home / ".claude.json").rename(to / ".claude.json")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(to))
+    # What the old folder holds now is no skill and no setting of Claude Code's.
+    skill(home / ".claude/skills", "decoy", TEXT)
+    overrides(home, a="off")
+    assert claude(home)["changed"] == []
+    # A skill added and one turned off in the folder it uses: both count, and so does the preview.
+    skill(to / "skills", "later", TEXT)
+    cc = claude(home)
+    assert cc["checked"] and cc["changed"][0] == CHANGED
+    assert "2 of 8 skills would show only a name" in cc["changed"][1]
+    cc = claude(home, {"a": "off"})
+    assert places(cc)[0.01] == "1% now · 1 of 7 show only a name"
+    assert "1 of 7 skills would show only a name" in cc["after"]["say"]
+    write_json(to / "settings.json", {"skillOverrides": {"a": "off", "b": "off"}})
+    assert claude(home)["changed"] == [CHANGED, KEEPS]

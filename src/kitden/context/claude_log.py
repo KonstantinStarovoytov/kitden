@@ -314,7 +314,7 @@ def _earlier_in(path: Path, wanted: set[str], found: dict[str, str]) -> None:
                         found[name] = text
 
 
-def earlier_descriptions(home: Path, names: Iterable[str]) -> dict[str, str]:
+def earlier_descriptions(config: Path, names: Iterable[str]) -> dict[str, str]:
     """For each of these skills, the description the newest list in the chat logs sent with it;
     only the skills found. For a skill built into Claude Code, which has no file: a list that
     shows its name only says nothing of its size, and a built-in skill is the same in every
@@ -330,7 +330,7 @@ def earlier_descriptions(home: Path, names: Iterable[str]) -> dict[str, str]:
     if not wanted:
         return found
     files = []
-    for path in (home / ".claude/projects").glob("*/*.jsonl"):  # not */*/subagents/*
+    for path in (config / "projects").glob("*/*.jsonl"):  # not */*/subagents/*
         try:
             files.append((path.stat().st_mtime, path))
         except OSError:  # gone since the folder was listed
@@ -345,9 +345,10 @@ def earlier_descriptions(home: Path, names: Iterable[str]) -> dict[str, str]:
     return found
 
 
-def last_claude_list(home: Path, folder: str | None) -> SentList | Unreadable | None:
-    """The newest list sent in a chat. With a folder, only that folder's chats."""
-    chats = (home / ".claude/projects").glob("*/*.jsonl")  # not */*/subagents/*
+def last_claude_list(config: Path, folder: str | None) -> SentList | Unreadable | None:
+    """The newest list sent in a chat. With a folder, only that folder's chats. `config` is
+    Claude Code's own folder, which keeps them."""
+    chats = (config / "projects").glob("*/*.jsonl")  # not */*/subagents/*
     return newest(
         chats,
         lambda path: _read_chat(path, folder),

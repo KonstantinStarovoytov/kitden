@@ -21,8 +21,9 @@ from kitden.changes.actions import (
     claude_allows_kitden,
 )
 from kitden.changes.json_splice import ABSENT
-from kitden.clients.base import SETUP_NAME, is_home
+from kitden.clients.base import SETUP_NAME
 from kitden.clients.claude_code import local_files
+from kitden.clients.claude_folder import ClaudeFolder, claude_folder
 from kitden.context.tables import CLAUDE_SHARE
 from kitden.local_gateway.keychain import references_in
 from kitden.local_gateway.project import project_chain
@@ -317,7 +318,9 @@ def _offered_words(inventory, state: str, word: str, line: str, after: str) -> l
     return out
 
 
-def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dict]:
+def _kitden_move_words(
+    change: Change, inventory, home: Path | None, claude: ClaudeFolder | None
+) -> list[dict]:
     """A move into the Kitden gateway: every client with the `kitden` entry offers the moved
     tools, also one that did not have the server. One line says which, what the rules carried
     over from the clients do, and which servers the gateway had already."""
@@ -376,7 +379,7 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
         line.append(f"{join_words(kept)} {_is(kept)} in the Kitden gateway already.")
     line += said
     new = [name for name in offered if name not in kept]
-    if new and "claude_code" in offering and home and claude_allows_kitden(home, known):
+    if new and "claude_code" in offering and claude and claude_allows_kitden(claude, known):
         line.append(
             "Claude Code allows every Kitden tool without asking; after the move that includes "
             f"the tools of {join_words(new)}."
@@ -745,13 +748,13 @@ def _rules(path: Path, key: str) -> dict:
     return as_dict(read_object(path).get(key))
 
 
-def _skill_keepers(inventory, home: Path, name: str) -> str | None:
+def _skill_keepers(inventory, home: Path, claude: ClaudeFolder, name: str) -> str | None:
     """The projects where a skill turned off for all projects stays on, in words: each whose own
     `skillOverrides` (shared or local, local winning) names it and keeps it on."""
     keeps = []
     for path in dict.fromkeys(p.path for p in inventory.projects):
         root = Path(path)
-        if is_home(root, home):
+        if claude.is_own(root):
             continue  # its .claude/settings.json is the user's own file
         rules = _rules(root / ".claude/settings.json", "skillOverrides")
         for local in local_files(root, home):
@@ -773,7 +776,7 @@ def _repo_folder(step) -> Path | None:
     return None if os.path.realpath(step.cwd) == os.path.realpath(folder) else folder
 
 
-def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
+def _skill_rule_words(change: Change, inventory, home: Path, claude: ClaudeFolder) -> list[dict]:
     """A skill or a plugin turned off, or a skill set to Name only: that state in its client.
     For all projects in Claude Code, the note names each project whose own settings may keep it
     on. A project's own rule taken out: the state the shared settings give it (the user's file,
@@ -806,14 +809,14 @@ def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
         elif edit.after is ABSENT:
             key = edit.key[0]
             project = Path(step.cwd) if step.cwd else Path(edit.path).parent.parent
-            shared = [home / ".claude/settings.json", project / ".claude/settings.json"]
+            shared = [claude.settings, project / ".claude/settings.json"]
             values = [_rules(f, key)[name] for f in shared if name in _rules(f, key)]
             last = values[-1] if values else None  # a hand-edited value may be a list or object
             off = last in ("off", False)
             state = "off" if off else "name-only" if last == "name-only" else "on"
             entry = {"client": client, "state": state, "word": FOLLOWS_SHARED}
         elif client == "claude_code" and step.scope is Scope.USER:
-            note = _skill_keepers(inventory, home, name)
+            note = _skill_keepers(inventory, home, claude, name)
             if note:
                 notes.append(note)
         repo = next((f for f in map(_repo_folder, group) if f is not None), None)
@@ -854,14 +857,17 @@ def after_words(
     cursor_imports: bool = False,
     skills: list[dict] | None = None,
     home: Path | None = None,
+    claude: ClaudeFolder | None = None,
 ) -> list[dict]:
     """One entry per client: {"client", "state", "word"}, in step order.
 
     With `cursor_imports` (Cursor loads Claude Code's plugins), a plugin added to Claude Code
     names Cursor last, with a note. `skills` are the skill list's rows a skill copy takes.
-    `home` is the folder whose Kitden gateway and Claude Code settings a change to the Kitden
-    gateway reads.
+    `home` is the folder whose Kitden gateway a change to it reads, and `claude` where Claude Code
+    keeps the user's files; by default the one the environment says.
     """
+    if claude is None and home is not None:
+        claude = claude_folder(home)
     if change.action == "skill.remove" and change.steps:
         return _skill_remove_words(change)
     if change.action in ("skill.install", "plugin.skills") and change.steps:
@@ -884,8 +890,8 @@ def after_words(
         return _disconnect_words(change)
     if change.action == GATEWAY_ADD:
         return _gateway_add_words(inventory)
-    if change.action == SKILL_RULE and home is not None:
-        return _skill_rule_words(change, inventory, home)
+    if change.action == SKILL_RULE and home is not None and claude is not None:
+        return _skill_rule_words(change, inventory, home, claude)
     if change.action == SKILL_LIMIT and change.steps:
         return _skill_limit_words(change)
     if change.action == MCP_ADD and home is not None:
@@ -893,7 +899,7 @@ def after_words(
     if change.action == PROJECT_ALIGN:
         return _align_words(change, inventory, skills or [], home, cursor_imports)
     if change.action == "gateway.move":
-        return _kitden_move_words(change, inventory, home)
+        return _kitden_move_words(change, inventory, home, claude)
     out: list[dict] = []
     for step in change.steps:
         if any(e["client"] == step.client for e in out):

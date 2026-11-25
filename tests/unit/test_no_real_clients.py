@@ -85,8 +85,9 @@ def test_a_client_can_take_three_folders_as_its_home():
 
 
 def test_no_test_inherits_a_real_client_folder(monkeypatch):
-    # The autouse fixtures ran before this body: both variables are gone whatever the shell had.
-    assert "CLAUDE_CONFIG_DIR" not in os.environ and "CODEX_HOME" not in os.environ
+    # The autouse fixtures ran before this body: the variables are gone whatever the shell had.
+    names = {"CLAUDE_CONFIG_DIR", "CLAUDE_CODE_PLUGIN_CACHE_DIR", "CODEX_HOME"}
+    assert not names & set(os.environ)
 
 
 def test_a_missing_client_skips_the_test_and_fails_it_on_the_nightly(tmp_path, monkeypatch):

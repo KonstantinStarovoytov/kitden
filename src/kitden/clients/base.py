@@ -443,7 +443,7 @@ class ClientAdapter(ABC):
 
     def detect(self) -> Client:
         version = self._read_version()
-        root = self.home / self.config_root
+        root = self.user_root()
         found = version is not None or root.exists()
         return Client(
             id=self.id,
@@ -453,6 +453,14 @@ class ClientAdapter(ABC):
             version_supported=is_supported(self.id, version),
             config_roots=(str(root),),
         )
+
+    def user_root(self) -> Path:
+        """The client's own settings folder."""
+        return self.home / self.config_root
+
+    def user_skills(self) -> Path:
+        """Where the client reads the user's own skills."""
+        return self.home / self.skills_folder
 
     def extra_clients(self) -> list[Client]:
         """Other client surfaces this adapter also reads (for example the Desktop Code tab)."""
@@ -481,6 +489,11 @@ class ClientAdapter(ABC):
     def reads_other_clients(self) -> bool:
         """Whether skills in other clients' folders reach this client too (Cursor)."""
         return False
+
+    def reaches_cursor(self, kind: ItemKind) -> bool:
+        """Whether the user's own skills or plugins of this client are where Cursor, which also
+        reads other clients' folders, looks for them."""
+        return True
 
     def imports_claude_plugins(self) -> bool:
         """Whether this client loads the plugins Claude Code has (Cursor)."""
@@ -572,8 +585,8 @@ class ClientAdapter(ABC):
             raise ValueError(f"{self.id} has no skills folder")
         if project is not None:
             need_folder(project)
-        root = Path(project) if project is not None else self.home
-        target = root / self.skills_folder / folder.name
+        place = self.user_skills() if project is None else Path(project) / self.skills_folder
+        target = place / folder.name
         if target.exists() or target.is_symlink():
             raise ValueError(f"{self.display_name} already has a skill named {folder.name}")
         copy = FolderCopy(

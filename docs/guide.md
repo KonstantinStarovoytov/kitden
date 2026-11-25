@@ -145,7 +145,7 @@ smallest limit at which no description is cut and no skill is left out. Kitden w
 `[skills] max_context_tokens` in your Codex `config.toml` (for all projects), with a backup and
 Undo; **Back to the default** takes it out, so Codex uses 2% of the window again. Restart Codex
 for it to take effect. Kitden writes `skillListingBudgetFraction` in your user
-settings (`~/.claude/settings.json`), for all projects, with a backup and Undo. Your next chat
+settings (`~/.claude/settings.json`, or the folder `CLAUDE_CONFIG_DIR` names), for all projects, with a backup and Undo. Your next chat
 shows the real list. Kitden does not offer it when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when
 a project's own settings file sets the share, when the limit of the last chat is not known, when
 everything fits, when by its count everything fits although the chat left descriptions out, or
@@ -289,6 +289,20 @@ after that and Kitden starts a fresh one.
 `kitden serve` runs the page in the terminal instead. It stays until you press **Ctrl+C**;
 closing the tab does not stop it. Only one page runs for a home folder, so `kitden` while
 `kitden serve` runs opens that page.
+
+### If Claude Code uses another folder
+
+With `CLAUDE_CONFIG_DIR` set, Kitden reads and writes Claude Code's files in that folder instead of
+`~/.claude`. With `CLAUDE_CODE_PLUGIN_CACHE_DIR` set, it reads plugins from there. Start Kitden with
+the same variable as Claude Code:
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude-work kitden
+```
+
+A page that is open for another folder stops, and a new one starts. Kitden does not see a variable
+set in the `env` of a settings file. Skills and plugins in a moved folder are not counted as
+Cursor's.
 
 ## Stop using Kitden
 

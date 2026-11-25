@@ -26,7 +26,8 @@ from kitden.clients.base import (
     SKILL_REMOVE,
     ClientAdapter,
 )
-from kitden.clients.claude_code import holds
+from kitden.clients.claude_code import holds, user_folder
+from kitden.clients.claude_folder import ClaudeFolder
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
 from kitden.context.rules import listed_share
 from kitden.context.tables import (
@@ -187,15 +188,24 @@ def install_steps(
     return steps
 
 
-def folder_readers(client: str, adapters: dict[str, ClientAdapter], found: set[str]) -> list[str]:
+def folder_readers(
+    client: str,
+    adapters: dict[str, ClientAdapter],
+    found: set[str],
+    project: str | None = None,
+) -> list[str]:
     """The clients that read the skills folder of `client`, in the user's home or a project.
 
     Claude Code reads .claude/skills; Codex and Cursor both read .agents/skills; Cursor alone
-    reads .cursor/skills. With Include Third-Party Plugins on, Cursor also reads .claude/skills.
+    reads .cursor/skills. With Include Third-Party Plugins on, Cursor also reads .claude/skills:
+    in a project, and the user's while Claude Code keeps it in the home folder.
     """
     cursor = adapters.get("cursor") if "cursor" in found else None
     if client == "claude_code":
-        return ["claude_code"] + (["cursor"] if cursor and cursor.reads_other_clients() else [])
+        claude = adapters.get("claude_code")
+        near = project is not None or claude is None or claude.reaches_cursor(ItemKind.SKILL)
+        reads = cursor is not None and near and cursor.reads_other_clients()
+        return ["claude_code"] + (["cursor"] if reads else [])
     if client == "codex":
         return ["codex"] + (["cursor"] if cursor else [])
     return [client]
@@ -229,7 +239,7 @@ def skill_steps(
     steps = []
     for client in ("claude_code", "codex"):
         if client in chosen:
-            readers = folder_readers(client, adapters, found)
+            readers = folder_readers(client, adapters, found, project)
             steps.append(adapters[client].skill_copy_step(folder, readers, project))
     if "cursor" in chosen and not any("cursor" in s.copy.readers for s in steps if s.copy):
         steps.append(adapters["cursor"].skill_copy_step(folder, ["cursor"], project))
@@ -771,11 +781,11 @@ def _permission_rules(path: Path, kind: str = "deny") -> list[str]:
     return [rule for rule in rules if isinstance(rule, str)] if isinstance(rules, list) else []
 
 
-def claude_allows_kitden(home: Path, known_projects: list[str]) -> bool:
+def claude_allows_kitden(claude: ClaudeFolder, known_projects: list[str]) -> bool:
     """True when Claude Code's user settings or a known project's settings allow every tool of
     the `kitden` entry without asking (`mcp__kitden` or `mcp__kitden__*`). Tools moved into the
     Kitden gateway are then allowed too."""
-    files = [home / ".claude/settings.json"]
+    files = [claude.settings]
     for project in known_projects:
         folder = Path(project) / ".claude"
         files += [folder / "settings.json", folder / "settings.local.json"]
@@ -783,23 +793,23 @@ def claude_allows_kitden(home: Path, known_projects: list[str]) -> bool:
     return any(rule in whole for path in files for rule in _permission_rules(path, "allow"))
 
 
-def _claude_denies(home: Path, known_projects: list[str]) -> dict[str | None, list[str]]:
+def _claude_denies(claude: ClaudeFolder, known_projects: list[str]) -> dict[str | None, list[str]]:
     """Claude Code's deny rules: the user's (None) and each known project's."""
-    denies: dict[str | None, list[str]] = {None: _permission_rules(home / ".claude/settings.json")}
+    denies: dict[str | None, list[str]] = {None: _permission_rules(claude.settings)}
     for project in known_projects:
         folder = Path(project) / ".claude"
-        if folder.resolve() == (home / ".claude").resolve():
-            continue  # the home folder: its settings are the user's
+        if folder.resolve() == claude.config.resolve():
+            continue  # its settings are the user's
         denies[project] = _permission_rules(folder / "settings.json")
         denies[project] += _permission_rules(folder / "settings.local.json")
     return denies
 
 
-def _claude_project_offs(home: Path) -> dict[str, list[str]]:
+def _claude_project_offs(claude: ClaudeFolder) -> dict[str, list[str]]:
     """The servers Claude Code's /mcp turned off in each project: `disabledMcpServers` in
-    ~/.claude.json (Task 4 ruling, 2026-10-21)."""
+    .claude.json (Task 4 ruling, 2026-10-21)."""
     try:
-        state = json.loads((home / ".claude.json").read_text())
+        state = json.loads(claude.state.read_text())
     except (OSError, ValueError):
         return {}
     projects = state.get("projects") if isinstance(state, dict) else None
@@ -989,8 +999,9 @@ def local_move_steps(
     steps = [step for step in written if step is not None]
     if steps:  # with a server entry written
         steps += _path_steps(home, settings)
-    denies = _claude_denies(home, known_projects)
-    project_offs = _claude_project_offs(home)
+    claude = user_folder(adapters, home)
+    denies = _claude_denies(claude, known_projects)
+    project_offs = _claude_project_offs(claude)
     for name in servers:
         rules, strict = _carried_rules(name, found[name], home, denies, project_offs)
         if name in held:
@@ -1362,7 +1373,7 @@ ON_NEEDS_PROJECT = "Pick a project to use the shared rule there."
 
 
 def _claude_rule_steps(
-    adapter: ClientAdapter, home: Path, item: Item, project: str | None, state: str
+    adapter: ClientAdapter, claude: ClaudeFolder, item: Item, project: str | None, state: str
 ) -> list[Step]:
     """Claude Code: a skill's `skillOverrides` key, or a plugin's key in one project (taken out
     of each local file that holds it)."""
@@ -1382,8 +1393,8 @@ def _claude_rule_steps(
         raise ValueError(PROJECT_SKILL_ALL)  # a rule in the user's file would hide every copy
     # On for all projects takes the user's own key out; with no key there, it is on already or a
     # project decides.
-    user_file = home / ".claude/settings.json"
-    if project is None and state == "on" and not holds(user_file, ("skillOverrides", item.name)):
+    own = holds(claude.settings, ("skillOverrides", item.name))
+    if project is None and state == "on" and not own:
         raise ValueError(ON_NEEDS_PROJECT)
     real = os.path.realpath
     if item.scope is Scope.PROJECT and project and real(str(item.project)) != real(project):
@@ -1392,7 +1403,11 @@ def _claude_rule_steps(
 
 
 def _built_in_steps(
-    adapter: ClientAdapter | None, home: Path, name: object, project: str | None, state: str
+    adapter: ClientAdapter | None,
+    claude: ClaudeFolder,
+    name: object,
+    project: str | None,
+    state: str,
 ) -> list[Step]:
     """Claude Code: the `skillOverrides` key of a skill built into it, in the user settings. It
     has no file, so no item: the target is its name, one of those the rule is known to reach."""
@@ -1400,8 +1415,7 @@ def _built_in_steps(
         raise ValueError("Choose a known skill.")
     if project is not None:
         raise ValueError(PROJECT_BUILT_IN)
-    user_file = home / ".claude/settings.json"
-    if state == "on" and not holds(user_file, ("skillOverrides", name)):
+    if state == "on" and not holds(claude.settings, ("skillOverrides", name)):
         raise ValueError(ON_NEEDS_PROJECT)
     return adapter.skill_rule_steps(name, None, state)
 
@@ -1436,11 +1450,12 @@ def skill_rule_steps(
     elif scope != "all":
         raise ValueError("Choose all projects or one project.")
     by_id = {i.id: i for i in inventory.items}
+    claude = user_folder(adapters, home)
     steps = []
     for target in targets:
         if isinstance(target, dict) and "built_in" in target:
             adapter = adapters.get("claude_code") if target.get("client") == "claude_code" else None
-            steps += _built_in_steps(adapter, home, target["built_in"], project, state)
+            steps += _built_in_steps(adapter, claude, target["built_in"], project, state)
             continue
         item = by_id.get(str(target.get("item"))) if isinstance(target, dict) else None
         if item is None or target.get("client") != item.client:
@@ -1451,7 +1466,7 @@ def skill_rule_steps(
         if adapter is None or item.client not in ("claude_code", "codex"):
             raise ValueError(f"{item.name} has no switch here.")
         if item.client == "claude_code":
-            steps += _claude_rule_steps(adapter, home, item, project, state)
+            steps += _claude_rule_steps(adapter, claude, item, project, state)
             continue
         if item.kind is not ItemKind.SKILL or item.scope is Scope.PLUGIN:
             raise ValueError(f"{item.name} has no switch here.")
