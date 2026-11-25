@@ -116,6 +116,10 @@ ORIGIN_WORDS: dict[str, str] = {
 READS_FOLDER = "{reader} reads {owner}'s folder"
 LOADS_PLUGINS = "Cursor loads Claude Code's plugins"
 
+# The review of a removed skill folder that holds other skills (Codex reads those too).
+INSIDE_GOES = "This also removes {names}, which is inside this folder."
+INSIDE_GO = "This also removes {names}, which are inside this folder."
+
 # What Undo of a removed Claude Code plugin cannot bring back: uninstall keeps the data folder
 # (--keep-data) but not the plugin's saved options. The review's lede says it once.
 REMOVE_NOTE = "Undo installs it again; its saved options are not brought back."

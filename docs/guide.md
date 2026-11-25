@@ -26,6 +26,10 @@ the client's instruction files ("3 files"); commands and agents are not counted,
 that has only those says "Commands and agents only". A client with nothing says "Nothing
 loaded".
 
+Codex also loads skills in sub-folders of its skills folders, even inside another skill's folder.
+Each has a row and a switch of its own. Turning off the outer skill leaves the ones inside it on;
+removing it removes them too, and the review names them.
+
 An MCP server you turned off with `/mcp` in one project shows as off in that project.
 
 The preview names the clients and projects affected. Adds on the map go to all projects;

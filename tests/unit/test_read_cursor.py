@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 
 from kitden.clients.claude_code import ClaudeCodeAdapter
-from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import INSTALLED_PREFIX, MAX_SKILL_DEPTH, REACTIVE_KEY, CursorAdapter
 from kitden.model import ItemKind, Scope, SourceKind, UnknownReason
 from tests.conftest import (
@@ -395,16 +394,11 @@ def test_symlinked_category_is_not_entered_and_symlinked_skill_keeps_its_link(tm
     assert adapter.item_actions(linked) == ()
 
 
-def test_nested_skill_folders_do_not_change_claude_code_or_codex_skill_lists(tmp_path, no_version):
-    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
-    claude_before = _skill_names(ClaudeCodeAdapter(home, read_version=no_version).scan())
-    codex_before = _skill_names(CodexAdapter(home, read_version=no_version).scan())
+def test_nested_skill_folders_do_not_change_claude_code_skill_lists(tmp_path, no_version):
+    home = make_home(tmp_path, "claude_code/2.1.283")
+    before = _skill_names(ClaudeCodeAdapter(home, read_version=no_version).scan())
 
     _write_skill(home / ".claude/skills/shipping/land-it")
     _write_skill(home / "work/website/.claude/skills/shipping/web-land")
-    _write_skill(home / ".agents/skills/shipping/ship-agent")
-    _write_skill(home / ".codex/skills/shipping/ship-codex")
-    _write_skill(home / "work/api/.agents/skills/shipping/api-ship")
 
-    assert _skill_names(ClaudeCodeAdapter(home, read_version=no_version).scan()) == claude_before
-    assert _skill_names(CodexAdapter(home, read_version=no_version).scan()) == codex_before
+    assert _skill_names(ClaudeCodeAdapter(home, read_version=no_version).scan()) == before

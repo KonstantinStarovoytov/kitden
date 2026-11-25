@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Codex skills in sub-folders:** Kitden now finds a Codex skill in a sub-folder of a skills folder,
+  also one inside another skill's folder. It has a row, a switch on Context, and counts in the
+  estimates when you add it after the last chat. Removing the outer skill names the skills that go
+  with it. A skill linked from one Codex folder to the other no longer shows as loaded twice (#217).
 - **Context says how your Codex skill list stands now:** when Codex skills were added or turned off
   after the last chat, an estimate under that chat's sentence says how many descriptions would be
   cut now, and the bar and the boxes show it. A Codex skill that is off no longer counts in the

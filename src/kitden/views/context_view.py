@@ -1671,7 +1671,7 @@ def _codex_added(rows: list[_Row]) -> list[_Row]:
 
 def _codex_off(inventory, codex_home: Path, folder: str | None) -> Callable[[str], bool]:
     """Whether the skill at a path is off there now, by itself or with its plugin. By the path in
-    config.toml, not by Kitden's item: an off skill, and one inside another's folder, has none."""
+    config.toml, not by Kitden's item: an off skill, and one only a chat's list names, has none."""
     off = skills_off(as_dict(Reader("codex").toml(codex_home / "config.toml")))
     loaded = effective_view(inventory, "codex", folder).items
     plugins_off = {
