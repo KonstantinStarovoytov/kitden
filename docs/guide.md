@@ -144,7 +144,8 @@ A skill you added has the line Codex would give it, so it counts. Two kinds do n
 is a link, and one in a folder the last list did not have, as Kitden cannot tell how Codex will
 write their lines. It names them, says that its estimates leave them out, and gives no estimate
 when nothing else changed. A skill that Codex never lists, because its `agents/openai.yaml` sets
-`allow_implicit_invocation: false`, is no change.
+`allow_implicit_invocation: false`, is no change; one that was on the last list and is set so now
+leaves the estimate.
 
 Codex's line works the same way, in tokens: when Codex cut descriptions short or left skills
 out, drag it in steps of 500 tokens, up to 10,000, the most Codex allows; it snaps to the

@@ -646,6 +646,50 @@ def test_a_codex_skill_that_is_never_on_the_list_is_no_change(home):
     assert codex(home)["changed"][0] == CHANGED
 
 
+def only_asked(home, name):
+    policy = own(home, name).parent / "agents/openai.yaml"
+    policy.parent.mkdir(exist_ok=True)
+    policy.write_text("policy:\n  allow_implicit_invocation: false\n")
+    return policy
+
+
+def test_a_listed_codex_skill_kept_for_when_it_is_asked_for_leaves_the_estimate(home):
+    budget = codex_cut_chat(home)
+    before = codex(home)
+    only_asked(home, "gamma")
+    cx = codex(home)
+    assert cx["checked"] is True and cx["changed"][0] == CHANGED
+    assert "every skill would keep its full description" in cx["changed"][1]
+    assert set(cx["now"]["sent"]) == {"alpha", "beta"} and cx["now"]["budget"] == budget
+    assert cx["windows"][0] == before["windows"][0]
+    assert set(cx["windows"][1]["result"]["sent"]) == {"alpha", "beta"}
+    assert set(codex(home, {"alpha": "off"})["after"]["result"]["sent"]) == {"beta"}
+    # It is not off: its switch says On, and its note says why it is on no side.
+    gamma = {s["name"]: s for s in cx["skills"]}["gamma"]
+    assert (gamma["state"], gamma["switch"]) == ("on", ["on", "off"])
+    assert gamma["note"] == words.NOTE_ONLY_ASKED
+
+
+def test_a_skill_kept_for_when_it_is_asked_for_was_not_left_out_of_a_names_only_list(home):
+    paths = codex_home(home, window=1)
+    budget = a_budget(paths, lambda fit: fit.sent == {"alpha": 0, "beta": 0, "gamma": None})
+    codex_home(home, window=window_for(budget))
+    before_the_chat(Path(paths["gamma"]))
+    before_the_chat(only_asked(home, "gamma"))
+    codex_chat(
+        home,
+        [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"],
+        at="2026-11-07T12:00:00Z",
+    )
+    cx = codex(home)
+    assert cx["changed"] == [] and "gamma" not in cx["windows"][0]["result"]["over"]
+    # Set after the chat: the list had left it out, and the next one does not hold it.
+    os.utime(own(home, "gamma").parent / "agents/openai.yaml")
+    cx = codex(home)
+    assert cx["changed"][0] == CHANGED
+    assert "gamma" in cx["windows"][0]["result"]["over"] and "gamma" not in cx["now"]["over"]
+
+
 def test_codex_skills_and_the_limit_changed(home):
     budget = codex_cut_chat(home)
     (home / ".codex/config.toml").write_text(

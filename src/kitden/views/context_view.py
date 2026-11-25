@@ -1677,14 +1677,18 @@ def _codex_off(inventory, codex_home: Path, folder: str | None) -> Callable[[str
     return is_off
 
 
+def _codex_policy(path: str) -> Path:
+    return Path(path).parent / "agents/openai.yaml"
+
+
 def _codex_hidden(path: str) -> bool:
-    """Codex never lists this skill: its `agents/openai.yaml` keeps it for when it is asked for.
+    """Codex does not list this skill: its `agents/openai.yaml` keeps it for when it is asked for.
 
     # checked 2026-11-25 (learn.chatgpt.com/docs/build-skills: `allow_implicit_invocation`; that
     # the skill is then not on the list: codex-rs/ext/skills/src/provider/host.rs)
     """
     try:
-        text = (Path(path).parent / "agents/openai.yaml").read_text(encoding="utf-8")
+        text = _codex_policy(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return False
     return ONLY_ASKED.search(text) is not None
@@ -2009,10 +2013,12 @@ def _codex(
     names_only = all(r.sent == "" for r in rows)
     if names_only:
         for item in [i for i in extras if i.scope is Scope.USER]:
-            if not _unchanged([Path(item.source.path or "")], at_ms):
+            path = item.source.path or ""
+            if not _unchanged([Path(path)], at_ms):
                 continue
-            text = _description(item.source.path)
-            rows.append(_Row(item.name, None, item, text, item.source.path or ""))
+            if _codex_hidden(path) and _unchanged([_codex_policy(path)], at_ms):
+                continue
+            rows.append(_Row(item.name, None, item, _description(path), path))
             extras.remove(item)
     # What the next chats list: the chat's skills in today's states, and those new since.
     new, new_shown, not_counted = _codex_new(extras, found, names_only, at_ms)
@@ -2020,6 +2026,9 @@ def _codex(
     rows_now = _codex_order(rows, new)
     is_off = _codex_off(inventory, codex_home, sent_list.folder)
     states = {r.name: "off" if is_off(r.path or "") else _state(r.item) for r in rows_now}
+    # A skill kept for when it is asked for is on, and not on the list.
+    asked_for = {r.name for r in rows if _codex_hidden(r.path or "")}
+    states_now = states | dict.fromkeys(asked_for, "off")
     then = {r.name: "on" for r in rows}  # the chat listed them
 
     limit = _codex_limit(codex_home)
@@ -2040,7 +2049,7 @@ def _codex(
     def rebuilds(budget: int) -> bool:
         return _codex_same(rows, run(then, budget, rows)[1], names_only)
 
-    base = run(states, budget) if budget and known else None
+    base = run(states_now, budget) if budget and known else None
     checked = base is not None and budget is not None and rebuilds(budget)
     # config.toml changed after the chat: the limit may differ from the one the chat was sent
     # under. When the default or a limit Kitden offers rebuilds the chat's list, the chat's card
@@ -2093,11 +2102,11 @@ def _codex(
 
     keep = (_asked_tokens(asked, window) or 0) > (budget or 0)
     if changes and not keep:
-        keep = limit_with(states, False)["offer"] is not None
-    limit_card = limit_with(states | changes, keep)
+        keep = limit_with(states_now, False)["offer"] is not None
+    limit_card = limit_with(states_now | changes, keep)
     # What Kitden expects from the setup as it is now, as for Claude Code.
     changed, expect = [], None
-    other_skills = bool(new) or any(states[r.name] == "off" for r in rows)
+    other_skills = bool(new) or any(states_now[r.name] == "off" for r in rows)
     if checked and base is not None and budget and (then_found or other_skills):
         on = words.WITH_LIMIT if limit is not None and not then_found else _on(window)
         expect = _codex_estimate(base[0], base[1], on, words.ESTIMATE)
@@ -2142,7 +2151,7 @@ def _codex(
         new_budget = None
     if base is not None and budget and checked and (changes or new_budget is not None):
         budget_after = new_budget if new_budget is not None else budget
-        skills, fit = run(states | changes, budget_after)
+        skills, fit = run(states_now | changes, budget_after)
         was, now = _codex_full(base[1], lengths), _codex_full(fit, lengths)
         gets = [r.name for r in rows_now if r.name not in changes and r.name in now - was]
         loses = [r.name for r in rows_now if r.name not in changes and r.name in was - now]
@@ -2169,6 +2178,8 @@ def _codex(
             note = f"{words.NOTE_NEWER} {note}" if note else words.NOTE_NEWER
         if states[r.name] == "off":
             note = words.NOTE_OFF
+        elif r.name in asked_for:
+            note = words.NOTE_ONLY_ASKED
         size = len(r.full) if r.full is not None else len(r.sent or "")
         text, seen = (
             r.full if r.full is not None else r.sent,
