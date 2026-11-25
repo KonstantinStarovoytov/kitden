@@ -54,8 +54,9 @@ on a fresh copy of the sample from `scripts/readme_demo.py`, in a temporary fold
 `context` uses the demo's own sample. Stand-ins keep it local: a fake Keychain, and from
 `tests/offline.py` (which the browser tests share) fake client commands, canned tool lists,
 catalog answers and latest version, and no access checks. Nothing goes online, and nothing of
-the real home folder is read or written. `scripts/record_scenes.py` plays each scene and
-takes it.
+the real home folder is read or written. The page also hears of no running client, so the
+clients on your computer never put a restart strip over the map. `scripts/record_scenes.py`
+plays each scene and takes it.
 
 Look at every picture before you commit it, and do not retouch the UI.
 
