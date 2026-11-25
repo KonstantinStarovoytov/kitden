@@ -549,6 +549,31 @@ def test_a_codex_skill_kitden_has_no_item_for_can_be_off_too(home):
     assert cx["changed"][0] == CHANGED and set(cx["now"]["sent"]) == {"alpha", "beta", "gamma"}
 
 
+def test_a_codex_skill_with_another_copy_on_is_not_off(home):
+    # The list is read by name, so two skills of one name share a state: on while one of them is.
+    paths = codex_home(home, window=20_000)
+    other = str(skill(own(home, folder=".codex/skills"), "alpha", CODEX_A).resolve())
+    codex_chat(
+        home,
+        [
+            f"- alpha: {CODEX_A} (file: {paths['alpha']})",
+            f"- alpha: {CODEX_A} (file: {other})",
+            f"- beta: {CODEX_B} (file: {paths['beta']})",
+            f"- gamma: {CODEX_C} (file: {paths['gamma']})",
+        ],
+    )
+    codex_off(home, other)
+    cx = codex(home)
+    assert [s["state"] for s in cx["skills"] if s["name"] == "alpha"] == ["on", "on"]
+    assert cx["changed"] == []
+    assert "alpha" in codex(home, {"beta": "off"})["after"]["result"]["sent"]
+    # With both off, it is off.
+    codex_off(home, paths["alpha"], other)
+    cx = codex(home)
+    assert {s["state"] for s in cx["skills"] if s["name"] == "alpha"} == {"off"}
+    assert cx["changed"][0] == CHANGED and set(cx["now"]["sent"]) == {"beta", "gamma"}
+
+
 def test_the_preview_counts_without_a_codex_skill_that_is_off(home):
     codex_cut_chat(home)
     codex_off(home, own(home, "gamma"))
