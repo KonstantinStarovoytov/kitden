@@ -1817,3 +1817,57 @@ def test_seen_in_every_case(full, sent, side, cap, seen):
 
 def test_the_codex_cap_starts_past_1024_characters():
     assert (_codex_cap(None), _codex_cap("x" * 1024), _codex_cap("x" * 1025)) == (None, None, 1021)
+
+
+def _wtu_home(home, wtu: bool, count: int = 15):
+    """15 skills; with `wtu`, each has a short description and a long when_to_use, and the chat
+    sent the two joined, cut at 1,536 (Claude Code 2.1.311, 2026-11-25)."""
+    sent = {}
+    for i in range(count):
+        n = f"s{i:02d}"
+        extra = f"when_to_use: {'W' * 1800}\n" if wtu else ""
+        skill(home / ".claude/skills", n, "D" * 100, extra)
+        sent[n] = ("D" * 100 + " - " + "W" * 1800)[:1535] + "…" if wtu else "D" * 100
+    claude_chat(home, sent)
+
+
+def test_name_only_frees_the_joined_size_and_the_page_keeps_the_description(home):
+    _wtu_home(home, True)
+    [row] = [s for s in view(home)["claude_code"]["skills"] if s["name"] == "s00"]
+    assert row["note"].startswith("Name only frees 1,538 characters")
+    assert row["description"] == "D" * 100
+
+
+def test_a_skill_without_when_to_use_counts_its_description_alone(home):
+    _wtu_home(home, False)
+    claude = view(home)["claude_code"]
+    assert claude["checked"] is True
+    assert claude["windows"][0]["result"]["used"] == 15 * (3 + 4 + 100) + 14
+
+
+def test_a_skill_with_only_when_to_use_counts_that_text(home):
+    path = skill(home / ".claude/skills", "solo", "")
+    path.write_text("---\nname: solo\nwhen_to_use: Use it.\n---\nBody.\n")
+    [row] = [s for s in view(home)["claude_code"]["skills"] if s["name"] == "solo"]
+    assert row["size"] == len("Use it.")
+
+
+def test_codex_and_cursor_count_the_description_alone(home):
+    skill(home / ".cursor/skills", "free", "Picks itself.", "when_to_use: Whenever.\n")
+    [row] = view(home)["cursor"]["skills"]
+    assert (row["size"], row["description"]) == (len("Picks itself."), "Picks itself.")
+
+
+def test_the_rule_rebuilds_a_list_cut_by_the_joined_size_of_when_to_use(home):
+    # 25 skills of 1,543 characters do not fit in 30,000: the chat sent the 19 most used whole and
+    # the rest by name. Counted by the description alone (100), everything would fit.
+    sent = {}
+    for i in range(25):
+        n = f"s{i:02d}"
+        skill(home / ".claude/skills", n, "D" * 100, f"when_to_use: {'W' * 1800}\n")
+        sent[n] = ("D" * 100 + " - " + "W" * 1800)[:1535] + "…" if i < 19 else None
+    usage(home, {f"s{i:02d}": 100 - i for i in range(25)})
+    claude_chat(home, sent)
+    claude = view(home)["claude_code"]
+    assert claude["checked"] is True
+    assert len(claude["windows"][0]["result"]["sent"]) == 19

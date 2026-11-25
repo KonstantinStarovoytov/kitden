@@ -22,7 +22,8 @@ nothing from it.
   it in has no chat, it reads the client's last chat in any folder and also prints that folder's
   path. `kitden show context` does the same, unless you give `--project`.
 - A skill's description, from its `SKILL.md`. The page shows it in the skill's Details, and
-  `kitden show context` prints it (see "The plugin and your agent"). Kitden keeps none of it.
+  `kitden show context` prints it (see "The plugin and your agent"). Its `when_to_use` is read
+  only for its size. Kitden keeps none of it.
 - Versions and plugin lists, from the clients' own commands.
 - A client you turned off in Kitden is not read, and none of its commands are run.
 

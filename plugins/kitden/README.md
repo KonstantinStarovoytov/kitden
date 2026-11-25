@@ -55,7 +55,7 @@ the skill files of a plugin's newest version, when an update removed the version
 For a skill built into Claude Code, which has no file, it reads the description an earlier chat
 sent, from the newest chat files.
 It uses them to size the skill list and keeps none of it. It also reads each skill's description
-from its `SKILL.md`, and
+from its `SKILL.md`, and its `when_to_use` only for its size, and
 `kitden show context` prints it, together with the names of the skills that did not fit in your
 last chat. When the folder you run it in has no chat, `kitden show context` reads your last chat
 in any folder and also prints that folder's path (with `--project` it stays with that folder).

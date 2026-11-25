@@ -67,7 +67,7 @@ from kitden.views.after import home_path
 from kitden.views.catalog import installed_inside
 from kitden.views.effective import effective_view, in_project
 from kitden.views.match import plugin_of
-from kitden.views.skills import read_skill
+from kitden.views.skills import list_text, read_skill
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 # The states `skill.rule` writes, per client (spec "Switches per client").
@@ -106,6 +106,13 @@ class _Row:
     # Claude Code: the description an earlier chat's list sent, for a built-in skill (no file).
     # Only the count uses it: `full` is what is on disk.
     earlier: str | None = None
+    # Claude Code: the description alone, what the page shows; `full` also holds when_to_use.
+    plain: str | None = None
+
+    @property
+    def page_text(self) -> str | None:
+        """The description the page shows for the skill."""
+        return self.full if self.plain is None else self.plain
 
     @property
     def then(self) -> str | None:
@@ -211,15 +218,29 @@ def _off_skills(inventory, client: str, folder: str | None) -> dict[str, Item]:
     return found
 
 
+def _texts(path: str | None) -> tuple[str | None, str | None]:
+    """A SKILL.md's description, and the text Claude Code's list holds, which adds the skill's
+    when_to_use (`list_text`); (None, None) when there is no such file."""
+    if not path or not Path(path).is_file():
+        return None, None
+    info = read_skill(Path(path).parent)
+    return info["description"], list_text(info)
+
+
 def _description(path: str | None) -> str | None:
     """The description in a SKILL.md, or None when there is no such file."""
-    if not path or not Path(path).is_file():
-        return None
-    return read_skill(Path(path).parent)["description"]
+    return _texts(path)[0]
 
 
-def _app_description(home: Path, name: str) -> str | None:
-    """The description of a skill the Claude app gives Claude Code (`anthropic-skills:docx`), from
+def _claude_row(name: str, sent: str | None, item: Item | None, path: str | None, **kw) -> _Row:
+    """A Claude Code row: `full` is the text its list holds, `plain` the description the page
+    shows."""
+    plain, full = _texts(path)
+    return _Row(name, sent, item, full, plain=plain, **kw)
+
+
+def _app_path(home: Path, name: str) -> str | None:
+    """The SKILL.md of a skill the Claude app gives Claude Code (`anthropic-skills:docx`), from
     the newest copy of its SKILL.md; None when there is none.
 
     # checked 2026-11-12 (real files, Claude app with Claude Code 2.1.309): the app keeps them in
@@ -237,7 +258,7 @@ def _app_description(home: Path, name: str) -> str | None:
             found.append((path.stat().st_mtime, path))
         except OSError:  # gone since the folder was listed
             continue
-    return _description(str(max(found)[1])) if found else None
+    return str(max(found)[1]) if found else None
 
 
 def _newer_copy(path: str) -> str | None:
@@ -345,11 +366,10 @@ def _disk_card(client: str, items: list[Item], message: str, how: list[str]) -> 
         note = words.NOTE_ONLY_ASKED if state in ASKED else None
         if from_plugin(item):
             note = words.NOTE_PLUGIN
-        text = _description(item.source.path)
+        text, listed = _texts(item.source.path)
+        size = len((listed if client == "claude_code" else text) or "")
         side = int(state == "name-only")
-        skills.append(
-            _skill(client, _name(client, item), item, len(text or ""), side, note, description=text)
-        )
+        skills.append(_skill(client, _name(client, item), item, size, side, note, description=text))
     sides = [words.SKILLS_FOUND, words.CONTEXT_SIDES[client][1]]
     return _card(client, message=message, sides=sides, skills=skills, how=how)
 
@@ -1174,15 +1194,17 @@ def _claude(
     rows = []
     for name, text in found.skills:
         item = by_name.get(name)
-        full = _description(item.source.path) if item else _app_description(home, name)
+        path = item.source.path if item else _app_path(home, name)
         rows.append(
-            _Row(name, text, item, full, shown=found.shown.get(name, ""), added=name in found.added)
+            _claude_row(
+                name, text, item, path, shown=found.shown.get(name, ""), added=name in found.added
+            )
         )
     # The skills there that the last chat's list does not hold: the next chat lists them, unless
     # they are off or only asked for.
     listed = {r.name for r in rows}
     extras = [
-        _Row(name, None, item, _description(item.source.path))
+        _claude_row(name, None, item, item.source.path)
         for name, item in loaded.items()
         if name not in listed
     ]
@@ -1194,7 +1216,7 @@ def _claude(
     # Off before the chat, so in no list: they wait on the page, and count once the tray turns one
     # on. Your own skills, and the built-in ones a setting keeps out; a plugin's come back with it.
     waiting = [
-        _Row(name, None, item, _description(item.source.path))
+        _claude_row(name, None, item, item.source.path)
         for name, item in turned_off.items()
         if name not in listed and name not in loaded and not from_plugin(item)
     ]
@@ -1401,9 +1423,11 @@ def _claude(
         size = len(r.full) if r.full is not None else len(r.sent or "")
         note = _claude_note(r, states[r.name], side, size, explained, can_free, cap)
         text, seen = (
-            r.full if r.full is not None else r.sent,
+            r.page_text if r.full is not None else r.sent,
             _seen(r.full, r.sent, side, None if r.added else _cap_then(cap, r.sent)),
         )
+        if seen is not None and r.plain is not None:
+            seen = min(seen, len(r.plain))  # the page shows the description, not when_to_use
         source, outside = _outside(r, plugins)
         held = _held(r, rules)
         if held:
@@ -1441,7 +1465,7 @@ def _claude(
                 None,
                 project_rule if held else _plugin_note(note, offer),
                 r.built_in,
-                description=r.full,
+                description=r.page_text,
                 state=states[r.name],
                 plugin_switch=offer,
                 held=held,
