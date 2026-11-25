@@ -15,7 +15,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import Error, Page, sync_playwright
 
 VIEW = {"width": 1280, "height": 800}
 SCALE = 1.5  # device pixels per CSS pixel; the README shows each animation at its CSS size
@@ -86,7 +86,19 @@ class Film:
         self.done = 0  # whole ms the clock has run
 
     def start(self) -> None:
-        self.page.clock.pause_at(self.page.evaluate("Date.now()") + 50)
+        """Pause the page's clock 50 ms on from where it is. The page counts milliseconds and
+        Playwright reads a number as seconds. A clock that lands anywhere else stops the scene."""
+        for tries in range(10):
+            at = self.page.evaluate("Date.now()") + 50
+            try:
+                self.page.clock.pause_at(at / 1000)
+                break
+            except Error as error:  # a busy computer took longer than 50 ms: ask again
+                if "to the past" not in str(error) or tries == 9:
+                    raise
+        off = self.page.evaluate("Date.now()") - at
+        if abs(off) > 1:  # 1 ms: the division rounds
+            raise RuntimeError(f"The page's clock paused {off} ms from where it was asked to.")
 
     def step(self, keep: bool = True) -> None:
         self.ms += 1000 / FPS

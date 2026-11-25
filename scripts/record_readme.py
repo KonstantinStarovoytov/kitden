@@ -6,8 +6,8 @@ Each picture starts the real page on a fresh copy of the README sample (scripts/
 in a temporary folder: memory in Claude Code, playwright in Codex and Context7 in Cursor.
 The Context picture is taken on the sample `kitden demo` opens, so the demo shows the same.
 Stand-ins keep it local: a fake Keychain, and from tests/offline.py fake client commands,
-canned tool lists and catalog answers, and no access checks. Nothing goes online, and nothing
-of the real home folder is read or written.
+canned tool lists, catalog answers and latest version, and no access checks. Nothing goes
+online, and nothing of the real home folder is read or written.
 
 Each scene is taken in light and dark, with a drawn cursor, and the part of the page it is
 about is saved in docs/images/readme/: a still as a PNG, an animation as a looping WebP
@@ -36,7 +36,7 @@ from conftest import install_fake_security  # noqa: E402
 from kitden.demo import DemoRunner, build_demo_home, demo_build, demo_command  # noqa: E402
 from kitden.local_gateway.settings import save_tools  # noqa: E402
 from kitden.views.inventory import build_inventory  # noqa: E402
-from offline import STAND_INS  # noqa: E402
+from offline import STAND_INS, canned_download  # noqa: E402
 
 PORT, TOKEN = 47930, "readme"
 OUT = ROOT / "docs/images/readme"
@@ -111,6 +111,7 @@ def start_page(home: Path, port: int = PORT, build=None) -> tuple[str, uvicorn.S
         home=home,
         run=DemoRunner(home),
         setup_command=lambda: demo_command(home),
+        fetch=canned_download,  # the update check hears of this version, not from PyPI
     )
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
