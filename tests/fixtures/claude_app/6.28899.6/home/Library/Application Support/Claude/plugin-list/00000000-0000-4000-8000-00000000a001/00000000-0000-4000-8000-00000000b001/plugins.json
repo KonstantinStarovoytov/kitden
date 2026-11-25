@@ -1,0 +1,6 @@
+{
+  "plugins": [
+    {"id": "00000000-0000-4000-8000-00000000c001@anthropic-plugin-directory", "name": "00000000-0000-4000-8000-00000000c001", "enabled": true, "installPath": "{HOME}/Library/Application Support/Claude/local-agent-mode-sessions/00000000-0000-4000-8000-00000000a001/00000000-0000-4000-8000-00000000b001/rpm/plugin_01GARDEN0000000000000000"},
+    {"id": "00000000-0000-4000-8000-00000000c002@anthropic-plugin-directory", "name": "00000000-0000-4000-8000-00000000c002", "enabled": false, "installPath": "{HOME}/Library/Application Support/Claude/local-agent-mode-sessions/00000000-0000-4000-8000-00000000a001/00000000-0000-4000-8000-00000000b001/rpm/plugin_01NIMBUS0000000000000000"}
+  ]
+}

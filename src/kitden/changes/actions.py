@@ -26,6 +26,7 @@ from kitden.clients.base import (
     SKILL_REMOVE,
     ClientAdapter,
 )
+from kitden.clients.claude_account import is_account_plugin
 from kitden.clients.claude_code import holds, user_folder
 from kitden.clients.claude_folder import ClaudeFolder
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
@@ -57,6 +58,7 @@ from kitden.model import (
     ItemKind,
     KeychainItem,
     Scope,
+    SourceKind,
     Step,
 )
 from kitden.redact import SECRET, redact
@@ -1378,7 +1380,9 @@ def _claude_rule_steps(
     """Claude Code: a skill's `skillOverrides` key, or a plugin's key in one project (taken out
     of each local file that holds it)."""
     if item.kind is ItemKind.PLUGIN:
-        if item.scope is Scope.ACCOUNT:
+        # A plugin of the Claude account that the account decides (required, or off there).
+        account = is_account_plugin(item) and item.source.kind is not SourceKind.FILE
+        if item.scope is Scope.ACCOUNT or account:
             raise ValueError(item.change_hint or f"{item.name} has no switch here.")
         if project is None:
             raise ValueError(PLUGIN_ALL_PROJECTS)

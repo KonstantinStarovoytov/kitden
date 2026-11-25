@@ -19,15 +19,17 @@ from kitden.changes.actions import (
     add_refusals,
 )
 from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, found_columns, is_direct_entry, is_home
+from kitden.clients.claude_account import FROM_APP
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
 from kitden.views.findings import group_of
 from kitden.views.instructions_map import instructions_map
-from kitden.views.library_map import OTHER, cursor_imports, library_map
+from kitden.views.library_map import ACCOUNT, cursor_imports, library_map
 from kitden.views.load_map import MARKS, Row, load_map
 from kitden.views.match import Copies, catalog_keys, plugin_copies, plugin_keys, source_keys
 from kitden.views.skills import project_skills, skill_catalog
 from kitden.views.words import (
+    ACCOUNT_ONLY_CLAUDE,
     CLIENT_UNREAD,
     NO_ADD_REVIEW,
     NO_ADD_UNREAD,
@@ -347,6 +349,8 @@ def _plugin_cell(
     take the skills that work alone. Otherwise, why not. A route comes only with an offer.
     `twin` is the other marketplace the client has a plugin of this name from."""
     who = CLIENT_WORDS[client]
+    if plugin_id.endswith(FROM_APP) and not offer:
+        return _cell(reason=ACCOUNT_ONLY_CLAUDE)
     # The client has it in a project this view does not show; adding it again would fail.
     if offer and client in offer["installed"]:
         return _cell(reason=f"{who} has it in another project.")
@@ -1047,8 +1051,8 @@ def _parts(item: dict, cells: dict[str, dict], skills: dict[tuple, dict]) -> lis
 def _account_rows(tables: dict[str, list[dict]], shown: set[str], t: _Tables, items) -> list:
     """Plugin rows the map leaves out because Claude Code keeps them in the account (the
     "Claude account plugins and connectors" row, Unknown): every item of the row is an
-    account's. They go under "Other plugins", with the reason Kitden gives for them; one that
-    only hidden clients have is left out."""
+    account's. They go under "From your Claude account", with the reason Kitden gives for them;
+    one that only hidden clients have is left out."""
     by_id = {i.id: i for i in items}
     out = []
     for row in tables["plugin"]:
@@ -1085,7 +1089,7 @@ def _item_groups(
 ) -> list[dict]:
     """The Library map's groups and items, each item with the cells of its row in the plugin,
     skill or hook table, and a plugin's parts; the plugins Claude Code keeps in the account join
-    "Other plugins" (`_account_rows`). An item only hidden clients have is left out."""
+    "From your Claude account" (`_account_rows`). An item only hidden clients have is left out."""
     rows = {r["key"]: r for kind in ("plugin", "skill", "hook") for r in tables[kind]}
     skills = {(r["source"], r["name"]): r for r in tables["skill"]}
     out = []
@@ -1116,12 +1120,12 @@ def _item_groups(
     shown = {i["id"] for g in answer["groups"] for i in g["items"]}
     account = _account_rows(tables, shown, t, found_items)
     if account:
-        other = next((g for g in out if g["key"] == OTHER["key"]), None)
-        if other is None:
-            other = {**OTHER, "items": []}
+        group = next((g for g in out if g["key"] == ACCOUNT["key"]), None)
+        if group is None:
+            group = {**ACCOUNT, "items": []}
             at = sum(1 for g in out if g["kind"] == "marketplace")
-            out.insert(at, other)
-        other["items"].extend(account)
+            out.insert(at, group)
+        group["items"].extend(account)
     return out
 
 

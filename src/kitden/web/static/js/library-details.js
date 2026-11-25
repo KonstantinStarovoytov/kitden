@@ -237,7 +237,8 @@ export const addLabel = (clients) => `Add to ${names(clients).join(" or ")}…`;
 
 // A plugin: State, Inside, Clients and Comes from; where it loads; "Add to <client>…" (a step to a
 // checklist, `addStep`), "Turn off for all projects…" and, in a project, "Turn off in this
-// project…"; its folder and its marketplace's source under Technical details.
+// project…"; its folder and its marketplace's source under Technical details. A plugin of the
+// Claude account adds its `note`: the app adds it, and where its switch is.
 export function pluginCard(item, c, { addStep = () => {}, commandsStep = () => {} } = {}) {
   const inside = insideWords(item.inside);
   const facts = [stateFact(item), { label: "Inside", value: inside || "Not known", quiet: !inside }, clientsFact(item), comesFrom(item, c)];
@@ -253,7 +254,7 @@ export function pluginCard(item, c, { addStep = () => {}, commandsStep = () => {
   actions.push(...onActions(item));
   const tech = item.technical || {};
   const more = [...removeActions(item), ...commandsAction(pluginEntries(item), commandsStep)];
-  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, more, after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
+  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: [loadsSay(item, c), item.note].filter(Boolean).join(" "), actions, more, after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
 }
 
 // A thing a plugin holds: Plugin, Kind, Source and Clients, and "Follows its plugin." It has no

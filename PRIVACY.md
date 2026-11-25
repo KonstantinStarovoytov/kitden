@@ -28,6 +28,11 @@ nothing from it.
 - A skill's description, from its `SKILL.md`. The page shows it in the skill's Details, and
   `kitden show context` prints it (see "The plugin and your agent"). Its `when_to_use` is read
   only for its size. Kitden keeps none of it.
+- The plugins the Claude app gives Claude Code from your Claude account, from the app's own
+  folder: its list of them, each plugin's `plugin.json`, the names of what it holds, and whether
+  the app gives it. When you turn one off on the page and press Apply, Kitden writes its key in
+  `enabledPlugins` of Claude Code's settings, with a backup you can undo. Nothing goes to your
+  account.
 - Versions and plugin lists, from the clients' own commands.
 - A client you turned off in Kitden is not read, and none of its commands are run.
 

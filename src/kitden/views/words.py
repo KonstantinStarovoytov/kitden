@@ -305,6 +305,11 @@ SKILLS_FOUND = "Skills found"
 # Where a skill comes from, in its Details.
 SOURCE_BUILT_IN = "Built into Claude Code"
 SOURCE_PLUGIN = "Plugin {}"
+SOURCE_ACCOUNT_PLUGIN = "Plugin {} from your Claude account"
+# The Library's group, and the source, of a plugin of the Claude account.
+ACCOUNT_GROUP = "From your Claude account"
+ACCOUNT_SOURCE = "Claude account"
+ACCOUNT_ONLY_CLAUDE = "Only Claude Code gets the plugins of your Claude account."
 SOURCE_PROJECT = "Project {}"
 SOURCE_OWN = "Your skills"
 # One skill's Details line.

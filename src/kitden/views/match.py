@@ -23,8 +23,11 @@ Copies = dict[str, list[tuple[str, str]]]
 def plugin_of(item: Item) -> str | None:
     """'superpowers@claude-plugins-official' for a part of that plugin, else None. All three
     clients keep a plugin's files in plugins/cache/<marketplace>/<plugin>/<version>/ (checked
-    2026-10-20: Claude Code's installPath in 2.1.283, Codex, Cursor's plugin folders)."""
-    return plugin_at(item.source.path or "") if item.scope is Scope.PLUGIN else None
+    2026-10-20: Claude Code's installPath in 2.1.283, Codex, Cursor's plugin folders). A plugin
+    of the Claude account is in the Claude app's folder, so its parts name it (`Item.plugin`)."""
+    if item.scope is not Scope.PLUGIN:
+        return None
+    return item.plugin or plugin_at(item.source.path or "")
 
 
 def plugin_at(path: str) -> str | None:

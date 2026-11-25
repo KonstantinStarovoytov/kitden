@@ -17,19 +17,22 @@ from kitden.clients.base import (
     found_columns,
     listed_columns,
 )
+from kitden.clients.claude_account import is_account_plugin
 from kitden.clients.claude_code import holds, local_files, rule_file
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Enabled, Item, ItemKind, Scope
 from kitden.views.catalog import catalog, installed_inside, plugin_folders
 from kitden.views.effective import in_project
 from kitden.views.load_map import Row, load_map, row_key
 from kitden.views.skills import skill_catalog
-from kitden.views.words import ORIGIN_WORDS, STATE_WORDS
+from kitden.views.words import ACCOUNT_GROUP, ORIGIN_WORDS, STATE_WORDS
 
 # A found client that loads nothing in the view shown.
 NOTHING_LOADED = "Nothing loaded"
 STORE = "store"
 # Plugins whose id names no marketplace (a Cursor plugin whose name is not stored locally).
 OTHER = {"key": "other", "name": "Other plugins", "icon": "puzzle", "kind": "other"}
+# The plugins the Claude app gives Claude Code from the user's Claude account.
+ACCOUNT = {"key": "account", "name": ACCOUNT_GROUP, "icon": "cloud", "kind": "account"}
 SKILLS = {"key": "skills", "name": "Your skills", "icon": "user-round", "kind": "skills"}
 SETTINGS = {"key": "settings", "name": "Your settings", "icon": "settings", "kind": "settings"}
 PROJECT = {
@@ -115,6 +118,8 @@ def _present(inventory, project: str | None) -> dict[str, list[Item]]:
 
 
 def _group(row: Row, own: list[Item], project: str | None) -> dict:
+    if row.kind is ItemKind.PLUGIN and any(is_account_plugin(i) for i in own):
+        return ACCOUNT
     if row.kind is ItemKind.PLUGIN and not row.source:
         return OTHER
     if row.kind is ItemKind.PLUGIN:
@@ -373,14 +378,15 @@ def _marketplace_entries(inventory) -> dict[str, dict[str, str]]:
 
 def library_map(inventory, adapters, project: str | None) -> dict:
     """The clients and the source groups of the Library map, in the order the map draws them:
-    marketplaces by name, then "Other plugins", "Your skills", "Your settings" and, with a project
-    picked, "Only this project". `here` says, per client, the picked project's own settings
-    decide the item there; a skill's `off_in` the projects that turn it off already; `can` what
-    Details and a drag may offer for it; `skill` the skill catalog's id a skill of "Your skills"
-    is copied from; and `skill_rules` where a one-project skill rule can go. `can.local_in` names
-    the folder whose local settings decide for Claude Code when it is the project's repository
-    root, not the project itself. A marketplace group's
-    `entries` are each client's marketplace item id, which `/api/commands` takes."""
+    marketplaces by name, then "From your Claude account", "Other plugins", "Your skills", "Your
+    settings" and, with a project picked, "Only this project". A plugin of the Claude account
+    has `note`: where it comes from and where its switch is. `here` says, per client, the picked
+    project's own settings decide the item there; a skill's `off_in` the projects that turn it
+    off already; `can` what Details and a drag may offer for it; `skill` the skill catalog's id
+    a skill of "Your skills" is copied from; and `skill_rules` where a one-project skill rule
+    can go. `can.local_in` names the folder whose local settings decide for Claude Code when it
+    is the project's repository root, not the project itself. A marketplace group's `entries`
+    are each client's marketplace item id, which `/api/commands` takes."""
     found = found_columns(inventory)
     imports = cursor_imports(adapters, found)
     by_id = {i.id: i for i in inventory.items}
@@ -437,6 +443,9 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             states = [i.skill_state for i in own if i.skill_state and i.skill_state != "off"]
             if states:
                 entry["skill_state"] = states[0]
+        account = next((i for i in own if is_account_plugin(i)), None)
+        if account is not None and account.change_hint:
+            entry["note"] = account.change_hint
         technical: dict[str, str] = {}
         if row.kind is ItemKind.PLUGIN:
             entry["plugin"] = row.lookup
@@ -459,7 +468,8 @@ def library_map(inventory, adapters, project: str | None) -> dict:
         (g for g in groups.values() if g["kind"] == "marketplace"),
         key=lambda g: g["name"].lower(),
     )
-    rest = [groups[g["key"]] for g in (OTHER, SKILLS, SETTINGS, PROJECT) if g["key"] in groups]
+    order = (ACCOUNT, OTHER, SKILLS, SETTINGS, PROJECT)
+    rest = [groups[g["key"]] for g in order if g["key"] in groups]
     for group in [*markets, *rest]:
         group["items"].sort(key=lambda i: i["name"].lower())
     shown = [*markets, *rest]

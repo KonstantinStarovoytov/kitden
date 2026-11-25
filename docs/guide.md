@@ -32,6 +32,16 @@ removing it removes them too, and the review names them.
 
 An MCP server you turned off with `/mcp` in one project shows as off in that project.
 
+**From your Claude account** holds the plugins you or your organization turned on for your
+Claude account. The Claude app gives them to Claude Code in its Code tab. Each shows what it
+holds, and its skills follow it, here and on **Context**. **Turn off** writes Claude Code's own
+setting, for all projects or for one, so the plugin stays in your account and in your other
+Claude apps. To remove it from your account, turn it off in the Claude app or on claude.ai. A
+plugin your organization requires has no switch. The group also has **Claude account plugins and
+connectors**, as Unknown: Kitden cannot see the rest of what your account keeps. The terminal gets
+the same plugins another way, which Kitden does not read yet, so a terminal chat's skill list
+does not count them for the next chat.
+
 The preview names the clients and projects affected. Adds on the map go to all projects;
 the List offers a project scope where supported. Start a new client session to load a change.
 
@@ -77,7 +87,8 @@ allows it; Cursor has no switch. A skill built into Claude Code, such as `datavi
 **built-in**: it is not a file, so the Library does not list it, but most have the same switch,
 for all projects. A skill of a plugin that Claude Code installed follows its plugin: its Details
 say what the plugin holds and offer **Turn off** for the whole plugin. When Kitden has no switch
-for a skill, such as one the Claude app adds, its Details say so and why. Your own and built-in
+for a skill, such as one the Claude app adds, its Details say so and why. A skill of a plugin
+from your Claude account names that plugin, and its Details offer the plugin's own switch. Your own and built-in
 Claude Code skills that are off, and so were not in the last list, wait under **Turned off**,
 where you can turn them on again. A skill that a project's own settings set has no switch here.
 The change goes through preview, **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list

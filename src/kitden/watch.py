@@ -43,11 +43,18 @@ EXPECT_SECONDS = 10.0  # how long a planned own write is remembered
 LATE_SECONDS = 5.0  # how often a folder that is not there yet is looked for
 
 
+# The Claude app's list of the Claude account's plugins, and whether it gives each one
+# (clients/claude_account.py). Other files of these names are not setup files.
+APP_LISTS = {("rpm", "manifest.json"), ("plugin-list", "plugins.json")}
+
+
 def is_relevant(path: str) -> bool:
     parts = Path(path).parts
     if NOISY_FOLDERS.intersection(parts):
         return False
     if parts[-1] in SETUP_FILES:
+        return True
+    if any(name == parts[-1] and folder in parts[:-1] for folder, name in APP_LISTS):
         return True
     return parts[-1].endswith((".md", ".mdc")) and bool(INSTRUCTION_FOLDERS.intersection(parts))
 

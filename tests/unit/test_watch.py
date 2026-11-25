@@ -29,6 +29,10 @@ from tests.conftest import aged
         ("/h/.cursor/rules/style.mdc", True),
         ("/h/.claude/rules/style.md", True),
         ("/h/.claude/plans/notes.md", False),
+        ("/h/Claude/local-agent-mode-sessions/a/o/rpm/manifest.json", True),
+        ("/h/Claude/plugin-list/a/o/plugins.json", True),
+        ("/h/Claude/vm_bundles/manifest.json", False),
+        ("/h/.claude/plugins.json", False),
     ],
 )
 def test_only_setup_files_trigger_a_rescan(path, want):
