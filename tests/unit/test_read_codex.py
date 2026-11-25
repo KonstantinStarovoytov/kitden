@@ -1,6 +1,8 @@
 import shutil
 from pathlib import Path
 
+import pytest
+
 from kitden.clients.codex import CodexAdapter
 from kitden.model import ItemKind, Scope, UnknownReason
 from tests.conftest import all_text, make_home, rows
@@ -468,3 +470,149 @@ def test_a_running_page_asks_codex_again_after_an_hour(tmp_path, monkeypatch):
     now = time.time() + 61 * 60
     _gmail(CodexAdapter(home, read_version=lambda: "0.163.0"))
     assert len(runs) == 2
+
+
+# Skills in sub-folders of a skills folder, as Codex's own walk finds them (docs/clients.md).
+
+
+def write_skill(folder: Path, name: str = "") -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "SKILL.md"
+    path.write_text(f"---\nname: {name or folder.name}\ndescription: Does it.\n---\n")
+    return path
+
+
+def skills_of(home, no_version, **more):
+    """Codex's skills: name -> item. A name listed twice fails the test that asks."""
+    scan = CodexAdapter(home, read_version=no_version, **more).scan()
+    items = [i for i in scan.items if i.kind is ItemKind.SKILL]
+    assert len({i.name for i in items}) == len(items), sorted(i.name for i in items)
+    return {i.name: i for i in items}
+
+
+@pytest.fixture
+def bare_home(tmp_path):
+    home = tmp_path / "home"
+    (home / ".codex").mkdir(parents=True)
+    return home
+
+
+def test_skills_in_sub_folders_are_listed_in_every_folder_codex_reads(bare_home, no_version):
+    home = bare_home
+    for name in ("api", "stranger"):
+        write_skill(home / "work" / name / ".agents/skills/team" / f"{name}-nested")
+    (home / ".codex/config.toml").write_text(
+        f'[projects."{home}/work/api"]\ntrust_level = "trusted"\n'
+        f'[projects."{home}/work/stranger"]\ntrust_level = "untrusted"\n'
+    )
+    write_skill(home / ".agents/skills/ops/deploy")
+    write_skill(home / ".codex/skills/team/triage")
+    found = skills_of(home, no_version)
+    assert set(found) == {"deploy", "triage", "api-nested"}  # no row for the folders between
+    assert found["deploy"].source.path == str(home / ".agents/skills/ops/deploy/SKILL.md")
+    assert (found["deploy"].scope, found["deploy"].project) == (Scope.USER, None)
+    assert (found["api-nested"].scope, found["api-nested"].project) == (
+        Scope.PROJECT,
+        str(home / "work/api"),
+    )
+    for item in found.values():
+        assert CodexAdapter(home).item_actions(item) == ("skill.remove",)
+
+
+def test_a_skill_inside_another_skills_folder_is_listed(bare_home, no_version):
+    write_skill(bare_home / ".codex/skills/qdrant")
+    write_skill(bare_home / ".codex/skills/qdrant/search-strategies/hybrid-search")
+    assert set(skills_of(bare_home, no_version)) == {"qdrant", "hybrid-search"}
+
+
+def test_codex_looks_six_folders_deep_and_skips_hidden_ones(bare_home, no_version):
+    root = bare_home / ".agents/skills"
+    write_skill(root / "1/2/3/4/5/six-deep")
+    write_skill(root / "1/2/3/4/5/six/seven-deep")
+    write_skill(root / ".system/hidden")
+    write_skill(root / "team/.trash/hidden-too")
+    assert set(skills_of(bare_home, no_version)) == {"six-deep"}
+
+
+def test_a_linked_folder_is_searched_and_its_skills_keep_their_link(bare_home, no_version):
+    home = bare_home
+    root = home / ".agents/skills"
+    real = write_skill(home / "elsewhere/pack/inside")
+    single = write_skill(home / "elsewhere/single")
+    write_skill(root / "team/own")
+    (root / "pack").symlink_to(home / "elsewhere/pack")
+    (root / "team/single").symlink_to(home / "elsewhere/single")
+    (root / "team/loop").symlink_to(root)
+    (root / "gone").symlink_to(home / "elsewhere/gone")
+    found = skills_of(home, no_version)
+    assert set(found) == {"inside", "single", "own"}
+    assert found["inside"].source.path == str(real)
+    assert found["inside"].source.link_path == str(root / "pack/inside")
+    assert found["single"].source.path == str(single)
+    assert found["single"].source.link_path == str(root / "team/single")
+    assert found["own"].source.link_path is None
+    adapter = CodexAdapter(home)
+    assert [adapter.item_actions(found[n]) for n in ("inside", "single")] == [(), ()]
+
+
+def test_a_skill_md_that_is_a_link_is_not_listed(bare_home, no_version):
+    real = write_skill(bare_home / "elsewhere/real")
+    folder = bare_home / ".agents/skills/linked"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").symlink_to(real)
+    assert skills_of(bare_home, no_version) == {}
+
+
+def test_a_skill_that_codex_finds_twice_is_one_row_the_real_folder(bare_home, no_version):
+    home = bare_home
+    shared = write_skill(home / ".codex/skills/team/shared")
+    (home / ".agents/skills").mkdir(parents=True)
+    (home / ".agents/skills/linked-team").symlink_to(home / ".codex/skills/team")
+    beside = write_skill(home / ".agents/skills/z-real")
+    (home / ".agents/skills/a-link").symlink_to(home / ".agents/skills/z-real")
+    found = skills_of(home, no_version)
+    assert {n: i.source.path for n, i in found.items()} == {
+        "shared": str(shared),
+        "z-real": str(beside),
+    }
+    assert [i.source.link_path for i in found.values()] == [None, None]
+
+
+def test_a_nested_skill_can_be_off(bare_home, no_version):
+    home = bare_home
+    outer = write_skill(home / ".codex/skills/outer")
+    inner = write_skill(home / ".codex/skills/outer/parts/inner")
+    (home / ".codex/config.toml").write_text(
+        f'[[skills.config]]\npath = "{inner}"\nenabled = false\n'
+    )
+    found = skills_of(home, no_version)
+    # checked 2026-11-25 (codex-rs/ext/skills/src/host_outcome.rs): by the skill's own path, so
+    # the outer skill stays on, and turning it off would leave the inner one.
+    assert {n: str(i.enabled) for n, i in found.items()} == {"outer": "on", "inner": "off"}
+    step = CodexAdapter(home).skill_rule_step(found["outer"])
+    assert step.edit is not None and step.edit.after == {"path": str(outer), "enabled": False}
+
+
+def test_a_skills_folder_with_very_many_folders_stops_at_codexs_limit(
+    bare_home, no_version, monkeypatch
+):
+    root = bare_home / ".agents/skills"
+    for n in range(6):
+        write_skill(root / f"s{n}")
+    monkeypatch.setattr("kitden.clients.codex.MAX_SKILL_FOLDERS", 4)  # the root counts as one
+    assert set(skills_of(bare_home, no_version)) == {"s0", "s1", "s2"}
+    monkeypatch.setattr("kitden.clients.codex.MAX_SKILL_FOLDERS", 2000)
+    monkeypatch.setattr("kitden.clients.codex.MAX_SKILL_ENTRIES", 8)  # 6 folders, then 2 files
+    assert set(skills_of(bare_home, no_version)) == {"s0", "s1"}
+
+
+def test_a_folder_that_cannot_be_read_hides_only_itself(bare_home, no_version):
+    root = bare_home / ".agents/skills"
+    write_skill(root / "team/fine")
+    locked = root / "locked"
+    write_skill(locked / "inside")
+    locked.chmod(0)
+    try:
+        assert set(skills_of(bare_home, no_version)) == {"fine"}
+    finally:
+        locked.chmod(0o755)

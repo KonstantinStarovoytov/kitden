@@ -604,6 +604,30 @@ def test_an_added_codex_skill_has_the_path_its_root_gives_it(home):
     assert cx["changed"][0] == CHANGED and len(cx["changed"]) == 2
 
 
+@pytest.mark.parametrize("folder", ["parts", "alpha/parts"])  # inside a skill's folder too
+def test_an_added_codex_skill_in_a_sub_folder_counts(home, folder):
+    skills, roots = rooted_chat(home)
+    for n in "12":
+        skill(own(home) / folder, f"later{n}", CODEX_LONG)
+    added = [CodexSkill(f"later{n}", CODEX_LONG, f"r0/{folder}/later{n}/SKILL.md") for n in "12"]
+    fit = codex_rule([*skills, *added], 300, roots)
+    cx = codex(home)
+    assert cx["now"]["size"] == fit.size and cx["now"]["used"] == fit.used
+    assert cx["changed"][0] == CHANGED and len(cx["changed"]) == 2
+
+
+def test_a_listed_codex_skill_in_a_sub_folder_has_a_switch(home):
+    codex_home(home, window=15_000)
+    inner = skill(own(home) / "alpha/parts", "inner", CODEX_LONG)
+    codex_chat(home, [f"- inner: {CODEX_LONG} (file: {inner.resolve()})"])
+    rows = {s["name"]: s for s in codex(home)["skills"]}
+    assert rows["inner"]["switch"] == ["on", "off"]
+    codex_off(home, inner)
+    cx = codex(home)
+    assert cx["changed"][0] == CHANGED
+    assert "inner" not in cx["now"]["sent"]
+
+
 @pytest.mark.parametrize("where", ["a root of its own", "a link"])
 def test_an_added_codex_skill_whose_line_is_not_known_is_said_and_not_counted(home, where):
     rooted_chat(home)

@@ -157,9 +157,11 @@ def skill_items(
     kind: SourceKind = SourceKind.FOLDER,
     project: str | None = None,
     enabled: Enabled = Enabled.ON,
+    find: Callable[[Path], list[tuple[str, Path, Path | None]]] = skills_in,
 ) -> list[Item]:
+    """One skill item for each skill that `find` sees in the folder."""
     items = []
-    for name, real, link in skills_in(folder):
+    for name, real, link in find(folder):
         source = Source(
             kind=kind, path=str(real), owner_client=owner, link_path=str(link) if link else None
         )

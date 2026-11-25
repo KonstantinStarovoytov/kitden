@@ -10,6 +10,7 @@ import subprocess  # runs the codex command without a shell
 import sys
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -38,6 +39,7 @@ from kitden.clients.base import (
     plain_source,
     project,
     skill_items,
+    skill_name,
     toggle_action,
     visible_folders,
 )
@@ -81,6 +83,11 @@ _LIST_CACHE: dict[tuple, tuple[float, dict]] = {}  # key -> (when it was asked, 
 _FILLING: set[tuple] = set()
 _FILL_LOCK = threading.Lock()
 REMOTE_INSTALL_RECORD = ".codex-remote-plugin-install.json"
+# checked 2026-11-25 (openai/codex, codex-rs/ext/skills/src/loader/mod.rs and discovery.rs, the
+# same in 0.159.2 to 0.172.0): the limits of Codex's walk of one skills folder.
+MAX_SKILL_DEPTH = 6  # levels of folders below the skills folder
+MAX_SKILL_FOLDERS = 2000  # the skills folder too
+MAX_SKILL_ENTRIES = 20_000
 
 
 def _recent(asked_at: float) -> bool:
@@ -113,6 +120,51 @@ def _plugin_states_only(listing: Any) -> dict | None:
 
 def _on(value: Any) -> Enabled:
     return Enabled.OFF if value is False else Enabled.ON
+
+
+def _skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
+    """Skills in `folder`, sub-folders too, as Codex's own walk finds them: (name, real SKILL.md
+    path, the skill's folder as found when a link leads to it).
+
+    checked 2026-11-25 (openai/codex, codex-rs/ext/skills/src/loader/discovery.rs and host.rs,
+    codex-rs/exec-server/src/local_file_system.rs, 0.159.2 to 0.172.0): a folder with a SKILL.md
+    is searched further, hidden folders are not, a linked folder is, each real folder once, and a
+    SKILL.md that is itself a link is skipped. Kitden leaves out a SKILL.md right in the skills
+    folder, which Codex reads: its folder is all the others' too. A folder that a link leads to is
+    searched after the real ones, so a skill found both ways is its real folder.
+    """
+    found: list[tuple[str, Path, Path | None]] = []
+    real = deque([(folder, 0, False)])  # folder, levels down, whether a link leads to it
+    links: deque[tuple[Path, int, bool]] = deque()
+    seen: set[str] = set()
+    entries = 0
+    while (real or links) and len(seen) < MAX_SKILL_FOLDERS:
+        place, depth, linked = (real or links).popleft()
+        path = os.path.realpath(place)
+        if path in seen:
+            continue
+        seen.add(path)
+        try:
+            with os.scandir(place) as listed:
+                inside = sorted(listed, key=lambda e: e.name)
+        except OSError:
+            continue
+        for entry in inside:
+            entries += 1
+            if entries > MAX_SKILL_ENTRIES:
+                return found
+            try:
+                is_folder, is_link = entry.is_dir(), entry.is_symlink()
+            except OSError:
+                continue
+            if is_folder:
+                if depth < MAX_SKILL_DEPTH and not entry.name.startswith("."):
+                    queue = links if is_link else real
+                    queue.append((place / entry.name, depth + 1, linked or is_link))
+            elif entry.name == "SKILL.md" and depth and not is_link and entry.is_file():
+                skill_md = Path(path) / entry.name
+                found.append((skill_name(skill_md), skill_md, place if linked else None))
+    return found
 
 
 def skills_off(config: dict) -> set[str]:
@@ -551,10 +603,9 @@ class CodexAdapter(ClientAdapter):
             )
 
         disabled_skills = skills_off(config)
-        for folder in (self.home / ".agents/skills", self.codex_home / "skills"):
-            for item in skill_items(CLIENT, folder, Scope.USER, CLIENT):
-                off = item.source.path in disabled_skills
-                scan.items.append(replace(item, enabled=Enabled.OFF if off else Enabled.ON))
+        for item in self._user_skills():
+            off = item.source.path in disabled_skills
+            scan.items.append(replace(item, enabled=Enabled.OFF if off else Enabled.ON))
 
         scan.items += instruction_items(CLIENT, _agents_md(self.codex_home), Scope.USER, CLIENT)
 
@@ -569,6 +620,18 @@ class CodexAdapter(ClientAdapter):
 
         scan.problems = read.problems
         return scan
+
+    def _user_skills(self) -> list[Item]:
+        """The skills of both user folders. Codex loads a SKILL.md once, however many links lead
+        to it (checked 2026-11-25, codex-rs/ext/skills/src/loader/host_merge.rs): a skill in one
+        folder that the other links to is its real folder."""
+        by_path: dict[str | None, Item] = {}
+        for folder in (self.home / ".agents/skills", self.codex_home / "skills"):
+            for item in skill_items(CLIENT, folder, Scope.USER, CLIENT, find=_skills_in):
+                kept = by_path.get(item.source.path)
+                if kept is None or (kept.source.link_path and not item.source.link_path):
+                    by_path[item.source.path] = item
+        return list(by_path.values())
 
     def _project(
         self, read: Reader, root: Path, trusted: bool, off: set[str], installed: set[str]
@@ -619,7 +682,12 @@ class CodexAdapter(ClientAdapter):
         # too (`skill_rule_step`).
         if trusted:
             for item in skill_items(
-                CLIENT, root / ".agents/skills", Scope.PROJECT, CLIENT, project=str(root)
+                CLIENT,
+                root / ".agents/skills",
+                Scope.PROJECT,
+                CLIENT,
+                project=str(root),
+                find=_skills_in,
             ):
                 items.append(
                     replace(item, enabled=Enabled.OFF) if item.source.path in off else item
