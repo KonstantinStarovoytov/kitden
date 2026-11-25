@@ -475,8 +475,8 @@ def skill_keepers(inventory, item, readers: list[str]) -> list[str]:
 
 
 def lost_inside(inventory, folder: str, client: str, name: str) -> list[str]:
-    """The other skills `client` loses when the skill folder of `name` goes: those inside it that
-    it loads from nowhere else."""
+    """The other skills `client` loses when the skill folder of `name` goes: those inside it, on
+    or off, that it loads from nowhere else."""
     gone = os.path.realpath(folder)
     inside = [
         i
@@ -484,7 +484,6 @@ def lost_inside(inventory, folder: str, client: str, name: str) -> list[str]:
         if i.client == client
         and i.kind is ItemKind.SKILL
         and i.name != name
-        and i.enabled is not Enabled.OFF
         and i.source.path is not None
         and os.path.realpath(i.source.path).startswith(f"{gone}/")
     ]
