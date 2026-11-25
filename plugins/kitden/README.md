@@ -53,7 +53,8 @@ and Codex's `[skills] max_context_tokens`. For
 the context check it also reads what the client sent in your last chats, from the client's own
 chat files, the skills the Claude app gives Claude Code, from the app's own folder, and Codex's
 model list (`models_cache.json`), for the size of its context window. For Codex it also reads
-the skill files of a plugin's newest version, when an update removed the version the chat used.
+the skill files of a plugin's newest version, when an update removed the version the chat used,
+and whether a skill's `agents/openai.yaml` keeps it off the list.
 For a skill built into Claude Code, which has no file, it reads the description an earlier chat
 sent, from the newest chat files.
 It uses them to size the skill list and keeps none of it. It also reads each skill's description

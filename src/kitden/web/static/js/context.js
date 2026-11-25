@@ -314,16 +314,16 @@ function moveFrom(at, spots) {
 // The two sides --------------------------------------------------------------------------------
 
 // A skill's side: on the last chat's window, the server's; on an estimate (another window, the setup
-// now, or after Apply), from that estimate. Claude Code: a skill whose description is sent, or one
-// that shows only a name (no room for it, or set to Name only), also when the last list did not hold
-// it. Codex: one with nothing cut off, or one that is. A skill on no side (in no list, or Kitden
-// cannot tell) stays apart; one the tray turns on (`back`) has a side in the estimate after Apply,
-// and none in the others, which know nothing of the tray. `state`: the tray's state for it.
+// now, or after Apply), from that estimate, also when the last list did not hold it. Claude Code: a
+// skill whose description is sent, or one that shows only a name (no room for it, or set to Name
+// only). Codex: one with nothing cut off, or one that is cut or left out. A skill on no side (in no
+// list, or Kitden cannot tell) stays apart; one the tray turns on (`back`) has a side in the estimate
+// after Apply, and none in the others, which know nothing of the tray. `state`: the tray's state for it.
 function sideOf(card, skill, result, estimate, back = false, planned = false, state = undefined) {
   if (back && estimate && !planned) return null;
-  const none = skill.side === null || skill.side === undefined;
   if (!estimate) return skill.side;
-  if (card.client === "codex") return none && !back ? skill.side : skill.name in (result.over || {}) ? 1 : 0;
+  // Codex may send a part of a description: such a skill has a piece sent and a piece over.
+  if (card.client === "codex" && skill.name in (result.over || {})) return 1;
   if (skill.name in (result.sent || {})) return 0;
   if (skill.name in (result.over || {})) return 1;
   return (planned ? state || skill.state : skill.state) === "name-only" ? 1 : null;

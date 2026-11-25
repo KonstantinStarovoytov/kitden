@@ -57,8 +57,8 @@ Codex let that list use only a small part of the context window. Claude Code the
 skills by name only; Codex shortens descriptions and, past that, leaves skills out. Kitden reads
 the skill list from the last chat log, plus the settings, skill files and use counts it needs
 to size and check that list; it keeps none of it and sends nothing. When your skills or the limit
-changed after that chat, Claude Code's card also says, as an estimate, how many would show only a
-name now ([below](#when-your-setup-changed-after-the-last-chat)). Estimates for another
+changed after that chat, the card also says, as an estimate, how many would show only a name now
+(Codex: how many would be cut short or left out, [below](#when-your-setup-changed-after-the-last-chat)). Estimates for another
 window, for your setup now, or for a switch you are about to make, show only while Kitden's rule
 rebuilds that last list; all but another window's also come from a count (below). Claude Code's log does not say the window, so Kitden names it only when one window alone
 gives that list. When Claude Code's settings set the limit, with `skillListingBudgetFraction` or
@@ -126,8 +126,8 @@ descriptions would fit".
 ### When your setup changed after the last chat
 
 The last chat is a fact, so its sentence and its window card stay. When you added, turned off or
-turned on Claude Code skills after it (or the chat itself got more skills on the way), or changed
-the limit, two lines under it say so and what Kitden expects now:
+turned on skills after it (in Claude Code, also when the chat itself got more skills on the way),
+or changed the limit, two lines under it say so and what Kitden expects now:
 
 > Your skills changed after this list was sent. Your next chat will show the real list.
 >
@@ -137,7 +137,15 @@ The bar, then named **Skill list now, estimate**, and the two boxes show that es
 everything would fit, a line says about how much room is left. When Kitden can only count, it says
 "every skill would keep its description" and shows that too, or "not all descriptions would fit",
 and the bar and the boxes stay the last chat's. It says nothing when its count does not explain
-the last chat itself. For Codex, this works for a changed limit only.
+the last chat itself.
+
+For Codex the estimate says how many descriptions would be cut short, or how many skills left out.
+A skill you added has the line Codex would give it, so it counts. Two kinds do not: a skill that
+is a link, and one in a folder the last list did not have, as Kitden cannot tell how Codex will
+write their lines. It names them, says that its estimates leave them out, and gives no estimate
+when nothing else changed. A skill that Codex never lists, because its `agents/openai.yaml` sets
+`allow_implicit_invocation: false`, is no change; one that was on the last list and is set so now
+leaves the estimate.
 
 Codex's line works the same way, in tokens: when Codex cut descriptions short or left skills
 out, drag it in steps of 500 tokens, up to 10,000, the most Codex allows; it snaps to the

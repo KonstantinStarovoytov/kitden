@@ -1395,6 +1395,35 @@ test('a skill turned off or set to Name only after the chat is where the estimat
   assert.deepEqual(apart(), ['asked']);
 });
 
+// Codex: lint was added after the chat and would be cut, note was added and fits, gone was turned off
+// and link's line is not known to the server.
+const CODEX_NOW = {
+  short: '', say: '', sent: { a: 100, b: 90, lint: 80, note: 20 }, over: { b: 60, lint: 70 }, kept: { b: 342, lint: 340 }, used: 300, size: 430, room: null, misfit: { kind: 'cut', n: 2 }, budget: 5440,
+};
+const CODEX_CHANGED = {
+  ...CODEX,
+  skills: [skill('a', 200, 0), skill('b', 570, 1), skill('gone', 90, 0, { state: 'off', switch: [] }), skill('lint', 560, null), skill('note', 40, null), skill('link', 60, null)],
+  changed: NOW_LINES, now: CODEX_NOW,
+};
+
+test('Codex skills added or turned off after the chat are where the estimate for now has them', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'codex' };
+  show(answer(CLAUDE, CODEX_CHANGED, CURSOR));
+  assert.equal(text(verdict()), CODEX.windows[0].result.say);
+  assert.deepEqual(byClass(main, 'ctx-room').map(text), NOW_LINES);
+  assert.deepEqual(zoomNames(), ['Context window', 'Skill list now, estimate']);
+  assert.deepEqual(placed(), [['a', 'note'], ['b', 'lint']]);
+  assert.deepEqual(pieces('over').map((n) => n.dataset.skill), ['b', 'lint']);
+  assert.equal(text(pillOf('lint')), 'lint340 of 560');
+  assert.deepEqual(pills(byClass(main, 'ctx-off')[0]).map((p) => p.dataset.skill), ['gone']);
+  assert.deepEqual(apart(), ['link']);
+  // With no estimate, the last chat's own picture.
+  show(answer(CLAUDE, { ...CODEX_CHANGED, changed: [], now: null }, CURSOR));
+  assert.deepEqual(placed(), [['a', 'gone'], ['b']]);
+  assert.deepEqual(apart(), ['lint', 'note', 'link']);
+});
+
 test('changes in the preview take the place of the estimate for now', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };

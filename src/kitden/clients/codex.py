@@ -115,6 +115,18 @@ def _on(value: Any) -> Enabled:
     return Enabled.OFF if value is False else Enabled.ON
 
 
+def skills_off(config: dict) -> set[str]:
+    """The SKILL.md paths that config.toml's `[[skills.config]]` turns off."""
+    rules = as_dict(config.get("skills")).get("config")
+    return {
+        os.path.realpath(rule["path"])
+        for rule in (rules if isinstance(rules, list) else [])
+        if isinstance(rule, dict)
+        and rule.get("enabled") is False
+        and isinstance(rule.get("path"), str)
+    }
+
+
 def _agents_md(folder: Path) -> list[tuple[Path, str]]:
     """The instruction files Codex looks for in one folder.
 
@@ -538,18 +550,7 @@ class CodexAdapter(ClientAdapter):
                 )
             )
 
-        disabled_skills = (
-            {
-                os.path.realpath(rule["path"])
-                for rule in config["skills"].get("config", [])
-                if isinstance(rule, dict)
-                and rule.get("enabled") is False
-                and isinstance(rule.get("path"), str)
-            }
-            if isinstance(config.get("skills"), dict)
-            and isinstance(config["skills"].get("config", []), list)
-            else set()
-        )
+        disabled_skills = skills_off(config)
         for folder in (self.home / ".agents/skills", self.codex_home / "skills"):
             for item in skill_items(CLIENT, folder, Scope.USER, CLIENT):
                 off = item.source.path in disabled_skills

@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Context says how your Codex skill list stands now:** when Codex skills were added or turned off
+  after the last chat, an estimate under that chat's sentence says how many descriptions would be
+  cut now, and the bar and the boxes show it. A Codex skill that is off no longer counts in the
+  estimates (#216).
 - **Context says how your skill list stands now:** when Claude Code skills were added, turned off
   or turned on after the last chat, or the limit changed, an estimate under that chat's sentence
   says how many skills would show only a name now, and the bar and the boxes show it. The limit

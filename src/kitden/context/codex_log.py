@@ -1,6 +1,7 @@
 """Codex's last skill list, the newest one sent, and its window from the model cache."""
 
 import json
+import os
 import re
 import tomllib
 from dataclasses import dataclass
@@ -35,6 +36,25 @@ class CodexSent:
     @property
     def at(self) -> str:
         return self.list.at
+
+    def path_of(self, skill_md: str) -> str | None:
+        """The `file:` path this list would give a SKILL.md it does not hold: the path as it is in
+        a list with no roots, else the alias of its longest root, then the rest of the path. None
+        under no root of the list: Codex then adds a root, and Kitden cannot tell the line.
+
+        # checked 2026-11-25 (codex-rs/ext/skills/src/aliases.rs shorten; real lists of Codex
+        # 0.159.2 to 0.171.0, every path of 7 lists)
+        """
+        if not self.roots:
+            return skill_md
+        found = [
+            (os.path.realpath(m["folder"]), m["alias"]) for m in map(ROOT.match, self.roots) if m
+        ]
+        under = [(folder, alias) for folder, alias in found if skill_md.startswith(f"{folder}/")]
+        if not under:
+            return None
+        folder, alias = max(under, key=lambda root: len(root[0]))
+        return alias + skill_md[len(folder) :]
 
 
 @dataclass(frozen=True)

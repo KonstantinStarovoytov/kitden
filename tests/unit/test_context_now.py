@@ -3,13 +3,30 @@ under: the sentence under the last chat's verdict, the estimate the picture foll
 line's places with the preview's changes in them. The chats are those of test_skill_limit."""
 
 import os
+from pathlib import Path
 
 import pytest
 
+from kitden.context.rules import CodexSkill, codex_rule
 from kitden.views import words
+from kitden.views.context_view import _size
 from tests.unit.test_codex_limit import cut_chat as codex_cut_chat
 from tests.unit.test_context_claude_log import assistant, list_entry, write_chat
-from tests.unit.test_context_view import before_the_chat, claude_chat, skill, view, write_json
+from tests.unit.test_context_view import (
+    CODEX_A,
+    CODEX_B,
+    CODEX_C,
+    a_budget,
+    before_the_chat,
+    claude_chat,
+    codex_chat,
+    codex_home,
+    rule_skills,
+    skill,
+    view,
+    window_for,
+    write_json,
+)
 from tests.unit.test_skill_limit import NAMES, TEXT, counted_chat, cut_chat, near_chat
 
 CHANGED = "Your skills changed after this list was sent. Your next chat will show the real list."
@@ -426,3 +443,388 @@ def test_the_setup_now_is_read_from_the_folder_claude_code_uses(home, tmp_path, 
     assert "1 of 7 skills would show only a name" in cc["after"]["say"]
     write_json(to / "settings.json", {"skillOverrides": {"a": "off", "b": "off"}})
     assert claude(home)["changed"] == [CHANGED, KEEPS]
+
+
+# Codex: skills turned off and added after the last chat
+
+CODEX_LONG = "Looks through a long report, marks what matters and writes down what to do about it."
+
+
+def codex(home, draft=None, limit=None):
+    asked = {"codex": draft or {}}
+    if limit is not None:
+        asked["limits"] = {"codex": limit}
+    return view(home, draft=asked)["codex"]
+
+
+def codex_off(home, *paths):
+    tables = [f'[[skills.config]]\npath = "{p}"\nenabled = false\n' for p in paths]
+    (home / ".codex/config.toml").write_text("\n".join(tables))
+
+
+def own(home, name="", folder=".agents/skills"):
+    return home / folder / name / "SKILL.md" if name else home / folder
+
+
+def later_skills(home):
+    """Two skills to add after a chat, as the rule sees them in a list with no roots table."""
+    return [
+        CodexSkill(f"later{n}", CODEX_LONG, str(own(home).resolve() / f"later{n}/SKILL.md"))
+        for n in "12"
+    ]
+
+
+def add_later(home):
+    for n in "12":
+        skill(own(home), f"later{n}", CODEX_LONG)
+
+
+def roomy_chat(home, at="2026-10-30T12:00:00Z"):
+    """The three skills of test_context_view sent whole. Returns the limit: with the two of
+    `later_skills` added, 4 of the 5 descriptions would be cut."""
+    paths = codex_home(home, window=1)
+    five = [*rule_skills(paths), *later_skills(home)]
+
+    def cut(fit):
+        return fit.cap is not None and fit.cap >= 30
+
+    budget = next(b for b in range(1, 3000) if cut(codex_rule(five, b)))
+    assert codex_rule(rule_skills(paths), budget).sent["alpha"] == len(CODEX_A)
+    codex_home(home, window=window_for(budget))
+    texts = {"alpha": CODEX_A, "beta": CODEX_B, "gamma": CODEX_C}
+    codex_chat(home, [f"- {n}: {t} (file: {paths[n]})" for n, t in texts.items()], at=at)
+    return budget
+
+
+def rooted_chat(home, window=15_000):
+    """The three sent whole in a list with a roots table: r0 is ~/.agents/skills."""
+    root = f"- `r0` = `{own(home).resolve()}`"
+    shown = {n: f"r0/{n}/SKILL.md" for n in ("alpha", "beta", "gamma")}
+    codex_home(home, window=window)
+    texts = {"alpha": CODEX_A, "beta": CODEX_B, "gamma": CODEX_C}
+    codex_chat(home, [root, *(f"- {n}: {t} (file: {shown[n]})" for n, t in texts.items())])
+    return [CodexSkill(n, t, shown[n]) for n, t in texts.items()], (root,)
+
+
+def test_a_codex_skill_turned_off_after_the_chat_is_said_and_leaves_the_estimate(home):
+    budget = codex_cut_chat(home)
+    before = codex(home)
+    assert before["changed"] == [] and before["now"] is None
+    codex_off(home, own(home, "gamma"))
+    cx = codex(home)
+    assert cx["checked"] is True
+    size = _size(budget * 50)
+    assert cx["changed"] == [
+        CHANGED,
+        f"Estimate: On a {size} window, every skill would keep its full description.",
+    ]
+    assert set(cx["now"]["sent"]) == {"alpha", "beta"} and cx["now"]["over"] == {}
+    assert cx["now"]["budget"] == budget
+    assert cx["now"]["room"].endswith(" tokens left before the limit.")
+    # The last chat's fact stays, and the limit line counts the two.
+    assert cx["windows"][0] == before["windows"][0] and cx["lamp"] == "warn"
+    assert cx["limit"]["why"] == words.LIMIT_NOT_NEEDED
+    rows = {s["name"]: s for s in cx["skills"]}
+    assert (rows["gamma"]["state"], rows["gamma"]["side"]) == ("off", 0)
+    assert rows["gamma"]["switch"] == [] and rows["alpha"]["state"] == "on"
+    assert rows["gamma"]["note"] == words.NOTE_OFF
+
+
+def test_a_codex_skill_kitden_has_no_item_for_can_be_off_too(home):
+    # Codex also lists a SKILL.md in a folder inside a skill's folder, which Kitden does not scan.
+    paths = codex_home(home, window=20_000)
+    deep = str(skill(own(home, "alpha").parent, "deep", "Goes deep.").resolve())
+    codex_chat(
+        home,
+        [
+            f"- alpha: {CODEX_A} (file: {paths['alpha']})",
+            f"- beta: {CODEX_B} (file: {paths['beta']})",
+            f"- deep: Goes deep. (file: {deep})",
+            f"- gamma: {CODEX_C} (file: {paths['gamma']})",
+        ],
+    )
+    assert codex(home)["changed"] == []
+    codex_off(home, deep)
+    cx = codex(home)
+    assert cx["changed"][0] == CHANGED and set(cx["now"]["sent"]) == {"alpha", "beta", "gamma"}
+
+
+def test_the_preview_counts_without_a_codex_skill_that_is_off(home):
+    codex_cut_chat(home)
+    codex_off(home, own(home, "gamma"))
+    cx = codex(home, {"alpha": "off"})
+    assert set(cx["after"]["result"]["sent"]) == {"beta"}
+    assert cx["after"]["gets"] == [] and cx["after"]["loses"] == []
+    assert codex(home, limit=500)["after"]["result"]["size"] == cx["now"]["size"]
+
+
+def test_codex_skills_added_after_the_chat_are_said_at_rest(home):
+    budget = roomy_chat(home)
+    before = codex(home)
+    assert before["changed"] == [] and before["windows"][0]["result"]["room"]
+    add_later(home)
+    cx = codex(home)
+    # What Codex's own rule gives for the five, the new ones by their files' paths.
+    five = [*rule_skills(codex_home(home, window=window_for(budget))), *later_skills(home)]
+    fit = codex_rule(five, budget)
+    assert cx["now"]["used"] == fit.used and cx["now"]["size"] == fit.size
+    assert cx["now"]["kept"] == {n: kept for n, kept in fit.sent.items() if n != "gamma"}
+    assert cx["changed"][0] == CHANGED and len(cx["changed"]) == 2
+    assert cx["changed"][1].startswith(f"Estimate: On a {_size(budget * 50)} window, ")
+    assert "4 of 5 descriptions" in cx["changed"][1]
+    assert cx["now"]["misfit"] == {"kind": "cut", "n": 4} and cx["now"]["room"] is None
+    assert cx["windows"][0] == before["windows"][0] and cx["lamp"] == "ok"
+    assert places(cx)[budget] == f"{budget} tokens now · 4 of 5 cut short or left out"
+    # The other window's estimate holds them too.
+    assert len(cx["windows"][1]["result"]["sent"]) == 5
+    rows = {s["name"]: s for s in cx["skills"]}
+    assert rows["later1"]["side"] is None and rows["later1"]["switch"] == ["on", "off"]
+
+
+def test_the_preview_counts_codex_skills_added_after_the_chat(home):
+    budget = roomy_chat(home)
+    add_later(home)
+    cx = codex(home, {"later1": "off", "later2": "off"})
+    assert set(cx["after"]["result"]["sent"]) == {"alpha", "beta", "gamma"}
+    assert cx["after"]["gets"] == ["alpha", "beta"]
+    assert places(cx)[budget] == f"{budget} tokens now · all 3 fit"
+    # One that stays can get its description back, and one the list held can.
+    cx = codex(home, {"alpha": "off", "later2": "off"})
+    assert cx["after"]["gets"] == ["beta", "later1"]
+
+
+def test_an_added_codex_skill_has_the_path_its_root_gives_it(home):
+    skills, roots = rooted_chat(home)
+    assert codex(home)["checked"] is True
+    add_later(home)
+    added = [CodexSkill(f"later{n}", CODEX_LONG, f"r0/later{n}/SKILL.md") for n in "12"]
+    fit = codex_rule([*skills, *added], 300, roots)
+    cx = codex(home)
+    assert cx["now"]["size"] == fit.size and cx["now"]["used"] == fit.used
+    assert cx["changed"][0] == CHANGED and len(cx["changed"]) == 2
+
+
+@pytest.mark.parametrize("where", ["a root of its own", "a link"])
+def test_an_added_codex_skill_whose_line_is_not_known_is_said_and_not_counted(home, where):
+    rooted_chat(home)
+    if where == "a link":
+        skill(home / "shared", "later", CODEX_LONG)
+        (home / ".agents/skills/later").symlink_to(home / "shared/later")
+    else:
+        skill(home / ".codex/skills", "later", CODEX_LONG)
+    left = "Kitden cannot tell how Codex will list later, so its estimates leave this skill out."
+    cx = codex(home)
+    assert cx["changed"] == [CHANGED, left] and cx["now"] is None
+    assert left in cx["how"]
+    assert "later" not in cx["windows"][1]["result"]["sent"]
+    # With a change Kitden can count, the estimate comes too.
+    codex_off(home, own(home, "gamma"))
+    cx = codex(home)
+    assert cx["changed"][0] == CHANGED and cx["changed"][1].startswith("Estimate: ")
+    assert cx["changed"][2] == left and set(cx["now"]["sent"]) == {"alpha", "beta"}
+    # Two are named together.
+    skill(home / ".codex/skills", "more", CODEX_LONG)
+    assert codex(home)["changed"][2] == (
+        "Kitden cannot tell how Codex will list later and more, so its estimates leave these "
+        "skills out."
+    )
+
+
+def test_a_codex_skill_that_is_never_on_the_list_is_no_change(home):
+    roomy_chat(home)
+    skill(own(home), "asked", CODEX_LONG)
+    policy = own(home, "asked").parent / "agents/openai.yaml"
+    policy.parent.mkdir()
+    policy.write_text(
+        "interface:\n  display_name: Asked\npolicy:\n  allow_implicit_invocation: false\n"
+    )
+    skill(own(home), "bare", "")
+    cx = codex(home)
+    assert cx["changed"] == [] and cx["now"] is None
+    assert not any("bare" in line or "asked" in line for line in cx["how"])
+    policy.write_text("policy:\n  allow_implicit_invocation: true\n")
+    assert codex(home)["changed"][0] == CHANGED
+
+
+def only_asked(home, name):
+    policy = own(home, name).parent / "agents/openai.yaml"
+    policy.parent.mkdir(exist_ok=True)
+    policy.write_text("policy:\n  allow_implicit_invocation: false\n")
+    return policy
+
+
+def test_a_listed_codex_skill_kept_for_when_it_is_asked_for_leaves_the_estimate(home):
+    budget = codex_cut_chat(home)
+    before = codex(home)
+    only_asked(home, "gamma")
+    cx = codex(home)
+    assert cx["checked"] is True and cx["changed"][0] == CHANGED
+    assert "every skill would keep its full description" in cx["changed"][1]
+    assert set(cx["now"]["sent"]) == {"alpha", "beta"} and cx["now"]["budget"] == budget
+    assert cx["windows"][0] == before["windows"][0]
+    assert set(cx["windows"][1]["result"]["sent"]) == {"alpha", "beta"}
+    assert set(codex(home, {"alpha": "off"})["after"]["result"]["sent"]) == {"beta"}
+    # It is not off: its switch says On, and its note says why it is on no side.
+    gamma = {s["name"]: s for s in cx["skills"]}["gamma"]
+    assert (gamma["state"], gamma["switch"]) == ("on", ["on", "off"])
+    assert gamma["note"] == words.NOTE_ONLY_ASKED
+
+
+def names_only_chat(home, policy=None):
+    """Names only, with room for two: a chat whose list holds alpha and beta. Gamma's own file, and
+    its policy file when there is one, are from before the chat."""
+    paths = codex_home(home, window=1)
+    budget = a_budget(paths, lambda fit: fit.sent == {"alpha": 0, "beta": 0, "gamma": None})
+    codex_home(home, window=window_for(budget))
+    before_the_chat(Path(paths["gamma"]))
+    if policy:
+        before_the_chat(policy(home, "gamma"))
+    codex_chat(
+        home,
+        [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"],
+        at="2026-11-07T12:00:00Z",
+    )
+
+
+def test_a_skill_kept_for_when_it_is_asked_for_was_not_left_out_of_a_names_only_list(home):
+    names_only_chat(home, only_asked)
+    cx = codex(home)
+    assert cx["changed"] == [] and "gamma" not in cx["windows"][0]["result"]["over"]
+
+
+def test_a_skill_that_codex_may_pick_again_counts_as_new_after_a_names_only_list(home):
+    names_only_chat(home, only_asked)
+    policy = own(home, "gamma").parent / "agents/openai.yaml"
+    policy.write_text("policy:\n  allow_implicit_invocation: true\n")
+    cx = codex(home)
+    # It was not on the list, and the next one holds it: an estimate, not a failed replay.
+    assert cx["checked"] is True and cx["changed"][0] == CHANGED
+    assert cx["changed"][1].startswith("Estimate: ")
+    assert "gamma" not in cx["windows"][0]["result"]["over"]
+    assert "gamma" in cx["now"]["over"]
+
+
+def test_a_policy_set_after_a_names_only_list_says_nothing_of_that_list(home):
+    # Left out, or kept off by an earlier policy: Kitden cannot tell.
+    names_only_chat(home)
+    assert "gamma" in codex(home)["windows"][0]["result"]["over"]
+    only_asked(home, "gamma")
+    cx = codex(home)
+    assert cx["changed"] == [] and "gamma" not in cx["windows"][0]["result"]["over"]
+
+
+@pytest.mark.parametrize("how", ["kept for when it is asked for", "off"])
+def test_a_plugin_skill_is_taken_out_by_its_newer_version(home, how):
+    # An update removed the version the chat used: what counts now is what its file says there.
+    paths = codex_home(home, window=20_000)
+    plugin = home / ".codex/plugins/cache/market/plug"
+    gone = plugin.resolve() / "1.0.0/skills/tool/SKILL.md"
+    newer = skill(plugin / "1.1.0/skills", "tool", "Does one thing.")
+    texts = {"alpha": CODEX_A, "beta": CODEX_B, "gamma": CODEX_C}
+    lines = [f"- {n}: {t} (file: {paths[n]})" for n, t in texts.items()]
+    codex_chat(home, [*lines, f"- plug:tool: Does one thing. (file: {gone})"])
+    cx = codex(home)
+    assert cx["checked"] is True and cx["changed"] == []
+    if how == "off":
+        # The path of the version that is gone turns nothing off.
+        codex_off(home, gone)
+        assert codex(home)["changed"] == []
+        codex_off(home, newer.resolve())
+    else:
+        policy = newer.parent / "agents/openai.yaml"
+        policy.parent.mkdir()
+        policy.write_text("policy:\n  allow_implicit_invocation: false\n")
+    cx = codex(home)
+    assert cx["changed"][0] == CHANGED
+    assert set(cx["now"]["sent"]) == {"alpha", "beta", "gamma"}
+
+
+def test_codex_skills_and_the_limit_changed(home):
+    budget = codex_cut_chat(home)
+    (home / ".codex/config.toml").write_text(
+        f'[skills]\nmax_context_tokens = 500\n\n[[skills.config]]\npath = "{own(home, "gamma")}"\n'
+        "enabled = false\n"
+    )
+    cx = codex(home)
+    assert cx["changed"] == [
+        "The limit and your skills changed after this list was sent: the limit is 500 tokens now. "
+        "Your next chat will show the real list.",
+        f"Estimate: On a {_size(budget * 50)} window, every skill would keep its full description.",
+    ]
+    assert set(cx["now"]["sent"]) == {"alpha", "beta"} and cx["now"]["budget"] == 500
+
+
+def test_a_codex_limit_set_before_the_chat_is_said_with_its_own_words(home):
+    paths = codex_home(home, limit=2_000)
+    texts = {"alpha": CODEX_A, "beta": CODEX_B, "gamma": CODEX_C}
+    codex_chat(home, [f"- {n}: {t} (file: {paths[n]})" for n, t in texts.items()])
+    skill(own(home), "later", CODEX_LONG)
+    assert codex(home)["changed"] == [
+        CHANGED,
+        "Estimate: With this limit, every skill would keep its full description.",
+    ]
+
+
+def test_a_codex_plugin_turned_off_after_the_chat_takes_its_skills_out(home):
+    paths = codex_home(home, window=20_000)
+    inside = home / ".codex/plugins/cache/market/plug/1.0/skills"
+    tool = skill(inside, "tool", "Does one thing.").resolve()
+    (home / ".codex/plugins/cache/market/plug/1.0/.codex-plugin").mkdir()
+    config = home / ".codex/config.toml"
+    config.write_text('[plugins."plug@market"]\nenabled = true\n')
+    codex_chat(
+        home,
+        [
+            f"- alpha: {CODEX_A} (file: {paths['alpha']})",
+            f"- beta: {CODEX_B} (file: {paths['beta']})",
+            f"- gamma: {CODEX_C} (file: {paths['gamma']})",
+            f"- plug:tool: Does one thing. (file: {tool})",
+        ],
+    )
+    cx = codex(home)
+    assert cx["checked"] is True and cx["changed"] == []
+    config.write_text('[plugins."plug@market"]\nenabled = false\n')
+    cx = codex(home)
+    assert cx["changed"][0] == CHANGED and "plug:tool" not in cx["now"]["sent"]
+    assert {s["name"]: s["state"] for s in cx["skills"]}["plug:tool"] == "off"
+
+
+def test_a_names_only_codex_chat_counts_a_skill_added_after_it(home):
+    paths = codex_home(home, window=1)
+    budget = a_budget(paths, lambda fit: fit.sent == {"alpha": 0, "beta": 0, "gamma": None})
+    codex_home(home, window=window_for(budget))
+    before_the_chat(Path(paths["gamma"]))
+    codex_chat(
+        home,
+        [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"],
+        at="2026-11-07T12:00:00Z",
+    )
+    assert codex(home)["changed"] == []
+    skill(own(home), "later", CODEX_LONG)
+    cx = codex(home)
+    assert cx["changed"][0] == CHANGED
+    assert "2 of 4 skills" in cx["changed"][1]
+    assert set(cx["now"]["over"]) == {"alpha", "beta", "gamma", "later"}
+
+
+def test_an_added_codex_skill_takes_its_place_in_the_order_of_the_list(home):
+    # Names only, and room for two: Codex keeps the first two by name, so the new one comes first.
+    paths = codex_home(home, window=1)
+    budget = a_budget(paths, lambda fit: fit.sent == {"alpha": 0, "beta": 0, "gamma": None})
+    codex_home(home, window=window_for(budget))
+    before_the_chat(Path(paths["gamma"]))
+    codex_chat(
+        home,
+        [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"],
+        at="2026-11-07T12:00:00Z",
+    )
+    skill(own(home), "abc", CODEX_LONG)
+    assert set(codex(home)["now"]["sent"]) == {"abc", "alpha"}
+
+
+def test_a_codex_chat_the_rule_does_not_rebuild_says_nothing_of_the_skills(home):
+    paths = codex_home(home, window=272_000)
+    codex_chat(home, [f"- alpha: {CODEX_A[:20]} (file: {paths['alpha']})"])
+    cx = codex(home)
+    assert cx["checked"] is False
+    assert cx["changed"] == [] and cx["now"] is None
