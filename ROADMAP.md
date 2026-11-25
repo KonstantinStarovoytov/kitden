@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Claude Code items show the state they really have:** a hook whose `if` can never match, a
+  project's plugin that is not installed, and a server you turned off with `/mcp` in one project
+  no longer show as On, and approvals in your home folder's local settings count without a trust
+  prompt (#201).
 - **A skill's `when_to_use` counts in the Claude Code list:** Kitden now adds it to the
   description when it works out sizes and the limit, as Claude Code does (#202).
 

@@ -157,6 +157,18 @@ def test_held_servers_show_via_kitden_gateway_in_connected_clients(home):
         assert "SENTINEL_SECRET_FILES" not in page.get("/api/items").text
 
 
+def test_held_servers_are_off_in_a_project_where_claude_code_turned_kitden_off(home):
+    hold(home, {"files": FILES})
+    add_kitden(home, "claude_code")
+    state = json.loads((home / ".claude.json").read_text())
+    site = project(home, "website")
+    state["projects"][site]["disabledMcpServers"] = ["kitden"]
+    (home / ".claude.json").write_text(json.dumps(state))
+
+    items = gateway_items(build_inventory(home), load_settings(home), home)
+    assert [(i.project, str(i.enabled)) for i in items] == [(None, "on"), (site, "off")]
+
+
 def test_the_kitden_gateway_is_listed_and_local_servers_can_move(home):
     hold(home, {"files": FILES})
     add_kitden(home, "cursor")
