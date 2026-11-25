@@ -398,6 +398,24 @@ def test_a_hook_with_if_on_a_non_tool_event_is_off(tmp_path, no_version):
     assert hooks["Notification: d"].enabled is Enabled.ON  # no handlers
 
 
+def test_a_hook_with_if_is_on_for_every_event_where_if_works(tmp_path, no_version):
+    # The list in code.claude.com/docs/en/hooks, "Hook handler fields", read 2026-11-25.
+    events = [
+        "PreToolUse",
+        "PostToolUse",
+        "PostToolUseFailure",
+        "PermissionRequest",
+        "PermissionDenied",
+        "PreSkillShellCommand",
+    ]
+    cmd = {"type": "command", "command": "x", "if": "Bash(git *)"}
+    hooks = _hooks(
+        tmp_path, no_version, {"hooks": {e: _group(cmd, matcher="Bash") for e in events}}
+    )
+    off = [e for e in events if hooks[f"{e}: Bash"].enabled is not Enabled.ON]
+    assert off == []
+
+
 def test_a_dead_group_beside_a_live_one_of_the_same_matcher_is_not_off(tmp_path, no_version):
     # The two share one id, so they must agree: the hook does run.
     dead = {"type": "command", "command": "x", "if": "Bash(git *)"}
