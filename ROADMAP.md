@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **A stack on the map shows whose cards it holds:** with a client selected or pointed at, a folded
+  stack brings that client's plugins, skills or servers to its front, dims the others in it, and
+  its badge says how many are that client's ("3 of 55"). Before, every card on the front looked
+  loaded by the client.
 - **Codex skills in sub-folders:** Kitden now finds a Codex skill in a sub-folder of a skills folder,
   also one inside another skill's folder. It has a row, a switch on Context, and counts in the
   estimates when you add it after the last chat. Removing the outer skill names the skills that go

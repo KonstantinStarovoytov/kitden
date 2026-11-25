@@ -2158,3 +2158,96 @@ test("a strip shows the card's own tile or kind icon, and a lamp only where the 
   assert.ok(walk(part).some((n) => n.dataset?.icon === 'sparkles'));
   assert.ok(!walk(part).some((n) => n.classList?.contains('lamp')));
 });
+
+// A lit stack: only the lit cards on it look lit.
+const PATH = new Set(['c1', 's5', 's6', 'c1>s5', 'c1>s6']);
+const slots = (n) => [...inside(n, '.stack-strip'), ...inside(n, '.stack-face')];
+const shownNames = (n) => slots(n).map((slot) => walk(slot).map((x) => x.textContent).find((text) => /^s\d+$/.test(text)));
+const unlit = (n) => slots(n).map((slot) => slot.classList.contains('unlit'));
+const pill = (n) => inside(n, '.stack-pill').map((x) => x.textContent);
+
+test('a selection brings its cards to the front of a stack, dims the rest and counts them', async () => {
+  const v = view();
+  const l = shelfAt([]);
+  await v.draw(STACKED, l, { motion: 'none' });
+  const n = v.node('stack:g:all');
+  const before = [slots(n), pos(n), n.style.width, n.style.height];
+  await v.draw(STACKED, l, { motion: 'none', selected: 'c1', lit: PATH });
+  assert.ok(n.classList.contains('lit'));
+  assert.deepEqual(shownNames(n), ['s0', 's5', 's6']);
+  assert.deepEqual(unlit(n), [true, false, false]);
+  assert.deepEqual(pill(n), ['2 of 12']);
+  assert.equal(n.getAttribute('aria-label'), 'Open Remote, 12: s0, s1, s2. 2 of 12 linked: s5, s6');
+  // In place: the same node, at the same spot, with the same three slots in it.
+  assert.equal(v.node('stack:g:all'), n);
+  assert.deepEqual([slots(n), pos(n), n.style.width, n.style.height], before);
+  // Let go, it is as it was.
+  await v.draw(STACKED, l, { motion: 'none' });
+  assert.deepEqual(shownNames(n), ['s0', 's1', 's2']);
+  assert.deepEqual([unlit(n), pill(n)], [[false, false, false], ['+9']]);
+  assert.equal(n.getAttribute('aria-label'), 'Open Remote, 12: s0, s1, s2');
+  assert.deepEqual(slots(n), before[0]);
+});
+
+test('pointing at a client does the same, and another client changes the cards again', async () => {
+  const v = view();
+  await v.draw(STACKED, shelfAt([]), { motion: 'none' });
+  const n = v.node('stack:g:all');
+  v.glance(PATH);
+  assert.deepEqual([shownNames(n), unlit(n), pill(n)], [['s0', 's5', 's6'], [true, false, false], ['2 of 12']]);
+  v.glance(new Set(['c2', 's11', 'c2>s11']));
+  assert.deepEqual([shownNames(n), unlit(n), pill(n)], [['s0', 's1', 's11'], [true, true, false], ['1 of 12']]);
+  v.glance(null);
+  assert.deepEqual([shownNames(n), unlit(n), pill(n)], [['s0', 's1', 's2'], [false, false, false], ['+9']]);
+  assert.equal(n.getAttribute('aria-label'), 'Open Remote, 12: s0, s1, s2');
+});
+
+test('a stack with none of the lit cards keeps its front and has no card marked', async () => {
+  const v = view();
+  await v.draw(STACKED, shelfAt(['g']), { motion: 'none', selected: 'c1', lit: new Set(['c1', 's0', 'c1>s0']) });
+  const n = v.node('stack:g:after');
+  assert.ok(!n.classList.contains('lit'));
+  assert.deepEqual([shownNames(n), unlit(n), pill(n)], [['s5', 's6', 's7'], [false, false, false], ['+4']]);
+});
+
+test('a lit stack of one card has no count, and one of two counts them', async () => {
+  const tree = (count) => ({ ...STACKED, blocks: STACKED.blocks.slice(0, 2 + count) });
+  const v = view();
+  const eleven = tree(11);
+  await v.draw(eleven, layoutTree(eleven, { spread: new Set(['g']), pages: new Map([['g', 1]]), narrow: false }), { motion: 'none', lit: new Set(['s10']) });
+  assert.deepEqual([shownNames(v.node('stack:g:after')), pill(v.node('stack:g:after'))], [['s10'], []]);
+  const w = view();
+  const two = tree(2);
+  const l = layoutTree(two, { narrow: false });
+  await w.draw(two, l, { motion: 'none' });
+  const n = w.node('stack:g:all');
+  assert.deepEqual([shownNames(n), pill(n)], [['s0', 's1'], []]);
+  await w.draw(two, l, { motion: 'none', lit: new Set(['s0']) });
+  assert.deepEqual([shownNames(n), unlit(n), pill(n)], [['s1', 's0'], [true, false], ['1 of 2']]);
+  await w.draw(two, l, { motion: 'none' });
+  assert.deepEqual([shownNames(n), pill(n)], [['s0', 's1'], []]);
+});
+
+test('a stack keeps the port of the card it stands for: a lit one when a path runs to it', async () => {
+  const ports = (i) => ({ left: i === 5 ? 'out' : true });
+  const tree = { ...STACKED, blocks: STACKED.blocks.map((b, i) => (i < 2 ? b : { ...b, ports: ports(i - 2) })) };
+  const v = view();
+  const l = layoutTree(tree, { narrow: false });
+  const look = () => inside(v.node('stack:g:all'), '.port').map((p) => p.className);
+  await v.draw(tree, l, { motion: 'none' });
+  assert.deepEqual(look(), ['port l']);
+  await v.draw(tree, l, { motion: 'none', lit: new Set(['s5']) });
+  assert.deepEqual(look(), ['port l out']);
+});
+
+test('a stack that holds fewer cards keeps its strips, each lifting as its place says', async () => {
+  const v = view();
+  await v.draw(STACKED, shelfAt([]), { motion: 'none' });
+  const n = v.node('stack:g:all');
+  const [first] = inside(n, '.stack-strip');
+  assert.equal(first.dataset.lift, '2');
+  const two = { ...STACKED, blocks: STACKED.blocks.slice(0, 4) };
+  await v.draw(two, layoutTree(two, { narrow: false }), { motion: 'none' });
+  assert.deepEqual(inside(n, '.stack-strip'), [first]);
+  assert.equal(first.dataset.lift, '1');
+});

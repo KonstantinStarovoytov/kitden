@@ -803,7 +803,7 @@ div.map .block-grip { flex: none; display: grid; margin-right: -4px; color: var(
    shows whole; a pill at the top right counts the cards under it. A stack of one card shows a thin
    edge under it. Hover spreads the strips 4 px each, to say it opens. */
 div.map .block.stack { display: block; padding: 0; border: 0; background: transparent; }
-div.map .stack-strip, div.map .stack-face, div.map .stack-edge { position: absolute; left: 0; right: 0; box-sizing: border-box; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); transition: border-color var(--t-fast) ease, translate 180ms var(--calm); }
+div.map .stack-strip, div.map .stack-face, div.map .stack-edge { position: absolute; left: 0; right: 0; box-sizing: border-box; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); transition: border-color var(--t-fast) ease, filter 300ms ease, translate 180ms var(--calm); }
 div.map .stack-strip + .stack-strip, div.map .stack-strip + .stack-face { box-shadow: 0 -2px 6px -4px rgb(0 0 0 / .35); }
 div.map .stack-strip { display: flex; align-items: flex-start; gap: 6px; padding: 3px 11px 0; color: var(--ink); font-size: 11px; font-weight: 600; line-height: 14px; }
 div.map .stack-strip .ic { flex: none; margin-top: 1px; color: var(--ink-3); }
@@ -816,7 +816,12 @@ div.map .stack-face { display: flex; align-items: center; gap: 10px; padding: 0 
 div.map .stack-edge { left: 6px; right: 6px; bottom: 0; height: 8px; border-top: 0; border-radius: 0 0 8px 8px; }
 div.map .block.stack.cards-outside .stack-strip, div.map .block.stack.cards-outside .stack-face, div.map .block.stack.cards-outside .stack-edge { background: var(--dim); }
 div.map .block.stack:hover > .stack-strip, div.map .block.stack:hover > .stack-face { border-color: color-mix(in srgb, var(--route) 38%, var(--wire)); }
-div.map .block.stack.lit > .stack-strip, div.map .block.stack.lit > .stack-face, div.map .block.stack.found > .stack-face { border-color: var(--route); }
+div.map .block.stack.lit > .stack-strip:not(.unlit), div.map .block.stack.lit > .stack-face, div.map .block.stack.found > .stack-face { border-color: var(--route); }
+/* On a lit stack a card off the path dims as a block does, and the pill counts the lit cards; the
+   name on the first strip ends before it. */
+div.map .block.stack.lit > .unlit { filter: opacity(0.4) saturate(0.6); }
+div.map .block.stack.lit > .stack-strip:first-child { padding-right: 72px; }
+div.map .block.stack.lit > .stack-pill { border-color: var(--route); color: var(--route); }
 div.map .stack-pill { position: absolute; top: -9px; right: 8px; z-index: 1; height: 18px; box-sizing: border-box; padding: 0 6px; border: 1px solid var(--wire-strong); border-radius: 9px; background: var(--panel-raised); color: var(--ink-2); font-size: 10px; font-weight: 600; line-height: 16px; font-variant-numeric: tabular-nums; }
 div.map .block.stack:hover > .stack-strip[data-lift="1"] { translate: 0 -4px; }
 div.map .block.stack:hover > .stack-strip[data-lift="2"] { translate: 0 -8px; }

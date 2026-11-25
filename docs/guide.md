@@ -12,6 +12,8 @@ Open **Library** and choose **All projects** or one project. **List → Differen
 what differs between Claude Code, Codex and Cursor. Click an item for its **Details**.
 On the map, a group of two or more starts folded as a stack of cards. Press a stack to open it;
 a big group shows five at a time, with the rest in the stack below. **Collapse** folds it again.
+When you select a client or point at it, a stack that holds some of its items shows those in
+front, dims the others, and its badge says how many of the stack are that client's ("3 of 55").
 The Gateway's groups work the same way.
 
 | What | How to manage it |

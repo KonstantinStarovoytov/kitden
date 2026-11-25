@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, collapseGroup, drawPlan, focusAfter, foldStep, enterDelays, findChip, findIn, foldable, groupOfStack, groupsWith, isNarrow, newCards, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, pressStack, shownFound, stackOf, toggleOpen, turnWords, unfoldDelays, wideWidth, withStacks } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, collapseGroup, drawPlan, focusAfter, foldStep, enterDelays, findChip, findIn, foldable, groupOfStack, groupsWith, isNarrow, newCards, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, pressStack, shownFound, stackFront, stackOf, stackSaid, toggleOpen, turnWords, unfoldDelays, wideWidth, withStacks } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -725,10 +725,11 @@ test('a search or a selection opens the folded group that holds it', () => {
   assert.equal(groupsWith(m, open, ['outside:local:direct-9']), open);
 });
 
-test("a lit card lights its stack and that stack's link", () => {
+test("a lit card lights its stack and that stack's link, and only the lit cards of it", () => {
   const m = model(0, 12, FOLDS);
   const folded = layoutTree(m, WIDE);
-  const lit = withStacks(litFrom(m, 'client:codex'), folded);
+  const reach = litFrom(m, 'client:codex');
+  const lit = withStacks(reach, folded);
   assert.ok(lit.has('stack:group:outside:all'));
   assert.ok(lit.has('client:codex>stack:group:outside:all'));
   assert.ok(!lit.has('client:cursor>stack:group:outside:all'));
@@ -736,6 +737,53 @@ test("a lit card lights its stack and that stack's link", () => {
   assert.equal(stackOf(folded, 'client:codex'), null);
   const none = new Set(['client:a']);
   assert.equal(withStacks(none, folded), none);
+  // The stack's front is Codex's cards (every third, from the second); the set that also lights the
+  // stack says the same.
+  for (const set of [reach, lit]) {
+    const front = stackFront(stack(folded, 'all'), set);
+    assert.deepEqual(front.cards, ['outside:local:analytics', 'outside:move:direct-4', 'outside:local:direct-7']);
+    assert.deepEqual([[...front.lit], front.count, front.words], [front.cards, 4, '4 of 12']);
+  }
+});
+
+const pile = (...holds) => ({ kind: 'stack', holds, name: 'Open Things' });
+
+test('with nothing lit a stack shows its first three cards, none of them lit, and no count', () => {
+  const was = { cards: ['a', 'b', 'c'], lit: new Set(), count: 0, words: '' };
+  assert.deepEqual(stackFront(pile('a', 'b', 'c', 'd'), new Set()), was);
+  // A path that runs past the stack changes nothing on it.
+  assert.deepEqual(stackFront(pile('a', 'b', 'c', 'd'), new Set(['client:x', 'z'])), was);
+});
+
+test('the lit cards of a stack come to its front in its order; the cards that fill it stay behind them', () => {
+  const front = (holds, lit) => { const f = stackFront(pile(...holds), new Set(lit)); return [f.cards, [...f.lit], f.words]; };
+  const abcde = ['a', 'b', 'c', 'd', 'e'];
+  assert.deepEqual(front(abcde, ['e']), [['a', 'b', 'e'], ['e'], '1 of 5']);
+  assert.deepEqual(front(abcde, ['a']), [['b', 'c', 'a'], ['a'], '1 of 5']);
+  assert.deepEqual(front(abcde, ['e', 'b']), [['a', 'b', 'e'], ['b', 'e'], '2 of 5']);
+  assert.deepEqual(front(abcde, ['e', 'd', 'c', 'b']), [['b', 'c', 'd'], ['b', 'c', 'd'], '4 of 5']);
+  assert.deepEqual(front(abcde, abcde), [['a', 'b', 'c'], ['a', 'b', 'c'], '5 of 5']);
+  // A stack of two or of one shows as many cards as before.
+  assert.deepEqual(front(['a', 'b'], ['a']), [['b', 'a'], ['a'], '1 of 2']);
+  assert.deepEqual(front(['a'], ['a']), [['a'], ['a'], '1 of 1']);
+});
+
+test('a lit stack says how many of its cards are on the path, and which ones it shows', () => {
+  const names = (id) => id.toUpperCase();
+  const said = (lit) => { const s = pile('a', 'b', 'c', 'd', 'e'); return stackSaid(s, stackFront(s, new Set(lit)), names); };
+  assert.equal(said([]), 'Open Things');
+  assert.equal(said(['e', 'b']), 'Open Things. 2 of 5 linked: B, E');
+  assert.equal(said(['b', 'c', 'd', 'e']), 'Open Things. 4 of 5 linked: B, C, D and 1 more');
+});
+
+test('a path moves no block and turns no page: the stacks of a page keep their place, cards and name', () => {
+  const m = model(0, 12, FOLDS);
+  const l = layoutTree(m, { spread: spreadOut(), pages: new Map([['group:outside', 1]]), ...WIDE });
+  const was = structuredClone(l.blocks);
+  const fronts = ['before', 'after'].map((role) => stackFront(stack(l, role), litFrom(m, 'client:cursor')));
+  assert.deepEqual(fronts.map((front) => front.words), ['1 of 5', '1 of 2']);
+  assert.deepEqual(fronts.map((front) => [...front.lit]), [['outside:move:n8n'], ['outside:local:direct-11']]);
+  assert.deepEqual(l.blocks, was);
 });
 
 test('a card whose change waits keeps its place in an open group', () => {
