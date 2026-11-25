@@ -15,6 +15,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   prompt (#201).
 - **A skill's `when_to_use` counts in the Claude Code list:** Kitden now adds it to the
   description when it works out sizes and the limit, as Claude Code does (#202).
+- **The Instructions map matches Codex and Cursor:** Codex shows no `AGENTS.md` in a project
+  marked untrusted, and Cursor shows the `CLAUDE.md` at a project's root (#203).
 
 ### 0.12.0
 

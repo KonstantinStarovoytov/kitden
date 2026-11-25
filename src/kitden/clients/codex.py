@@ -122,8 +122,10 @@ def _agents_md(folder: Path) -> list[tuple[Path, str]]:
     (default ~/.codex) Codex reads AGENTS.override.md if it exists, else AGENTS.md; in a project
     it walks from the project root down to the working folder and reads the same two names in
     each folder (plus names set in `project_doc_fallback_filenames`, not read here). Kitden
-    lists both files when both exist. The docs do not say whether an untrusted project's
-    AGENTS.md is read (not checked); Kitden lists it either way.
+    lists both files when both exist. checked 2026-11-25 (openai/codex PR 39837,
+    `is_untrusted()` in codex-rs/config/src/config_toml.rs): Codex skips a project's files only
+    when its `trust_level` is exactly "untrusted"; a project with no `trust_level` is read.
+    Kitden lists a project's files except in an untrusted project (the caller decides).
     """
     return [(folder / "AGENTS.override.md", "instructions"), (folder / "AGENTS.md", "instructions")]
 
@@ -560,8 +562,9 @@ class CodexAdapter(ClientAdapter):
             trusted = as_dict(settings).get("trust_level") == "trusted"
             scan.items += self._project(read, Path(path), trusted, disabled_skills, installed)
             # The user's file lives in codex_home, so a home-folder project's files are its own.
-            files = _agents_md(Path(path))
-            scan.items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
+            if as_dict(settings).get("trust_level") != "untrusted":
+                files = _agents_md(Path(path))
+                scan.items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
 
         scan.problems = read.problems
         return scan
