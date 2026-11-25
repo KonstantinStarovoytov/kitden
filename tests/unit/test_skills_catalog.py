@@ -143,6 +143,15 @@ def test_front_matter_unquotes_only_a_value_that_starts_and_ends_with_the_same_q
     assert _front(tmp_path, "description: ''")["description"] == ""
 
 
+def test_front_matter_joins_a_quoted_value_over_several_lines(tmp_path):
+    meta = _front(tmp_path, 'description: "Say \\"hi\\"\n  to: everyone\n  here"\nlicense: MIT')
+    assert meta["description"] == 'Say "hi" to: everyone here'
+    assert meta["license"] == "MIT"
+    assert _front(tmp_path, "description: 'it''s\n  fine'")["description"] == "it's fine"
+    # One that never ends stays as its first line is.
+    assert _front(tmp_path, 'description: "open\n  still')["description"] == '"open'
+
+
 def test_front_matter_counts_a_quoted_description_like_the_client_sends_it(tmp_path):
     # The same shape as skills/pptx and skills/xlsx in anthropics/skills (checked 2026-11-25):
     # 6 escapes, 738 characters as written and 732 as read; 2 escapes, 950 and 948. Their text is

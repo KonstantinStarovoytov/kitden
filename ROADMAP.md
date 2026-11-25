@@ -12,7 +12,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Codex skills in sub-folders:** Kitden now finds a Codex skill in a sub-folder of a skills folder,
   also one inside another skill's folder. It has a row, a switch on Context, and counts in the
   estimates when you add it after the last chat. Removing the outer skill names the skills that go
-  with it. A skill linked from one Codex folder to the other no longer shows as loaded twice (#217).
+  with it, also those that are off. A skill linked from one Codex folder to the other no longer
+  shows as loaded twice (#217).
 - **Context says how your Codex skill list stands now:** when Codex skills were added or turned off
   after the last chat, an estimate under that chat's sentence says how many descriptions would be
   cut now, and the bar and the boxes show it. A Codex skill that is off no longer counts in the
@@ -22,8 +23,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   says how many skills would show only a name now, and the bar and the boxes show it. The limit
   line counts the changes waiting in the preview, as the estimate above it does (#215).
 - **A quoted skill description is counted as the client reads it:** a description in quotes with
-  `\"` inside no longer shows backslashes in Details, and its length on the Context tab matches
-  what the client sends (#214).
+  `\"` inside no longer shows backslashes in Details, one that goes on over several lines is read
+  whole, and its length on the Context tab matches what the client sends (#214).
 - **The Add panels have an even gap above the hint:** the closed "Add a GitHub source" block no
   longer takes a row of its own (#204).
 - **Claude Code items show the state they really have:** a hook whose `if` can never match, a
