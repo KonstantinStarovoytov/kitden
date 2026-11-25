@@ -10,7 +10,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 ### Not yet released
 
 - **A skill's `when_to_use` counts in the Claude Code list:** Kitden now adds it to the
-  description when it works out sizes and the limit, as Claude Code does.
+  description when it works out sizes and the limit, as Claude Code does (#202).
 
 ### 0.12.0
 
