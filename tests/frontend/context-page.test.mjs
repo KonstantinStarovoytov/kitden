@@ -1339,3 +1339,117 @@ test("another window's estimate knows nothing of the tray: the skill stands apar
   assert.equal(byClass(main, 'ctx-off').length, 0);
   await fire(cards()[0], 'click');
 });
+
+// The setup changed after the chat: delta was added, so the server expects beta to lose its place and
+// alpha and delta to be sent (`now`).
+const NOW_LINES = ['Your skills changed after this list was sent. Your next chat will show the real list.', 'Estimate: On a 200K window, 2 of 4 skills would show only a name. The agent may not use them.'];
+const NOW = {
+  short: '', say: '', sent: { alpha: 4000, delta: 2500 }, over: { beta: 1992, gamma: 3000 }, used: 6600, size: 11592, room: null, misfit: { kind: 'name', n: 2 }, budget: 8000,
+};
+const DELTA = skill('delta', 2490, null);
+const CHANGED = { ...TIGHT, skills: [...TIGHT.skills, DELTA], changed: NOW_LINES, now: NOW };
+const zoomNames = () => byClass(main, 'ctx-zl').map(text);
+
+test('skills changed after the chat: the verdict stays the fact, the picture and the sides show the estimate for now', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(CHANGED, CODEX, CURSOR));
+  // The fact: the verdict, the card and its lamp.
+  assert.equal(text(verdict()), TIGHT.windows[0].result.say);
+  assert.equal(byClass(verdict(), 'ctx-est').length, 0);
+  assert.match(text(cards()[0]), /Last chat · Nov 7.*1 of 3 showed only a name/);
+  // The estimate, in the place and the style of a changed limit.
+  assert.deepEqual(byClass(main, 'ctx-room').map(text), NOW_LINES);
+  assert.equal(text(byClass(byClass(main, 'ctx-room')[1], 'ctx-est')[0]), 'Estimate:');
+  // The picture says it is one, and it and the sides count what the sentence counts.
+  assert.deepEqual(zoomNames(), ['Context window', 'Skill list now, estimate']);
+  assert.deepEqual(pieces('over').map((n) => n.dataset.skill), ['beta', 'gamma']);
+  assert.deepEqual(pieces('sent').map((n) => n.dataset.skill), ['alpha', 'delta']);
+  assert.deepEqual(placed(), [['alpha', 'delta'], ['beta', 'gamma']]);
+  assert.deepEqual(apart(), []);
+  // With nothing changed, the last chat's own picture.
+  show(answer({ ...CHANGED, changed: [], now: null }, CODEX, CURSOR));
+  assert.deepEqual(zoomNames(), ['Context window', 'Skill list']);
+  assert.deepEqual(placed(), [['alpha', 'beta'], ['gamma']]);
+  assert.deepEqual(apart(), ['delta']);
+});
+
+test('the estimate for now gives the room left, in place of the chat\'s', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const now = { ...NOW, sent: { alpha: 4000, beta: 2000, delta: 1200 }, over: {}, used: 7300, size: 7300, misfit: null, room: 'Estimate: about 700 characters left before the limit.' };
+  const fact = { ...TIGHT.windows[0], result: { ...TIGHT.windows[0].result, room: 'Estimate: about 9 characters left before the limit.' } };
+  show(answer({ ...CHANGED, windows: [fact], now }, CODEX, CURSOR));
+  assert.deepEqual(byClass(main, 'ctx-room').map(text), [...NOW_LINES, now.room]);
+});
+
+test('a skill turned off or set to Name only after the chat is where the estimate for now has it', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const skills = [skill('alpha', 3990, 0, { state: 'off' }), skill('beta', 1990, 0, { state: 'name-only' }), TIGHT.skills[2], skill('asked', 10, 0, { state: 'user-invocable-only' })];
+  const now = { ...NOW, sent: { gamma: 3000 }, over: {}, used: 3100, size: 3100, misfit: null };
+  show(answer({ ...CHANGED, skills, now }, CODEX, CURSOR));
+  assert.deepEqual(placed(), [['gamma'], ['beta']]);
+  assert.deepEqual(pills(byClass(main, 'ctx-off')[0]).map((p) => p.dataset.skill), ['alpha']);
+  // Asked for only: in no list, so on no side.
+  assert.deepEqual(apart(), ['asked']);
+});
+
+test('changes in the preview take the place of the estimate for now', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const after = { ...AFTER, loses: [], result: { ...AFTER.result, sent: { alpha: 4000, beta: 2000, delta: 1200 }, over: { gamma: 3000 } } };
+  show(answer({ ...CHANGED, after }, CODEX, CURSOR));
+  assert.equal(text(verdict()), AFTER.say);
+  assert.deepEqual(byClass(main, 'ctx-room'), []);
+  assert.deepEqual(zoomNames(), ['Context window', 'Skill list']);
+  // delta, not in the last list, has its side in the estimate after Apply too.
+  assert.deepEqual(placed(), [['alpha', 'beta', 'delta'], ['gamma']]);
+});
+
+test("another window's estimate places a skill the last list did not hold", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const other = window('1M window', '', 'Estimate', 'All 4 would fit', 'Estimate: On a 1M window, every skill would keep its description.', { budget: 30000 });
+  other.result.sent = { alpha: 4000, beta: 2000, gamma: 3000, delta: 2500 };
+  show(answer({ ...CHANGED, windows: [...TIGHT.windows, other] }, CODEX, CURSOR));
+  await fire(cards()[1], 'click');
+  assert.deepEqual(placed(), [['alpha', 'beta', 'gamma', 'delta'], []]);
+  assert.deepEqual(byClass(main, 'ctx-room'), []);
+  assert.deepEqual(zoomNames(), ['Context window', 'Skill list']);
+  await fire(cards()[0], 'click');
+});
+
+test('what does not fit a lower limit starts past that limit, not past the chat\'s', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const card = { ...CHANGED, windows: [{ ...TIGHT.windows[0], budget: 16000 }], now: { ...NOW, used: 7900 } };
+  show(answer(card, CODEX, CURSOR));
+  // The bar is drawn to the chat's 16,000; the estimate goes by 8,000.
+  assert.equal(parseFloat(pieceOf('beta', 'over').style.left).toFixed(3), (8000 / 16000 * 100).toFixed(3));
+});
+
+test('what does not fit a raised limit starts past that limit, for the setup now and after Apply', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  // The chat's limit is 8,000. 12,000 is the limit now, or the one waiting: 11,000 of it are used, and
+  // gamma's 3,000 have no room in the rest.
+  const result = { ...NOW, sent: { alpha: 8000, beta: 2900 }, over: { gamma: 3000 }, used: 11000, size: 14000, misfit: { kind: 'name', n: 1 } };
+  const start = (12000 / 15000 * 100).toFixed(3);
+  show(answer({ ...CHANGED, now: { ...result, budget: 12000 } }, CODEX, CURSOR));
+  assert.equal(parseFloat(pieceOf('gamma', 'over').style.left).toFixed(3), start);
+  show(answer({ ...CHANGED, now: null, changed: [], after: { ...AFTER, result, budget: 12000 } }, CODEX, CURSOR));
+  assert.equal(parseFloat(pieceOf('gamma', 'over').style.left).toFixed(3), start);
+});
+
+test('while changes wait the handle stays with nothing to suggest', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const waiting = STEPS.map((s) => ({ ...s, short: 0, say: s.now ? '1% now · all 2 fit' : `${s.say.split(' ')[0]} · all 2 fit` }));
+  show(answer({ ...TIGHT, limit: { ...LIMIT, offer: null, steps: waiting } }, CODEX, CURSOR));
+  assert.equal(grip().getAttribute('aria-valuetext'), '1% now · all 2 fit');
+  await fire(byClass(main, 'ctx-flag')[0], 'click');
+  assert.match(text(drawer), /Now1% of the context window: 8,000 characters/);
+  assert.doesNotMatch(text(drawer), /Suggested|Cost|Set to/);
+  closePanel({ instant: true });
+});

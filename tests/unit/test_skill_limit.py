@@ -944,8 +944,12 @@ def test_after_apply_of_a_share_that_does_not_fit_names_no_skill(home):
     draft = {"claude_code": {"j": "name-only"}, "limits": {"claude_code": 0.015}}
     after = view(home, draft=draft)["claude_code"]["after"]
     assert after["gets"] == ["a", "h", "i"] and "j" not in after["result"]["sent"]
-    # A switch alone gets no estimate: that needs the rule.
-    assert view(home, draft={"claude_code": {"j": "off"}})["claude_code"]["after"] is None
+    # A switch alone gets the count's answer too, as the limit line's places do.
+    after = view(home, draft={"claude_code": {"j": "off"}})["claude_code"]["after"]
+    assert (after["result"], after["budget"]) == (None, 8_000)
+    assert after["say"] == (
+        "After Apply, estimate: On a 200K window, not all descriptions would fit."
+    )
     assert view(home, draft={"limits": {"claude_code": 0.01}})["claude_code"]["after"] is None
 
 

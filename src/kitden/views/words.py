@@ -427,6 +427,14 @@ LIMIT_CHANGED = (
     "The limit was changed after this chat: it is {share} now. Your next chat will show the real "
     "list."
 )
+# The same when the skills now are not the ones that list was sent with; an estimate follows.
+SKILLS_CHANGED = (
+    "Your skills changed after this list was sent. Your next chat will show the real list."
+)
+LIMIT_AND_SKILLS_CHANGED = (
+    "The limit and your skills changed after this list was sent: the limit is {share} now. Your "
+    "next chat will show the real list."
+)
 # Why Kitden does not offer a new limit; the sentence goes under "How this is counted".
 LIMIT_NOT_FIXED = (
     "Kitden does not offer a new skill list limit: SLASH_COMMAND_TOOL_CHAR_BUDGET is set, and it "

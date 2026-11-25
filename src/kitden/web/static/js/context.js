@@ -22,7 +22,7 @@ const PILL_NUMBERS = "The number beside a skill is the length of its description
 const ESTIMATE = /^(After Apply, estimate:|Estimate:)/;
 
 // The picture's own words; the rest is the server's.
-const PICTURE = { window: "Context window", rest: "Rest of the window", list: "Skill list", sent: "Sent", free: "Free" };
+const PICTURE = { window: "Context window", rest: "Rest of the window", list: "Skill list", now: "Skill list now, estimate", sent: "Sent", free: "Free" };
 const OVER = { claude_code: "Over the limit: not sent", codex: "Over the limit: cut off" };
 const STATES = { on: "On", "name-only": "Name only", off: "Off" };
 const HOW = "How this is counted";
@@ -164,19 +164,24 @@ export function renderContext(main, { again = false } = {}) {
   // The verdict: the shown window's sentence (after Apply, the estimate), or the client's message
   // when it has no window. The room left (an estimate on the last chat's window) comes under it.
   main.append(sentence(shown ? (after ? after.say : shown.result.say) : card.message || "", "ctx-verdict"));
-  // The limit changed after the last chat: said under its verdict, with what Kitden expects now.
+  // The limit or the skills changed after the last chat: said under its verdict, with what Kitden
+  // expects now. The picture and the sides show that estimate; the verdict and the card stay the
+  // chat's fact.
   if (index === 0 && !after) for (const line of card.changed || []) main.append(sentence(line, "ctx-room"));
-  if (shown && shown.result.room && !after) main.append(sentence(shown.result.room, "ctx-room"));
+  const now = index === 0 && !after && shown ? card.now || null : null;
+  const room = shown && !after ? (now || shown.result).room : null;
+  if (room) main.append(sentence(room, "ctx-room"));
   // A message beside windows (the estimate could not be checked) is a note under the verdict.
   if (windows.length && card.message) main.append(el("p", "ctx-note", card.message));
   // A count that does not fit everything cannot say which skills do: no result of its own, so the
   // picture and the sides stay the last chat's.
   const planned = after ? after.result : null;
-  const result = shown ? planned || shown.result : null;
-  const estimate = Boolean(planned) || index > 0;
+  const result = shown ? planned || now || shown.result : null;
+  const estimate = Boolean(planned || now) || index > 0;
   const heat = heatOf(card, result, estimate, Boolean(planned));
   // The chat's own limit line stays where it is; a new limit shows as a second line (limitControl).
-  if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`, heat, index === 0 ? controlOf(card) : null));
+  const look = { name: now ? PICTURE.now : PICTURE.list, room: planned ? after.budget : now ? now.budget : null };
+  if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`, heat, index === 0 ? controlOf(card) : null, look));
   if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
   if (card.how.length) main.append(howFor(card.how));
   markAll();
@@ -189,16 +194,18 @@ export function renderContext(main, { again = false } = {}) {
 // per skill as wide as what was sent, the names' characters as one piece, then past the limit
 // line, hatched, what was not sent (Codex: cut off). The scale is the limit (or what was sent,
 // when it is larger) plus what did not fit. A sent piece takes its skill's heat.
-function zoom(card, w, r, at, heat, control = null) {
+// `name`: what the bar shows; `room`: the limit an estimate on the chat's window goes by.
+function zoom(card, w, r, at, heat, control = null, { name = PICTURE.list, room = null } = {}) {
   const sent = r.sent || {};
   const over = r.over || {};
   const total = (part) => Object.values(part).reduce((sum, n) => sum + n, 0);
   const limit = w.budget || r.used;
-  const top = Math.max(limit, r.used);
+  // What did not fit starts past the limit, or past the one the estimate goes by, lower or higher.
+  const top = Math.max(room || limit, r.used);
   // With the limit control, the bar also has room for the place that fits everything and for the
   // new limit, so the line can be dragged there; a place further right is past the bar's end.
   const reach = control ? control.reach : 0;
-  const scale = Math.max(top + total(over), reach * roomFor(control ? control.beyond : 0)) || 1;
+  const scale = Math.max(top + total(over), limit, reach * roomFor(control ? control.beyond : 0)) || 1;
   const pct = (n) => (n / scale) * 100;
   const spots = new Map();
   const place = (node, key, from, size) => {
@@ -213,7 +220,7 @@ function zoom(card, w, r, at, heat, control = null) {
   slice.style.width = `${SLICE}%`;
   strip.append(slice, el("p", null, PICTURE.rest));
   const label = (text) => { const node = el("div", "ctx-zl"); node.append(el("span", null, text)); return node; };
-  box.append(label(PICTURE.window), strip, link(pct(limit)), label(PICTURE.list));
+  box.append(label(PICTURE.window), strip, link(pct(limit)), label(name));
 
   const hold = el("div", "ctx-hold");
   const bar = el("div", "ctx-bar");
@@ -306,24 +313,27 @@ function moveFrom(at, spots) {
 
 // The two sides --------------------------------------------------------------------------------
 
-// A skill's side: on the last chat's window, the server's; on an estimate (another window, or
-// after Apply), from that estimate (Claude Code: a skill whose description is sent; Codex: one
-// with nothing cut off). A skill on no side (not in the last list, or Kitden cannot tell) stays
-// apart; one the tray turns on (`back`) has a side in the estimate after Apply, and none in another
-// window's, which knows nothing of the tray.
-function sideOf(card, skill, result, estimate, back = false, planned = false) {
+// A skill's side: on the last chat's window, the server's; on an estimate (another window, the setup
+// now, or after Apply), from that estimate. Claude Code: a skill whose description is sent, or one
+// that shows only a name (no room for it, or set to Name only), also when the last list did not hold
+// it. Codex: one with nothing cut off, or one that is. A skill on no side (in no list, or Kitden
+// cannot tell) stays apart; one the tray turns on (`back`) has a side in the estimate after Apply,
+// and none in the others, which know nothing of the tray. `state`: the tray's state for it.
+function sideOf(card, skill, result, estimate, back = false, planned = false, state = undefined) {
   if (back && estimate && !planned) return null;
   const none = skill.side === null || skill.side === undefined;
-  if (!estimate || (none && !back)) return skill.side;
-  if (card.client === "codex") return skill.name in (result.over || {}) ? 1 : 0;
-  return skill.name in (result.sent || {}) ? 0 : 1;
+  if (!estimate) return skill.side;
+  if (card.client === "codex") return none && !back ? skill.side : skill.name in (result.over || {}) ? 1 : 0;
+  if (skill.name in (result.sent || {})) return 0;
+  if (skill.name in (result.over || {})) return 1;
+  return (planned ? state || skill.state : skill.state) === "name-only" ? 1 : null;
 }
 
 // How warm each skill on the first side is, grey to orange: its size against the largest there,
 // "0.00" to "1.00". The sizes to weigh at a glance; the other side stays grey.
 function heatOf(card, result, estimate, planned) {
   const states = draftFrom(current("context"))[card.client] || {};
-  const first = card.skills.filter((s) => states[s.name] !== "off" && sideOf(card, s, result, estimate, turnedOn(s, states), planned) === 0);
+  const first = card.skills.filter((s) => states[s.name] !== "off" && sideOf(card, s, result, estimate, turnedOn(s, states), planned, states[s.name]) === 0);
   const top = Math.max(0, ...first.map((s) => s.size));
   return new Map(first.map((s) => [s.name, (top ? s.size / top : 0).toFixed(2)]));
 }
@@ -350,7 +360,7 @@ function sidesFor(card, result, after, estimate, heat) {
     // A skill the tray turns off leaves the list.
     if (states[skill.name] === "off") continue;
     const back = turnedOn(skill, states);
-    const side = sideOf(card, skill, result, estimate, back, Boolean(after && after.result));
+    const side = sideOf(card, skill, result, estimate, back, Boolean(after && after.result), states[skill.name]);
     // Off, and not in this list (an estimate leaves it out): it waits under Turned off, so it can
     // come back.
     const out = skill.state === "off" && !back && (estimate || !clouds[side]);
@@ -573,13 +583,14 @@ function limitButton(client, choice, primary, param) {
   return node;
 }
 
-// What the limit control of a card works with, or null when the server offers nothing to change
-// (the line then is only a picture). `steps`: the places, left to right; `at`: the place the new
+// What the limit control of a card works with, or null when the server offers nothing to change and
+// gives no places (the line then is only a picture; while changes wait it can have places with
+// nothing to suggest). `steps`: the places, left to right; `at`: the place the new
 // limit has now (the tray's row, else today's); `reach`: the limit the bar must have room for, never
 // less than today's limit and the chat's own, so every place up to them is to scale.
 export function controlOf(card) {
   const limit = card.limit;
-  if (!limit || !(limit.offer || limit.back)) return null;
+  if (!limit || !(limit.offer || limit.back || (limit.steps || []).length)) return null;
   const param = limit.param || "fraction";
   const steps = limit.steps || [];
   const here = Math.max(0, steps.findIndex((s) => s.now));
