@@ -1,11 +1,18 @@
 # Kitden roadmap
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
+
+### Not yet released
+
+- **Claude Code items show the state they really have:** a hook whose `if` can never match, a
+  project's plugin that is not installed, and a server you turned off with `/mcp` in one project
+  no longer show as On, and approvals in your home folder's local settings count without a trust
+  prompt.
 
 ### 0.12.0
 

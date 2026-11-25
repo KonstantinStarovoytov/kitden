@@ -1,5 +1,7 @@
 import json
+from dataclasses import replace
 
+from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_REMOVE
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.model import ClientStatus, Enabled, ItemKind, Scope, UnknownReason
 from kitden.system import claude_desktop_dir
@@ -358,3 +360,214 @@ def test_an_unreadable_local_file_leaves_approval_unknown(tmp_path, no_version):
     local = site / ".claude/settings.local.json"
     local.write_text("{ not json")
     assert states() == {"docs": Enabled.OFF, "old-search": Enabled.UNKNOWN}
+
+
+# Hooks with `if` on events that are not tool events never run.
+
+
+def _hooks(tmp_path, no_version, user: dict, project: dict | None = None):
+    home = make_home(tmp_path, FIXTURE)
+    (home / ".claude/settings.json").write_text(json.dumps(user))
+    if project is not None:
+        (home / "work/website/.claude/settings.json").write_text(json.dumps(project))
+    scan = ClaudeCodeAdapter(home, read_version=no_version).scan()
+    return {i.name: i for i in scan.items if i.kind is ItemKind.HOOK}
+
+
+def _group(*handlers: dict, matcher: str = "") -> list[dict]:
+    return [{"matcher": matcher, "hooks": list(handlers)}]
+
+
+def test_a_hook_with_if_on_a_non_tool_event_is_off(tmp_path, no_version):
+    cmd = {"type": "command", "command": "x", "if": "Bash(git *)"}
+    hooks = _hooks(
+        tmp_path,
+        no_version,
+        {
+            "hooks": {
+                "Stop": _group(cmd, matcher="a"),
+                "PreToolUse": _group(cmd, matcher="b"),
+                "SessionStart": _group(cmd, {"type": "command", "command": "y"}, matcher="c"),
+                "Notification": [{"matcher": "d"}],
+            }
+        },
+    )
+    assert hooks["Stop: a"].enabled is Enabled.OFF
+    assert hooks["PreToolUse: b"].enabled is Enabled.ON
+    assert hooks["SessionStart: c"].enabled is Enabled.ON  # one handler has no `if`
+    assert hooks["Notification: d"].enabled is Enabled.ON  # no handlers
+
+
+def test_a_dead_group_beside_a_live_one_of_the_same_matcher_is_not_off(tmp_path, no_version):
+    # The two share one id, so they must agree: the hook does run.
+    dead = {"type": "command", "command": "x", "if": "Bash(git *)"}
+    groups = _group(dead) + _group({"type": "command", "command": "y"})
+    home = make_home(tmp_path, FIXTURE)
+    (home / ".claude/settings.json").write_text(json.dumps({"hooks": {"Stop": groups}}))
+    scan = ClaudeCodeAdapter(home, read_version=no_version).scan()
+    hooks = [i for i in scan.items if i.name == "Stop: *"]
+    assert [i.enabled for i in hooks] == [Enabled.ON, Enabled.ON]
+
+
+def test_disable_all_hooks_false_does_not_revive_a_dead_hook(tmp_path, no_version):
+    cmd = {"type": "command", "command": "x", "if": "Bash(git *)"}
+    user = {"hooks": {"Stop": _group(cmd, matcher="a"), "PreToolUse": _group(cmd, matcher="b")}}
+    hooks = _hooks(tmp_path, no_version, {**user, "disableAllHooks": False})
+    assert hooks["Stop: a"].enabled is Enabled.OFF
+    assert hooks["PreToolUse: b"].enabled is Enabled.ON
+
+
+def test_a_project_rule_does_not_say_a_dead_hook_is_on(tmp_path, no_version):
+    cmd = {"type": "command", "command": "x", "if": "Bash(git *)"}
+    user = {"disableAllHooks": True, "hooks": {"Stop": _group(cmd, matcher="a")}}
+    user["hooks"]["PreToolUse"] = _group(cmd, matcher="b")
+    home = make_home(tmp_path, FIXTURE)
+    (home / ".claude/settings.json").write_text(json.dumps(user))
+    (home / "work/website/.claude/settings.local.json").write_text(
+        json.dumps({"disableAllHooks": False})
+    )
+    scan = ClaudeCodeAdapter(home, read_version=no_version).scan()
+    hooks = {i.name: i for i in scan.items if i.kind is ItemKind.HOOK and i.project is None}
+    assert hooks["Stop: a"].project_rules == ()
+    assert len(hooks["PreToolUse: b"].project_rules) == 1
+
+
+# A plugin enabled only in a project's shared settings waits for an install.
+
+
+def _project_plugin(tmp_path, no_version, installs=None, user=None, local=None):
+    home = make_home(tmp_path, FIXTURE)
+    site = home / "work/website"
+    (site / ".claude/settings.json").write_text(json.dumps({"enabledPlugins": {"ghost@m": True}}))
+    if user is not None:
+        (home / ".claude/settings.json").write_text(json.dumps({"enabledPlugins": user}))
+    if local is not None:
+        (site / ".claude/settings.local.json").write_text(json.dumps({"enabledPlugins": local}))
+    if installs is not None:
+        file = home / ".claude/plugins/installed_plugins.json"
+        records = installs(site) if callable(installs) else installs
+        file.write_text(json.dumps({"plugins": {"ghost@m": records}}))
+    scan = ClaudeCodeAdapter(home, read_version=no_version).scan()
+    found = [i for i in scan.items if i.name == "ghost@m" and i.scope is Scope.PROJECT]
+    return home, site, found[0], ClaudeCodeAdapter(home, read_version=no_version)
+
+
+def test_a_project_plugin_that_is_not_installed_is_unknown(tmp_path, no_version):
+    _, _, item, adapter = _project_plugin(tmp_path, no_version)
+    assert item.enabled is Enabled.UNKNOWN
+    assert item.change_hint
+    # The person can still turn it off and remove it.
+    actions = adapter.item_actions(replace(item, actions=()))
+    assert PLUGIN_DISABLE in actions and PLUGIN_REMOVE in actions
+
+
+def test_a_user_install_counts_for_a_project_plugin(tmp_path, no_version):
+    record = [{"scope": "user", "installPath": "/x"}]
+    _, _, item, _ = _project_plugin(tmp_path, no_version, installs=record)
+    assert item.enabled is Enabled.ON and item.change_hint is None
+
+
+def test_an_install_for_another_project_does_not_count(tmp_path, no_version):
+    record = [{"scope": "project", "projectPath": "/somewhere/else", "installPath": "/x"}]
+    _, _, item, _ = _project_plugin(tmp_path, no_version, installs=record)
+    assert item.enabled is Enabled.UNKNOWN
+
+
+def test_an_install_for_this_project_counts(tmp_path, no_version):
+    def record(site):
+        return [{"scope": "project", "projectPath": str(site)}]
+
+    _, _, item, _ = _project_plugin(tmp_path, no_version, installs=record)
+    assert item.enabled is Enabled.ON
+
+
+def test_user_or_local_settings_that_enable_it_make_it_on(tmp_path, no_version):
+    _, _, item, _ = _project_plugin(tmp_path / "a", no_version, user={"ghost@m": True})
+    assert item.enabled is Enabled.ON
+    _, _, item, _ = _project_plugin(tmp_path / "b", no_version, local={"ghost@m": True})
+    assert item.enabled is Enabled.ON
+    _, _, item, _ = _project_plugin(tmp_path / "c", no_version, user={"ghost@m": False})
+    assert item.enabled is Enabled.UNKNOWN
+
+
+def test_a_plugin_with_no_install_of_its_own_is_not_called_not_installed(tmp_path, no_version):
+    # A skills-folder plugin loads from the repository; it never has an install record.
+    home = make_home(tmp_path, FIXTURE)
+    settings = home / "work/website/.claude/settings.json"
+    settings.write_text(json.dumps({"enabledPlugins": {"kit@skills-dir": True}}))
+    scan = ClaudeCodeAdapter(home, read_version=no_version).scan()
+    (item,) = [i for i in scan.items if i.name == "kit@skills-dir"]
+    assert item.enabled is Enabled.ON and item.change_hint is None
+
+
+def test_an_install_in_the_main_checkout_counts_in_a_worktree(tmp_path, no_version):
+    main = tmp_path / "main"
+    (main / ".git/worktrees/site").mkdir(parents=True)
+
+    def record(site):
+        (site / ".git").write_text(f"gitdir: {main}/.git/worktrees/site\n")
+        return [{"scope": "project", "projectPath": str(main)}]
+
+    _, _, item, _ = _project_plugin(tmp_path / "home-of-it", no_version, installs=record)
+    assert item.enabled is Enabled.ON and item.change_hint is None
+
+
+def test_an_unreadable_install_record_does_not_say_not_installed(tmp_path, no_version):
+    home, _, _, adapter = _project_plugin(tmp_path, no_version)
+    (home / ".claude/plugins/installed_plugins.json").write_text("{broken")
+    items = [i for i in adapter.scan().items if i.name == "ghost@m"]
+    assert [(i.enabled, i.change_hint) for i in items] == [(Enabled.UNKNOWN, None)]
+
+
+def test_an_install_recorded_under_a_linked_project_path_counts(tmp_path, no_version):
+    def record(site):
+        link = tmp_path / "link"
+        link.symlink_to(site)
+        return [{"scope": "local", "projectPath": str(link)}]
+
+    _, _, item, _ = _project_plugin(tmp_path / "home-of-it", no_version, installs=record)
+    assert item.enabled is Enabled.ON
+
+
+# A server the /mcp menu turned off in a project (`disabledMcpServers` in ~/.claude.json).
+
+
+def _mcp_offs(tmp_path, no_version, names):
+    home = make_home(tmp_path, FIXTURE)
+    site = str(home / "work/website")
+    state = json.loads((home / ".claude.json").read_text())
+    state["projects"][site]["disabledMcpServers"] = names
+    (home / ".claude.json").write_text(json.dumps(state))
+    scan = ClaudeCodeAdapter(home, read_version=no_version).scan()
+    return site, [i for i in scan.items if i.kind is ItemKind.MCP_SERVER]
+
+
+def test_a_local_or_project_server_the_mcp_menu_turned_off_is_off(tmp_path, no_version):
+    _, items = _mcp_offs(tmp_path, no_version, ["local-db", "docs"])
+    state = {i.name: i.enabled for i in items if i.scope in (Scope.LOCAL, Scope.PROJECT)}
+    assert state["local-db"] is Enabled.OFF
+    assert state["docs"] is Enabled.OFF
+
+
+def test_a_user_server_turned_off_in_a_project_has_a_rule_there(tmp_path, no_version):
+    site, items = _mcp_offs(tmp_path, no_version, ["github"])
+    user = next(i for i in items if i.name == "github" and i.scope is Scope.USER)
+    assert user.enabled is Enabled.ON
+    assert [(p, e) for p, e, *_ in user.project_rules] == [(site, Enabled.OFF)]
+
+
+# The home folder is trusted for its own local file.
+
+
+def test_the_home_folder_needs_no_trust_for_its_local_approvals(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    (home / ".mcp.json").write_text(json.dumps({"mcpServers": {"homesrv": {"command": "x"}}}))
+    (home / ".claude/settings.local.json").write_text(
+        json.dumps({"enabledMcpjsonServers": ["homesrv"]})
+    )
+    state = json.loads((home / ".claude.json").read_text())
+    state["projects"][str(home)] = {"hasTrustDialogAccepted": False}
+    (home / ".claude.json").write_text(json.dumps(state))
+    scan = ClaudeCodeAdapter(home, read_version=no_version).scan()
+    found = [i for i in scan.items if i.name == "homesrv"]
+    assert [i.enabled for i in found] == [Enabled.ON]

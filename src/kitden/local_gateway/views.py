@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from kitden.changes.actions import GATEWAY_RULE, KITDEN_GATEWAY, secrets_out
-from kitden.clients.base import mcp_item
+from kitden.clients.base import SETUP_NAME, mcp_item
 from kitden.gateways import data_dir
 from kitden.local_gateway import keychain
 from kitden.local_gateway.project import project_chain
@@ -55,18 +55,26 @@ def gateway_items(inventory, settings: dict, home: Path) -> list[Item]:
     for entry in setup_server_state(inventory):
         if entry["state"] != "added":
             continue
+        # The projects where the client's own choice turns its `kitden` entry off.
+        off_in = {
+            path
+            for i in inventory.items
+            if i.client == entry["client"] and i.name == SETUP_NAME and i.scope is Scope.USER
+            for path, state, *_ in i.project_rules
+            if state is Enabled.OFF
+        }
         for name, server in settings["servers"].items():
             places = [(None, own_state(rules["global"], name, None), f"servers.{name}")]
             # Only projects with a rule of their own for the server can change it.
             ruled = [k for k in known if own_state(rules["projects"].get(k), name, None)]
             for project in known:
                 chain = project_chain(project, home, ruled) if ruled else []
-                if chain:
+                if chain or project in off_in:
                     state = state_in(settings, chain, name, None)
                     places.append((project, state, f"rules.projects.{project}.{name}"))
             for project, state, key in places:
                 source = Source(kind=SourceKind.FILE, path=path, owner_client=CLIENT, key_path=key)
-                on = entry["enabled"] is not False and state != "off"
+                on = entry["enabled"] is not False and state != "off" and project not in off_in
                 item = mcp_item(
                     entry["client"],
                     name,
