@@ -56,9 +56,11 @@ that is the chat that last got a full skill list, one that was started or resume
 Codex let that list use only a small part of the context window. Claude Code then shows some
 skills by name only; Codex shortens descriptions and, past that, leaves skills out. Kitden reads
 the skill list from the last chat log, plus the settings, skill files and use counts it needs
-to size and check that list; it keeps none of it and sends nothing. Estimates for another
-window, or for a switch you are about to make, show only while Kitden's rule rebuilds that last
-list; a new limit also gets one from a count (below). Claude Code's log does not say the window, so Kitden names it only when one window alone
+to size and check that list; it keeps none of it and sends nothing. When your skills or the limit
+changed after that chat, Claude Code's card also says, as an estimate, how many would show only a
+name now ([below](#when-your-setup-changed-after-the-last-chat)). Estimates for another
+window, for your setup now, or for a switch you are about to make, show only while Kitden's rule
+rebuilds that last list; all but another window's also come from a count (below). Claude Code's log does not say the window, so Kitden names it only when one window alone
 gives that list. When Claude Code's settings set the limit, with `skillListingBudgetFraction` or
 `SLASH_COMMAND_TOOL_CHAR_BUDGET`, Kitden uses that limit, and `skillListingMaxDescChars` for the
 length of a description. Cursor gets no verdict, because Kitden cannot see what Cursor sends. Skills
@@ -95,7 +97,8 @@ line back to 1% or press **Back to 1%** to take it out again. You can also drag 
 share of the list between 1% and the one you have, such as 1.2% from 1.3%; Codex's line does the
 same in steps of 500 tokens. After Apply, the last chat keeps
 the limit it was sent under, the next chats' line shows the new one, and the page says the
-limit changed and what Kitden expects from your next chat. A share in your settings that is not
+limit changed and what Kitden expects from your next chat (see
+[When your setup changed](#when-your-setup-changed-after-the-last-chat)). A share in your settings that is not
 on the list, such as 4.5% from an earlier Kitden or one you wrote by hand, still works: Kitden
 shows it as the limit now, offers the shares of the list above it (none above 4%), and **Back to
 1%**.
@@ -110,11 +113,31 @@ Kitden can find: those count at the longest a description can be (1,536 characte
 Claude Code has no file: when an earlier chat's list sent its description, it counts at that
 length, and the details say how many count so. The place of today says how many skills showed
 only a name ("1.3% now · 2 of 92 show only a name") when the last chat was sent under today's
-limit and no skill joined since. When the limit was changed after the last chat, the cost is
+limit, no skill joined since, and none it sent was turned off or set to Name only since. When the limit was changed after the last chat, the cost is
 measured from what the list uses at today's limit, not from what that chat used.
 
 The share is for your next chats, so skills you added or turned on after the last chat are
-counted too, and the details say how many.
+counted too, and the details say how many. Changes waiting in the preview count as well: turn
+skills off, set them to Name only or turn them on again, and the line's steps and note count the
+same skills as the estimate above. The handle stays while they wait, even when everything fits.
+A count gives an estimate for a switch too: "every skill would keep its description" or "not all
+descriptions would fit".
+
+### When your setup changed after the last chat
+
+The last chat is a fact, so its sentence and its window card stay. When you added, turned off or
+turned on Claude Code skills after it (or the chat itself got more skills on the way), or changed
+the limit, two lines under it say so and what Kitden expects now:
+
+> Your skills changed after this list was sent. Your next chat will show the real list.
+>
+> **Estimate:** On a 1M window, 23 of 96 skills would show only a name. The agent may not use them.
+
+The bar, then named **Skill list now, estimate**, and the two boxes show that estimate. When
+everything would fit, a line says about how much room is left. When Kitden can only count, it says
+"every skill would keep its description" and shows that too, or "not all descriptions would fit",
+and the bar and the boxes stay the last chat's. It says nothing when its count does not explain
+the last chat itself. For Codex, this works for a changed limit only.
 
 Codex's line works the same way, in tokens: when Codex cut descriptions short or left skills
 out, drag it in steps of 500 tokens, up to 10,000, the most Codex allows; it snaps to the

@@ -1546,6 +1546,14 @@ def test_a_skill_limit_says_the_share_everywhere_it_shows():
         "The limit was changed after this chat: it is {share} now. Your next chat will show the "
         "real list."
     )
+    assert said.SKILLS_CHANGED == (
+        "Your skills changed after this list was sent. Your next chat will show the real list."
+    )
+    assert said.LIMIT_AND_SKILLS_CHANGED == (
+        "The limit and your skills changed after this list was sent: the limit is {share} now. "
+        "Your next chat will show the real list."
+    )
+    assert 'now: "Skill list now, estimate"' in context
     assert said.CLAUDE_SHARE_SET == (
         "Your Claude Code settings let this list use {share} of the context window."
     )

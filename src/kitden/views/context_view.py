@@ -164,6 +164,8 @@ def _card(client: str, **parts) -> dict:
         "sides": list(words.CONTEXT_SIDES[client]),
         "skills": [],
         "after": None,
+        # The estimate for the setup as it is now, when the last chat was sent under another one.
+        "now": None,
         "how": [],
         "limit": None,
         "changed": [],
@@ -673,7 +675,7 @@ def _limit_steps(
     as they are (spec limit-line-control). `points`: (value, limit, short, used, head, now) per
     place, `value` as a tray row sends it, `limit` in the card's unit, `short` how many skills the
     limit would still cut and `used` what the list would send (both None with no estimate), and
-    `head` the share or the limit in words. `n`: the skills the limit can cut. `unknown_words`:
+    `head` the share or the limit in words. `n`: the skills on the list. `unknown_words`:
     what a place says whose `short` is not known."""
     out = []
     for value, limit, short, used, head, now in points:
@@ -744,7 +746,8 @@ def _claude_steps(
     short, unknown = words.LIMIT_STEP_SHORT, words.LIMIT_STEP_NOT_ALL
     # The place of today costs nothing more, also where the count of it is not what the chat used.
     used = now.used if now is not None else fits.used
-    return _limit_steps(points, used, len(wanted), "characters", short, unknown)
+    # Of all the skills the next chats list, as the verdict and the window cards count.
+    return _limit_steps(points, used, len(fits.skills), "characters", short, unknown)
 
 
 def _claude_limit(
@@ -755,12 +758,14 @@ def _claude_limit(
     share: float,
     pair: tuple[int, int] | None,
     fits: _Fits | None,
+    keep: bool = False,
 ) -> dict:
     """Details' "Skill list limit" (spec skill-list-limit): the limit now, the first share on
     Kitden's list (`CLAUDE_SHARES`) above it at which every description the limit cut fits, by
     the same rule as the verdict or else by a count (see `_Fits`), and what that costs; Back to
     the default when the user file has a higher share. `why`: why there is no suggestion. Skills
-    set to Name only or Off stay as they are."""
+    set to Name only or Off stay as they are. `keep`: the line keeps its places with nothing to
+    suggest (changes wait in the preview, so it must not go while the person works with it)."""
     holder = _limit_file(files)
     user = files[0]
     above = fraction is not None and fraction > CLAUDE_SHARE
@@ -782,8 +787,12 @@ def _claude_limit(
         limit["counted"] = fits.lines
     skills, now = fits.skills, fits.at(budget)
     wanted = {s.name for s in skills if not s.name_only}
+    shows = back is not None or keep
     if now is not None and wanted <= now.full:
-        steps = _claude_steps(pair, share, fits, True, []) if back else []
+        all_fit: list[tuple[float, ClaudeFit | None]] = []
+        if keep:
+            all_fit = [(at, now) for at in shares_above(share)]
+        steps = _claude_steps(pair, share, fits, back is not None, all_fit) if shows else []
         return limit | {"why": fits.not_needed, "steps": steps}
     # Every share on the list above today's, as the line can be dragged there. Once all fit, a
     # higher share sends the same list: the rule runs no more. Today's share may be off the list.
@@ -797,7 +806,8 @@ def _claude_limit(
     if found is None:
         # Nothing on the list fits: the ceiling, or today's share when that is higher still.
         most = words.percent(max(CLAUDE_SHARES[-1], share))
-        steps = _claude_steps(pair, share, fits, True, []) if back else []
+        more = ups if keep else []
+        steps = _claude_steps(pair, share, fits, back is not None, more) if shows else []
         return limit | {"why": words.LIMIT_NOT_ENOUGH.format(share=most), "steps": steps}
     offered, fit = found
     limit["steps"] = _claude_steps(pair, share, fits, back is not None, ups)
@@ -910,11 +920,17 @@ def _claude_counted(
     changed: bool,
     cap: int,
     same_limit: bool,
+    replayed: bool,
 ) -> _Fits:
     """`_Fits` by count, at today's limit `budget`. `used`: what the chat's list used. `sent`: the
     skills it sent inside its limit, when no setting changed since: it shows that they fit.
     `extras`: the skills that were not in its list. `changed`: the limit was changed after it.
-    `same_limit`: the chat was sent under today's limit."""
+    `same_limit`: the chat was sent under today's limit, and no change in the preview waits.
+    `replayed`: the rule rebuilds the chat; only a size it needs for the next ones is missing."""
+    # A skill the chat sent, off or Name only now, leaves room: the chat's numbers say less then.
+    same_limit = same_limit and not any(
+        r.sent is not None and states[r.name] in ("off", "name-only") for r in rows
+    )
     listed = {r.name for r in rows}
     chat = rows
     rows = [*rows, *extras]
@@ -939,7 +955,7 @@ def _claude_counted(
     ]
     unknown = sum(r.earlier is None for r in bare)
     earlier = len(bare) - unknown
-    lines = [words.LIMIT_COUNTED]
+    lines = [] if replayed else [words.LIMIT_COUNTED]
     if unknown:
         line = _many(unknown, words.LIMIT_COUNTED_ONE, words.LIMIT_COUNTED_MANY)
         lines.append(line.format(n=unknown, cap=f"{cap:,}"))
@@ -1236,8 +1252,11 @@ def _claude(
     }
     off = _not_loaded(inventory, client, found.folder, loaded)
     off |= {name for name, state in states.items() if state in ASKED}
-    # What the next chats list: today's skills, in today's states (`rows_now`).
+    # What the next chats list: today's skills, in today's states (`rows_now`); and what they list
+    # once the preview's changes are applied.
     states_now = states | {name: "off" for name in states if name in off}
+    changes = _changes(draft, states, SWITCHES[client])
+    states_next = states_now | changes
     weights = _claude_weights(home, at_ms)
 
     setting = _claude_setting(files)
@@ -1286,7 +1305,12 @@ def _claude(
     # A built-in skill has no file: when the rule cannot rebuild the chat, the place its list
     # stops at and the count take its description from an earlier chat's list. Not in `full`,
     # which is what is on disk: the rule stays exact and never reads it.
-    if setting is None and not (checked and base is not None):
+    # A change in the preview may turn on a skill whose size is not known: then the next chats are
+    # counted too.
+    ruled = base
+    if changes and budget:
+        ruled = _claude_run(rows_now, states_next, weights, budget, cap=cap)
+    if setting is None and not (checked and base is not None and ruled is not None):
         bare = [r for r in (*rows, *waiting) if r.built_in and r.full is None and r.sent is None]
         found_earlier = earlier_descriptions(home, {r.name for r in bare})
         for r in bare:
@@ -1321,29 +1345,42 @@ def _claude(
         source = words.WORKED_OUT if worked_out else None
         models = " · ".join(p for p in (_model_name(found.model), found.surface, source) if p)
     windows = [_window_card(title, models, _tag(date), then_budget, fact)]
-    # What the next chats get at each limit: by the rule, or by a count when the rule does not
-    # rebuild the chat (or cannot run) but its limit is known.
-    fits = None
-    if pair is not None and budget is not None:
-        if checked and base is not None:
-            fits = _Fits(
-                base[0],
-                base[1].used,
-                lambda limit: claude_rule(base[0], limit, cap),
+
+    # What the next chats get at each limit, in these states: by the rule, or by a count when the
+    # rule does not rebuild the chat (or cannot run) but its limit is known.
+    def fits_in(states: dict[str, str], run: tuple | None, waits: bool) -> _Fits | None:
+        if pair is None or budget is None:
+            return None
+        new = [*extras, *waiting]
+        if checked and run is not None:
+            return _Fits(
+                run[0],
+                run[1].used,
+                lambda limit: claude_rule(run[0], limit, cap),
                 words.LIMIT_NOT_NEEDED,
-                _added_lines(extras, states_now),
+                _added_lines(new, states),
                 False,
             )
-        else:
-            # What the chat sent inside its limit, when no setting changed since.
-            late = {r.name for r in rows if r.added or _longer_now(r, cap)}
-            known = frozenset() if moved else sent_full - late
-            is_new = then_share is not None
-            same = then_budget == budget
-            fits = _claude_counted(
-                rows, extras, states_now, budget, fact["used"], known, is_new, cap, same
-            )
-    counted = fits is not None and fits.counted
+        # What the chat sent inside its limit, when no setting changed since.
+        late = {r.name for r in rows if r.added or _longer_now(r, cap)}
+        known = frozenset() if moved else sent_full - late
+        is_new = then_share is not None
+        same = then_budget == budget and not waits
+        return _claude_counted(
+            rows, new, states, budget, fact["used"], known, is_new, cap, same, checked
+        )
+
+    fits_now = fits_in(states_now, base, False)
+    fits_next = fits_in(states_next, ruled, True) if changes else fits_now
+    counted = fits_now is not None and fits_now.counted
+    # A count holds for the next chats unless the chat itself goes against it: the list it sent has
+    # room for everything by the count and was not sent whole, or the other way round.
+    holds = then_budget is None
+    if counted and then_budget is not None:
+        first = [r for r in rows if not r.added]
+        whole = all(r.sent is not None or then[r.name] == "name-only" for r in first)
+        holds = whole == (_claude_count(first, then, then_budget, cap)[1] is not None)
+    with_limit = words.WITH_LIMIT if setting is not None else _on(window)
 
     def count_says(states: dict[str, str], limit: int, frame: str) -> dict:
         """The estimate for a limit by a count: `result` is None where not everything fits."""
@@ -1354,15 +1391,38 @@ def _claude(
         result = _claude_estimate(skills, fit, _on(window), frame, cap)
         return {"say": result["say"], "result": result, "full": fit.full}
 
-    # What Kitden expects from the limit now, said under the chat's verdict.
-    changed = []
-    if then_share is not None and budget is not None:
-        if counted:
-            expect = count_says(states_now, budget, words.ESTIMATE)
+    # The next chats list other skills than this list, or in other states: some came or went, or
+    # were added during the chat (sent whole, outside the limit).
+    listed_then = {r.name: then[r.name] == "name-only" for r in rows}
+    listed_now = {name: s == "name-only" for name, s in states_now.items() if s != "off"}
+    other_skills = listed_now != listed_then or any(r.added and r.name in listed_now for r in rows)
+    # A skill the fact counts as cut by the limit is Name only now. Whether it was so in the chat
+    # Kitden cannot tell (`_chosen`): it gives the estimate and does not say that a skill changed.
+    cut_now_named = any(
+        r.sent is None and listed_now.get(r.name) and r.name not in chosen for r in rows
+    )
+    # What Kitden expects from the setup as it is now, said under the chat's verdict; the picture
+    # follows it.
+    changed, expected = [], None
+    say = None
+    if budget is not None and (then_share is not None or other_skills or cut_now_named):
+        if checked and base is not None:
+            expected = _claude_estimate(base[0], base[1], with_limit, words.ESTIMATE, cap)
+            if expected["misfit"] is None:
+                left = f"{budget - base[1].used:,}"
+                expected["room"] = words.ROOM_LEFT.format(left=left, unit="characters")
+            say = expected["say"]
+        elif counted and (then_share is not None or holds):
+            count = count_says(states_now, budget, words.ESTIMATE)
+            expected, say = count["result"], count["say"]
+    if say is not None:
+        shown = _percent(share)
+        if then_share is not None and other_skills:
+            changed = [words.LIMIT_AND_SKILLS_CHANGED.format(share=shown), say]
+        elif then_share is not None:
+            changed = [words.LIMIT_CHANGED.format(share=shown), say]
         else:
-            assert base is not None
-            expect = _claude_estimate(base[0], base[1], _on(window), words.ESTIMATE, cap)
-        changed = [words.LIMIT_CHANGED.format(share=_percent(share)), expect["say"]]
+            changed = [words.SKILLS_CHANGED, say] if other_skills else [say]
     if base is not None and checked and setting is None and window in CLAUDE_OTHER_WINDOW:
         other, per_token = CLAUDE_OTHER_WINDOW[window]
         shown = ""  # which models have that window is not in any file Kitden can read
@@ -1375,42 +1435,50 @@ def _claude(
         title = words.WINDOW_TITLE.format(size=_size(other))
         windows.append(_window_card(title, shown, words.ESTIMATE_TAG, limit, result))
 
-    limit_card = _claude_limit(home, files, setting, fraction, share, pair, fits)
+    # The limit line counts what the preview's changes leave. While they wait it keeps the places
+    # above today's share that the setup without them has, or that a new limit in the tray is on.
+    keep = (_asked_share(asked) or 0) > share
+    if changes and not keep:
+        today = _claude_limit(home, files, setting, fraction, share, pair, fits_now)
+        keep = today["offer"] is not None
+    limit_card = _claude_limit(home, files, setting, fraction, share, pair, fits_next, keep)
     # A share in the tray counts only where Kitden would write it: the user file decides.
     new_share = _asked_share(asked) if limit_card["now"] is not None else None
     if new_share is not None and abs(new_share - share) < 1e-9:
         new_share = None
     after = None
-    changes = _changes(draft, states, SWITCHES[client])
-    if checked and (changes or new_share is not None):
-        if new_share is not None and pair is not None:
-            budget_after = claude_budget(*pair, new_share)
-        else:
-            budget_after = budget
-        run = _claude_run(rows_now, states_now | changes, weights, budget_after, cap=cap)
-        if run is not None and base is not None:
+    budget_after = budget
+    if new_share is not None and pair is not None:
+        budget_after = claude_budget(*pair, new_share)
+    if (changes or new_share is not None) and budget_after is not None:
+        run = _claude_run(rows_now, states_next, weights, budget_after, cap=cap)
+        if checked and run is not None and base is not None:
             skills, fit = run
             full = base[1].full
-            gets = [r.name for r in rows if r.name not in changes and r.name in fit.full - full]
-            loses = [r.name for r in rows if r.name not in changes and r.name in full - fit.full]
-            on = words.WITH_LIMIT if setting is not None else _on(window)
-            result = _claude_estimate(skills, fit, on, words.AFTER_APPLY, cap)
+            gets = [r.name for r in rows_now if r.name not in changes and r.name in fit.full - full]
+            loses = [
+                r.name for r in rows_now if r.name not in changes and r.name in full - fit.full
+            ]
+            result = _claude_estimate(skills, fit, with_limit, words.AFTER_APPLY, cap)
             say = f"{result['say']} {_swap(client, gets, loses)}".strip()
             after = {"say": say, "gets": gets, "loses": loses, "result": result}
             after["budget"] = budget_after
-    elif counted and pair is not None and new_share is not None:
-        # A count says what a limit gives; a switch alone it cannot judge.
-        budget_after = claude_budget(*pair, new_share)
-        expect = count_says(states_now | changes, budget_after, words.AFTER_APPLY)
-        full = expect["full"]
-        gets = [r.name for r in rows if r.name not in changes and r.sent is None and r.name in full]
-        say = f"{expect['say']} {_swap(client, gets, [])}".strip()
-        after = {"say": say, "gets": gets, "loses": [], "result": expect["result"]}
-        after["budget"] = budget_after
+        elif not checked and fits_next is not None and (new_share is not None or holds):
+            # A count says what a limit gives; with a switch alone it has to hold for the chat.
+            expect = count_says(states_next, budget_after, words.AFTER_APPLY)
+            full = expect["full"]
+            gets = [
+                r.name for r in rows if r.name not in changes and r.sent is None and r.name in full
+            ]
+            say = f"{expect['say']} {_swap(client, gets, [])}".strip()
+            after = {"say": say, "gets": gets, "loses": [], "result": expect["result"]}
+            after["budget"] = budget_after
 
     explained = checked or two_limits
+    # A skill's note goes by the side it has now: the estimate's, or else the chat's.
+    sent_now = sent_full if expected is None else frozenset(expected["sent"])
     can_free = any(
-        r.sent is not None
+        r.name in sent_now
         and states[r.name] == "on"
         and not _held(r, rules)
         and (_ruled(r) or (r.item is not None and not from_plugin(r.item)))
@@ -1421,7 +1489,8 @@ def _claude(
     for r in rows:
         side = 0 if r.sent is not None else 1
         size = len(r.full) if r.full is not None else len(r.sent or "")
-        note = _claude_note(r, states[r.name], side, size, explained, can_free, cap)
+        side_now = 0 if r.name in sent_now else 1
+        note = _claude_note(r, states[r.name], side_now, size, explained, can_free, cap)
         text, seen = (
             r.page_text if r.full is not None else r.sent,
             _seen(r.full, r.sent, side, None if r.added else _cap_then(cap, r.sent)),
@@ -1519,6 +1588,7 @@ def _claude(
         how=how,
         limit=limit_card,
         changed=changed,
+        now=expected | {"budget": budget} if expected else None,
     )
 
 
@@ -1726,12 +1796,14 @@ def _codex_limit_card(
     checked: bool,
     lengths: dict[str, int],
     rerun,
+    keep: bool = False,
 ) -> dict:
     """Details' "Skill list limit" for Codex (spec limit-line-control, stage 2): the limit now in
     tokens, the smallest limit in steps of 500 above it up to 10,000 at which no description is
     cut and no skill is left out, by the rule that gives the verdict, its cost, and Back to the
-    default when config.toml sets the key. `rerun(budget)` runs the rule on today's skills. The
-    places the limit line can be dragged to are in `steps`, as for Claude Code."""
+    default when config.toml sets the key. `base` and `rerun(budget)` run the rule on today's
+    skills, with the preview's changes. The places the limit line can be dragged to are in `steps`,
+    as for Claude Code, and so is `keep`."""
     back = {"tokens": "default", "label": words.CODEX_LIMIT_BACK} if limit is not None else None
     card = {"now": None, "offer": None, "back": back, "note": None, "why": None}
     card |= {"param": "tokens", "steps": []}
@@ -1771,20 +1843,23 @@ def _codex_limit_card(
     said = words.CODEX_LIMIT_NOW_SET if limit is not None else words.CODEX_LIMIT_NOW_DEFAULT
     card["now"] = said.format(n=f"{budget:,}")
     assert now is not None
+    above = range(
+        (budget // CODEX_LIMIT_STEP + 1) * CODEX_LIMIT_STEP, CODEX_MAX_LIMIT + 1, CODEX_LIMIT_STEP
+    )
+    shows = back is not None or keep
     if names <= _codex_full(now, lengths):
-        return card | {"why": words.LIMIT_NOT_NEEDED, "steps": steps([]) if back else []}
+        same = [(n, now) for n in above] if keep else []
+        return card | {"why": words.LIMIT_NOT_NEEDED, "steps": steps(same) if shows else []}
     ups: list[tuple[int, CodexFit]] = []
     found = None
-    for n in range(
-        (budget // CODEX_LIMIT_STEP + 1) * CODEX_LIMIT_STEP, CODEX_MAX_LIMIT + 1, CODEX_LIMIT_STEP
-    ):
+    for n in above:
         fit = found[1] if found else rerun(n)
         ups.append((n, fit))
         if found is None and names <= _codex_full(fit, lengths):
             found = (n, fit)
     if found is None:
         why = words.CODEX_LIMIT_NOT_ENOUGH.format(n=f"{CODEX_MAX_LIMIT:,}")
-        return card | {"why": why, "steps": steps([]) if back else []}
+        return card | {"why": why, "steps": steps(ups if keep else []) if shows else []}
     offered, fit = found
     shown = words.TOKENS.format(n=f"{offered:,}")
     offer = {"tokens": offered, "label": words.LIMIT_SET.format(share=shown)}
@@ -1909,12 +1984,25 @@ def _codex(
         models = sent_list.model or ""
     windows = [_window_card(title, models, _tag(date), then_budget, fact)]
     lengths = {r.name: len(r.full or "") for r in rows}
-    limit_card = _codex_limit_card(
-        window, limit, budget, base, checked, lengths, lambda b: run(states, b)[1]
-    )
-    changed = []
+    # The limit line counts what the preview's changes leave (as for Claude Code).
+    changes = _changes(draft, states, SWITCHES[client])
+
+    def limit_with(states: dict[str, str], keep: bool) -> dict:
+        ran = run(states, budget) if budget and known else None
+        return _codex_limit_card(
+            window, limit, budget, ran, checked, lengths, lambda b: run(states, b)[1], keep
+        )
+
+    keep = (_asked_tokens(asked, window) or 0) > (budget or 0)
+    if changes and not keep:
+        keep = limit_with(states, False)["offer"] is not None
+    limit_card = limit_with(states | changes, keep)
+    changed, expect = [], None
     if then_found and base is not None and budget:
         expect = _codex_estimate(base[0], base[1], _on(window), words.ESTIMATE)
+        if expect["misfit"] is None:
+            left = f"{budget - base[1].used:,}"
+            expect["room"] = words.ROOM_LEFT.format(left=left, unit="tokens")
         shown = words.TOKENS.format(n=f"{budget:,}")
         changed = [words.LIMIT_CHANGED.format(share=shown), expect["say"]]
     if base is not None and checked:
@@ -1935,7 +2023,6 @@ def _codex(
             windows.append(_window_card(title, shown, words.ESTIMATE_TAG, limit_there, result))
 
     after = None
-    changes = _changes(draft, states, SWITCHES[client])
     # A limit in the tray counts only where Kitden could estimate today's.
     new_budget = _asked_tokens(asked, window) if limit_card["now"] is not None else None
     if new_budget == budget:
@@ -2012,6 +2099,7 @@ def _codex(
         how=how,
         limit=limit_card,
         changed=changed,
+        now=expect | {"budget": budget} if expect else None,
     )
 
 
