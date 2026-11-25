@@ -154,10 +154,24 @@ def _read_skill(folder: Path) -> dict:
     return {
         "name": meta.get("name") or folder.name,
         "description": meta.get("description", ""),
+        "when_to_use": meta.get("when_to_use", ""),
         "files": files,
         "self_contained": not needs,
         "needs": needs,
     }
+
+
+def list_text(info: dict) -> str:
+    """The text Claude Code's skill list holds for a skill: `description - when_to_use`, the
+    description alone when there is no when_to_use.
+
+    # checked 2026-11-25 (install, version 2.1.311, program file): the two are joined with
+    # ` - `, and the cap counts them together; the docs say the same of the cap. With no
+    # description the client uses the start of the skill's text, which Kitden does not read:
+    # the when_to_use alone is counted then.
+    """
+    description, when = info["description"], info["when_to_use"]
+    return f"{description} - {when}" if description and when else description or when
 
 
 # Reading every file of hundreds of skills takes a moment; a folder is read again only when a

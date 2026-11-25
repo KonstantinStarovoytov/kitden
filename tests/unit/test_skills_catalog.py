@@ -11,7 +11,13 @@ import pytest
 from kitden.demo import build_demo_home
 from kitden.views.catalog import search
 from kitden.views.inventory import build_inventory, default_adapters
-from kitden.views.skills import front_matter, project_skills, read_skill, skill_catalog
+from kitden.views.skills import (
+    front_matter,
+    list_text,
+    project_skills,
+    read_skill,
+    skill_catalog,
+)
 from tests.conftest import cursor_db, make_home, write_cursor_fixture_state
 
 PLUGIN = "toolbox@claude-plugins-official"
@@ -295,3 +301,20 @@ def test_a_project_skill_is_a_catalog_row_of_its_project(tmp_path):
     assert all(r["project"] is None for r in skill_catalog(inventory, adapters))
     website = project_skills(inventory, adapters, str(home / "work/website"))
     assert all(r["name"] != "api-style" for r in website)  # another project's skill
+
+
+def test_list_text_joins_description_and_when_to_use_as_claude_code_does(tmp_path):
+    # checked 2026-11-25 (install, version 2.1.311): `description - when_to_use`, and the
+    # description alone when there is no when_to_use.
+    path = tmp_path / "a" / "SKILL.md"
+    path.parent.mkdir()
+    path.write_text("---\nname: a\ndescription: Does A.\nwhen_to_use: >-\n  Use for\n  A.\n---\n")
+    info = read_skill(path.parent)
+    assert (info["description"], info["when_to_use"]) == ("Does A.", "Use for A.")
+    assert list_text(info) == "Does A. - Use for A."
+    path.write_text("---\nname: a\ndescription: Does A.\n---\n")
+    assert list_text(read_skill(path.parent)) == "Does A."
+    path.write_text("---\nname: a\nwhen_to_use: Use for A.\n---\n")
+    assert list_text(read_skill(path.parent)) == "Use for A."
+    path.write_text("---\nname: a\nwhen_to_use: ''\ndescription: Does A.\n---\n")
+    assert list_text(read_skill(path.parent)) == "Does A."
