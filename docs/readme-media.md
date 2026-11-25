@@ -36,7 +36,8 @@ Each animation ends on its key moment, holds it, and fades back to its start.
 An earlier screen recording stuttered: frames came at uneven times. Now the page runs on a
 paused clock. Each step moves the page one frame (1/30 s) on, puts every animation at that
 time, and saves the frame. So the motion is even, however long a frame takes to save.
-Waiting for the network is cut out.
+Waiting is cut out. The clock stops 50 ms on from the page's own time, so times on the page
+stay right; a clock that lands anywhere else stops the recording.
 
 The WebPs are near-lossless (`-near_lossless 60`). Lossy WebP left dark bars and blocks
 where frames differ a little, and lower settings left grain on warm dark cards.
@@ -51,9 +52,10 @@ uv run --with playwright==1.64.1 python scripts/record_readme.py
 needs `ffmpeg` and `img2webp` (from libwebp) on the PATH. Each picture starts the real page
 on a fresh copy of the sample from `scripts/readme_demo.py`, in a temporary folder;
 `context` uses the demo's own sample. Stand-ins keep it local: a fake Keychain, and from
-`tests/offline.py` (which the browser tests share) fake client commands, canned tool lists
-and catalog answers, and no access checks. Nothing goes online, and nothing of the real
-home folder is read or written. `scripts/record_scenes.py` plays each scene and takes it.
+`tests/offline.py` (which the browser tests share) fake client commands, canned tool lists,
+catalog answers and latest version, and no access checks. Nothing goes online, and nothing of
+the real home folder is read or written. `scripts/record_scenes.py` plays each scene and
+takes it.
 
 Look at every picture before you commit it, and do not retouch the UI.
 
