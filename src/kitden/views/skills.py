@@ -118,7 +118,9 @@ def front_matter(skill_md: Path) -> dict[str, str]:
         elif key and block is not None:
             block.append(line.strip())
         elif key and quoted:
-            quoted = f"{quoted} {line.strip()}"
+            # As YAML folds it: a line end is a space, a blank line a line break.
+            rest = line.strip()
+            quoted += f" {rest}" if rest and not quoted.endswith("\n") else rest or "\n"
             if (text := _unquote(quoted)) != quoted:
                 out[key], quoted = text, ""
     if key and block is not None:

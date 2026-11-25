@@ -148,6 +148,9 @@ def test_front_matter_joins_a_quoted_value_over_several_lines(tmp_path):
     assert meta["description"] == 'Say "hi" to: everyone here'
     assert meta["license"] == "MIT"
     assert _front(tmp_path, "description: 'it''s\n  fine'")["description"] == "it's fine"
+    # A blank line is a line break, as in YAML.
+    meta = _front(tmp_path, 'description: "one\n\n  two\n  \n\n  three"')
+    assert meta["description"] == "one\ntwo\n\nthree"
     # One that never ends stays as its first line is.
     assert _front(tmp_path, 'description: "open\n  still')["description"] == '"open'
 
