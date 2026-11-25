@@ -200,8 +200,8 @@ function zoom(card, w, r, at, heat, control = null, { name = PICTURE.list, room 
   const over = r.over || {};
   const total = (part) => Object.values(part).reduce((sum, n) => sum + n, 0);
   const limit = w.budget || r.used;
-  // What did not fit starts past the limit, or past a lower one that the estimate goes by.
-  const top = Math.max(room ? Math.min(limit, room) : limit, r.used);
+  // What did not fit starts past the limit, or past the one the estimate goes by, lower or higher.
+  const top = Math.max(room || limit, r.used);
   // With the limit control, the bar also has room for the place that fits everything and for the
   // new limit, so the line can be dragged there; a place further right is past the bar's end.
   const reach = control ? control.reach : 0;

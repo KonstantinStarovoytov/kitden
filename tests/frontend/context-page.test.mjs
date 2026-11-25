@@ -1429,6 +1429,19 @@ test('what does not fit a lower limit starts past that limit, not past the chat\
   assert.equal(parseFloat(pieceOf('beta', 'over').style.left).toFixed(3), (8000 / 16000 * 100).toFixed(3));
 });
 
+test('what does not fit a raised limit starts past that limit, for the setup now and after Apply', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  // The chat's limit is 8,000. 12,000 is the limit now, or the one waiting: 11,000 of it are used, and
+  // gamma's 3,000 have no room in the rest.
+  const result = { ...NOW, sent: { alpha: 8000, beta: 2900 }, over: { gamma: 3000 }, used: 11000, size: 14000, misfit: { kind: 'name', n: 1 } };
+  const start = (12000 / 15000 * 100).toFixed(3);
+  show(answer({ ...CHANGED, now: { ...result, budget: 12000 } }, CODEX, CURSOR));
+  assert.equal(parseFloat(pieceOf('gamma', 'over').style.left).toFixed(3), start);
+  show(answer({ ...CHANGED, now: null, changed: [], after: { ...AFTER, result, budget: 12000 } }, CODEX, CURSOR));
+  assert.equal(parseFloat(pieceOf('gamma', 'over').style.left).toFixed(3), start);
+});
+
 test('while changes wait the handle stays with nothing to suggest', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };
