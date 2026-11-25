@@ -13,7 +13,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   Claude Code from your Claude account have a group of their own, "From your Claude account".
   Each shows what it holds and can be turned off for all projects or one, with Undo; it stays in
   your account. On Context their skills name their plugin and offer its switch, instead of saying
-  they have none. The terminal's own copies of these plugins are not read yet.
+  they have none. The terminal's own copies of these plugins are not read yet (#219).
 - **Codex skills in sub-folders:** Kitden now finds a Codex skill in a sub-folder of a skills folder,
   also one inside another skill's folder. It has a row, a switch on Context, and counts in the
   estimates when you add it after the last chat. Removing the outer skill names the skills that go
