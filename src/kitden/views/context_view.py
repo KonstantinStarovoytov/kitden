@@ -24,6 +24,7 @@ from kitden.clients.base import (
     from_plugin,
 )
 from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, ClaudeCodeAdapter, local_files
+from kitden.clients.claude_folder import ClaudeFolder, claude_folder
 from kitden.clients.versions import highest_version
 from kitden.context.claude_log import Unreadable, earlier_descriptions, last_claude_list
 from kitden.context.codex_log import codex_window, codex_windows, last_codex_list
@@ -127,19 +128,22 @@ def context_view(
     folder: str | None,
     draft: dict,
     anywhere: bool = False,
+    claude: ClaudeFolder | None = None,
 ) -> dict:
     """One card per found client. `folder` is the picked project (None: all projects); `draft`
     maps client -> skill name -> state, the tray's changes not applied yet, and `limits` to
     client -> the skill list's share of the window in the tray ("default": the key taken out).
     With `anywhere`, a client with no chat in `folder` shows its last chat in any folder; the
-    card's fact names it."""
+    card's fact names it. `claude` is where Claude Code keeps the user's files; by default the one
+    the environment says."""
+    claude = claude or claude_folder(home)
     clients = []
     limits = as_dict(draft.get("limits"))
     for client in found_columns(inventory):
         changes = as_dict(draft.get(client))
         if client == "claude_code":
             asked = limits.get(client)
-            clients.append(_claude(inventory, home, folder, changes, anywhere, asked))
+            clients.append(_claude(inventory, home, claude, folder, changes, anywhere, asked))
         elif client == "codex":
             asked = limits.get(client)
             clients.append(_codex(inventory, codex_home, folder, changes, anywhere, asked))
@@ -239,7 +243,7 @@ def _claude_row(name: str, sent: str | None, item: Item | None, path: str | None
     return _Row(name, sent, item, full, plain=plain, **kw)
 
 
-def _app_path(home: Path, name: str) -> str | None:
+def _app_path(home: Path, claude: ClaudeFolder, name: str) -> str | None:
     """The SKILL.md of a skill the Claude app gives Claude Code (`anthropic-skills:docx`), from
     the newest copy of its SKILL.md; None when there is none.
 
@@ -252,7 +256,7 @@ def _app_path(home: Path, name: str) -> str | None:
     found = []
     for path in (
         *app.glob(f"*/*/skills/{skill}/SKILL.md"),
-        *(home / ".claude/skills/synced").glob(f"*/{skill}/SKILL.md"),
+        *(claude.config / "skills/synced").glob(f"*/{skill}/SKILL.md"),
     ):
         try:
             found.append((path.stat().st_mtime, path))
@@ -457,9 +461,9 @@ def _window_card(title: str, models: str, tag: str, budget: int | None, result: 
 # Claude Code
 
 
-def _claude_files(home: Path, folder: str | None) -> list[Path]:
+def _claude_files(home: Path, claude: ClaudeFolder, folder: str | None) -> list[Path]:
     """Claude Code's settings files for a chat in `folder`, the winning one last."""
-    files = [home / ".claude/settings.json"]
+    files = [claude.settings]
     if folder:
         project = Path(folder)
         files += [project / ".claude/settings.json", *local_files(project, home)]
@@ -581,7 +585,7 @@ def _held(row: _Row, rules: dict[str, tuple[str, bool]]) -> bool:
     )
 
 
-def _claude_plugins(inventory, home: Path, folder: str | None) -> _Plugins:
+def _claude_plugins(inventory, home: Path, claude: ClaudeFolder, folder: str | None) -> _Plugins:
     """Those Claude Code installed, for all projects or in `folder`; not an account's."""
     items = [
         i
@@ -591,7 +595,9 @@ def _claude_plugins(inventory, home: Path, folder: str | None) -> _Plugins:
         and i.scope is not Scope.ACCOUNT
         and i.project in (None, folder)
     ]
-    return _Plugins(items, installed_inside({"claude_code": ClaudeCodeAdapter(home)}))
+    return _Plugins(
+        items, installed_inside({"claude_code": ClaudeCodeAdapter(home, folder=claude)})
+    )
 
 
 def _plugin_note(note: str | None, offer: dict | None) -> str | None:
@@ -963,13 +969,13 @@ def _added_lines(extras, states) -> list[str]:
     return [_many(n, words.LIMIT_ADDED_ONE, words.LIMIT_ADDED_MANY).format(n=n)] if n else []
 
 
-def _claude_weights(home: Path, at_ms: int) -> dict[str, float]:
+def _claude_weights(claude: ClaudeFolder, at_ms: int) -> dict[str, float]:
     """Each skill's use, aged from the chat's time.
 
     # checked 2026-11-09 (real ~/.claude.json): skillUsage maps a skill's name, as the log
     # writes it (plugin prefix too), to {usageCount, lastUsedAt (ms)}.
     """
-    state = as_dict(Reader("claude_code").json(home / ".claude.json"))
+    state = as_dict(Reader("claude_code").json(claude.state))
     weights = {}
     for name, entry in as_dict(state.get("skillUsage")).items():
         count, last = as_dict(entry).get("usageCount"), as_dict(entry).get("lastUsedAt")
@@ -1173,13 +1179,19 @@ def _model_name(model: str | None) -> str | None:
 
 
 def _claude(
-    inventory, home: Path, folder: str | None, draft: dict, anywhere: bool, asked=None
+    inventory,
+    home: Path,
+    claude: ClaudeFolder,
+    folder: str | None,
+    draft: dict,
+    anywhere: bool,
+    asked=None,
 ) -> dict:
     """`asked`: the skill list's share a tray row asks for (a number or "default")."""
     client = "claude_code"
-    found = last_claude_list(home, folder)
+    found = last_claude_list(claude.config, folder)
     if found is None and anywhere and folder is not None:
-        found = last_claude_list(home, None)
+        found = last_claude_list(claude.config, None)
     if found is None or isinstance(found, Unreadable):
         return _no_list(client, _skills(inventory, client, folder), found)
     if not found.skills:
@@ -1190,11 +1202,11 @@ def _claude(
     loaded = {_name(client, i): i for i in items}
     turned_off = _off_skills(inventory, client, found.folder)
     by_name = turned_off | loaded
-    plugins = _claude_plugins(inventory, home, found.folder)
+    plugins = _claude_plugins(inventory, home, claude, found.folder)
     rows = []
     for name, text in found.skills:
         item = by_name.get(name)
-        path = item.source.path if item else _app_path(home, name)
+        path = item.source.path if item else _app_path(home, claude, name)
         rows.append(
             _claude_row(
                 name, text, item, path, shown=found.shown.get(name, ""), added=name in found.added
@@ -1208,7 +1220,7 @@ def _claude(
         for name, item in loaded.items()
         if name not in listed
     ]
-    files = _claude_files(home, found.folder)
+    files = _claude_files(home, claude, found.folder)
     rules = _built_in_rules(files)
     # `always_full` is checked against each chat: a wrong name here and the rule no longer
     # rebuilds the list.
@@ -1238,7 +1250,7 @@ def _claude(
     off |= {name for name, state in states.items() if state in ASKED}
     # What the next chats list: today's skills, in today's states (`rows_now`).
     states_now = states | {name: "off" for name in states if name in off}
-    weights = _claude_weights(home, at_ms)
+    weights = _claude_weights(claude, at_ms)
 
     setting = _claude_setting(files)
     fraction = _claude_fraction(files)
@@ -1288,7 +1300,7 @@ def _claude(
     # which is what is on disk: the rule stays exact and never reads it.
     if setting is None and not (checked and base is not None):
         bare = [r for r in (*rows, *waiting) if r.built_in and r.full is None and r.sent is None]
-        found_earlier = earlier_descriptions(home, {r.name for r in bare})
+        found_earlier = earlier_descriptions(claude.config, {r.name for r in bare})
         for r in bare:
             r.earlier = found_earlier.get(r.name)
 

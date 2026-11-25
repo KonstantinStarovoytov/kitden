@@ -9,7 +9,8 @@ nothing from it.
   Claude Code's settings set for the skill list (`skillListingBudgetFraction`,
   `skillListingMaxDescChars`). Kitden uses them to size the skill list and keeps none of it.
   When you set the skill list limit on the Context page and press Apply, Kitden writes
-  `skillListingBudgetFraction` in `~/.claude/settings.json`, or for Codex
+  `skillListingBudgetFraction` in Claude Code's user settings (`~/.claude/settings.json`, or
+  `settings.json` in the folder `CLAUDE_CONFIG_DIR` names), or for Codex
   `[skills] max_context_tokens` in its `config.toml`, with a backup you can undo.
 - For the context check, what the client sent in your last chats, from the client's own chat
   files, and the skills the Claude app gives Claude Code, from the app's own folder. For Codex, also

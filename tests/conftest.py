@@ -463,10 +463,11 @@ def all_text(value) -> str:
 
 @pytest.fixture(autouse=True)
 def _no_real_client_homes(monkeypatch):
-    """Tests must never reach the real ~/.codex or Claude Code folder through CODEX_HOME or
-    CLAUDE_CONFIG_DIR."""
+    """Tests must never reach the real ~/.codex or Claude Code folder through CODEX_HOME,
+    CLAUDE_CONFIG_DIR or CLAUDE_CODE_PLUGIN_CACHE_DIR."""
     monkeypatch.delenv("CODEX_HOME", raising=False)
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_PLUGIN_CACHE_DIR", raising=False)
 
 
 @pytest.fixture(autouse=True)

@@ -86,7 +86,7 @@ def _build(
     folder = Path(item.source.path or "").parent
     if not read_skill(folder)["self_contained"]:
         raise ValueError("needs the rest of its plugin")
-    readers = folder_readers(client, adapters, found)
+    readers = folder_readers(client, adapters, found, into)
     return [adapters[client].skill_copy_step(folder, readers, into)]
 
 
@@ -150,7 +150,11 @@ def align_steps(
                 has[client].add((ItemKind.SKILL, skill["name"]))
     offers = {o["id"]: o for o in catalog(inventory, adapters)}
     cursor = adapters.get("cursor")
-    imports = "cursor" in clients and cursor is not None and cursor.imports_claude_plugins()
+    claude = adapters.get("claude_code")
+    near = claude is None or claude.reaches_cursor(ItemKind.PLUGIN)
+    imports = (
+        "cursor" in clients and cursor is not None and near and cursor.imports_claude_plugins()
+    )
 
     candidates: list[dict] = []
     built: list[list[Step]] = []

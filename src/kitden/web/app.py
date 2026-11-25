@@ -54,6 +54,7 @@ from kitden.changes.actions import (
     add_refusals,
     add_server_steps,
     disconnect_steps,
+    folder_readers,
     gateway_add_steps,
     install_steps,
     keychain_steps,
@@ -107,6 +108,7 @@ from kitden.clients.base import (
     SKILL_REMOVE,
 )
 from kitden.clients.choice import clients_on, off_clients, set_client
+from kitden.clients.claude_code import user_folder
 from kitden.command import installed_command
 from kitden.discovery import Discovery, configured_entry, short_name
 from kitden.gateways import data_dir
@@ -1282,7 +1284,9 @@ def create_app(
         if home is None:
             return []
         codex_home = getattr(adapters.get("codex"), "codex_home", None) or home / ".codex"
-        return context_view(state.inventory, home, codex_home, path, draft or {})["clients"]
+        return context_view(
+            state.inventory, home, codex_home, path, draft or {}, claude=user_folder(adapters, home)
+        )["clients"]
 
     def _gateway_view(request, project, path):
         held, problem = _kitden(path)
@@ -1717,7 +1721,12 @@ def create_app(
         switched = built.items[0] if change.action in switches else None
         mark_reach(change, state.inventory, switched, imports)
         after = after_words(
-            change, state.inventory, cursor_imports=imports, skills=built.copied, home=home
+            change,
+            state.inventory,
+            cursor_imports=imports,
+            skills=built.copied,
+            home=home,
+            claude=user_folder(adapters, home) if home is not None else None,
         )
         # A server a Mac app runs may come back: a note, never a refusal.
         after += app_notes(change.action, built.items)
@@ -2013,10 +2022,9 @@ def create_app(
 
     def _inherits() -> dict:
         """Whether Cursor loads Claude Code's plugins and the skills in its folder."""
-        cursor = _found_cursor()
         return {
             "plugin": _cursor_imports(),
-            "skill": bool(cursor and cursor.reads_other_clients()),
+            "skill": "cursor" in folder_readers("claude_code", adapters, set(_found_clients())),
         }
 
     async def market_server_list(request: Request) -> JSONResponse:

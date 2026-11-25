@@ -11,7 +11,9 @@ files; paths are only under `technical`, and imports reach the page only, never 
 import os
 from pathlib import Path
 
-from kitden.clients.base import found_columns, is_home
+from kitden.clients.base import found_columns
+from kitden.clients.claude_code import user_folder
+from kitden.clients.claude_folder import ClaudeFolder
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, ItemKind, _hash
 from kitden.redact import redact_line
 from kitden.views.effective import client_order
@@ -62,7 +64,7 @@ def _name(path: Path, in_project: bool) -> str:
     return path.name
 
 
-def _reads_agents(inventory, project: str, home: Path) -> bool:
+def _reads_agents(inventory, project: str, own: ClaudeFolder) -> bool:
     """Claude Code reads the project's AGENTS.md: it is found, not too old, and no CLAUDE.md
     file is in the project or a folder above it."""
     claude = next((c for c in inventory.clients if c.id == "claude_code"), None)
@@ -74,7 +76,7 @@ def _reads_agents(inventory, project: str, home: Path) -> bool:
     root = Path(project)
     for folder in (root, *root.parents):
         names = ["CLAUDE.md", "CLAUDE.local.md"]
-        if not is_home(folder, home):  # ~/.claude/CLAUDE.md is the user's own
+        if not own.is_own(folder):  # the user's own CLAUDE.md does not count
             names.append(".claude/CLAUDE.md")
         if any((folder / name).is_file() for name in names):
             return False
@@ -132,7 +134,8 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
     home = next((a.home for a in adapters.values()), None)
     blocks = _blocks(inventory, project)
     through: set[str] = set()
-    if project is not None and home is not None and _reads_agents(inventory, project, home):
+    own = user_folder(adapters, home) if home is not None else None
+    if project is not None and own is not None and _reads_agents(inventory, project, own):
         agents = Path(project) / "AGENTS.md"
         if agents.is_file():
             block = blocks.setdefault(

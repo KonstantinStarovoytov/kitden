@@ -9,6 +9,7 @@ entry.
 
 import json
 import os
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,7 @@ from kitden.clients.base import (
     skill_items,
     toggle_action,
 )
+from kitden.clients.claude_folder import ClaudeFolder, claude_folder
 from kitden.clients.versions import highest_version, is_supported
 from kitden.local_gateway.settings import as_dict
 from kitden.model import (
@@ -139,7 +141,7 @@ def _install_counts(installs: Any, project_path: str) -> bool:
 # `--settings`, and whether git tracks the local file (a tracked file also waits for trust).
 # checked 2026-11-25 (code.claude.com/docs/en/permissions, "When your local settings file needs
 # trust"): in the home folder the local file's approvals apply without trust; `scan` counts the
-# home folder as trusted. Not read: a folder set as CLAUDE_CONFIG_DIR, which the docs treat alike.
+# home folder as trusted, and a folder whose `.claude` is CLAUDE_CONFIG_DIR, as the docs do.
 def _approval(
     name: str, user: dict, project_files: list[dict], trusted: bool, unread: bool
 ) -> Enabled:
@@ -336,6 +338,33 @@ class ClaudeCodeAdapter(ClientAdapter):
     skills_folder = ".claude/skills"
     skill_note = NEW_SESSION
 
+    def __init__(
+        self,
+        home: Path,
+        read_version: Callable[[], str | None] | None = None,
+        folder: ClaudeFolder | None = None,
+    ) -> None:
+        """`folder` is where Claude Code keeps the user's files; by default the one the
+        environment says (claude_folder)."""
+        super().__init__(home, read_version)
+        self.folder = folder or claude_folder(home)
+
+    def user_root(self) -> Path:
+        return self.folder.config
+
+    def user_skills(self) -> Path:
+        return self.folder.config / "skills"
+
+    # checked 2026-11-25 (cursor.com/docs/skills): Cursor's docs name only `~/.claude`. Whether it
+    # follows the variables is not checked, so a moved folder is taken not to reach it.
+    def reaches_cursor(self, kind: ItemKind) -> bool:
+        usual = claude_folder(self.home, {})
+        here = (self.folder.config, self.folder.plugins)
+        there = (usual.config, usual.plugins)
+        if kind is not ItemKind.PLUGIN:
+            here, there = here[:1], there[:1]
+        return [os.path.realpath(p) for p in here] == [os.path.realpath(p) for p in there]
+
     def extra_clients(self) -> list[Client]:
         """The Claude Desktop Code tab: Claude Code settings plus claude_desktop_config.json."""
         config = claude_desktop_dir(self.home) / DESKTOP_CONFIG
@@ -400,7 +429,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         """Where a rule goes: the user settings, or one project's `rule_file`. A project's rule
         taken out goes from each local file that holds it."""
         if project is None:
-            return [self.home / ".claude/settings.json"]
+            return [self.folder.settings]
         holding = [f for f in local_files(Path(project), self.home) if holds(f, key)]
         if not off and holding:
             return holding
@@ -447,7 +476,7 @@ class ClaudeCodeAdapter(ClientAdapter):
     def skill_limit_step(self, value: Any) -> Step:
         """`skillListingBudgetFraction` set to `value` in the user settings; ABSENT takes it out,
         so the default applies again. Never a project's file."""
-        path = self.home / ".claude/settings.json"
+        path = self.folder.settings
         return Step(
             client=CLIENT,
             scope=Scope.USER,
@@ -468,8 +497,8 @@ class ClaudeCodeAdapter(ClientAdapter):
 
     def marketplace_sources(self) -> dict[str, str | None]:
         read = Reader(CLIENT)
-        settings = as_dict(read.json(self.home / ".claude/settings.json"))
-        known = as_dict(read.json(self.home / ".claude/plugins/known_marketplaces.json"))
+        settings = as_dict(read.json(self.folder.settings))
+        known = as_dict(read.json(self.folder.plugins / "known_marketplaces.json"))
         sources: dict[str, str | None] = {}
         for name, entry in {**as_dict(settings.get("extraKnownMarketplaces")), **known}.items():
             source = as_dict(as_dict(entry).get("source"))
@@ -482,7 +511,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         # Checked 2026-10-19 (2.1.283): `marketplace add` records the source under
         # extraKnownMarketplaces in ~/.claude/settings.json; `remove` takes it out.
         edit = FileEdit(
-            path=str(self.home / ".claude/settings.json"),
+            path=str(self.folder.settings),
             fmt="json",
             key=("extraKnownMarketplaces", name),
             after=PRESENT,
@@ -500,16 +529,16 @@ class ClaudeCodeAdapter(ClientAdapter):
 
     def plugin_install_step(self, plugin_id: str, project: str | None = None) -> Step:
         # No -y: a plugin that installs by running a command stops here and says so.
-        root, scope = self.home, Scope.USER
+        path, scope = self.folder.settings, Scope.USER
         if project is not None:
             # checked 2026-10-22 (`claude plugin install --help`, 2.1.283, and
             # code.claude.com/docs/en/plugins/install): `-s project`, run in the project, puts
             # the plugin in `enabledPlugins` of <project>/.claude/settings.json, the file the
             # project shares; `uninstall -s project` takes it out there.
             need_folder(project)
-            root, scope = Path(project), Scope.PROJECT
+            path, scope = Path(project) / ".claude/settings.json", Scope.PROJECT
         edit = FileEdit(
-            path=str(root / ".claude/settings.json"),
+            path=str(path),
             fmt="json",
             key=("enabledPlugins", plugin_id),
             after=True,
@@ -570,7 +599,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         )
 
     def marketplace_roots(self) -> dict[str, Path]:
-        known = as_dict(Reader(CLIENT).json(self.home / ".claude/plugins/known_marketplaces.json"))
+        known = as_dict(Reader(CLIENT).json(self.folder.plugins / "known_marketplaces.json"))
         roots = {}
         for name, entry in known.items():
             where = as_dict(entry).get("installLocation")
@@ -580,7 +609,7 @@ class ClaudeCodeAdapter(ClientAdapter):
 
     def plugin_folders(self) -> dict[str, Path]:
         """Plugin id -> its install folder, the first one in `installed_plugins.json` on disk."""
-        record = as_dict(Reader(CLIENT).json(self.home / ".claude/plugins/installed_plugins.json"))
+        record = as_dict(Reader(CLIENT).json(self.folder.plugins / "installed_plugins.json"))
         out: dict[str, Path] = {}
         for plugin_id, installs in as_dict(record.get("plugins")).items():
             for install in installs if isinstance(installs, list) else []:
@@ -597,7 +626,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         """A user-scope MCP entry, added with `claude mcp add-json` (FR-021, FR-024), or written
         directly when it holds a secret."""
         edit = FileEdit(
-            path=str(self.home / ".claude.json"),
+            path=str(self.folder.state),
             fmt="json",
             key=("mcpServers", name),
             after=value,
@@ -651,8 +680,8 @@ class ClaudeCodeAdapter(ClientAdapter):
     def scan(self) -> Scan:
         read = Reader(CLIENT)
         scan = Scan()
-        state_path = self.home / ".claude.json"
-        settings_path = self.home / ".claude/settings.json"
+        state_path = self.folder.state
+        settings_path = self.folder.settings
         state = as_dict(read.json(state_path))
         settings = as_dict(read.json(settings_path))
         settings_known = not read.failed(settings_path)
@@ -662,7 +691,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         project_skill_rules: dict[str, dict[str, tuple[str, Scope]]] = {}
         project_hook_rules: dict[str, tuple[bool, Scope]] = {}
         projects = as_dict(state.get("projects"))
-        installed_path = self.home / ".claude/plugins/installed_plugins.json"
+        installed_path = self.folder.plugins / "installed_plugins.json"
         installed = as_dict(as_dict(read.json(installed_path)).get("plugins"))
         installed_known = not read.failed(installed_path)
         # checked 2026-11-25 (code.claude.com/docs/en/mcp, "Disable a server without removing
@@ -693,7 +722,9 @@ class ClaudeCodeAdapter(ClientAdapter):
                 data,
                 settings,
                 settings_known,
-                is_trusted(projects, Path(path), self.home) or is_home(Path(path), self.home),
+                is_trusted(projects, Path(path), self.home)
+                or is_home(Path(path), self.home)
+                or self.folder.is_own(Path(path)),
                 installed if installed_known else None,
                 off_names,
             )
@@ -775,13 +806,13 @@ class ClaudeCodeAdapter(ClientAdapter):
 
         # Skills, hooks and marketplaces.
         user_skills = _apply_rules(
-            skill_items(CLIENT, self.home / ".claude/skills", Scope.USER, CLIENT),
+            skill_items(CLIENT, self.user_skills(), Scope.USER, CLIENT),
             _skill_rules([(Scope.USER, settings)]),
             settings_known,
         )
         scan.items += _project_rules(user_skills, project_skill_rules)
         scan.items += instruction_items(
-            CLIENT, _instruction_files(self.home / ".claude"), Scope.USER, CLIENT
+            CLIENT, _instruction_files(self.folder.config), Scope.USER, CLIENT
         )
         raw_hooks = hook_items(CLIENT, settings, settings_path, Scope.USER, claude_rules=True)
         user_hooks = _apply_hooks_rule(raw_hooks, _hooks_rule([(Scope.USER, settings)]))
@@ -795,7 +826,7 @@ class ClaudeCodeAdapter(ClientAdapter):
             i if dead.enabled is Enabled.OFF else replace(i, project_rules=tuple(hook_rules))
             for dead, i in zip(raw_hooks, user_hooks, strict=True)
         ]
-        marketplaces_path = self.home / ".claude/plugins/known_marketplaces.json"
+        marketplaces_path = self.folder.plugins / "known_marketplaces.json"
         for name, entry in as_dict(read.json(marketplaces_path)).items():
             where = marketplace_source(as_dict(entry).get("source"))
             scan.items.append(
@@ -834,8 +865,9 @@ class ClaudeCodeAdapter(ClientAdapter):
         path = str(root)
         items: list[Item] = []
         # When the project is the home folder, its `.claude/settings.json` and skills are the
-        # user's own, already read as user items; reading them again made a project copy.
-        at_home = is_home(root, self.home)
+        # user's own, already read as user items; reading them again made a project copy. With
+        # the user's folder moved, they are the project's.
+        at_home = self.folder.is_own(root)
         settings_path = root / ".claude/settings.json"
         settings = {} if at_home else as_dict(read.json(settings_path))
         # The local files, the winning one last; each plugin key comes from the last that has it.
@@ -936,3 +968,10 @@ class ClaudeCodeAdapter(ClientAdapter):
         return items + mcp_items(
             CLIENT, servers, mcp_path, Scope.PLUGIN, enabled=enabled, kind=SourceKind.PLUGIN
         )
+
+
+def user_folder(adapters: Mapping[str, ClientAdapter], home: Path) -> ClaudeFolder:
+    """The folder the Claude Code adapter reads. Without one (the client is off) the usual folder
+    in `home`, so the demo never follows the environment."""
+    adapter = adapters.get(CLIENT)
+    return adapter.folder if isinstance(adapter, ClaudeCodeAdapter) else claude_folder(home, {})
