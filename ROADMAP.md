@@ -20,7 +20,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **The Instructions map matches Codex and Cursor:** Codex shows no `AGENTS.md` in a project
   marked untrusted, and Cursor shows the `CLAUDE.md` at a project's root (#203).
 - **Kitden follows `CLAUDE_CONFIG_DIR`:** with it set, or `CLAUDE_CODE_PLUGIN_CACHE_DIR`, Kitden
-  reads and writes Claude Code's files in that folder, not in `~/.claude` (#213).
+  reads and writes Claude Code's files in that folder, not in `~/.claude`. The page also notices
+  a client's folder that is made after it started (#213).
 
 ### 0.12.0
 
