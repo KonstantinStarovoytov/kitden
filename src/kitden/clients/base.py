@@ -297,6 +297,7 @@ IF_EVENTS = (
     "PostToolUseFailure",
     "PermissionRequest",
     "PermissionDenied",
+    "PreSkillShellCommand",
 )
 
 
