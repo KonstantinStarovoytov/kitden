@@ -11,6 +11,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **The Add panels have an even gap above the hint:** the closed "Add a GitHub source" block no
   longer takes a row of its own (#204).
+- **Claude Code items show the state they really have:** a hook whose `if` can never match, a
+  project's plugin that is not installed, and a server you turned off with `/mcp` in one project
+  no longer show as On, and approvals in your home folder's local settings count without a trust
+  prompt (#201).
 
 ### 0.12.0
 

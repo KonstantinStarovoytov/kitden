@@ -289,6 +289,26 @@ def mcp_items(
     ]
 
 
+# checked 2026-11-25 (code.claude.com/docs/en/hooks, "Hook handler fields"): a handler with `if`
+# runs only on these events; on any other event it never runs.
+IF_EVENTS = (
+    "PreToolUse",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "PermissionRequest",
+    "PermissionDenied",
+)
+
+
+def dead_hook(event: str, group: Any) -> bool:
+    """A Claude Code matcher group that never runs: it has handlers, every one has `if`, and the
+    event is not one where `if` works."""
+    handlers = as_dict(group).get("hooks")
+    if event in IF_EVENTS or not isinstance(handlers, list) or not handlers:
+        return False
+    return all(isinstance(h, dict) and "if" in h for h in handlers)
+
+
 def hook_items(
     client: str,
     settings: dict,
@@ -297,12 +317,22 @@ def hook_items(
     owner: str | None = None,
     kind: SourceKind = SourceKind.FILE,
     project: str | None = None,
+    claude_rules: bool = False,
 ) -> list[Item]:
     """One hook item for each matcher of each event in a Claude Code settings file. `owner` is
-    the client whose file it is, when that is not `client`."""
+    the client whose file it is, when that is not `client`. With `claude_rules` a matcher whose
+    groups all never run (`dead_hook`) is off; Cursor, which reads these files too, keeps its own
+    rules."""
     items = []
     for event, groups in as_dict(settings.get("hooks")).items():
-        for group in groups if isinstance(groups, list) else []:
+        groups = groups if isinstance(groups, list) else []
+        # Groups of one matcher share an id, so they share a state: one that runs is enough.
+        runs = [
+            as_dict(g).get("matcher") or "*"
+            for g in groups
+            if not (claude_rules and dead_hook(event, g))
+        ]
+        for group in groups:
             matcher = as_dict(group).get("matcher") or "*"
             items.append(
                 Item(
@@ -312,6 +342,7 @@ def hook_items(
                     source=file_source(path, owner or client, f"hooks.{event}", kind=kind),
                     scope=scope,
                     project=project,
+                    enabled=Enabled.ON if matcher in runs else Enabled.OFF,
                 )
             )
     return items

@@ -152,10 +152,10 @@ class Item:
     # "user-invocable-only" or "off"), or "only-asked" when SKILL.md says
     # `disable-model-invocation: true` (Claude Code and Cursor). None: loaded as usual.
     skill_state: str | None = None
-    # A user skill or Claude Code hook that a project's own settings rule: (project, on or off,
-    # rule file, the rule's value, such as "name-only"; a hook's is "on" or "off", from
-    # `disableAllHooks`). The effective view applies the one for its project; the item itself
-    # shows the user's rule.
+    # A user skill, Claude Code hook or MCP server that a project's own settings rule: (project,
+    # on or off, rule file, the rule's value, such as "name-only"; a hook's is "on" or "off", from
+    # `disableAllHooks`; a server's is "off", from `disabledMcpServers`). The effective view
+    # applies the one for its project; the item itself shows the user's rule.
     project_rules: tuple[tuple[str, Enabled, Scope, str], ...] = ()
     # Equal for two MCP entries the Kitden gateway would run the same way (entries.entry_key).
     # Its values can be secrets, so it stays on the server: item_dict leaves it out.
