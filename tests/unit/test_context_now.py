@@ -690,6 +690,32 @@ def test_a_skill_kept_for_when_it_is_asked_for_was_not_left_out_of_a_names_only_
     assert "gamma" in cx["windows"][0]["result"]["over"] and "gamma" not in cx["now"]["over"]
 
 
+@pytest.mark.parametrize("how", ["kept for when it is asked for", "off"])
+def test_a_plugin_skill_is_taken_out_by_its_newer_version(home, how):
+    # An update removed the version the chat used: what counts now is what its file says there.
+    paths = codex_home(home, window=20_000)
+    plugin = home / ".codex/plugins/cache/market/plug"
+    gone = plugin.resolve() / "1.0.0/skills/tool/SKILL.md"
+    newer = skill(plugin / "1.1.0/skills", "tool", "Does one thing.")
+    texts = {"alpha": CODEX_A, "beta": CODEX_B, "gamma": CODEX_C}
+    lines = [f"- {n}: {t} (file: {paths[n]})" for n, t in texts.items()]
+    codex_chat(home, [*lines, f"- plug:tool: Does one thing. (file: {gone})"])
+    cx = codex(home)
+    assert cx["checked"] is True and cx["changed"] == []
+    if how == "off":
+        # The path of the version that is gone turns nothing off.
+        codex_off(home, gone)
+        assert codex(home)["changed"] == []
+        codex_off(home, newer.resolve())
+    else:
+        policy = newer.parent / "agents/openai.yaml"
+        policy.parent.mkdir()
+        policy.write_text("policy:\n  allow_implicit_invocation: false\n")
+    cx = codex(home)
+    assert cx["changed"][0] == CHANGED
+    assert set(cx["now"]["sent"]) == {"alpha", "beta", "gamma"}
+
+
 def test_codex_skills_and_the_limit_changed(home):
     budget = codex_cut_chat(home)
     (home / ".codex/config.toml").write_text(

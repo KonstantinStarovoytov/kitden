@@ -104,7 +104,7 @@ class _Row:
     added: bool = False  # Claude Code: added during the chat, sent whole outside the limit
     built_in: bool = False  # Claude Code: built in, so no file
     always_full: bool = False  # Claude Code: built in, keeps its description whatever the limit
-    moved: bool = False  # Codex: read from its plugin's newer version, the chat's one is gone
+    newer: str = ""  # Codex: its file in its plugin's newer version, when the chat's one is gone
     # Codex: the newer version's description is another text than the chat sent, so the size it
     # had in the chat is not known.
     changed: bool = False
@@ -113,6 +113,15 @@ class _Row:
     earlier: str | None = None
     # Claude Code: the description alone, what the page shows; `full` also holds when_to_use.
     plain: str | None = None
+
+    @property
+    def moved(self) -> bool:
+        return bool(self.newer)
+
+    @property
+    def file(self) -> str:
+        """Codex: the skill's file as it is now."""
+        return self.newer or self.path
 
     @property
     def page_text(self) -> str | None:
@@ -1727,7 +1736,7 @@ def _codex_order(rows: list[_Row], new: list[_Row]) -> list[_Row]:
     """
 
     def place(r: _Row) -> tuple[int, str]:
-        if "/.system/" in (r.path or ""):
+        if "/.system/" in r.path:
             return 0, r.name
         return 1 if r.item is not None and r.item.project else 2, r.name
 
@@ -2003,7 +2012,7 @@ def _codex(
             and text is not None
             and not codex_catalog(whole).startswith(text)
         )
-        rows.append(_Row(name, text, item, whole, path, moved=newer is not None, changed=changed))
+        rows.append(_Row(name, text, item, whole, path, newer=newer or "", changed=changed))
     rows = _codex_added(rows)
     matched = {r.item.id for r in rows if r.item}
     extras = [i for i in items if i.id not in matched]
@@ -2025,9 +2034,9 @@ def _codex(
     as_shown = as_shown | new_shown
     rows_now = _codex_order(rows, new)
     is_off = _codex_off(inventory, codex_home, sent_list.folder)
-    states = {r.name: "off" if is_off(r.path or "") else _state(r.item) for r in rows_now}
+    states = {r.name: "off" if is_off(r.file) else _state(r.item) for r in rows_now}
     # A skill kept for when it is asked for is on, and not on the list.
-    asked_for = {r.name for r in rows if _codex_hidden(r.path or "")}
+    asked_for = {r.name for r in rows if _codex_hidden(r.file)}
     states_now = states | dict.fromkeys(asked_for, "off")
     then = {r.name: "on" for r in rows}  # the chat listed them
 
@@ -2040,7 +2049,7 @@ def _codex(
         states: dict[str, str], budget: int, listed: list[_Row] = rows_now
     ) -> tuple[list[CodexSkill], CodexFit]:
         skills = [
-            CodexSkill(r.name, r.full or "", as_shown.get(r.name) or r.path or "")
+            CodexSkill(r.name, r.full or "", as_shown.get(r.name) or r.path)
             for r in listed
             if states[r.name] != "off"
         ]
