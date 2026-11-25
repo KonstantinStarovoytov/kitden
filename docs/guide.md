@@ -61,7 +61,8 @@ gives that list. When Claude Code's settings set the limit, with `skillListingBu
 `SLASH_COMMAND_TOOL_CHAR_BUDGET`, Kitden uses that limit, and `skillListingMaxDescChars` for the
 length of a description. Cursor gets no verdict, because Kitden cannot see what Cursor sends. Skills
 whose descriptions are sent go from grey to orange with the length of their description, so the
-few that take most of the list stand out. A skill's **Details** shows its description, with
+few that take most of the list stand out. For Claude Code a skill's size also counts its
+`when_to_use`, as Claude Code does. A skill's **Details** shows its description, with
 the part the agent did not get in grey. There you can also
 switch it to **On**, **Name only** (Claude Code) or **Off** where the client
 allows it; Cursor has no switch. A skill built into Claude Code, such as `dataviz`, is marked
