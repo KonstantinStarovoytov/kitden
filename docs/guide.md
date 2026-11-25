@@ -16,15 +16,17 @@ The Gateway's groups work the same way.
 
 | What | How to manage it |
 | --- | --- |
-| **Plugins and skills** | Use **+ Add**, or drag an item onto another client. Turn it on or off, choose its scope, or remove a copy in **Details**, where the client supports it. A Claude Code skill can also be off in one project only, beside your other skill rules. **Add missing plugins and skills…** fills gaps across clients. |
+| **Plugins and skills** | Use **+ Add**, or drag an item onto another client. Turn it on or off, choose its scope, or remove a copy in **Details**, where the client supports it. A Claude Code skill can also be off in one project only, beside your other skill rules. A plugin that a project turns on, but that is not installed on this computer, shows as unknown. **Add missing plugins and skills…** fills gaps across clients. |
 | **Marketplaces** | Browse their plugins and skills. **+ Add → Add a marketplace…** adds a GitHub source. **Details → More → Commands…** has update and remove commands to copy. |
-| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. With **All projects** it shows the files loaded in every project, and a quiet line names a client that loads none; pick a project to see its own files. A project's `CLAUDE.md` shows Cursor beside Claude Code, and Codex shows no project files in a project marked untrusted. When a client is turned off in Kitden, the tab says so. A Claude Code hook that `disableAllHooks` turns off shows as off. Kitden only reads these; edit them in your editor. |
+| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. With **All projects** it shows the files loaded in every project, and a quiet line names a client that loads none; pick a project to see its own files. A project's `CLAUDE.md` shows Cursor beside Claude Code, and Codex shows no project files in a project marked untrusted. When a client is turned off in Kitden, the tab says so. A Claude Code hook that `disableAllHooks` turns off shows as off, as does one that can never run because its `if` is on an event that ignores it. Kitden only reads these; edit them in your editor. |
 
 On the map each client's block says what it loads there: its plugins and skills ("5 plugins ·
 62 skills"), or its hooks when a hook is all it has ("1 hook"). On **Instructions** it counts
 the client's instruction files ("3 files"); commands and agents are not counted, and a client
 that has only those says "Commands and agents only". A client with nothing says "Nothing
 loaded".
+
+An MCP server you turned off with `/mcp` in one project shows as off in that project.
 
 The preview names the clients and projects affected. Adds on the map go to all projects;
 the List offers a project scope where supported. Start a new client session to load a change.
