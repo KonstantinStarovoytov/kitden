@@ -10,6 +10,7 @@ import json
 import os
 import re
 import tomllib
+from urllib.parse import urlsplit
 
 import pytest
 from playwright.sync_api import expect
@@ -58,9 +59,17 @@ def settings(home) -> dict:
 
 
 def api_reads(page) -> list[str]:
-    """The page's reads of /api/, from now on, as the browser asks for them."""
+    """The page's reads of /api/, from now on, as the browser asks for them. Not /api/update: the
+    page looks there every 3 s by itself while the latest version is not known (update.js, ASKS),
+    and a slow drag can fall on such a look."""
     seen: list[str] = []
-    page.on("request", lambda request: "/api/" in request.url and seen.append(request.url))
+
+    def note(request) -> None:
+        path = urlsplit(request.url).path
+        if path.startswith("/api/") and path != "/api/update":
+            seen.append(request.url)
+
+    page.on("request", note)
     return seen
 
 
