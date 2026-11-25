@@ -7,7 +7,8 @@ in a temporary folder: memory in Claude Code, playwright in Codex and Context7 i
 The Context picture is taken on the sample `kitden demo` opens, so the demo shows the same.
 Stand-ins keep it local: a fake Keychain, and from tests/offline.py fake client commands,
 canned tool lists, catalog answers and latest version, and no access checks. Nothing goes
-online, and nothing of the real home folder is read or written.
+online, nothing of the real home folder is read or written, and the clients that run here
+do not change a picture.
 
 Each scene is taken in light and dark, with a drawn cursor, and the part of the page it is
 about is saved in docs/images/readme/: a still as a PNG, an animation as a looping WebP
@@ -112,6 +113,7 @@ def start_page(home: Path, port: int = PORT, build=None) -> tuple[str, uvicorn.S
         run=DemoRunner(home),
         setup_command=lambda: demo_command(home),
         fetch=canned_download,  # the update check hears of this version, not from PyPI
+        processes=list,  # no client runs, so no restart strip moves the map down
     )
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
     server = uvicorn.Server(config)
