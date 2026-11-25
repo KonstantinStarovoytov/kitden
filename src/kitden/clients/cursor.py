@@ -420,7 +420,7 @@ class CursorAdapter(ClientAdapter):
         return items
 
     def _instructions(self, workspaces: list[str]) -> list[Item]:
-        """Rule files and AGENTS.md.
+        """Rule files, AGENTS.md and CLAUDE.md.
 
         checked 2026-10-22 (cursor.com/docs/context/rules): project rules are `.mdc` files in
         `.cursor/rules`, sub-folders too; a plain `.md` file there is not a rule. Cursor reads
@@ -429,13 +429,20 @@ class CursorAdapter(ClientAdapter):
         root is legacy and will be deprecated; user rule files live in `~/.cursor/rules` (the
         docs name no extension there; Kitden reads `.mdc` as in projects). User rules made in
         Customize → Rules sync with the Cursor account and are not files, so they are not read.
+        checked 2026-11-25 (cursor.com/help/customization/rules, "How does CLAUDE.md work in
+        Cursor?"): a CLAUDE.md in the project root is read like AGENTS.md. CLAUDE.local.md,
+        `.claude/CLAUDE.md` and nested ones are not added.
         """
         items = instruction_items(
             CLIENT, expand(self.home / ".cursor/rules", "instructions", "*.mdc"), Scope.USER, CLIENT
         )
         for path in workspaces:
             root = Path(path)
-            files = [(root / ".cursorrules", "instructions"), (root / "AGENTS.md", "instructions")]
+            files = [
+                (root / ".cursorrules", "instructions"),
+                (root / "AGENTS.md", "instructions"),
+                (root / "CLAUDE.md", "instructions"),
+            ]
             if not is_home(root, self.home):  # the home folder's rules are the user's own
                 files += expand(root / ".cursor/rules", "instructions", "*.mdc")
             items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)

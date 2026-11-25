@@ -202,6 +202,28 @@ def test_scan_reads_agents_md_for_the_user_and_each_project(tmp_path, no_version
     }
 
 
+def test_an_untrusted_project_has_no_instruction_files_listed(tmp_path, no_version):
+    # checked 2026-11-25: Codex skips project files only when trust_level is "untrusted"; a
+    # project entry with no trust_level is read (codex PR 39837, is_untrusted()).
+    home = make_home(tmp_path, FIXTURE)
+    config = home / ".codex/config.toml"
+    plain = home / "work/plain"
+    config.write_text(config.read_text() + f'\n[projects."{plain}"]\nnote = "no trust level"\n')
+    for folder in (home / "work/api", home / "work/untrusted", plain):
+        for name in ("AGENTS.md", "AGENTS.override.md"):
+            (folder / name).parent.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_text("x")
+    (home / ".codex/AGENTS.override.md").write_text("x")
+    scan = CodexAdapter(home, read_version=no_version).scan()
+    found = _instructions(scan)
+    for folder, listed in (("api", True), ("untrusted", False), ("plain", True)):
+        paths = {i[4] for i in found if i[3] == str(home / "work" / folder)}
+        names = {str(home / "work" / folder / n) for n in ("AGENTS.md", "AGENTS.override.md")}
+        assert paths == (names if listed else set()), folder
+    user = {i[4] for i in found if i[0] is Scope.USER}
+    assert user == {str(home / ".codex" / n) for n in ("AGENTS.md", "AGENTS.override.md")}
+
+
 def test_the_user_agents_md_follows_codex_home(tmp_path, no_version):
     home = make_home(tmp_path, FIXTURE)
     moved = tmp_path / "codex-home"

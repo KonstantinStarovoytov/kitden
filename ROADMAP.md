@@ -1,11 +1,16 @@
 # Kitden roadmap
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
+
+### Not yet released
+
+- **The Instructions map matches Codex and Cursor:** Codex shows no `AGENTS.md` in a project
+  marked untrusted, and Cursor shows the `CLAUDE.md` at a project's root.
 
 ### 0.12.0
 

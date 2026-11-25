@@ -298,3 +298,18 @@ def _full(home):
     _write(home / ".cursor/rules/a.mdc", "---\n---\nBe brief.\n")
     inventory = build_inventory(home, list(adapters.values()), [])
     return inventory, adapters, None
+
+
+def test_cursor_and_claude_code_reading_one_claude_md_are_one_block(home):
+    # checked 2026-11-25: Cursor reads the project-root CLAUDE.md like AGENTS.md.
+    site = home / "work/site"
+    claude_json = home / ".claude.json"
+    data = json.loads(claude_json.read_text())
+    data.setdefault("projects", {})[str(site)] = {}
+    claude_json.write_text(json.dumps(data))
+    _write(site / "CLAUDE.md", "# Site\n")
+    files = _files(_map(home, str(site)))
+    assert files["project", "CLAUDE.md"]["by"] == {"claude_code": True, "cursor": True}
+    assert "through" not in files["project", "CLAUDE.md"]
+    # With a CLAUDE.md, Claude Code no longer reads AGENTS.md: Cursor still does.
+    assert files["project", "AGENTS.md"]["by"] == {"cursor": True}

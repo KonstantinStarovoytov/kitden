@@ -247,6 +247,29 @@ def test_the_home_folder_as_a_cursor_project_skips_only_the_user_rules(tmp_path,
     assert (Scope.USER, "mine") in {(i[0], i[1]) for i in _instructions(scan)}
 
 
+def test_cursor_reads_only_the_project_root_claude_md(tmp_path, no_version):
+    # checked 2026-11-25 (cursor.com/help/customization/rules): the root CLAUDE.md is read
+    # like AGENTS.md; CLAUDE.local.md, .claude/CLAUDE.md and nested ones are not added.
+    for third_party in (True, False):
+        home = make_home(tmp_path / str(third_party), FIXTURE)
+        site = home / "work/site"
+        for name in ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "docs/CLAUDE.md"):
+            (site / name).parent.mkdir(parents=True, exist_ok=True)
+            (site / name).write_text("x")
+        (home / ".claude").mkdir(exist_ok=True)
+        (home / ".claude/CLAUDE.md").write_text("x")  # the user's own file: home-folder project
+        write_cursor_fixture_state(
+            home,
+            {
+                REACTIVE_KEY: {"thirdPartyExtensibilityEnabled": third_party},
+                INSTALLED_PREFIX + f"123|file://{home}": [],
+            },
+        )
+        scan = CursorAdapter(home, read_version=no_version).scan()
+        claude = {i[4] for i in _instructions(scan) if "CLAUDE" in str(i[4])}
+        assert claude == {str(site / "CLAUDE.md")}, third_party
+
+
 def test_cursor_state_is_read_from_the_linux_config_folder(system, tmp_path, no_version):
     system("linux")
     home, scan = _scan(tmp_path, no_version)

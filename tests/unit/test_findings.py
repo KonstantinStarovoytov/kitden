@@ -344,3 +344,9 @@ def test_a_marketplace_codex_cloned_from_another_repo_is_another_source(tmp_path
         f for f in find_findings(build_inventory(home)) if "claude-plugins-official" in f.names
     ]
     assert [str(f.type) for f in found] == ["same_in_other_clients"]
+
+
+def test_one_claude_md_read_by_claude_code_and_cursor_is_not_a_finding():
+    claude = item("claude_code", ItemKind.INSTRUCTIONS, "CLAUDE.md", "/h/p/CLAUDE.md")
+    cursor = item("cursor", ItemKind.INSTRUCTIONS, "CLAUDE.md", "/h/p/CLAUDE.md")
+    assert find_findings(Inventory(items=[claude, cursor])) == []
