@@ -470,3 +470,24 @@ def test_the_command_line_gives_the_client_the_same_folder(home, moved, monkeypa
     monkeypatch.setattr(client_cli, "find_command", lambda name, where: str(script))
     done = client_cli.CommandRunner(home)(["claude"], None)
     assert done.output == str(moved) == os.environ["CLAUDE_CONFIG_DIR"]
+
+
+def test_a_relative_folder_is_the_one_under_the_start_folder(tmp_path, monkeypatch):
+    # The page and client commands run in other folders, so the program makes it absolute first.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", "claude-work")
+    monkeypatch.setenv("CLAUDE_CODE_PLUGIN_CACHE_DIR", "plug")
+    seen = {}
+    monkeypatch.setattr(cli, "_open", lambda args: seen.update(os.environ) or 0)
+    assert cli.main(["open", "--home", str(tmp_path / "home")]) == 0
+    assert seen["CLAUDE_CONFIG_DIR"] == str(tmp_path / "claude-work")
+    assert seen["CLAUDE_CODE_PLUGIN_CACHE_DIR"] == str(tmp_path / "plug")
+
+
+@pytest.mark.parametrize("value", ["", "~/plug", "/plug"])
+def test_a_plugin_folder_that_is_not_relative_stays_as_typed(tmp_path, monkeypatch, value):
+    monkeypatch.setenv("CLAUDE_CODE_PLUGIN_CACHE_DIR", value)
+    monkeypatch.setattr(cli, "_open", lambda args: 0)
+    assert cli.main(["open", "--home", str(tmp_path)]) == 0
+    assert os.environ["CLAUDE_CODE_PLUGIN_CACHE_DIR"] == value
+    assert "CLAUDE_CONFIG_DIR" not in os.environ

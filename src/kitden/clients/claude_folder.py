@@ -36,10 +36,23 @@ def claude_folder(home: Path, env: Mapping[str, str] | None = None) -> ClaudeFol
     env = os.environ if env is None else env
     moved, plugins = env.get("CLAUDE_CONFIG_DIR"), env.get("CLAUDE_CODE_PLUGIN_CACHE_DIR")
     config = Path(moved) if moved else home / ".claude"
-    if plugins and (plugins == "~" or plugins.startswith("~/")):
+    if plugins and _from_home(plugins):
         plugins = str(home / plugins[2:])
     return ClaudeFolder(
         config=config,
         state=(config if moved else home) / ".claude.json",
         plugins=Path(plugins) if plugins else config / "plugins",
     )
+
+
+def _from_home(plugins: str) -> bool:
+    return plugins == "~" or plugins.startswith("~/")
+
+
+def make_absolute() -> None:
+    """Pin a relative folder to the start folder: the page and the client commands that Kitden
+    runs work in other folders, and would each take it from there."""
+    for name in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_PLUGIN_CACHE_DIR"):
+        value = os.environ.get(name)
+        if value and not (name == "CLAUDE_CODE_PLUGIN_CACHE_DIR" and _from_home(value)):
+            os.environ[name] = str(Path(value).absolute())

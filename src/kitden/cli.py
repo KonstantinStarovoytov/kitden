@@ -537,8 +537,10 @@ def _show_answer(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from kitden.clients.claude_folder import make_absolute
     from kitden.demo import SIZES
 
+    make_absolute()
     parser = argparse.ArgumentParser(prog="kitden")
     parser.add_argument("--version", action="store_true", help="print the version and exit")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
