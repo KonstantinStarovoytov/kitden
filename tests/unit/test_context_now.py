@@ -670,24 +670,47 @@ def test_a_listed_codex_skill_kept_for_when_it_is_asked_for_leaves_the_estimate(
     assert gamma["note"] == words.NOTE_ONLY_ASKED
 
 
-def test_a_skill_kept_for_when_it_is_asked_for_was_not_left_out_of_a_names_only_list(home):
+def names_only_chat(home, policy=None):
+    """Names only, with room for two: a chat whose list holds alpha and beta. Gamma's own file, and
+    its policy file when there is one, are from before the chat."""
     paths = codex_home(home, window=1)
     budget = a_budget(paths, lambda fit: fit.sent == {"alpha": 0, "beta": 0, "gamma": None})
     codex_home(home, window=window_for(budget))
     before_the_chat(Path(paths["gamma"]))
-    before_the_chat(only_asked(home, "gamma"))
+    if policy:
+        before_the_chat(policy(home, "gamma"))
     codex_chat(
         home,
         [f"- alpha: (file: {paths['alpha']})", f"- beta: (file: {paths['beta']})"],
         at="2026-11-07T12:00:00Z",
     )
+
+
+def test_a_skill_kept_for_when_it_is_asked_for_was_not_left_out_of_a_names_only_list(home):
+    names_only_chat(home, only_asked)
     cx = codex(home)
     assert cx["changed"] == [] and "gamma" not in cx["windows"][0]["result"]["over"]
-    # Set after the chat: the list had left it out, and the next one does not hold it.
-    os.utime(own(home, "gamma").parent / "agents/openai.yaml")
+
+
+def test_a_skill_that_codex_may_pick_again_counts_as_new_after_a_names_only_list(home):
+    names_only_chat(home, only_asked)
+    policy = own(home, "gamma").parent / "agents/openai.yaml"
+    policy.write_text("policy:\n  allow_implicit_invocation: true\n")
     cx = codex(home)
-    assert cx["changed"][0] == CHANGED
-    assert "gamma" in cx["windows"][0]["result"]["over"] and "gamma" not in cx["now"]["over"]
+    # It was not on the list, and the next one holds it: an estimate, not a failed replay.
+    assert cx["checked"] is True and cx["changed"][0] == CHANGED
+    assert cx["changed"][1].startswith("Estimate: ")
+    assert "gamma" not in cx["windows"][0]["result"]["over"]
+    assert "gamma" in cx["now"]["over"]
+
+
+def test_a_policy_set_after_a_names_only_list_says_nothing_of_that_list(home):
+    # Left out, or kept off by an earlier policy: Kitden cannot tell.
+    names_only_chat(home)
+    assert "gamma" in codex(home)["windows"][0]["result"]["over"]
+    only_asked(home, "gamma")
+    cx = codex(home)
+    assert cx["changed"] == [] and "gamma" not in cx["windows"][0]["result"]["over"]
 
 
 @pytest.mark.parametrize("how", ["kept for when it is asked for", "off"])

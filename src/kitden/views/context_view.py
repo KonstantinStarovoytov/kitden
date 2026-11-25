@@ -1690,6 +1690,11 @@ def _codex_policy(path: str) -> Path:
     return Path(path).parent / "agents/openai.yaml"
 
 
+def _codex_as_then(path: str, at_ms: int) -> bool:
+    """Nothing that puts the skill on Codex's list or keeps it off was written after the chat."""
+    return _unchanged([Path(path), _codex_policy(path)], at_ms)
+
+
 def _codex_hidden(path: str) -> bool:
     """Codex does not list this skill: its `agents/openai.yaml` keeps it for when it is asked for.
 
@@ -1709,15 +1714,15 @@ def _codex_new(
     """The skills there that the last chat's list does not hold and the next one will: their rows,
     the path each has on the list, and the names of those whose line Kitden cannot tell (a skill
     that is a link, or under a root that the list does not have). Codex skips a SKILL.md with no
-    description. When the list had names only, skills may have been left out of it: then only a
-    file written after the chat is surely new."""
+    description. When the list had names only, skills may have been left out of it: then only one
+    whose file, or policy file, was written after the chat counts."""
     rows, shown, unknown = [], {}, []
     for item in extras:
         path = item.source.path or ""
         text = _description(path)
         if not text or _codex_hidden(path):
             continue
-        if names_only and _unchanged([Path(path)], at_ms):
+        if names_only and _codex_as_then(path, at_ms):
             continue
         line = None if item.source.link_path else found.path_of(path)
         if line is None:
@@ -2023,9 +2028,7 @@ def _codex(
     if names_only:
         for item in [i for i in extras if i.scope is Scope.USER]:
             path = item.source.path or ""
-            if not _unchanged([Path(path)], at_ms):
-                continue
-            if _codex_hidden(path) and _unchanged([_codex_policy(path)], at_ms):
+            if not _codex_as_then(path, at_ms) or _codex_hidden(path):
                 continue
             rows.append(_Row(item.name, None, item, _description(path), path))
             extras.remove(item)
