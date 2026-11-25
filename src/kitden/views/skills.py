@@ -52,12 +52,45 @@ TEXT_LIMIT = 512 * 1024
 PATH_UP = re.compile(r"(?<![\w.${}~/-])[\w.${}~/-]*?\.\./[\w.${}~/-]*")
 KEY_LINE = re.compile(r"^([A-Za-z][\w-]*):\s*(.*)$")
 BLOCK_MARKS = {"|", ">", "|-", ">-", "|+", ">+"}
+DOUBLE_QUOTED = re.compile(r'"((?:[^"\\]|\\.)*)"')
+SINGLE_QUOTED = re.compile(r"'((?:[^']|'')*)'")
+ESCAPE = re.compile(r"\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|.)")
+ESCAPES = {
+    "0": "\0", "a": "\a", "b": "\b", "t": "\t", "n": "\n", "v": "\v", "f": "\f",
+    "r": "\r", "e": "\x1b", " ": " ", '"': '"', "/": "/", "\\": "\\",
+    "N": "\x85", "_": "\xa0", "L": "\u2028", "P": "\u2029",
+}  # fmt: skip
+
+
+def _escape(match: re.Match[str]) -> str:
+    code = match.group(1)
+    if len(code) > 1:  # \xNN, \uNNNN, \UNNNNNNNN
+        number = int(code[1:], 16)
+        if number > 0x10FFFF or 0xD800 <= number <= 0xDFFF:  # not text a page can send
+            return match.group(0)
+        return chr(number)
+    return ESCAPES.get(code, match.group(0))  # an unknown escape stays as written
+
+
+def _unquote(value: str) -> str:
+    """A YAML quoted one-line value as its text; any other value as it is.
+
+    Only a value that is one whole quoted string is unquoted. Double quotes use backslash
+    escapes, single quotes only double the quote.
+    """
+    if match := DOUBLE_QUOTED.fullmatch(value):
+        return ESCAPE.sub(_escape, match.group(1))
+    if match := SINGLE_QUOTED.fullmatch(value):
+        return match.group(1).replace("''", "'")
+    return value
 
 
 def front_matter(skill_md: Path) -> dict[str, str]:
     """The `key: value` lines between the `---` fences of SKILL.md, as plain text.
 
     A block value (`description: >` followed by indented lines) is joined into one line.
+    A quoted value is read as YAML reads it (`\\"` becomes `"`), so its length matches what a
+    client sends.
     Lists and nested keys are skipped; only flat text is needed here.
     """
     try:
@@ -78,7 +111,7 @@ def front_matter(skill_md: Path) -> dict[str, str]:
             key, value = match.group(1), match.group(2).strip()
             block = [] if value in BLOCK_MARKS else None
             if block is None:
-                out[key] = value.strip("'\"")
+                out[key] = _unquote(value)
         elif key and block is not None:
             block.append(line.strip())
     if key and block is not None:

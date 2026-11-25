@@ -13,6 +13,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   or turned on after the last chat, or the limit changed, an estimate under that chat's sentence
   says how many skills would show only a name now, and the bar and the boxes show it. The limit
   line counts the changes waiting in the preview, as the estimate above it does (#215).
+- **A quoted skill description is counted as the client reads it:** a description in quotes with
+  `\"` inside no longer shows backslashes in Details, and its length on the Context tab matches
+  what the client sends (#214).
 - **The Add panels have an even gap above the hint:** the closed "Add a GitHub source" block no
   longer takes a row of its own (#204).
 - **Claude Code items show the state they really have:** a hook whose `if` can never match, a
