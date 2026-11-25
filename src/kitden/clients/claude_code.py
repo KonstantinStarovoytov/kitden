@@ -15,6 +15,7 @@ from typing import Any
 
 from kitden.changes.json_splice import ABSENT, PRESENT
 from kitden.clients.base import (
+    PLUGIN_DISABLE,
     PLUGIN_REMOVE,
     REMOVE_DIRECT,
     SETUP_NAME,
@@ -75,6 +76,9 @@ DESKTOP_CONFIG = "claude_desktop_config.json"
 DESKTOP_BUNDLED = "claude-code"
 # Plugins that come from these places have no install to remove (plugins/loading docs).
 NOT_INSTALLED = ("@synced", "@inline", "@skills-dir")
+PROJECT_NOT_INSTALLED = (
+    "Turned on by this project, but not installed here, so Claude Code may not load it."
+)
 
 
 def _instruction_files(folder: Path) -> list:
@@ -103,6 +107,28 @@ def _on(value: bool | None) -> Enabled:
     return Enabled.UNKNOWN if value is None else (Enabled.ON if value else Enabled.OFF)
 
 
+# checked 2026-11-25 (code.claude.com/docs/en/plugins/loading, "Enabled in project settings but
+# not installed"): a plugin turned on only in a project's `.claude/settings.json` does not load at
+# start until it is installed. Exceptions Kitden cannot see (a seed folder, a relative-path plugin
+# in a marketplace added from a local path) are why the state is "unknown", not "off".
+# The record's `scope` and `projectPath` keys were seen in a sandbox home (2026-11-25, Claude Code
+# 2.1.311, `plugin install -s project` and `-s local`); the docs do not show them.
+# checked 2026-11-25 (code.claude.com/docs/en/worktrees, "What worktrees share with the main
+# checkout"): a project install made in the main checkout also loads in its worktrees.
+def _install_counts(installs: Any, project_path: str) -> bool:
+    """The plugin has an install record that serves this project: any record that is not a
+    project or local install, or one for this project's folder or its main checkout."""
+    serves = [os.path.realpath(p) for p in (project_path, main_checkout(Path(project_path))) if p]
+    for record in installs if isinstance(installs, list) else []:
+        record = as_dict(record)
+        where = record.get("projectPath")
+        if record.get("scope") not in ("project", "local") or not isinstance(where, str):
+            return True
+        if os.path.realpath(where) in serves:
+            return True
+    return False
+
+
 # checked 2026-11-15 (code.claude.com/docs/en/mcp; /en/settings-reference gives the three keys
 # the scope "Any file"; and Claude Code 2.1.311 run in a sandbox home): `enabledMcpjsonServers`,
 # `enableAllProjectMcpServers` and `disabledMcpjsonServers` are settings keys. A name in
@@ -111,6 +137,9 @@ def _on(value: bool | None) -> Enabled:
 # kept the keys in `~/.claude.json` under `projects.<path>`; Claude Code moves them to the local
 # file when it next starts there, so Kitden reads them there too. Not read: managed settings,
 # `--settings`, and whether git tracks the local file (a tracked file also waits for trust).
+# checked 2026-11-25 (code.claude.com/docs/en/permissions, "When your local settings file needs
+# trust"): in the home folder the local file's approvals apply without trust; `scan` counts the
+# home folder as trusted. Not read: a folder set as CLAUDE_CONFIG_DIR, which the docs treat alike.
 def _approval(
     name: str, user: dict, project_files: list[dict], trusted: bool, unread: bool
 ) -> Enabled:
@@ -220,12 +249,17 @@ def _hooks_rule(layers: list[tuple[Scope, dict]]) -> tuple[bool, Scope] | None:
 
 
 def _apply_hooks_rule(items: list[Item], rule: tuple[bool, Scope] | None) -> list[Item]:
-    """The hooks as `disableAllHooks` leaves them."""
+    """The hooks as `disableAllHooks` leaves them. A hook that is off before (one that never
+    runs, see `dead_hook`) stays off: `false` does not bring it back."""
     if rule is None:
         return items
     off, scope = rule
-    enabled = Enabled.OFF if off else Enabled.ON
-    return [replace(i, enabled=enabled, state_scope=scope) for i in items]
+    return [
+        i
+        if i.enabled is Enabled.OFF and not off
+        else replace(i, enabled=Enabled.OFF if off else Enabled.ON, state_scope=scope)
+        for i in items
+    ]
 
 
 # checked 2026-10-27 (code.claude.com/docs/en/settings, "Where Claude Code keeps the local file
@@ -258,6 +292,16 @@ def _owned(path: Path) -> bool:
         return path.stat().st_uid == os.getuid()
     except OSError:
         return False
+
+
+def main_checkout(folder: Path) -> Path | None:
+    """The main checkout of a git worktree, from its `.git` file; None for any other folder."""
+    try:
+        line = (folder / ".git").read_text().strip()
+    except (OSError, ValueError):
+        return None
+    git, mark, _ = line.removeprefix("gitdir: ").partition("/.git/worktrees/")
+    return Path(git) if mark else None
 
 
 def local_files(project: Path, home: Path) -> list[Path]:
@@ -322,6 +366,8 @@ class ClaudeCodeAdapter(ClientAdapter):
         ):
             if item.name.endswith(NOT_INSTALLED):
                 return toggle_action(item)
+            if item.scope is Scope.PROJECT and item.enabled is Enabled.UNKNOWN:
+                return (PLUGIN_DISABLE, PLUGIN_REMOVE)  # on in the file, so it can go off
             return (*toggle_action(item), PLUGIN_REMOVE)
         if is_own_skill(item, CLIENT):
             return (SKILL_REMOVE,)
@@ -616,24 +662,40 @@ class ClaudeCodeAdapter(ClientAdapter):
         project_skill_rules: dict[str, dict[str, tuple[str, Scope]]] = {}
         project_hook_rules: dict[str, tuple[bool, Scope]] = {}
         projects = as_dict(state.get("projects"))
+        installed_path = self.home / ".claude/plugins/installed_plugins.json"
+        installed = as_dict(as_dict(read.json(installed_path)).get("plugins"))
+        installed_known = not read.failed(installed_path)
+        # checked 2026-11-25 (code.claude.com/docs/en/mcp, "Disable a server without removing
+        # it"): the /mcp menu records the names it turned off per project in `~/.claude.json`,
+        # `projects.<path>.disabledMcpServers`; Claude Code does not connect to those. Not read:
+        # the names of plugin and claude.ai servers in it (their form is not checked).
+        mcp_offs: dict[str, set[str]] = {}
         for path, data in projects.items():
             data = as_dict(data)
+            off_names = _names(data.get("disabledMcpServers"))
+            if off_names:
+                mcp_offs[path] = off_names
             scan.projects.append(project(path, CLIENT))
-            scan.items += mcp_items(
-                CLIENT,
-                data.get("mcpServers"),
-                state_path,
-                Scope.LOCAL,
-                project=path,
-                table=f"projects.{path}.mcpServers",
-            )
+            scan.items += [
+                replace(i, enabled=Enabled.OFF) if i.name in off_names else i
+                for i in mcp_items(
+                    CLIENT,
+                    data.get("mcpServers"),
+                    state_path,
+                    Scope.LOCAL,
+                    project=path,
+                    table=f"projects.{path}.mcpServers",
+                )
+            ]
             found, rules, hooks_rule = self._project_files(
                 read,
                 Path(path),
                 data,
                 settings,
                 settings_known,
-                is_trusted(projects, Path(path), self.home),
+                is_trusted(projects, Path(path), self.home) or is_home(Path(path), self.home),
+                installed if installed_known else None,
+                off_names,
             )
             scan.items += found
             if rules is not None:
@@ -643,9 +705,21 @@ class ClaudeCodeAdapter(ClientAdapter):
 
         # Plugins: user settings decide on/off; project settings may override.
         enabled = as_dict(settings.get("enabledPlugins"))
-        installed = as_dict(
-            as_dict(read.json(self.home / ".claude/plugins/installed_plugins.json")).get("plugins")
-        )
+        # A user server a project turned off is off only there: a rule of that project.
+        scan.items = [
+            replace(
+                i,
+                project_rules=tuple(
+                    (p, Enabled.OFF, Scope.LOCAL, "off") for p, n in mcp_offs.items() if i.name in n
+                ),
+            )
+            if i.kind is ItemKind.MCP_SERVER
+            and i.client == CLIENT
+            and i.scope is Scope.USER
+            and any(i.name in n for n in mcp_offs.values())
+            else i
+            for i in scan.items
+        ]
         for plugin_id, installs in installed.items():
             state_on = _on(enabled.get(plugin_id)) if settings_known else Enabled.UNKNOWN
             if settings_known and plugin_id not in enabled:
@@ -709,16 +783,18 @@ class ClaudeCodeAdapter(ClientAdapter):
         scan.items += instruction_items(
             CLIENT, _instruction_files(self.home / ".claude"), Scope.USER, CLIENT
         )
-        user_hooks = _apply_hooks_rule(
-            hook_items(CLIENT, settings, settings_path, Scope.USER),
-            _hooks_rule([(Scope.USER, settings)]),
-        )
+        raw_hooks = hook_items(CLIENT, settings, settings_path, Scope.USER, claude_rules=True)
+        user_hooks = _apply_hooks_rule(raw_hooks, _hooks_rule([(Scope.USER, settings)]))
         hook_rules = [
             (path, Enabled.OFF if off else Enabled.ON, scope, "off" if off else "on")
             for path, (off, scope) in project_hook_rules.items()
             if scope is not Scope.USER
         ]
-        scan.items += [replace(i, project_rules=tuple(hook_rules)) for i in user_hooks]
+        # A hook that never runs gets no project rule: a rule cannot turn it on.
+        scan.items += [
+            i if dead.enabled is Enabled.OFF else replace(i, project_rules=tuple(hook_rules))
+            for dead, i in zip(raw_hooks, user_hooks, strict=True)
+        ]
         marketplaces_path = self.home / ".claude/plugins/known_marketplaces.json"
         for name, entry in as_dict(read.json(marketplaces_path)).items():
             where = marketplace_source(as_dict(entry).get("source"))
@@ -749,9 +825,12 @@ class ClaudeCodeAdapter(ClientAdapter):
         user_settings: dict,
         user_known: bool,
         trusted: bool,
+        installed: dict | None,
+        mcp_off: set[str],
     ) -> tuple[list[Item], dict[str, tuple[str, Scope]] | None, tuple[bool, Scope] | None]:
         """The project's items, its skill rules (None when a settings file was unreadable) and
-        its `disableAllHooks` rule (None when no file sets it)."""
+        its `disableAllHooks` rule (None when no file sets it). `installed` is None when the
+        record of installs was unreadable."""
         path = str(root)
         items: list[Item] = []
         # When the project is the home folder, its `.claude/settings.json` and skills are the
@@ -774,7 +853,9 @@ class ClaudeCodeAdapter(ClientAdapter):
                     file_source(mcp_path, CLIENT, f"mcpServers.{name}"),
                     Scope.PROJECT,
                     project=path,
-                    enabled=_approval(name, user_settings, project_files, trusted, unread),
+                    enabled=Enabled.OFF
+                    if name in mcp_off
+                    else _approval(name, user_settings, project_files, trusted, unread),
                 )
             )
         # checked 2026-10-26 (code.claude.com/docs/en/plugins/loading, "Find where a plugin is
@@ -791,6 +872,16 @@ class ClaudeCodeAdapter(ClientAdapter):
             for plugin_id, value in as_dict(file_settings.get("enabledPlugins")).items()
         }
         for (scope, plugin_id), (file_path, value) in plugins.items():
+            waits = (
+                scope is Scope.PROJECT
+                and value is True
+                and not plugin_id.endswith(NOT_INSTALLED)
+                and not _install_counts((installed or {}).get(plugin_id), path)
+                and as_dict(user_settings.get("enabledPlugins")).get(plugin_id) is not True
+                and not any(
+                    as_dict(d.get("enabledPlugins")).get(plugin_id) is True for _, d in locals_
+                )
+            )
             items.append(
                 Item(
                     client=CLIENT,
@@ -799,8 +890,9 @@ class ClaudeCodeAdapter(ClientAdapter):
                     source=file_source(file_path, CLIENT, f"enabledPlugins.{plugin_id}"),
                     scope=scope,
                     project=path,
-                    enabled=_on(value),
+                    enabled=Enabled.UNKNOWN if waits else _on(value),
                     state_scope=scope,
+                    change_hint=PROJECT_NOT_INSTALLED if waits and installed is not None else None,
                 )
             )
         layers = [
@@ -810,7 +902,10 @@ class ClaudeCodeAdapter(ClientAdapter):
         ]
         hooks_rule = _hooks_rule(layers)
         items += _apply_hooks_rule(
-            hook_items(CLIENT, settings, settings_path, Scope.PROJECT, project=path), hooks_rule
+            hook_items(
+                CLIENT, settings, settings_path, Scope.PROJECT, project=path, claude_rules=True
+            ),
+            hooks_rule,
         )
         rules = _skill_rules(layers)
         read_files = [settings_path, *(p for p, _ in locals_)]

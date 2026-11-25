@@ -293,7 +293,8 @@ def test_a_plugin_in_another_project_is_not_offered_again(home):
         answer = library(inventory, adapters, project, kind="plugin", show="all")
         return _row(answer, "toolbox")["cells"]["claude_code"]
 
-    assert toolbox(str(home / "work/website"))["state"] == "on"
+    # Turned on by the project, with no install on this computer: not known to load.
+    assert toolbox(str(home / "work/website"))["state"] == "unk"
     elsewhere = _cell(reason="Claude Code has it in another project.")
     assert toolbox(None) == elsewhere
     assert toolbox(str(home / "work/api")) == elsewhere
