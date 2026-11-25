@@ -116,8 +116,8 @@ def test_front_matter_reads_a_double_quoted_value_like_yaml(tmp_path):
     assert read(r"say \"deck,\" and \\ and \/") == 'say "deck," and \\ and /'
     assert read(r"a\tb\nc") == "a\tb\nc"
     assert read(r"\x41 \u00e9 \U0001F600") == "A é 😀"
-    assert read(r"keep \q and \xZZ and \U00110000 as written") == (
-        r"keep \q and \xZZ and \U00110000 as written"
+    assert read(r"keep \q and \xZZ and \U00110000 and \ud800 and \U0000DFFF as written") == (
+        r"keep \q and \xZZ and \U00110000 and \ud800 and \U0000DFFF as written"
     )
     assert read("it's fine") == "it's fine"
 

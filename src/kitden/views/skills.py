@@ -66,7 +66,9 @@ def _escape(match: re.Match[str]) -> str:
     code = match.group(1)
     if len(code) > 1:  # \xNN, \uNNNN, \UNNNNNNNN
         number = int(code[1:], 16)
-        return chr(number) if number <= 0x10FFFF else match.group(0)
+        if number > 0x10FFFF or 0xD800 <= number <= 0xDFFF:  # not text a page can send
+            return match.group(0)
+        return chr(number)
     return ESCAPES.get(code, match.group(0))  # an unknown escape stays as written
 
 
