@@ -1,8 +1,8 @@
 """Offline stand-ins for the page on a sample home: catalog answers from the tables below, no
-client command, no access check and no tool list from a real server. Shared by the browser
-tests (the `sample` fixture in tests/browser/conftest.py) and the README pictures
-(scripts/record_readme.py). Tests apply STAND_INS with monkeypatch; the script sets them
-itself. Only stand-ins live here, no filming code. Nothing here ships: the wheel takes only
+client command, no access check, no update check online and no tool list from a real server.
+Shared by the browser tests (the `sample` fixture in tests/browser/conftest.py) and the README
+pictures (scripts/record_readme.py). Tests apply STAND_INS with monkeypatch; the script sets
+them itself. Only stand-ins live here, no filming code. Nothing here ships: the wheel takes only
 src/kitden."""
 
 import json
@@ -12,7 +12,9 @@ import kitden.clients.codex as codex
 import kitden.clients.version_cache as version_cache
 import kitden.discovery as discovery
 import kitden.web.app as web
+from kitden import __version__
 from kitden.demo import canned_refresh, no_sign_in
+from kitden.update.check import PYPI_URL
 
 # skills.sh's answer to "mcp", the first six rows as the page sorts them, and the skill picked
 # from it (checked 2026-11-05: https://skills.sh, https://github.com/anthropics/skills). The
@@ -151,6 +153,10 @@ CATALOG[f"{REGISTRY}?search=weather&version=latest&limit=100"] = {
 # The add panel's first read, before anything is typed: the registry's listing. Empty here, so
 # the panel shows no row and no error (a refused read is a console error in the browser tests).
 CATALOG[f"{REGISTRY}?search=&version=latest&limit=100"] = {"servers": []}
+
+# PyPI's answer to the update check: this version is the latest, so the page offers no update.
+# `create_app` takes what asks for it: `fetch=canned_download`.
+CATALOG[PYPI_URL] = {"info": {"version": __version__}}
 
 # What the page reads through these, as (module, name, value).
 STAND_INS = [
