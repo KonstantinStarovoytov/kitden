@@ -10,7 +10,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 ### Not yet released
 
 - **The Instructions map matches Codex and Cursor:** Codex shows no `AGENTS.md` in a project
-  marked untrusted, and Cursor shows the `CLAUDE.md` at a project's root.
+  marked untrusted, and Cursor shows the `CLAUDE.md` at a project's root (#203).
 
 ### 0.12.0
 
