@@ -1,5 +1,8 @@
 import json
+import os
 from dataclasses import replace
+
+import pytest
 
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_REMOVE
 from kitden.clients.claude_code import ClaudeCodeAdapter
@@ -518,12 +521,15 @@ def test_a_plugin_with_no_install_of_its_own_is_not_called_not_installed(tmp_pat
     assert item.enabled is Enabled.ON and item.change_hint is None
 
 
-def test_an_install_in_the_main_checkout_counts_in_a_worktree(tmp_path, no_version):
+@pytest.mark.parametrize("relative", [False, True])  # git worktree add --relative-paths
+def test_an_install_in_the_main_checkout_counts_in_a_worktree(tmp_path, no_version, relative):
     main = tmp_path / "main"
     (main / ".git/worktrees/site").mkdir(parents=True)
 
     def record(site):
-        (site / ".git").write_text(f"gitdir: {main}/.git/worktrees/site\n")
+        gitdir = main / ".git/worktrees/site"
+        shown = os.path.relpath(gitdir, site) if relative else gitdir
+        (site / ".git").write_text(f"gitdir: {shown}\n")
         return [{"scope": "project", "projectPath": str(main)}]
 
     _, _, item, _ = _project_plugin(tmp_path / "home-of-it", no_version, installs=record)
