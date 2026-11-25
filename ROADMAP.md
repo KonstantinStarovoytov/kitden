@@ -1,11 +1,16 @@
 # Kitden roadmap
 
-Last updated: 2026-11-24
+Last updated: 2026-11-25
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
+
+### Not yet released
+
+- **The Add panels have an even gap above the hint:** the closed "Add a GitHub source" block no
+  longer takes a row of its own.
 
 ### 0.12.0
 

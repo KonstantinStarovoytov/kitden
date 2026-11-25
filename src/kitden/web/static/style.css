@@ -1482,6 +1482,7 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .discovery:has(.discovery-workspace) .discovery-filters { margin-bottom: 0; }
 .discovery:has(.discovery-workspace) .discovery-source-add { margin: 0; }
 .discovery-source-add > summary { display: none; }
+.discovery-source-add:not([open]) { display: none; }
 .discovery-source-add[open] { padding: 16px; border: 1px solid var(--wire); border-radius: 8px; }
 .discovery-results .res[aria-pressed="true"] { border-color: var(--focus); background: var(--route-soft); }
 .discovery-more { align-self: flex-start; }

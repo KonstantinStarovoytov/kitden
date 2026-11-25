@@ -3147,6 +3147,11 @@ def test_the_add_panels_client_ticks_start_at_one_edge():
     assert "align-items: flex-start" in rule(".discovery-inspector .checks")
 
 
+def test_a_closed_source_form_leaves_no_row_in_the_add_panels():
+    # Its summary is hidden, but a closed `details` still took a grid row and one more gap.
+    assert rule(".discovery-source-add:not([open])").strip() == "display: none;"
+
+
 def test_the_overview_is_one_column_where_its_map_does_not_fit_whole():
     # Cards (330) + gap (40) + the map (470) = 840, plus the rail (148), the frame (32) and the
     # page padding (44): under 1064 px the whole map no longer fits beside the cards.
