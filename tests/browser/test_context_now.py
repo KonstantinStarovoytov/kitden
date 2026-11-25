@@ -2,7 +2,8 @@
 the chat stays, and an estimate for the skills as they are now is said under it and drawn in the
 bar and the two boxes. And the limit line counts the changes waiting in the preview, as the verdict
 does. The medium sample's last Claude Code chat: 4 of 20 skills showed only a name at 1% of a 200K
-window (8,000 characters)."""
+window (8,000 characters). The Codex chats are those of tests/unit, written into the sample before
+the page starts."""
 
 import json
 import re
@@ -11,7 +12,14 @@ import pytest
 from playwright.sync_api import expect
 
 from tests.browser.conftest import SETTINGS, wait_until
-from tests.browser.test_limit_line import bar_box, drag_to, open_context, readout
+from tests.browser.test_limit_line import (
+    bar_box,
+    codex_chat_alone,
+    drag_to,
+    open_codex,
+    open_context,
+    readout,
+)
 
 pytestmark = pytest.mark.browser
 
@@ -174,3 +182,90 @@ def test_the_handle_stays_when_the_preview_makes_everything_fit_and_the_limit_wa
     switch(states, "On")
     expect(handle).to_have_attribute("aria-valuetext", re.compile(r"^4% · all 20 fit"))
     expect(verdict).to_contain_text("every skill would keep its description")
+
+
+class TestCodexAdded:
+    """A Codex chat that sent three skills whole, and two more written after it: on that window
+    four of the five would be cut."""
+
+    @pytest.fixture
+    def before_start(self):
+        from tests.unit.test_context_now import add_later, roomy_chat
+
+        def write(home):
+            codex_chat_alone(home, roomy_chat)
+            add_later(home)
+
+        return write
+
+    def test_codex_skills_added_after_the_chat_are_said_and_drawn_as_an_estimate(self, page, demo):
+        handle = open_codex(page)
+        main = page.get_by_role("main")
+        fact = "all 3 skills were sent with full descriptions."
+        expect(main).to_contain_text(fact)
+        window = main.get_by_role("button", name=re.compile(r"Last chat · Nov 20"))
+        expect(window).to_contain_text("All 3 sent in full")
+        expect(main).to_contain_text(CHANGED)
+        expect(main).to_contain_text(re.compile(r"Estimate: On a \d+K window, .*4 of 5 desc"))
+        expect(picture_name(page)).to_have_text("Skill list now, estimate")
+        assert boxes(page) == [1, 4]
+        expect(page.locator(".ctx-seg.over")).to_have_count(4)
+        for name in ("later1", "later2"):
+            pill = page.locator(".ctx-side.lo .ctx-pill").filter(has_text=name)
+            expect(pill).to_have_text(re.compile(rf"^{name}\d+ of \d+$"))
+        expect(handle).to_have_attribute("aria-valuetext", re.compile(r"now · 4 of 5 cut short"))
+        # Another window's estimate holds them too, and says nothing of the last chat.
+        main.get_by_role("button", name=re.compile(r"^500K window Estimate")).click()
+        expect(main).not_to_contain_text(CHANGED)
+        wait_until(lambda: boxes(page) == [5, 0])
+        window.click()
+        # Off in the preview, they leave the estimate again.
+        for name in ("later1", "later2"):
+            switch(pick(page, name), "Off")
+        verdict = page.locator(".ctx-verdict")
+        expect(verdict).to_contain_text("every skill would keep its full description")
+        expect(handle).to_have_attribute("aria-valuetext", re.compile(r"now · all 3 fit"))
+        wait_until(lambda: boxes(page) == [3, 0])
+
+
+class TestCodexOff:
+    """The Codex chat of tests/unit/test_codex_limit.py: three skills on a tiny window, two of them
+    cut short. Without the third the two fit."""
+
+    @pytest.fixture
+    def before_start(self):
+        from tests.unit.test_codex_limit import cut_chat
+
+        return lambda home: codex_chat_alone(home, cut_chat)
+
+    def test_a_codex_skill_turned_off_after_the_chat_is_said_at_rest_until_undo(self, page, demo):
+        config = demo.home / ".codex/config.toml"
+        before = config.read_bytes()
+        open_codex(page)
+        main = page.get_by_role("main")
+        fact = re.compile(r"2 of 3 descriptions were cut to \d+–\d+ characters")
+        expect(main).to_contain_text(fact)
+        expect(main).not_to_contain_text(CHANGED)
+        expect(picture_name(page)).to_have_text("Skill list")
+        assert boxes(page) == [1, 2]
+        switch(pick(page, "gamma"), "Off")
+        expect(main).to_contain_text("After Apply, estimate: ")
+        page.locator("#dock").get_by_role("button", name="Apply").click()
+        undo = page.get_by_role("button", name="Undo")
+        expect(undo).to_be_visible()
+        assert b"enabled = false" in config.read_bytes()
+        expect(main).to_contain_text(fact)
+        expect(main).to_contain_text(CHANGED)
+        expect(main).to_contain_text(
+            re.compile(r"Estimate: On a \d+K window, every skill would keep its full description")
+        )
+        expect(main).to_contain_text(re.compile(r"Estimate: about [\d,]+ tokens left before"))
+        expect(picture_name(page)).to_have_text("Skill list now, estimate")
+        wait_until(lambda: boxes(page) == [2, 0])
+        expect(page.locator(".ctx-seg.over")).to_have_count(0)
+        expect(page.locator('.ctx-off .ctx-pill[data-skill="gamma"]')).to_be_visible()
+        undo.click()
+        wait_until(lambda: config.read_bytes() == before, seconds=10)
+        expect(main).not_to_contain_text(CHANGED)
+        expect(picture_name(page)).to_have_text("Skill list")
+        wait_until(lambda: boxes(page) == [1, 2])

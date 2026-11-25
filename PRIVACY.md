@@ -17,7 +17,8 @@ nothing from it.
 - For the context check, what the client sent in your last chats, from the client's own chat
   files, and the skills the Claude app gives Claude Code, from the app's own folder. For Codex, also
   its model list (`models_cache.json`), for the size of its context window, and the skill files of a
-  plugin's newest version when the chat's version was removed by an update. For a skill built into
+  plugin's newest version when the chat's version was removed by an update, and, in a skill the last
+  chat's list did not hold, whether its `agents/openai.yaml` keeps it off the list. For a skill built into
   Claude Code, which has no file, the description an earlier chat sent, from the newest chat files.
   Kitden uses them to size the skill list and keeps none of it. The page, `kitden show context`
   and `kitden scan` all do this check. `kitden scan` prints in your terminal one line about each

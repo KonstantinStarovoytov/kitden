@@ -435,6 +435,13 @@ LIMIT_AND_SKILLS_CHANGED = (
     "The limit and your skills changed after this list was sent: the limit is {share} now. Your "
     "next chat will show the real list."
 )
+# Codex: skills added after that list whose line Kitden cannot work out; said beside the estimates.
+CODEX_NOT_COUNTED_ONE = (
+    "Kitden cannot tell how Codex will list {names}, so its estimates leave this skill out."
+)
+CODEX_NOT_COUNTED_MANY = (
+    "Kitden cannot tell how Codex will list {names}, so its estimates leave these skills out."
+)
 # Why Kitden does not offer a new limit; the sentence goes under "How this is counted".
 LIMIT_NOT_FIXED = (
     "Kitden does not offer a new skill list limit: SLASH_COMMAND_TOOL_CHAR_BUDGET is set, and it "

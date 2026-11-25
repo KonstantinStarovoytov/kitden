@@ -9,6 +9,7 @@ import itertools
 import json
 import os
 import re
+import shutil
 import tomllib
 from urllib.parse import urlsplit
 
@@ -480,6 +481,31 @@ class TestCounted:
         expect(main).not_to_contain_text("The limit was changed after this chat")
 
 
+def codex_chat_alone(home, write):
+    """A newer Codex chat than the sample's own, with no skill there that it does not hold.
+    `write(home, at)` writes its skills and its log; a skill of the sample would count as added
+    after it."""
+    for folder in (".agents/skills", ".codex/skills"):
+        shutil.rmtree(home / folder)
+    # Later than the sample's own chat, in its time and its file's, so it is the last chat.
+    write(home, at="2026-11-20T12:00:00Z")
+    for log in (home / ".codex/sessions").rglob("rollout-a.jsonl"):
+        os.utime(log)
+
+
+def open_codex(page):
+    """Context on Codex, once its card is pressed and the page stands still: its limit handle."""
+    page.evaluate("location.hash = '#context'")
+    chips = page.get_by_role("main").get_by_role("group", name="Client")
+    codex = chips.get_by_role("button", name="Codex")
+    codex.click()
+    expect(codex).to_have_attribute("aria-pressed", "true")
+    wait_until(
+        lambda: not page.evaluate("document.documentElement.classList.contains('place-change')")
+    )
+    return page.get_by_role("slider", name="Skill list limit")
+
+
 class TestCodex:
     """Stage 2: the same control on the Codex card. The medium sample's Codex chat fits, so a
     newer Codex chat is written into the sample before the page starts: the cut-short chat of
@@ -490,28 +516,14 @@ class TestCodex:
     def before_start(self):
         from tests.unit.test_codex_limit import cut_chat
 
-        def write(home):
-            # Later than the sample's own Codex chat, in its time and its file's, so it is the
-            # last chat.
-            cut_chat(home, at="2026-11-20T12:00:00Z")
-            for log in (home / ".codex/sessions").rglob("rollout-a.jsonl"):
-                os.utime(log)
-
-        return write
+        return lambda home: codex_chat_alone(home, cut_chat)
 
     def test_the_codex_line_drags_to_500_tokens_applies_and_undo(self, page, demo):
         config = demo.home / ".codex/config.toml"
         before = config.read_bytes() if config.exists() else None
-        page.evaluate("location.hash = '#context'")
         main = page.get_by_role("main")
-        codex = main.get_by_role("group", name="Client").get_by_role("button", name="Codex")
-        codex.click()
-        expect(codex).to_have_attribute("aria-pressed", "true")
-        handle = page.get_by_role("slider", name="Skill list limit")
+        handle = open_codex(page)
         expect(handle).to_have_attribute("aria-valuetext", re.compile(r"tokens now · 2 of 3 cut"))
-        wait_until(
-            lambda: not page.evaluate("document.documentElement.classList.contains('place-change')")
-        )
         page.locator(".ctx-flag").click()
         details = page.get_by_role("complementary", name="Details")
         expect(details).to_contain_text("2% of the context window:")

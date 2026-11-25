@@ -13,6 +13,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import TypeGuard
 
@@ -25,9 +26,10 @@ from kitden.clients.base import (
 )
 from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, ClaudeCodeAdapter, local_files
 from kitden.clients.claude_folder import ClaudeFolder, claude_folder
+from kitden.clients.codex import skills_off
 from kitden.clients.versions import highest_version
 from kitden.context.claude_log import Unreadable, earlier_descriptions, last_claude_list
-from kitden.context.codex_log import codex_window, codex_windows, last_codex_list
+from kitden.context.codex_log import CodexSent, codex_window, codex_windows, last_codex_list
 from kitden.context.rules import (
     ClaudeFit,
     ClaudeSkill,
@@ -67,7 +69,7 @@ from kitden.views import words
 from kitden.views.after import home_path
 from kitden.views.catalog import installed_inside
 from kitden.views.effective import effective_view, in_project
-from kitden.views.match import plugin_of
+from kitden.views.match import plugin_at, plugin_of
 from kitden.views.skills import list_text, read_skill
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -83,6 +85,8 @@ BUDGET_KEY = "SLASH_COMMAND_TOOL_CHAR_BUDGET"
 FRACTION_KEY = LIMIT_KEY
 CAP_KEY = "skillListingMaxDescChars"
 WHOLE = re.compile(r"[0-9]+")
+# In a Codex skill's `agents/openai.yaml`, under `policy`.
+ONLY_ASKED = re.compile(r"^[ \t]+allow_implicit_invocation[ \t]*:[ \t]*false\b", re.M | re.I)
 
 
 @dataclass
@@ -1656,6 +1660,77 @@ def _codex_added(rows: list[_Row]) -> list[_Row]:
     return out
 
 
+def _codex_off(inventory, codex_home: Path, folder: str | None) -> Callable[[str], bool]:
+    """Whether the skill at a path is off there now, by itself or with its plugin. By the path in
+    config.toml, not by Kitden's item: an off skill, and one inside another's folder, has none."""
+    off = skills_off(as_dict(Reader("codex").toml(codex_home / "config.toml")))
+    loaded = effective_view(inventory, "codex", folder).items
+    plugins_off = {
+        i.name
+        for i in inventory.items
+        if i.client == "codex" and i.kind is ItemKind.PLUGIN and i.project in (None, folder)
+    } - {i.name for i in loaded if i.kind is ItemKind.PLUGIN}
+
+    def is_off(path: str) -> bool:
+        return os.path.realpath(path) in off or plugin_at(path) in plugins_off
+
+    return is_off
+
+
+def _codex_hidden(path: str) -> bool:
+    """Codex never lists this skill: its `agents/openai.yaml` keeps it for when it is asked for.
+
+    # checked 2026-11-25 (learn.chatgpt.com/docs/build-skills: `allow_implicit_invocation`; that
+    # the skill is then not on the list: codex-rs/ext/skills/src/provider/host.rs)
+    """
+    try:
+        text = (Path(path).parent / "agents/openai.yaml").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return ONLY_ASKED.search(text) is not None
+
+
+def _codex_new(
+    extras: list[Item], found: CodexSent, names_only: bool, at_ms: int
+) -> tuple[list[_Row], dict[str, str], list[str]]:
+    """The skills there that the last chat's list does not hold and the next one will: their rows,
+    the path each has on the list, and the names of those whose line Kitden cannot tell (a skill
+    that is a link, or under a root that the list does not have). Codex skips a SKILL.md with no
+    description. When the list had names only, skills may have been left out of it: then only a
+    file written after the chat is surely new."""
+    rows, shown, unknown = [], {}, []
+    for item in extras:
+        path = item.source.path or ""
+        text = _description(path)
+        if not text or _codex_hidden(path):
+            continue
+        if names_only and _unchanged([Path(path)], at_ms):
+            continue
+        line = None if item.source.link_path else found.path_of(path)
+        if line is None:
+            unknown.append(item.name)
+        else:
+            rows.append(_Row(item.name, None, item, text, path))
+            shown[item.name] = line
+    return rows, shown, unknown
+
+
+def _codex_order(rows: list[_Row], new: list[_Row]) -> list[_Row]:
+    """`new` among the list's rows, in Codex's order: its own skills, then the project's, then the
+    user's, each by name. At the end when the list itself is in another order.
+
+    # checked 2026-11-25 (codex-rs/ext/skills/src/render.rs order_entries, and real lists)
+    """
+
+    def place(r: _Row) -> tuple[int, str]:
+        if "/.system/" in (r.path or ""):
+            return 0, r.name
+        return 1 if r.item is not None and r.item.project else 2, r.name
+
+    in_order = all(place(a) <= place(b) for a, b in pairwise(rows))
+    return sorted([*rows, *new], key=place) if in_order else [*rows, *new]
+
+
 def _codex_same(rows: list[_Row], fit: CodexFit, names_only: bool) -> bool:
     """The rule leaves out, cuts and keeps the same skills as the log, at the same length: the
     log's cuts may differ by a few characters (366-370 on 2026-10-30), so the rule's length
@@ -1939,23 +2014,34 @@ def _codex(
             text = _description(item.source.path)
             rows.append(_Row(item.name, None, item, text, item.source.path or ""))
             extras.remove(item)
-    states = {r.name: _state(r.item) for r in rows}
+    # What the next chats list: the chat's skills in today's states, and those new since.
+    new, new_shown, not_counted = _codex_new(extras, found, names_only, at_ms)
+    as_shown = as_shown | new_shown
+    rows_now = _codex_order(rows, new)
+    is_off = _codex_off(inventory, codex_home, sent_list.folder)
+    states = {r.name: "off" if is_off(r.path or "") else _state(r.item) for r in rows_now}
+    then = {r.name: "on" for r in rows}  # the chat listed them
 
     limit = _codex_limit(codex_home)
     window = codex_window(codex_home, sent_list.model)
     budget = codex_budget(window or 0, limit) if window or limit else None
     known = all(r.full is not None for r in rows)
 
-    def run(states: dict[str, str], budget: int) -> tuple[list[CodexSkill], CodexFit]:
+    def run(
+        states: dict[str, str], budget: int, listed: list[_Row] = rows_now
+    ) -> tuple[list[CodexSkill], CodexFit]:
         skills = [
-            CodexSkill(r.name, r.full or "", as_shown.get(r.name) or r.path)
-            for r in rows
+            CodexSkill(r.name, r.full or "", as_shown.get(r.name) or r.path or "")
+            for r in listed
             if states[r.name] != "off"
         ]
         return skills, codex_rule(skills, budget, roots)
 
+    def rebuilds(budget: int) -> bool:
+        return _codex_same(rows, run(then, budget, rows)[1], names_only)
+
     base = run(states, budget) if budget and known else None
-    checked = base is not None and _codex_same(rows, base[1], names_only)
+    checked = base is not None and budget is not None and rebuilds(budget)
     # config.toml changed after the chat: the limit may differ from the one the chat was sent
     # under. When the default or a limit Kitden offers rebuilds the chat's list, the chat's card
     # shows that limit and the estimates use today's (as for Claude Code).
@@ -1964,9 +2050,9 @@ def _codex(
     then_found = False
     if not checked and known and window and moved:
         offers = range(CODEX_LIMIT_STEP, CODEX_MAX_LIMIT + 1, CODEX_LIMIT_STEP)
-        for then in dict.fromkeys([codex_budget(window, None), *offers]):
-            if then != budget and _codex_same(rows, run(states, then)[1], names_only):
-                then_budget, then_found = then, True
+        for other in dict.fromkeys([codex_budget(window, None), *offers]):
+            if other != budget and rebuilds(other):
+                then_budget, then_found = other, True
                 break
         checked = then_found and base is not None
     if moved and not checked:
@@ -1995,7 +2081,7 @@ def _codex(
         title = words.WINDOW_TITLE.format(size=_size(window or 0))
         models = sent_list.model or ""
     windows = [_window_card(title, models, _tag(date), then_budget, fact)]
-    lengths = {r.name: len(r.full or "") for r in rows}
+    lengths = {r.name: len(r.full or "") for r in rows_now}
     # The limit line counts what the preview's changes leave (as for Claude Code).
     changes = _changes(draft, states, SWITCHES[client])
 
@@ -2009,14 +2095,29 @@ def _codex(
     if changes and not keep:
         keep = limit_with(states, False)["offer"] is not None
     limit_card = limit_with(states | changes, keep)
+    # What Kitden expects from the setup as it is now, as for Claude Code.
     changed, expect = [], None
-    if then_found and base is not None and budget:
-        expect = _codex_estimate(base[0], base[1], _on(window), words.ESTIMATE)
+    other_skills = bool(new) or any(states[r.name] == "off" for r in rows)
+    if checked and base is not None and budget and (then_found or other_skills):
+        on = words.WITH_LIMIT if limit is not None and not then_found else _on(window)
+        expect = _codex_estimate(base[0], base[1], on, words.ESTIMATE)
         if expect["misfit"] is None:
             left = f"{budget - base[1].used:,}"
             expect["room"] = words.ROOM_LEFT.format(left=left, unit="tokens")
+    if checked and (expect or not_counted):
         shown = words.TOKENS.format(n=f"{budget:,}")
-        changed = [words.LIMIT_CHANGED.format(share=shown), expect["say"]]
+        if not then_found:
+            changed = [words.SKILLS_CHANGED]
+        elif other_skills or not_counted:
+            changed = [words.LIMIT_AND_SKILLS_CHANGED.format(share=shown)]
+        else:
+            changed = [words.LIMIT_CHANGED.format(share=shown)]
+        changed += [expect["say"]] if expect else []
+    uncounted = []
+    if checked and not_counted:
+        line = _many(len(not_counted), words.CODEX_NOT_COUNTED_ONE, words.CODEX_NOT_COUNTED_MANY)
+        uncounted = [line.format(names=_names(not_counted))]
+        changed += uncounted
     if base is not None and checked:
         other = None
         if limit is not None and window:
@@ -2043,8 +2144,8 @@ def _codex(
         budget_after = new_budget if new_budget is not None else budget
         skills, fit = run(states | changes, budget_after)
         was, now = _codex_full(base[1], lengths), _codex_full(fit, lengths)
-        gets = [r.name for r in rows if r.name not in changes and r.name in now - was]
-        loses = [r.name for r in rows if r.name not in changes and r.name in was - now]
+        gets = [r.name for r in rows_now if r.name not in changes and r.name in now - was]
+        loses = [r.name for r in rows_now if r.name not in changes and r.name in was - now]
         on = words.WITH_LIMIT if limit is not None or new_budget is not None else _on(window)
         result = _codex_estimate(skills, fit, on, words.AFTER_APPLY)
         say = f"{result['say']} {_swap(client, gets, loses)}".strip()
@@ -2066,12 +2167,26 @@ def _codex(
             note = words.NOTE_CHANGED
         elif r.moved:  # first, whatever the other note: the size read may not be the chat's
             note = f"{words.NOTE_NEWER} {note}" if note else words.NOTE_NEWER
+        if states[r.name] == "off":
+            note = words.NOTE_OFF
         size = len(r.full) if r.full is not None else len(r.sent or "")
         text, seen = (
             r.full if r.full is not None else r.sent,
             _seen(r.full, r.sent, side, _codex_cap(r.full)),
         )
-        skills.append(_skill(client, r.name, r.item, size, side, note, description=text, seen=seen))
+        skills.append(
+            _skill(
+                client,
+                r.name,
+                r.item,
+                size,
+                side,
+                note,
+                description=text,
+                seen=seen,
+                state=states[r.name],
+            )
+        )
     for item in extras:
         text = _description(item.source.path)
         note = words.NOTE_NOT_LISTED
@@ -2091,6 +2206,7 @@ def _codex(
         *([words.HOW_CODEX_SETTING] if limit is not None else []),
         words.HOW_CODEX_SIZES.format(when=when),
         words.HOW_CODEX_TOKENS,
+        *uncounted,
         *([limit_card["why"]] if limit_card["why"] else []),
     ]
     return _card(

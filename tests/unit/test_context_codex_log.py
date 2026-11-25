@@ -378,3 +378,25 @@ def test_a_window_setting_that_is_not_a_whole_number_is_ignored(tmp_path):
     for text in ('model_context_window = "big"\n', "model_context_window = 0\n", "not toml ["):
         (tmp_path / "config.toml").write_text(text)
         assert codex_window(tmp_path, "gpt-6-astra") == 272000
+
+
+def test_the_path_a_list_would_give_a_skill_it_does_not_hold(tmp_path):
+    home = tmp_path.resolve()
+    roots = (f"- `r0` = `{home}/skills`", f"- `r1` = `{home}/skills/.system`")
+    sent = CodexSent(None, {}, {}, roots)  # type: ignore[arg-type]
+    assert sent.path_of(f"{home}/skills/new/SKILL.md") == "r0/new/SKILL.md"
+    assert sent.path_of(f"{home}/skills/pack/deep/SKILL.md") == "r0/pack/deep/SKILL.md"
+    assert sent.path_of(f"{home}/skills/.system/new/SKILL.md") == "r1/new/SKILL.md"
+    # Codex would add a root for it, so Kitden cannot tell.
+    assert sent.path_of(f"{home}/skills-two/new/SKILL.md") is None
+    # A list with no roots writes the whole path.
+    plain = CodexSent(None, {}, {}, ())  # type: ignore[arg-type]
+    assert plain.path_of("/a/new/SKILL.md") == "/a/new/SKILL.md"
+
+
+def test_a_root_is_found_through_a_link(tmp_path):
+    real = tmp_path.resolve() / "real"
+    real.mkdir()
+    (tmp_path / "linked").symlink_to(real)
+    sent = CodexSent(None, {}, {}, (f"- `r0` = `{tmp_path.resolve()}/linked`",))  # type: ignore[arg-type]
+    assert sent.path_of(f"{real}/new/SKILL.md") == "r0/new/SKILL.md"

@@ -24,9 +24,12 @@ def plugin_of(item: Item) -> str | None:
     """'superpowers@claude-plugins-official' for a part of that plugin, else None. All three
     clients keep a plugin's files in plugins/cache/<marketplace>/<plugin>/<version>/ (checked
     2026-10-20: Claude Code's installPath in 2.1.283, Codex, Cursor's plugin folders)."""
-    if item.scope is not Scope.PLUGIN:
-        return None
-    parts = PurePath(item.source.path or "").parts
+    return plugin_at(item.source.path or "") if item.scope is Scope.PLUGIN else None
+
+
+def plugin_at(path: str) -> str | None:
+    """The plugin a file in a client's plugin cache belongs to (see `plugin_of`), else None."""
+    parts = PurePath(path).parts
     for i in range(len(parts) - 4, -1, -1):
         if parts[i] == "plugins" and parts[i + 1] == "cache":
             return f"{parts[i + 3]}@{parts[i + 2]}"
