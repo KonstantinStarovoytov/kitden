@@ -10,7 +10,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 ### Not yet released
 
 - **The Add panels have an even gap above the hint:** the closed "Add a GitHub source" block no
-  longer takes a row of its own.
+  longer takes a row of its own (#204).
 
 ### 0.12.0
 
