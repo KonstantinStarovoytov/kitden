@@ -103,6 +103,59 @@ def test_front_matter_reads_plain_quoted_and_block_values(tmp_path):
     assert front_matter(path) == {}
 
 
+def _front(tmp_path, line):
+    path = tmp_path / "SKILL.md"
+    path.write_text(f"---\nname: demo\n{line}\n---\n# Demo\n")
+    return front_matter(path)
+
+
+def test_front_matter_reads_a_double_quoted_value_like_yaml(tmp_path):
+    def read(value):
+        return _front(tmp_path, f'description: "{value}"')["description"]
+
+    assert read(r"say \"deck,\" and \\ and \/") == 'say "deck," and \\ and /'
+    assert read(r"a\tb\nc") == "a\tb\nc"
+    assert read(r"\x41 \u00e9 \U0001F600") == "A é 😀"
+    assert read(r"keep \q and \xZZ and \U00110000 and \ud800 and \U0000DFFF as written") == (
+        r"keep \q and \xZZ and \U00110000 and \ud800 and \U0000DFFF as written"
+    )
+    assert read("it's fine") == "it's fine"
+
+
+def test_front_matter_reads_a_single_quoted_value_like_yaml(tmp_path):
+    meta = _front(tmp_path, "description: 'it''s \"fine\" \\n'")
+    assert meta["description"] == 'it\'s "fine" \\n'
+
+
+def test_front_matter_unquotes_only_a_value_that_starts_and_ends_with_the_same_quote(tmp_path):
+    for value in [
+        'Use for "decks"',
+        '"decks" are good',
+        "it's here'",
+        "'one' and 'two'",
+        '"one" and "two"',
+        '"unterminated',
+        "'",
+        '"',
+    ]:
+        assert _front(tmp_path, f"description: {value}")["description"] == value
+    assert _front(tmp_path, 'description: ""')["description"] == ""
+    assert _front(tmp_path, "description: ''")["description"] == ""
+
+
+def test_front_matter_counts_a_quoted_description_like_the_client_sends_it(tmp_path):
+    # The same shape as skills/pptx and skills/xlsx in anthropics/skills (checked 2026-11-25):
+    # 6 escapes, 738 characters as written and 732 as read; 2 escapes, 950 and 948. Their text is
+    # not copied here, so the lines are built.
+    for read_length, quotes in [(732, 6), (948, 2)]:
+        text = "x" * (read_length - quotes)
+        text = text[:10] + '"' * quotes + text[10:]
+        line = "description: " + '"' + text.replace('"', '\\"') + '"'
+        assert len(line) - len('description: ""') == read_length + quotes
+        assert _front(tmp_path, line)["description"] == text
+        assert len(_front(tmp_path, line)["description"]) == read_length
+
+
 def test_a_skill_in_a_plugin_lists_its_files_and_marks_scripts(home):
     tidy = _rows(home)[f"tidy@{PLUGIN}"]
     assert tidy["description"] == "Tidy up the code you touch."
