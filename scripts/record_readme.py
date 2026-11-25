@@ -95,7 +95,9 @@ def sample(root: Path) -> Path:
 
 
 def stand_ins(root: Path) -> None:
-    """Everything stays on this computer, once per run."""
+    """Everything stays on this computer and in the sample, once per run."""
+    for name in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_PLUGIN_CACHE_DIR", "CODEX_HOME"):
+        os.environ.pop(name, None)
     install_fake_security(root / "keychain")
     os.environ["KITDEN_SECURITY"] = str(root / "keychain/bin/security")
     os.environ["KITDEN_SECRET_TOOL"] = str(root / "keychain/bin/secret-tool")

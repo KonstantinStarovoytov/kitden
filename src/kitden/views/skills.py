@@ -88,7 +88,8 @@ def _unquote(value: str) -> str:
 def front_matter(skill_md: Path) -> dict[str, str]:
     """The `key: value` lines between the `---` fences of SKILL.md, as plain text.
 
-    A block value (`description: >` followed by indented lines) is joined into one line.
+    A block value (`description: >` followed by indented lines) is joined into one line, and so
+    is a quoted value that goes on over several lines.
     A quoted value is read as YAML reads it (`\\"` becomes `"`), so its length matches what a
     client sends.
     Lists and nested keys are skipped; only flat text is needed here.
@@ -103,6 +104,7 @@ def front_matter(skill_md: Path) -> dict[str, str]:
     out: dict[str, str] = {}
     key = None
     block: list[str] | None = None
+    quoted = ""  # a value as written so far, while its closing quote is on a later line
     for line in parts[1].splitlines():
         match = KEY_LINE.match(line)
         if match:
@@ -112,8 +114,15 @@ def front_matter(skill_md: Path) -> dict[str, str]:
             block = [] if value in BLOCK_MARKS else None
             if block is None:
                 out[key] = _unquote(value)
+            quoted = value if value[:1] in ('"', "'") and out.get(key) == value else ""
         elif key and block is not None:
             block.append(line.strip())
+        elif key and quoted:
+            # As YAML folds it: a line end is a space, a blank line a line break.
+            rest = line.strip()
+            quoted += f" {rest}" if rest and not quoted.endswith("\n") else rest or "\n"
+            if (text := _unquote(quoted)) != quoted:
+                out[key], quoted = text, ""
     if key and block is not None:
         out[key] = " ".join(x for x in block if x)
     return out
@@ -475,8 +484,8 @@ def skill_keepers(inventory, item, readers: list[str]) -> list[str]:
 
 
 def lost_inside(inventory, folder: str, client: str, name: str) -> list[str]:
-    """The other skills `client` loses when the skill folder of `name` goes: those inside it that
-    it loads from nowhere else."""
+    """The other skills `client` loses when the skill folder of `name` goes: those inside it, on
+    or off, that it loads from nowhere else."""
     gone = os.path.realpath(folder)
     inside = [
         i
@@ -484,7 +493,6 @@ def lost_inside(inventory, folder: str, client: str, name: str) -> list[str]:
         if i.client == client
         and i.kind is ItemKind.SKILL
         and i.name != name
-        and i.enabled is not Enabled.OFF
         and i.source.path is not None
         and os.path.realpath(i.source.path).startswith(f"{gone}/")
     ]

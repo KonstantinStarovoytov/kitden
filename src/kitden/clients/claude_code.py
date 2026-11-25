@@ -43,6 +43,7 @@ from kitden.clients.base import (
 )
 from kitden.clients.claude_folder import ClaudeFolder, claude_folder
 from kitden.clients.versions import highest_version, is_supported
+from kitden.local_gateway.project import main_checkout
 from kitden.local_gateway.settings import as_dict
 from kitden.model import (
     Client,
@@ -120,7 +121,7 @@ def _on(value: bool | None) -> Enabled:
 def _install_counts(installs: Any, project_path: str) -> bool:
     """The plugin has an install record that serves this project: any record that is not a
     project or local install, or one for this project's folder or its main checkout."""
-    serves = [os.path.realpath(p) for p in (project_path, main_checkout(Path(project_path))) if p]
+    serves = [os.path.realpath(p) for p in (project_path, main_checkout(Path(project_path)))]
     for record in installs if isinstance(installs, list) else []:
         record = as_dict(record)
         where = record.get("projectPath")
@@ -294,16 +295,6 @@ def _owned(path: Path) -> bool:
         return path.stat().st_uid == os.getuid()
     except OSError:
         return False
-
-
-def main_checkout(folder: Path) -> Path | None:
-    """The main checkout of a git worktree, from its `.git` file; None for any other folder."""
-    try:
-        line = (folder / ".git").read_text().strip()
-    except (OSError, ValueError):
-        return None
-    git, mark, _ = line.removeprefix("gitdir: ").partition("/.git/worktrees/")
-    return Path(git) if mark else None
 
 
 def local_files(project: Path, home: Path) -> list[Path]:

@@ -2037,7 +2037,11 @@ def _codex(
     as_shown = as_shown | new_shown
     rows_now = _codex_order(rows, new)
     is_off = _codex_off(inventory, codex_home, sent_list.folder)
-    states = {r.name: "off" if is_off(r.file) else _state(r.item) for r in rows_now}
+    # By name, as the list is read: with another skill of its name on, it is on.
+    states = {
+        r.name: "off" if is_off(r.file) and r.name not in by_name else _state(r.item)
+        for r in rows_now
+    }
     # A skill kept for when it is asked for is on, and not on the list.
     asked_for = {r.name for r in rows if _codex_hidden(r.file)}
     states_now = states | dict.fromkeys(asked_for, "off")

@@ -233,6 +233,17 @@ def test_removing_a_skill_says_which_skills_inside_its_folder_go_with_it(client)
     assert digest(outer) == before
 
 
+def test_an_inner_skill_that_is_off_is_named_too(client):
+    outer = _outer_and_inner(client, "dense", "sparse")
+    off = (outer / "parts/dense/SKILL.md").resolve()
+    with (client.home / ".codex/config.toml").open("a") as config:
+        config.write(f'\n[[skills.config]]\npath = "{off}"\nenabled = false\n')
+    client.post("/api/rescan", headers=POST)
+    change = _remove(client, _skill_item(client, "codex", "qdrant", where=str(outer))["id"]).json()
+    note = "This also removes dense and sparse, which are inside this folder."
+    assert change["after"][0]["note"] == note
+
+
 def test_removing_an_inner_skill_keeps_the_outer_one(client):
     outer = _outer_and_inner(client, "dense", "sparse")
     before = digest(outer)
