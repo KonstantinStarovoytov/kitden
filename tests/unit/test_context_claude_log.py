@@ -62,7 +62,7 @@ def test_reads_names_and_sent_text_from_the_last_full_list(tmp_path):
     write_chat(
         tmp_path, "p", "chat", [first, assistant("claude-sonnet-4-6"), second, assistant()], 100
     )
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert got == SentList(
         client="claude_code",
         at="2026-11-09T10:00:00Z",
@@ -77,20 +77,23 @@ def test_reads_names_and_sent_text_from_the_last_full_list(tmp_path):
 def test_a_description_with_a_dash_line_stays_whole(tmp_path):
     entry = list_entry(["a", "b"], "- a: One.\n- not a skill\n- b: Two.")
     write_chat(tmp_path, "p", "chat", [entry], 100)
-    assert last_claude_list(tmp_path, None).skills == (("a", "One.\n- not a skill"), ("b", "Two."))
+    assert last_claude_list(tmp_path / ".claude", None).skills == (
+        ("a", "One.\n- not a skill"),
+        ("b", "Two."),
+    )
 
 
 def test_a_name_that_starts_another_name_is_not_mixed_up(tmp_path):
     entry = list_entry(["ab", "a"], "- ab: Long.\n- a: Short.")
     write_chat(tmp_path, "p", "chat", [entry], 100)
-    assert last_claude_list(tmp_path, None).skills == (("ab", "Long."), ("a", "Short."))
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("ab", "Long."), ("a", "Short."))
 
 
 def test_the_command_in_brackets_after_a_name_is_not_its_description(tmp_path):
     # Claude Code adds the word you type when it is not the skill's name (seen on 2.1.330).
     entry = list_entry(["a", "b-local", "c"], "- a: One.\n- b-local (b): Two.\n- c")
     write_chat(tmp_path, "p", "chat", [entry], 100)
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert got.skills == (("a", "One."), ("b-local", "Two."), ("c", None))
     assert got.shown == {"b-local": "b-local (b)"}
 
@@ -99,7 +102,7 @@ def test_a_skill_by_name_only_can_have_a_command_in_brackets(tmp_path):
     for content in ("- a: One.\n- b-local (b)\n- c: Two.", "- a: One.\n- c: Two.\n- b-local (b)"):
         names = ["a", "b-local", "c"] if content.endswith("Two.") else ["a", "c", "b-local"]
         write_chat(tmp_path, "p", "chat", [list_entry(names, content)], 100)
-        got = last_claude_list(tmp_path, None)
+        got = last_claude_list(tmp_path / ".claude", None)
         assert dict(got.skills) == {"a": "One.", "b-local": None, "c": "Two."}
         assert got.shown == {"b-local": "b-local (b)"}
 
@@ -108,7 +111,7 @@ def test_a_dash_line_with_other_words_in_brackets_stays_in_its_description(tmp_p
     text = "One.\n- b (not a command): no.\n- b (x) and more\n- c (x): not a skill"
     entry = list_entry(["a", "b"], f"- a: {text}\n- b: Two.")
     write_chat(tmp_path, "p", "chat", [entry], 100)
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert got.skills == (("a", text), ("b", "Two."))
     assert got.shown == {}
 
@@ -118,7 +121,7 @@ def test_a_dash_line_like_a_command_is_not_the_entry_of_a_skill_listed_by_its_na
         for own, text in (("- b: Two.", "Two."), ("- b", None)):
             content = f"- a: One.\n{line}\n{own}\n- c (d): Three."
             write_chat(tmp_path, "p", "chat", [list_entry(["a", "b", "c"], content)], 100)
-            got = last_claude_list(tmp_path, None)
+            got = last_claude_list(tmp_path / ".claude", None)
             assert got.skills == (("a", f"One.\n{line}"), ("b", text), ("c", "Three."))
             assert got.shown == {"c": "c (d)"}
 
@@ -127,13 +130,13 @@ def test_an_added_skill_keeps_its_command_in_brackets(tmp_path):
     full = list_entry(["a", "b-local"], "- a: One.\n- b-local (b)")
     added = list_entry(["c-local"], "- c-local (c): Three.", isInitial=False)
     write_chat(tmp_path, "p", "chat", [full, added], 100)
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert got.skills == (("a", "One."), ("b-local", None), ("c-local", "Three."))
     assert got.shown == {"b-local": "b-local (b)", "c-local": "c-local (c)"}
     # Sent again with no command, it is shown by its name.
     again = list_entry(["b-local"], "- b-local: Two.", isInitial=False)
     write_chat(tmp_path, "p", "chat", [full, added, again], 100)
-    assert last_claude_list(tmp_path, None).shown == {"c-local": "c-local (c)"}
+    assert last_claude_list(tmp_path / ".claude", None).shown == {"c-local": "c-local (c)"}
 
 
 def test_skips_subagent_logs_sidechains_and_runs_that_are_not_a_chat(tmp_path):
@@ -145,26 +148,26 @@ def test_skips_subagent_logs_sidechains_and_runs_that_are_not_a_chat(tmp_path):
     write_chat(tmp_path, "p", "side", [side], 300)
     sdk = list_entry(["a"], "- a: Run.", entrypoint="sdk-cli")
     write_chat(tmp_path, "p", "run", [sdk], 400)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Plain."),)
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Plain."),)
 
 
 def test_an_unknown_entrypoint_is_read_without_a_surface(tmp_path):
     entry = list_entry(["a"], "- a: Hi.", entrypoint="claude-vscode")
     write_chat(tmp_path, "p", "chat", [entry], 100)
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert got.surface is None
     assert got.skills == (("a", "Hi."),)
 
 
 def test_the_terminal_surface_is_named(tmp_path):
     write_chat(tmp_path, "p", "chat", [list_entry(["a"], "- a: Hi.", entrypoint="cli")], 100)
-    assert last_claude_list(tmp_path, None).surface == "in the terminal"
+    assert last_claude_list(tmp_path / ".claude", None).surface == "in the terminal"
 
 
 def test_a_chat_with_no_list_yet_falls_back_to_the_next_older(tmp_path):
     write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
     write_chat(tmp_path, "p", "new", [assistant()], 200)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Old."),)
 
 
 def stamp(at: str) -> float:
@@ -177,7 +180,7 @@ def test_the_newest_list_wins_not_the_newest_file(tmp_path):
     new = list_entry(["a"], "- a: New.", at="2026-11-11T23:00:00Z")
     write_chat(tmp_path, "p", "old", [old], stamp("2026-11-12T17:10:00Z"))
     write_chat(tmp_path, "p", "new", [new], stamp("2026-11-11T23:05:00Z"))
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert (got.at, got.skills) == ("2026-11-11T23:00:00Z", (("a", "New."),))
 
 
@@ -188,12 +191,12 @@ def test_skills_added_to_an_old_chat_do_not_make_it_the_last_chat(tmp_path):
     fresh = list_entry(["a", "b"], "- a\n- b", at="2026-11-23T09:00:00Z")
     write_chat(tmp_path, "p", "old", [old, added], stamp("2026-11-23T12:00:00Z"))
     write_chat(tmp_path, "p", "fresh", [fresh], stamp("2026-11-23T09:00:00Z"))
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert got.skills == (("a", None), ("b", None))
     assert got.at == "2026-11-23T09:00:00Z"
     # Alone, the old chat is still read with what was added to it, at the time of that list.
     (tmp_path / ".claude/projects/p/fresh.jsonl").unlink()
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert got.skills == (("a", "Old."), ("b", "New."))
     assert got.at == "2026-11-23T12:00:00Z"
 
@@ -203,15 +206,15 @@ def test_a_newer_unreadable_list_wins_over_an_older_good_one(tmp_path):
     odd = list_entry("a", "- a: New.", at="2026-11-11T09:00:00Z")
     write_chat(tmp_path, "p", "good", [good], stamp("2026-11-12T09:00:00Z"))
     write_chat(tmp_path, "p", "odd", [odd], stamp("2026-11-11T09:05:00Z"))
-    assert isinstance(last_claude_list(tmp_path, None), Unreadable)
+    assert isinstance(last_claude_list(tmp_path / ".claude", None), Unreadable)
 
 
 def test_a_picked_folder_reads_only_its_own_chats(tmp_path):
     write_chat(tmp_path, "mine", "chat", [list_entry(["a"], "- a: Mine.", folder="/work/a")], 100)
     write_chat(tmp_path, "other", "chat", [list_entry(["a"], "- a: Other.", folder="/work/b")], 200)
-    assert last_claude_list(tmp_path, "/work/a").skills == (("a", "Mine."),)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Other."),)
-    assert last_claude_list(tmp_path, "/work/none") is None
+    assert last_claude_list(tmp_path / ".claude", "/work/a").skills == (("a", "Mine."),)
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Other."),)
+    assert last_claude_list(tmp_path / ".claude", "/work/none") is None
 
 
 def test_a_chat_from_another_folder_is_not_read_line_by_line(tmp_path, monkeypatch):
@@ -224,7 +227,7 @@ def test_a_chat_from_another_folder_is_not_read_line_by_line(tmp_path, monkeypat
     read = []
     whole = claude_log._read_chat
     monkeypatch.setattr(claude_log, "_read_chat", lambda p, f: read.append(p.stem) or whole(p, f))
-    assert last_claude_list(tmp_path, "/work/a").skills == (("a", "Mine."),)
+    assert last_claude_list(tmp_path / ".claude", "/work/a").skills == (("a", "Mine."),)
     assert read == ["chat"]  # only the picked folder's
 
 
@@ -239,7 +242,7 @@ def test_a_folder_with_other_letters_is_found_however_the_log_spells_it(tmp_path
         only = tmp_path / ".claude/projects" / f"p{1 - n}" / "chat.jsonl"
         kept = only.read_bytes()
         only.write_bytes(b"")
-        assert last_claude_list(tmp_path, folder).skills == (("a", "Mine."),)
+        assert last_claude_list(tmp_path / ".claude", folder).skills == (("a", "Mine."),)
         only.write_bytes(kept)
 
 
@@ -250,13 +253,13 @@ def test_a_chat_that_moved_to_another_folder_keeps_the_picked_folders_list(tmp_p
     older = list_entry(["a"], "- a: Older.", folder="/work/a", at="2026-11-19T10:00:00Z")
     write_chat(tmp_path, "p", "moved", [here, assistant(), there], stamp("2026-11-22T12:00:00Z"))
     write_chat(tmp_path, "p", "older", [older], stamp("2026-11-19T10:00:00Z"))
-    assert last_claude_list(tmp_path, "/work/a").skills == (("a", "Here."),)
-    assert last_claude_list(tmp_path, "/work/b").skills == (("a", "There."),)
-    assert last_claude_list(tmp_path, None).skills == (("a", "There."),)
+    assert last_claude_list(tmp_path / ".claude", "/work/a").skills == (("a", "Here."),)
+    assert last_claude_list(tmp_path / ".claude", "/work/b").skills == (("a", "There."),)
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "There."),)
 
 
 def test_no_chats_at_all_is_none(tmp_path):
-    assert last_claude_list(tmp_path, None) is None
+    assert last_claude_list(tmp_path / ".claude", None) is None
 
 
 def test_a_list_with_an_unknown_shape_is_unreadable_on_any_version(tmp_path):
@@ -265,21 +268,21 @@ def test_a_list_with_an_unknown_shape_is_unreadable_on_any_version(tmp_path):
         odd = list_entry(["a"], "- a: New.", version=version)
         del odd["attachment"]["names"]
         write_chat(tmp_path, "p", "new", [odd], 200)
-        assert last_claude_list(tmp_path, None) == Unreadable("claude_code", version)
+        assert last_claude_list(tmp_path / ".claude", None) == Unreadable("claude_code", version)
 
 
 def test_a_good_list_after_an_odd_one_is_read(tmp_path):
     odd = list_entry(["a"], "- a: Odd.")
     del odd["attachment"]["content"]
     write_chat(tmp_path, "p", "chat", [odd, list_entry(["a"], "- a: Good.")], 100)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Good."),)
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Good."),)
 
 
 def test_added_skills_alone_fall_back_to_the_next_older(tmp_path):
     write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
     odd = list_entry(["a"], "- a: New.", isInitial=False)
     write_chat(tmp_path, "p", "new", [odd], 200)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Old."),)
 
 
 def test_skills_added_during_a_chat_are_marked_until_the_next_full_list(tmp_path):
@@ -288,25 +291,25 @@ def test_skills_added_during_a_chat_are_marked_until_the_next_full_list(tmp_path
     first = list_entry(["a"], "- a")
     more = list_entry(["c"], "- c: Does C.", isInitial=False, at="2026-11-09T11:00:00Z")
     write_chat(tmp_path, "p", "chat", [first, more], 100)
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert (got.skills, got.added) == ((("a", None), ("c", "Does C.")), frozenset({"c"}))
     again = list_entry(["a", "c"], "- a\n- c", at="2026-11-09T12:00:00Z")
     write_chat(tmp_path, "p", "chat", [first, more, again], 100)
-    assert last_claude_list(tmp_path, None).added == frozenset()
+    assert last_claude_list(tmp_path / ".claude", None).added == frozenset()
 
 
 def test_a_list_cut_short_is_not_a_full_list(tmp_path):
     write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
     short = list_entry(["a"], "- a: New.", skillCount=3)
     write_chat(tmp_path, "p", "new", [short], 200)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Old."),)
 
 
 def test_a_list_whose_names_are_not_all_text_is_unreadable(tmp_path):
     write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
     odd = list_entry(["a", 7], "- a: New.\n- 7: Seven.")
     write_chat(tmp_path, "p", "new", [odd], 200)
-    assert last_claude_list(tmp_path, None) == Unreadable("claude_code", "2.1.311")
+    assert last_claude_list(tmp_path / ".claude", None) == Unreadable("claude_code", "2.1.311")
 
 
 def test_a_half_written_last_line_is_skipped(tmp_path):
@@ -319,7 +322,7 @@ def test_a_half_written_last_line_is_skipped(tmp_path):
         100,
         raw_tail='{"type": "attachment", "attachment": {"type": "skill_listing", "na',
     )
-    assert last_claude_list(tmp_path, None).skills == (("a", "Whole."),)
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Whole."),)
 
 
 def test_only_list_lines_are_parsed(tmp_path):
@@ -337,7 +340,7 @@ def test_only_list_lines_are_parsed(tmp_path):
     lines.insert(25_000, json.dumps(list_entry(["a"], "- a: Hi.")))
     path.write_text("\n".join(lines) + "\n")
     start = time.perf_counter()
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert time.perf_counter() - start < 1
     assert got.skills == (("a", "Hi."),)
     assert got.model == "claude-opus-5-5"
@@ -348,21 +351,21 @@ def test_a_chat_with_no_list_falls_back_whatever_its_version(tmp_path):
         write_chat(tmp_path, "p", "old", [list_entry(["a"], "- a: Old.")], 100)
         bare = {"type": "user", "version": version, "cwd": "/work/a", "isSidechain": False}
         write_chat(tmp_path, "p", "new", [bare, assistant()], 200)
-        assert last_claude_list(tmp_path, None).skills == (("a", "Old."),)
+        assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Old."),)
 
 
 def test_a_file_that_cannot_be_read_is_skipped(tmp_path):
     write_chat(tmp_path, "p", "ok", [list_entry(["a"], "- a: Fine.")], 100)
     (tmp_path / ".claude/projects/p/dir.jsonl").mkdir()  # opening it fails
     (tmp_path / ".claude/projects/p/gone.jsonl").symlink_to(tmp_path / "missing")  # stat fails
-    assert last_claude_list(tmp_path, None).skills == (("a", "Fine."),)
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Fine."),)
 
 
 def test_a_list_with_no_entrypoint_is_read_without_a_surface(tmp_path):
     entry = list_entry(["a"], "- a: Hi.")
     del entry["entrypoint"]
     write_chat(tmp_path, "p", "chat", [entry], 100)
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert got.surface is None
     assert got.skills == (("a", "Hi."),)
 
@@ -371,7 +374,7 @@ def test_a_list_with_no_version_has_an_empty_version(tmp_path):
     entry = list_entry(["a"], "- a: Hi.")
     del entry["version"]
     write_chat(tmp_path, "p", "chat", [entry], 100)
-    assert last_claude_list(tmp_path, None).version == ""
+    assert last_claude_list(tmp_path / ".claude", None).version == ""
 
 
 def added_entry(names, content, **kw):
@@ -383,7 +386,7 @@ def test_skills_added_in_the_middle_of_a_chat_join_the_list(tmp_path):
     full = list_entry(["a", "b"], "- a: Does A.\n- b", at="2026-11-09T10:00:00Z")
     added = added_entry(["p:c"], "- p:c: Does C.", at="2026-11-09T11:00:00Z")
     write_chat(tmp_path, "p", "chat", [full, assistant(), added], 100)
-    got = last_claude_list(tmp_path, None)
+    got = last_claude_list(tmp_path / ".claude", None)
     assert got.skills == (("a", "Does A."), ("b", None), ("p:c", "Does C."))
     assert got.at == "2026-11-09T11:00:00Z"
 
@@ -391,26 +394,32 @@ def test_skills_added_in_the_middle_of_a_chat_join_the_list(tmp_path):
 def test_an_added_skill_already_in_the_list_takes_its_new_text(tmp_path):
     full = list_entry(["a", "b"], "- a\n- b: Does B.")
     write_chat(tmp_path, "p", "chat", [full, added_entry(["a"], "- a: Does A.")], 100)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Does A."), ("b", "Does B."))
+    assert last_claude_list(tmp_path / ".claude", None).skills == (
+        ("a", "Does A."),
+        ("b", "Does B."),
+    )
 
 
 def test_a_full_list_after_added_skills_stands_alone(tmp_path):
     full = list_entry(["a"], "- a: Does A.")
     again = list_entry(["a", "c"], "- a: Does A.\n- c")
     write_chat(tmp_path, "p", "chat", [full, added_entry(["c"], "- c: Does C."), again], 100)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Does A."), ("c", None))
+    assert last_claude_list(tmp_path / ".claude", None).skills == (("a", "Does A."), ("c", None))
 
 
 def test_added_skills_with_no_full_list_before_them_are_no_list(tmp_path):
     write_chat(tmp_path, "p", "chat", [added_entry(["c"], "- c: Does C."), assistant()], 100)
-    assert last_claude_list(tmp_path, None) is None
+    assert last_claude_list(tmp_path / ".claude", None) is None
 
 
 def test_added_skills_from_another_version_keep_the_list_readable(tmp_path):
     full = list_entry(["a"], "- a: Does A.", version="2.2.0")
     added = added_entry(["c"], "- c: Does C.", version="2.2.0")
     write_chat(tmp_path, "p", "chat", [full, added], 100)
-    assert last_claude_list(tmp_path, None).skills == (("a", "Does A."), ("c", "Does C."))
+    assert last_claude_list(tmp_path / ".claude", None).skills == (
+        ("a", "Does A."),
+        ("c", "Does C."),
+    )
 
 
 def test_the_model_is_the_one_that_answered_the_list_not_a_later_one(tmp_path):
@@ -421,13 +430,13 @@ def test_the_model_is_the_one_that_answered_the_list_not_a_later_one(tmp_path):
         assistant("claude-opus-5-5"),
     ]
     write_chat(tmp_path, "p", "chat", entries, 100)
-    assert last_claude_list(tmp_path, None).model == "claude-fable-5-1"
+    assert last_claude_list(tmp_path / ".claude", None).model == "claude-fable-5-1"
 
 
 def test_a_list_with_no_answer_yet_takes_the_model_before_it(tmp_path):
     entries = [assistant("claude-sonnet-4-6"), list_entry(["a"], "- a: Does A.")]
     write_chat(tmp_path, "p", "chat", entries, 100)
-    assert last_claude_list(tmp_path, None).model == "claude-sonnet-4-6"
+    assert last_claude_list(tmp_path / ".claude", None).model == "claude-sonnet-4-6"
 
 
 # A built-in skill's description from an earlier chat's list
@@ -439,7 +448,7 @@ def test_the_newest_list_with_a_description_wins(tmp_path):
     first = list_entry(["init"], "- init: Older in this chat.", at="2026-11-02T10:00:00Z")
     last = list_entry(["init", "a"], "- init: New.\n- a: Does A.", at="2026-11-03T10:00:00Z")
     write_chat(tmp_path, "q", "new", [first, assistant(), last], 100)
-    assert earlier_descriptions(tmp_path, ["init"]) == {"init": "New."}
+    assert earlier_descriptions(tmp_path / ".claude", ["init"]) == {"init": "New."}
 
 
 def test_a_list_that_shows_the_skill_by_name_only_is_passed_over(tmp_path):
@@ -447,13 +456,13 @@ def test_a_list_that_shows_the_skill_by_name_only_is_passed_over(tmp_path):
     # The newest lists, in another folder, show it by name only: the older one counts.
     named = list_entry(["init", "a"], "- init\n- a: Does A.", folder="/work/b")
     write_chat(tmp_path, "q", "new", [named, named], 100)
-    assert earlier_descriptions(tmp_path, ["init", "missing"]) == {"init": "Sets up."}
+    assert earlier_descriptions(tmp_path / ".claude", ["init", "missing"]) == {"init": "Sets up."}
 
 
 def test_a_skill_shown_with_its_command_is_read_by_its_name(tmp_path):
     entry = list_entry(["ship-local", "init"], "- ship-local (ship): Ships it.\n- init: Sets up.")
     write_chat(tmp_path, "p", "chat", [entry], 100)
-    assert earlier_descriptions(tmp_path, ["ship-local", "init"]) == {
+    assert earlier_descriptions(tmp_path / ".claude", ["ship-local", "init"]) == {
         "ship-local": "Ships it.",
         "init": "Sets up.",
     }
@@ -477,10 +486,10 @@ def test_reading_stops_once_every_skill_is_found(tmp_path, monkeypatch):
     write_chat(tmp_path, "p", "mid", [list_entry(["code-review"], "- code-review: Reviews.")], 70)
     write_chat(tmp_path, "p", "new", [list_entry(["init"], "- init: New.")], 100)
     read = spy_reads(monkeypatch)
-    assert earlier_descriptions(tmp_path, ["init"]) == {"init": "New."}
+    assert earlier_descriptions(tmp_path / ".claude", ["init"]) == {"init": "New."}
     assert read == ["new"]
     read.clear()
-    got = earlier_descriptions(tmp_path, ["init", "code-review"])
+    got = earlier_descriptions(tmp_path / ".claude", ["init", "code-review"])
     assert got == {"init": "New.", "code-review": "Reviews."} and read == ["new", "mid"]
 
 
@@ -489,7 +498,7 @@ def test_only_the_forty_newest_logs_are_read(tmp_path, monkeypatch):
     for i in range(40):
         write_chat(tmp_path, "p", f"chat{i:02}", [list_entry(["a"], "- a: Does A.")], 100 + i)
     read = spy_reads(monkeypatch)
-    assert earlier_descriptions(tmp_path, ["init"]) == {}
+    assert earlier_descriptions(tmp_path / ".claude", ["init"]) == {}
     assert len(read) == 40 and "oldest" not in read
 
 
@@ -507,10 +516,10 @@ def test_a_log_or_a_line_kitden_cannot_read_is_passed_over(tmp_path):
     empty.write_text("")
     os.utime(empty, (70, 70))
     (tmp_path / ".claude/projects/p/folder.jsonl").mkdir()
-    assert earlier_descriptions(tmp_path, ["init"]) == {"init": "Sets up."}
+    assert earlier_descriptions(tmp_path / ".claude", ["init"]) == {"init": "Sets up."}
 
 
 def test_no_names_reads_nothing(tmp_path, monkeypatch):
     write_chat(tmp_path, "p", "chat", [list_entry(["init"], "- init: Sets up.")], 100)
     read = spy_reads(monkeypatch)
-    assert earlier_descriptions(tmp_path, []) == {} and read == []
+    assert earlier_descriptions(tmp_path / ".claude", []) == {} and read == []

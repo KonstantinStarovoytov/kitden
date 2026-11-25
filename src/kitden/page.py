@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from kitden import __version__
+from kitden.clients.claude_folder import claude_folder
 from kitden.gateways import data_dir, private_data_dir
 
 HOST = "127.0.0.1"
@@ -70,10 +71,17 @@ def page_running(home: Path) -> bool:
     return True
 
 
+def claude_key(home: Path) -> list[str]:
+    """Where a page started now reads Claude Code's files."""
+    folder = claude_folder(home)
+    return [str(folder.config), str(folder.state), str(folder.plugins)]
+
+
 def write_record(home: Path, port: int, token: str, background: bool) -> None:
     record = {
         "pid": os.getpid(),
         "version": __version__,
+        "claude": claude_key(home),
         "port": port,
         "token": token,
         "background": background,
@@ -111,8 +119,9 @@ def wait_for_record(home: Path, seconds: float = WAIT_SECONDS) -> dict | None:
 
 
 def stop_page(home: Path, record: dict) -> bool:
-    """Stop the running page and wait until it has ended. For a page of another Kitden version:
-    after `brew upgrade` or `uv tool upgrade` in a terminal its files are gone or changed."""
+    """Stop the running page and wait until it has ended. For a page of another Kitden version
+    (after `brew upgrade` or `uv tool upgrade` in a terminal its files are gone or changed), or
+    one that reads another Claude Code folder."""
     with contextlib.suppress(KeyError, TypeError, ValueError, OSError):
         os.kill(int(record["pid"]), signal.SIGTERM)
     lock = PageLock(home)

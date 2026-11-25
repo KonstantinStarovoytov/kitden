@@ -44,7 +44,13 @@ KINDS = {ItemKind.PLUGIN: "plugin", ItemKind.SKILL: "skill", ItemKind.HOOK: "hoo
 def cursor_imports(adapters, found: list[str]) -> bool:
     """Cursor and Claude Code are both found, and Cursor loads Claude Code's plugins."""
     cursor = adapters.get("cursor") if "cursor" in found else None
-    return bool(cursor and cursor.imports_claude_plugins() and "claude_code" in found)
+    claude = adapters.get("claude_code") if "claude_code" in found else None
+    return bool(
+        cursor
+        and claude
+        and claude.reaches_cursor(ItemKind.PLUGIN)
+        and cursor.imports_claude_plugins()
+    )
 
 
 def map_clients(inventory, cursor_imports: bool, loads: dict[str, str | None]) -> list[dict]:

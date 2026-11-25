@@ -119,7 +119,7 @@ def reads(item: Item, items: list[Item]) -> str:
         if item.name == ".cursorrules":
             return "An older rules file. Cursor plans to stop reading it."
         return "Cursor reads it in each chat in this project."
-    if "/.claude/rules/" in path:
+    if item.name not in ("CLAUDE.md", "CLAUDE.local.md"):  # a file of a `rules` folder
         return "Read when a session starts. A rule that names paths is read only for those files."
     return "Read when a session starts."
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from kitden.clients.base import ClientAdapter
 from kitden.clients.choice import off_clients
 from kitden.clients.claude_code import ClaudeCodeAdapter
+from kitden.clients.claude_folder import claude_folder
 from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import CursorAdapter
 from kitden.demo.keychain import DemoKeychain
@@ -50,11 +51,11 @@ def _version(home: Path, adapter: type[ClientAdapter]) -> Callable[[], str | Non
 
 
 def demo_adapters(home: Path) -> list[ClientAdapter]:
-    """The three clients, reading only the sample: no client command runs, CODEX_HOME is not
-    read, and Codex's plugin list answers at once with no plugins. A client that is off in the
-    sample is left out."""
+    """The three clients, reading only the sample: no client command runs, CODEX_HOME,
+    CLAUDE_CONFIG_DIR and CLAUDE_CODE_PLUGIN_CACHE_DIR are not read, and Codex's plugin list
+    answers at once with no plugins. A client that is off in the sample is left out."""
     adapters = [
-        ClaudeCodeAdapter(home, _version(home, ClaudeCodeAdapter)),
+        ClaudeCodeAdapter(home, _version(home, ClaudeCodeAdapter), folder=claude_folder(home, {})),
         CodexAdapter(
             home,
             _version(home, CodexAdapter),

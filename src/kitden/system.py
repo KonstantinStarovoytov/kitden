@@ -17,9 +17,11 @@ short list), and a sample or test home must never reach the person's own folders
 import os
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
+
+from kitden.clients.claude_folder import claude_folder
 
 PLATFORMS = {"darwin": "mac", "linux": "linux"}
 SYSTEM: str = os.environ.get("KITDEN_SYSTEM") or PLATFORMS.get(sys.platform, sys.platform)
@@ -56,10 +58,12 @@ def claude_desktop_dir(home: Path) -> Path:
     return Path(home) / ".config/Claude"
 
 
-def watched(home: Path) -> list[Path]:
-    """The folders whose setup files trigger a rescan."""
-    clients = [Path(home) / name for name in (".claude", ".codex", ".cursor", ".agents")]
-    return [*clients, claude_desktop_dir(home)]
+def watched(home: Path, env: Mapping[str, str] | None = None) -> list[Path]:
+    """The folders whose setup files trigger a rescan. `env` is as for `claude_folder`."""
+    claude = claude_folder(Path(home), env)
+    clients = [claude.config, *(Path(home) / name for name in (".codex", ".cursor", ".agents"))]
+    inside = claude.plugins.is_relative_to(claude.config)
+    return [*clients, claude_desktop_dir(home), *([] if inside else [claude.plugins])]
 
 
 def app_roots(home: Path) -> list[Path]:

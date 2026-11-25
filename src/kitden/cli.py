@@ -122,9 +122,15 @@ def _open(args: argparse.Namespace) -> int:
     """Open the running page for this home folder, or start one in the background (FR-008)."""
     root = _home(args) or Path.home()
     running = page.read_record(root) if page.page_running(root) else None
-    # Kitden updated in a terminal while its page ran: that page cannot serve any more.
-    if running and running.get("version") != __version__ and not page.stop_page(root, running):
-        print("The page of the old Kitden version did not stop.", file=sys.stderr)
+    if running and running.get("version") != __version__:
+        # Kitden updated in a terminal while its page ran: that page cannot serve any more.
+        old = "of the old Kitden version"
+    elif running and running.get("claude") != page.claude_key(root):
+        old = "for another Claude Code folder"
+    else:
+        old = None
+    if running and old and not page.stop_page(root, running):
+        print(f"The page {old} did not stop.", file=sys.stderr)
         return EXIT_NOT_STARTED
     if not page.page_running(root):  # a page still starting holds the lock: none starts again
         page.remove_record(root)  # left by a page that ended without cleaning up
@@ -241,7 +247,8 @@ def _page(
         token=token,
         port=port,
         session=session,
-        watch_folders=system.watched(home),  # the home folder itself: flat, below
+        # The home folder itself: flat, below. The demo does not read the environment.
+        watch_folders=system.watched(home, {} if more.get("demo") else None),
         flat_folders=[home],
         home=home,
         first_scan_later=True,  # listen first; the page shows its skeleton while it scans
@@ -530,8 +537,10 @@ def _show_answer(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from kitden.clients.claude_folder import make_absolute
     from kitden.demo import SIZES
 
+    make_absolute()
     parser = argparse.ArgumentParser(prog="kitden")
     parser.add_argument("--version", action="store_true", help="print the version and exit")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
