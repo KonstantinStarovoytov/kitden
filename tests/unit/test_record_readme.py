@@ -20,6 +20,7 @@ import tests.offline
 from kitden import __version__
 from kitden.changes.backup import ChangeStore
 from kitden.gateways import data_dir
+from kitden.views.inventory import build_inventory
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -71,6 +72,20 @@ def test_the_update_check_asks_nobody(recorder, tmp_path):
             time.sleep(0.05)
     assert latest == __version__
     assert update["notes_url"] is None  # the page offers no update
+
+
+def test_the_clients_own_folders_of_this_computer_are_not_read(recorder, tmp_path, monkeypatch):
+    for name in ("KITDEN_SECURITY", "KITDEN_SECRET_TOOL"):
+        monkeypatch.setenv(name, "")  # the script sets them: put back after the test
+    for name in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_PLUGIN_CACHE_DIR", "CODEX_HOME"):
+        folder = tmp_path / name / "skills/mine"
+        folder.mkdir(parents=True)
+        (folder / "SKILL.md").write_text("---\nname: mine\n---\n")
+        monkeypatch.setenv(name, str(tmp_path / name))
+    home = recorder.sample(tmp_path)
+    assert "mine" in {i.name for i in build_inventory(home).items}
+    recorder.stand_ins(tmp_path / "stand-ins")
+    assert "mine" not in {i.name for i in build_inventory(home).items}
 
 
 def test_running_clients_bring_no_restart_strip(recorder, tmp_path, monkeypatch):
