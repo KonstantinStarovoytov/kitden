@@ -195,3 +195,89 @@ def test_removing_a_nested_cursor_skill_keeps_its_category_folder(client):
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
     assert undone["state"] == "undone", undone.get("error")
     assert digest(skill_dir) == before
+
+
+# A Codex skill inside another skill's folder: Codex lists both, Cursor only the outer one.
+
+
+def _outer_and_inner(client, *inner):
+    outer = client.home / ".codex/skills/qdrant"
+    outer.mkdir(parents=True)
+    (outer / "SKILL.md").write_text("---\nname: qdrant\n---\n")
+    for name in inner:
+        (outer / "parts" / name).mkdir(parents=True)
+        (outer / "parts" / name / "SKILL.md").write_text(f"---\nname: {name}\n---\n")
+    client.post("/api/rescan", headers=POST)
+    return outer
+
+
+def test_removing_a_skill_says_which_skills_inside_its_folder_go_with_it(client):
+    outer = _outer_and_inner(client, "dense", "sparse")
+    before = digest(outer)
+    change = _remove(client, _skill_item(client, "codex", "qdrant", where=str(outer))["id"]).json()
+    assert change["after"] == [
+        {
+            "client": "codex",
+            "state": "off",
+            "word": "Removed",
+            "note": "This also removes dense and sparse, which are inside this folder.",
+        },
+        {"client": "cursor", "state": "off", "word": "Removed"},
+    ]
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "verified", applied.get("error")
+    names = {i["name"] for i in client.get("/api/items?client=codex&kind=skill").json()}
+    assert not names & {"qdrant", "dense", "sparse"}
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone", undone.get("error")
+    assert digest(outer) == before
+
+
+def test_removing_an_inner_skill_keeps_the_outer_one(client):
+    outer = _outer_and_inner(client, "dense", "sparse")
+    before = digest(outer)
+    inner = _skill_item(client, "codex", "dense", where=str(outer / "parts/dense"))
+    change = _remove(client, inner["id"]).json()
+    # Cursor does not read inside a skill's folder, so it loses nothing.
+    assert change["after"] == [{"client": "codex", "state": "off", "word": "Removed"}]
+    client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    names = {i["name"] for i in client.get("/api/items?client=codex&kind=skill").json()}
+    assert {"qdrant", "sparse"} <= names and "dense" not in names
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone" and digest(outer) == before
+
+
+def test_a_copy_inside_the_removed_folder_is_not_one_that_stays(client):
+    outer = _outer_and_inner(client, "qdrant")  # the inner one has the same name
+    change = _remove(client, _skill_item(client, "codex", "qdrant", where=str(outer))["id"]).json()
+    assert change["steps"][0]["keeps"] == []
+    assert [e["word"] for e in change["after"]] == ["Removed", "Removed"]
+    # Both copies go, and the note does not say the same name again.
+    assert all("note" not in e for e in change["after"])
+
+
+def test_an_inner_skill_with_another_copy_is_not_lost(client):
+    outer = _outer_and_inner(client, "dense", "langfuse")  # Codex has langfuse on its own too
+    change = _remove(client, _skill_item(client, "codex", "qdrant", where=str(outer))["id"]).json()
+    assert change["after"][0]["note"] == "This also removes dense, which is inside this folder."
+
+
+def test_a_skill_and_one_inside_its_folder_cannot_go_in_one_preview(client):
+    outer = _outer_and_inner(client, "dense")
+    ids = [
+        _skill_item(client, "codex", "qdrant", where=str(outer))["id"],
+        _skill_item(client, "codex", "dense", where=str(outer / "parts/dense"))["id"],
+    ]
+    for pair in (ids, ids[::-1]):
+        requests = [
+            {
+                "id": f"r{n}",
+                "kind": "skill.remove",
+                "title": f"Remove {n}",
+                "targets": [{"item": item}],
+                "params": {},
+            }
+            for n, item in enumerate(pair)
+        ]
+        answer = client.post("/api/batch/check", json={"requests": requests}, headers=POST)
+        assert "in the preview changes the same folder" in answer.json()["reason"]

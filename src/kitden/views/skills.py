@@ -450,23 +450,50 @@ def skill_readers(inventory, item) -> list[str]:
     return [c for c in CLIENTS if c in readers]
 
 
-def skill_keepers(inventory, item, readers: list[str]) -> list[str]:
-    """The readers that still load another copy of the skill once its folder is gone: from
-    another folder, a plugin that is on, or a folder of the same project."""
-    gone = os.path.dirname(os.path.realpath(item.source.path))
-    project = item.project if item.scope is Scope.PROJECT else None
-    keeps = {
+def _kept_copies(inventory, name: str, gone: str, project: str | None) -> set[str]:
+    """The clients that load a skill of this name from outside the folder `gone`: from another
+    folder, a plugin that is on, or a folder of the same project."""
+    return {
         i.client
         for i in inventory.items
-        if i.client in readers
-        and i.kind is ItemKind.SKILL
-        and i.name == item.name
+        if i.kind is ItemKind.SKILL
+        and i.name == name
         and i.enabled is not Enabled.OFF
         and i.source.path is not None
-        and os.path.dirname(os.path.realpath(i.source.path)) != gone
+        and not os.path.realpath(i.source.path).startswith(f"{gone}/")
         and (i.scope in (Scope.USER, Scope.PLUGIN) or (project and i.project == project))
     }
+
+
+def skill_keepers(inventory, item, readers: list[str]) -> list[str]:
+    """The readers that still load another copy of the skill once its folder is gone. A skill
+    inside that folder goes with it (Codex reads those too)."""
+    gone = os.path.dirname(os.path.realpath(item.source.path))
+    project = item.project if item.scope is Scope.PROJECT else None
+    keeps = _kept_copies(inventory, item.name, gone, project) & set(readers)
     return [c for c in CLIENTS if c in keeps]
+
+
+def lost_inside(inventory, folder: str, client: str, name: str) -> list[str]:
+    """The other skills `client` loses when the skill folder of `name` goes: those inside it that
+    it loads from nowhere else."""
+    gone = os.path.realpath(folder)
+    inside = [
+        i
+        for i in inventory.items
+        if i.client == client
+        and i.kind is ItemKind.SKILL
+        and i.name != name
+        and i.enabled is not Enabled.OFF
+        and i.source.path is not None
+        and os.path.realpath(i.source.path).startswith(f"{gone}/")
+    ]
+    lost = set()
+    for i in inside:
+        project = i.project if i.scope is Scope.PROJECT else None
+        if client not in _kept_copies(inventory, i.name, gone, project):
+            lost.add(i.name)
+    return sorted(lost)
 
 
 def _offer_row(offer: dict, routes: dict, installed: list[str], refusal: str | None) -> dict:

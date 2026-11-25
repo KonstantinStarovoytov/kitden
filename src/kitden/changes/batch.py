@@ -166,7 +166,9 @@ def _between(old: Part, new: Part) -> str | None:
         if key[: len(own)] == own or own[: len(key)] == key:
             return SAME.format(other=other, what="setting")
     for a, b in pairs:
-        if _folder(a) and _folder(a) == _folder(b):
+        # One folder may be inside the other: a Codex skill in another skill's folder.
+        one, two = _folder(a), _folder(b)
+        if one and two and (f"{one}/".startswith(f"{two}/") or f"{two}/".startswith(f"{one}/")):
             return SAME.format(other=other, what="folder")
     return None
 

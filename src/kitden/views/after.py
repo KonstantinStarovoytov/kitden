@@ -45,10 +45,13 @@ from kitden.redact import redact
 from kitden.system import secret_store_name
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import kitden_on, setup_server_state
+from kitden.views.skills import lost_inside
 from kitden.views.words import (
     AFTER_WORDS,
     CODEX_AFTER_DEFAULT,
     FOLLOWS_SHARED,
+    INSIDE_GO,
+    INSIDE_GOES,
     KEEP_THEIR_RULES,
     KEEPS_ITS_RULE,
     LIMIT_AFTER,
@@ -170,9 +173,10 @@ def _skill_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
     return out
 
 
-def _skill_remove_words(change: Change) -> list[dict]:
+def _skill_remove_words(change: Change, inventory) -> list[dict]:
     """Every client that reads the removed folder. One that still loads another copy of the
-    skill, from another folder or a plugin, says so: it does not lose the skill."""
+    skill, from another folder or a plugin, says so: it does not lose the skill. One that loads
+    skills inside the folder (Codex) names those it loses with it."""
     step = change.steps[0]
     removal = step.removal
     assert removal is not None
@@ -180,11 +184,18 @@ def _skill_remove_words(change: Change) -> list[dict]:
     for client in CLIENTS:
         if client not in removal.readers:
             continue
+        entry = {"client": client, "state": "off", "word": "Removed"}
+        notes = []
         if client in removal.keeps:
-            note = f"{CLIENT_WORDS[client]} still loads another copy of {step.name}."
-            out.append({"client": client, "state": "on", "word": "Loads once", "note": note})
-        else:
-            out.append({"client": client, "state": "off", "word": "Removed"})
+            entry = {"client": client, "state": "on", "word": "Loads once"}
+            notes.append(f"{CLIENT_WORDS[client]} still loads another copy of {step.name}.")
+        inside = lost_inside(inventory, removal.path, client, step.name)
+        if inside:
+            words = INSIDE_GOES if len(inside) == 1 else INSIDE_GO
+            notes.append(words.format(names=join_words(inside)))
+        if notes:
+            entry["note"] = " ".join(notes)
+        out.append(entry)
     return out
 
 
@@ -869,7 +880,7 @@ def after_words(
     if claude is None and home is not None:
         claude = claude_folder(home)
     if change.action == "skill.remove" and change.steps:
-        return _skill_remove_words(change)
+        return _skill_remove_words(change, inventory)
     if change.action in ("skill.install", "plugin.skills") and change.steps:
         return _skill_words(change, inventory, skills or [])
     if change.action == GATEWAY_RULE and home is not None:
