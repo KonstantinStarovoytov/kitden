@@ -168,15 +168,18 @@ def _skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
 
 
 def skills_off(config: dict) -> set[str]:
-    """The SKILL.md paths that config.toml's `[[skills.config]]` turns off."""
+    """The SKILL.md paths that config.toml's `[[skills.config]]` turns off. When several entries
+    name one path, the last one wins (checked 2026-11-26, Codex's config reference)."""
     rules = as_dict(config.get("skills")).get("config")
-    return {
-        os.path.realpath(rule["path"])
-        for rule in (rules if isinstance(rules, list) else [])
-        if isinstance(rule, dict)
-        and rule.get("enabled") is False
-        and isinstance(rule.get("path"), str)
-    }
+    last: dict[str, bool] = {}
+    for rule in rules if isinstance(rules, list) else []:
+        if (
+            isinstance(rule, dict)
+            and isinstance(rule.get("enabled"), bool)
+            and isinstance(rule.get("path"), str)
+        ):
+            last[os.path.realpath(rule["path"])] = rule["enabled"]
+    return {path for path, enabled in last.items() if not enabled}
 
 
 def _agents_md(folder: Path) -> list[tuple[Path, str]]:
