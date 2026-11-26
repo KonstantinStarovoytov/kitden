@@ -63,7 +63,8 @@ export function factsOf(card, group, view) {
   const listed = members.filter((m) => m.side !== null && !m.off && !m.going);
   const factListed = members.filter((m) => m.skill.side !== null && m.skill.side !== undefined);
   const off = members.filter((m) => m.off || m.going).length;
-  const allOff = members.length > 0 && members.every((m) => m.off);
+  // A Codex plugin that is off and in no list comes with no skills (`group.off`): it is off too.
+  const allOff = members.length > 0 ? members.every((m) => m.off) : Boolean(group.off);
   const going = !allOff && members.some((m) => m.going) && members.every((m) => m.off || m.going);
   const state = allOff ? "off" : going ? "going" : members.some((m) => m.back) ? "back" : "on";
   return {
@@ -90,6 +91,7 @@ export function groupsOf(card, view) {
 export function groupLine(card, facts, estimate) {
   const unit = card.unit || "characters";
   if (facts.state === "off") {
+    if (!facts.members.length) return ["Off"];
     const { n, size } = facts.was;
     const was = n ? `was ${many(n, "skill", "skills")}, ${fmt(size)} ${unit} in your last chat` : many(facts.members.length, "skill", "skills");
     return ["Off", was];

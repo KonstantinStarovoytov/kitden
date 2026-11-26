@@ -331,6 +331,11 @@ GROUP_WHY_BUILT_IN = (
     "own, in their Details."
 )
 GROUP_WHY_PLUGIN = "Kitden has no switch for this plugin here. Turn it off in the Library."
+# A Codex plugin that is off and that the last list did not hold.
+CODEX_OFF_PLUGIN = (
+    "Codex does not list the skills of a plugin that is off, so they are not counted here. They "
+    "come back after you turn it on and start a new chat."
+)
 GROUP_WHY_PROJECT = (
     "This project's own settings set this plugin, so it has no switch here: one for all projects "
     "would leave this project as its settings say."

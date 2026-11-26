@@ -156,14 +156,16 @@ def test_a_codex_plugin_group_has_its_switch_and_its_skills_take_it(home):
 
 
 def test_an_off_codex_plugin_keeps_its_group_after_a_chat_without_it(home):
+    # Codex does not list the skills of a plugin that is off: Kitden does not guess them. The group
+    # stands off, with its switch, and says when the skills come back.
     paths = codex_home(home, window=20_000)
     codex_plugin(home, enabled=False)
     codex_chat(home, [f"- alpha: Does alpha. (file: {paths['alpha']})"])
     card = codex(home)
     group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
     assert group["switch"]["label"] == "Turn on plug"
-    (row,) = [s for s in card["skills"] if s["group"] == "plugin:plug@market"]
-    assert (row["state"], row["side"], row["note"]) == ("off", None, words.NOTE_OFF)
+    assert (group["skills"], group["off"], group["why"]) == ([], True, words.CODEX_OFF_PLUGIN)
+    assert group["lookup"] == "plug@market"
 
 
 def test_a_codex_plugin_turned_off_after_the_chat_lists_its_skill_once(home):
@@ -176,19 +178,6 @@ def test_a_codex_plugin_turned_off_after_the_chat_lists_its_skill_once(home):
     assert [s["name"] for s in card["skills"]].count("plug:tool") == 1
     group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
     assert group["switch"]["label"] == "Turn on plug"
-
-
-def test_an_off_codex_plugin_with_no_version_folder_keeps_its_skills(home):
-    # Codex may keep a plugin's files in its own folder, with no version folder under it.
-    paths = codex_home(home, window=20_000)
-    folder = home / ".codex/plugins/cache/market/plug"
-    skill(folder / "skills", "tool", "Does one thing.")
-    (folder / ".codex-plugin").mkdir(parents=True)
-    (home / ".codex/config.toml").write_text('[plugins."plug@market"]\nenabled = false\n')
-    codex_chat(home, [f"- alpha: Does alpha. (file: {paths['alpha']})"])
-    card = codex(home)
-    group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
-    assert group["skills"] == ["plug:tool"]
 
 
 def test_a_codex_plugin_a_project_sets_has_no_switch_for_all_projects(home):
@@ -214,20 +203,7 @@ def test_a_codex_plugin_a_project_sets_has_no_switch_for_all_projects(home):
     assert group["switch"] is None and group["why"] == words.GROUP_WHY_PROJECT
 
 
-def test_an_off_codex_plugin_keeps_its_nested_skills(home):
-    # Codex finds a skill in a sub-folder of skills/, so Kitden does too.
-    paths = codex_home(home, window=20_000)
-    folder = home / ".codex/plugins/cache/market/plug"
-    skill(folder / "skills/tools", "tool", "Does one thing.")
-    (folder / ".codex-plugin").mkdir(parents=True)
-    (home / ".codex/config.toml").write_text('[plugins."plug@market"]\nenabled = false\n')
-    codex_chat(home, [f"- alpha: Does alpha. (file: {paths['alpha']})"])
-    card = codex(home)
-    group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
-    assert group["skills"] == ["plug:tool"] and group["switch"]["label"] == "Turn on plug"
-
-
-def test_a_codex_plugin_a_project_turns_off_shows_its_skills_and_why_no_switch(home):
+def test_a_codex_plugin_a_project_turns_off_stands_off_with_why_no_switch(home):
     # The user's entry has it on, the project's off, and the last chat did not list it.
     paths = codex_home(home, window=20_000)
     codex_plugin(home)
@@ -242,5 +218,5 @@ def test_a_codex_plugin_a_project_turns_off_shows_its_skills_and_why_no_switch(h
     write_log(home / ".codex", "a", log, 100)
     card = view(home, folder=str(project))["codex"]
     group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
-    assert group["skills"] == ["plug:tool"]
+    assert (group["skills"], group["off"]) == ([], True)
     assert group["switch"] is None and group["why"] == words.GROUP_WHY_PROJECT

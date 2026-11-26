@@ -85,3 +85,12 @@ test("the Library's line says what a plugin or a skill takes now, and which grou
   const now = { sent: { a: 310, 'p:x': 520 }, over: {} };
   assert.equal(takesLine({ ...CARD, now }, { plugin: 'p@m' }).say, "Takes 520 characters of Claude Code's skill list.");
 });
+
+test('a Codex plugin that is off and in no list is an off group with no skills', () => {
+  const card = { ...CARD, client: 'codex', unit: 'tokens', groups: [...CARD.groups, { key: 'plugin:r@m', kind: 'plugin', name: 'r', skills: [], lookup: 'r@m', off: true, switch: { item: 'rr', action: 'plugin.enable', label: 'Turn on r' } }] };
+  const all = groupsOf(card, factView());
+  const r = all.at(-1);
+  assert.equal(r.group.key, 'plugin:r@m');
+  assert.equal(r.state, 'off');
+  assert.deepEqual(groupLine(card, r, false), ['Off']);
+});

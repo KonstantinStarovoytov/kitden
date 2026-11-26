@@ -92,7 +92,7 @@ adds the same change as the Library's, and the estimate, the bar and the limit l
 once, before you apply it. Its name opens the plugin's Details in the Library. A group without a
 switch says why when you open it, and where to turn it off. Press a header to open the group to its
 skills; with more than three groups they start closed. A group that is off says **Off** and what it
-took in your last chat, and a group you are turning off says **Off after Apply** and about how much
+took in your last chat (a Codex plugin that is off and was not in that chat shows no skills, as Codex does not list them, with its **Turn on**), and a group you are turning off says **Off after Apply** and about how much
 it frees. A plugin's or a skill's Details in the Library say what it takes of the skill list now,
 with **Show in Context**, which opens its group here. Cursor's skills stay in two boxes: those the
 agent can pick, and those it uses only when you ask.

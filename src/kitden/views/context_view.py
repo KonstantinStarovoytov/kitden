@@ -23,12 +23,10 @@ from kitden.clients.base import (
     Reader,
     found_columns,
     from_plugin,
-    visible_folders,
 )
 from kitden.clients.claude_account import FROM_APP, is_account_plugin
 from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, ClaudeCodeAdapter, local_files
 from kitden.clients.claude_folder import ClaudeFolder, claude_folder
-from kitden.clients.codex import skills_in as codex_skills_in
 from kitden.clients.codex import skills_off
 from kitden.clients.versions import highest_version
 from kitden.context.claude_log import (
@@ -1871,23 +1869,6 @@ def _codex_off(inventory, codex_home: Path, folder: str | None) -> Callable[[str
     return is_off
 
 
-def _codex_plugin_skills(codex_home: Path, plugin_id: str) -> list[tuple[str, str | None]]:
-    """The skills of a Codex plugin as its list names them ("plug:tool"), with their descriptions,
-    from its folder in Codex's plugin cache; none when Kitden finds no folder. The folder is the
-    one the adapter reads (`CodexAdapter.plugin_folders`): the plugin's own folder when its files
-    sit there, else its newest version folder."""
-    name, _, market = plugin_id.partition("@")
-    plugin = codex_home / "plugins/cache" / market / name
-    if not plugin.is_dir():
-        return []
-    versions = visible_folders(plugin)
-    has_files = (plugin / ".codex-plugin").is_dir() or not versions
-    folder = plugin if has_files else max(versions, key=lambda v: v.stat().st_mtime)
-    # As Codex walks a skills folder: sub-folders too (`skills_in`, checked 2026-11-25).
-    found = codex_skills_in(folder / "skills")
-    return [(f"{name}:{skill}", _description(str(path))) for skill, path, _ in found]
-
-
 def _codex_policy(path: str) -> Path:
     return Path(path).parent / "agents/openai.yaml"
 
@@ -2479,37 +2460,33 @@ def _codex(
     members = [
         r.item or off_items.get(os.path.realpath(r.file)) if r.file else r.item for r in rows
     ]
-    # The skills of a plugin that is off and that the last list did not hold: Codex lists none of
-    # them, so Kitden reads them from the plugin's folder. They wait on the page in their plugin's
-    # group, with its switch to turn it on again (as for Claude Code).
-    on_page = {s["name"] for s in skills}
-    waiting: list[Item | None] = []
+    groups = _grouped(client, skills, [*members, *extras], plugins)
+    # A plugin that is off and that the last list did not hold: Codex does not list its skills, so
+    # Kitden does not guess them. Its group stands with no skills, off, with its switch (or why
+    # there is none), and says that its skills come back with the next chat after it is on.
+    shown = {g["key"] for g in groups}
     for plugin_id in dict.fromkeys(p.name for p in plugins):
-        # The entry that decides here: the project's own when it has one, else the user's. With
-        # the project's, there is no switch; the group says why.
         entries = [p for p in plugins if p.name == plugin_id]
+        # The entry that decides here: the project's own when it has one, else the user's.
         deciding = next((p for p in entries if p.scope is not Scope.USER), entries[0])
-        if deciding.enabled is not Enabled.OFF:
+        if deciding.enabled is not Enabled.OFF or f"plugin:{plugin_id}" in shown:
             continue
+        name, _, market = plugin_id.partition("@")
         offer = _codex_switch(_codex_plugin(plugins, plugin_id))
-        for name, text in _codex_plugin_skills(codex_home, plugin_id):
-            if name in on_page:
-                continue
-            skills.append(
-                _skill(
-                    client,
-                    name,
-                    None,
-                    len(text or ""),
-                    None,
-                    words.NOTE_OFF,
-                    description=text,
-                    state="off",
-                    plugin_switch=offer,
-                )
-            )
-            waiting.append(None)
-    groups = _grouped(client, skills, [*members, *extras, *waiting], plugins)
+        why = words.CODEX_OFF_PLUGIN if offer else words.GROUP_WHY_PROJECT
+        groups.append(
+            {
+                "key": f"plugin:{plugin_id}",
+                "kind": "plugin",
+                "name": name,
+                "from": market or None,
+                "lookup": plugin_id,
+                "why": why,
+                "switch": offer,
+                "skills": [],
+                "off": True,
+            }
+        )
 
     version = f" {sent_list.version}" if sent_list.version else ""
     if checked:
