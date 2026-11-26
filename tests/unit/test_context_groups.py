@@ -220,3 +220,18 @@ def test_a_codex_plugin_a_project_turns_off_stands_off_with_why_no_switch(home):
     group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
     assert (group["skills"], group["off"]) == ([], True)
     assert group["switch"] is None and group["why"] == words.GROUP_WHY_PROJECT
+
+
+def test_a_codex_skill_is_in_the_plugin_its_file_comes_from_when_two_share_a_name(home):
+    # plug@market is off; plug@other, another marketplace's copy, sent its skill in the chat.
+    paths = codex_home(home, window=20_000)
+    codex_plugin(home, enabled=False)
+    other = home / ".codex/plugins/cache/other/plug/2.0/skills"
+    tool = skill(other, "tool", "Does one thing.").resolve()
+    lines = [f"- alpha: Does alpha. (file: {paths['alpha']})"]
+    codex_chat(home, [*lines, f"- plug:tool: Does one thing. (file: {tool})"])
+    card = codex(home)
+    row = next(s for s in card["skills"] if s["name"] == "plug:tool")
+    assert row["group"] == "plugin:plug@other" and row["state"] == "on"
+    off = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
+    assert (off["skills"], off["off"], off["switch"]["label"]) == ([], True, "Turn on plug")

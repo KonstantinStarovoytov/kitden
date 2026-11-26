@@ -709,18 +709,24 @@ def _group(
 
 
 def _grouped(
-    client: str, skills: list[dict], items: list[Item | None], plugins: list[Item]
+    client: str,
+    skills: list[dict],
+    items: list[Item | None],
+    plugins: list[Item],
+    plugin_ids: list[str | None] | None = None,
 ) -> list[dict]:
     """Each skill's group (`skill["group"]`), and the groups in the order they first come: their
     key, kind, name, marketplace (`from`), Library item, switch (the plugin's own, as a member's
     Details offer it) and why there is none, and their skills by name."""
     groups: dict[str, dict] = {}
-    for skill, item in zip(skills, items, strict=True):
-        plugin_id = None
-        if item is None and skill["plugin"]:
-            plugin_id = next(
-                (p.name for p in plugins if p.name.split("@")[0] == skill["plugin"]), None
-            )
+    ids = plugin_ids or [None] * len(skills)
+    for skill, item, known_id in zip(skills, items, ids, strict=True):
+        # The plugin a skill with no item follows: by its file (Codex says where), else by its
+        # prefix when only one plugin has that name (two marketplaces may both have one).
+        plugin_id = known_id
+        if plugin_id is None and item is None and skill["plugin"]:
+            named = [p.name for p in plugins if p.name.split("@")[0] == skill["plugin"]]
+            plugin_id = named[0] if len(set(named)) == 1 else None
         found = _group(client, skill, item, plugins, plugin_id)
         if client == "codex" and found["kind"] == "plugin" and not skill["plugin_switch"]:
             # Codex: a skill of a plugin Kitden knows, with no item of its own (or one that is off),
@@ -2460,7 +2466,11 @@ def _codex(
     members = [
         r.item or off_items.get(os.path.realpath(r.file)) if r.file else r.item for r in rows
     ]
-    groups = _grouped(client, skills, [*members, *extras], plugins)
+    # A listed skill's plugin by its file, which names its marketplace.
+    by_file = [plugin_at(r.file) if r.file else None for r in rows]
+    groups = _grouped(
+        client, skills, [*members, *extras], plugins, [*by_file, *[None] * len(extras)]
+    )
     # A plugin that is off and that the last list did not hold: Codex does not list its skills, so
     # Kitden does not guess them. Its group stands with no skills, off, with its switch (or why
     # there is none), and says that its skills come back with the next chat after it is on.
