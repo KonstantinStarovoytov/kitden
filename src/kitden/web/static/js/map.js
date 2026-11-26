@@ -145,6 +145,28 @@ function stackOfCards(group, role, cards, size) {
   return { id: `stack:${group.id}:${role}`, column: group.column, parent: group.id, kind: "stack", role, group: group.id, holds: cards.map((card) => card.id), more: Math.max(0, cards.length - STACK_SHOWS), firstH: cards[0].h, name };
 }
 
+// What a stack shows with `lit` lit: its first three cards; or, when it holds lit cards, those come to
+// the front in its order (the last of `cards` is the whole one, the strips are behind it), and cards
+// off the path fill what they leave, behind them. `lit`: the lit cards among `cards`; `count`: how many
+// of all its cards are lit; `words`: that count in words ("3 of 55"), "" when none is. The stack keeps
+// its size and its page.
+export function stackFront({ holds }, lit) {
+  const mine = holds.filter((id) => lit.has(id));
+  if (!mine.length) return { cards: holds.slice(0, STACK_SHOWS), lit: new Set(), count: 0, words: "" };
+  const shows = Math.min(STACK_SHOWS, holds.length);
+  const front = mine.slice(0, shows);
+  const behind = holds.filter((id) => !lit.has(id)).slice(0, shows - front.length);
+  return { cards: [...behind, ...front], lit: new Set(front), count: mine.length, words: `${mine.length} of ${holds.length}` };
+}
+
+// What a stack says with that front (`nameOf(id)` names a card): its own words, and how many of its
+// cards are lit and which ("Open Your skills, 55: a, b, c. 2 of 55 linked: x, y").
+export function stackSaid(stack, front, nameOf) {
+  if (!front.count) return stack.name;
+  const more = front.count - front.lit.size;
+  return `${stack.name}. ${front.words} linked: ${[...front.lit].map(nameOf).join(", ")}${more ? ` and ${more} more` : ""}`;
+}
+
 // The children a block shows: a group's always, any other block's only while it is open. A group
 // that folds shows one stack while it is not in `spread`. A group past six shows the cards of its
 // page between a stack of the cards before and one of the cards after; a pinned block shows where
@@ -341,7 +363,8 @@ export function stackOf(layout, id) {
 }
 
 // What lights with `lit` on a layout with stacks: also each stack that holds a lit card, and each
-// link to a stack that stands for a lit link. `lit` itself when nothing is added.
+// link to a stack that stands for a lit link. `lit` itself when nothing is added. A lit stack lights
+// only its lit cards (stackFront).
 export function withStacks(lit, layout) {
   let next = lit;
   const add = (id) => {

@@ -9,6 +9,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **A stack on the map shows whose cards it holds:** with a client selected or pointed at, a folded
+  stack brings that client's plugins, skills or servers to its front, dims the others in it, and
+  its badge says how many are that client's ("3 of 55"). Before, every card on the front looked
+  loaded by the client.
 - **The plugins of your Claude account are in the Library:** the plugins the Claude app gives
   Claude Code from your Claude account have a group of their own, "From your Claude account".
   Each shows what it holds and can be turned off for all projects or one, with Undo; it stays in

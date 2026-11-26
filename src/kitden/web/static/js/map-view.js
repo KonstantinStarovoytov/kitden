@@ -5,7 +5,7 @@
 // small × on its middle. A selection dims what is off its path and lays an accent line over each
 // lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
 import { button, byKeys, cutName, el, icon, plural, showWaits } from "./dom.js";
-import { blockLabel, crossPoint, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, stackOf, unfoldDelays, withStacks } from "./map.js";
+import { blockLabel, crossPoint, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, stackFront, stackOf, stackSaid, unfoldDelays, withStacks } from "./map.js";
 import { animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -24,7 +24,6 @@ const FOLD_BACK_MS = 160; // ... and they fold back into it this fast
 const STACK_MS = 300; // a card slides out of its stack, or back into one
 const STACK_STEP = 15; // ... the cards out of a stack 15 ms apart
 const STRIP_ICON = 12; // the icon on a card's strip in a stack
-const STACK_SHOWS = 3; // a stack draws its first three cards
 const ROOM = 24; // under the lowest block
 const ENTER_RISE = 6; // an entering block starts this far below its place
 const CAPTION_ICON = 13; // a group caption's icon
@@ -168,16 +167,19 @@ function blockParts(block, { tile }) {
   return { parts, lamp, nums, projects };
 }
 
-// A stack's parts (`place`, a layout's stack; `byId`, the model's blocks): the first cards as
-// strips, each the top of a whole card under the one before, the last of the first three whole
-// (its own parts, with no count), a pill "+N" for the cards under them, a thin edge under a stack
-// of one card, and the left port of its first card.
-function stackParts(place, byId, { tile }) {
-  const cards = place.holds.slice(0, STACK_SHOWS).map((id) => byId.get(id)).filter(Boolean);
+// A stack's parts (`place`, a layout's stack; `front`, the cards it shows, map.js stackFront; `byId`,
+// the model's blocks): the first cards as strips, each the top of a whole card under the one before,
+// the last whole (its own parts, with no count), a thin edge under a stack of one card, the left port
+// of its first card, and a pill "+N" for the cards under them. On a lit stack a card off the path is
+// `unlit`, the port is the first lit card's, and the pill counts the lit cards ("3 of 55"; a stack of
+// one needs none).
+function stackParts(place, front, byId, { tile }) {
+  const cards = front.cards.map((id) => byId.get(id)).filter(Boolean);
+  const look = (base, card) => (front.count && !front.lit.has(card.id) ? `${base} unlit` : base);
   const peek = cards.length > 1 ? (place.h - place.cardH) / (cards.length - 1) : 0;
   const parts = [];
   cards.slice(0, -1).forEach((card, i) => {
-    const strip = el("span", "stack-strip");
+    const strip = el("span", look("stack-strip", card));
     strip.style.top = `${i * peek}px`;
     strip.style.height = `${place.cardH}px`;
     strip.dataset.lift = String(cards.length - 1 - i);
@@ -188,15 +190,37 @@ function stackParts(place, byId, { tile }) {
   });
   const last = cards.at(-1);
   if (cards.length === 1) parts.push(quiet(el("span", "stack-edge")));
-  const face = el("span", "stack-face");
+  const face = el("span", look("stack-face", last));
   face.style.top = `${(cards.length - 1) * peek}px`;
   face.style.height = `${place.cardH}px`;
   face.append(...blockParts({ ...last, count: undefined, grip: false, ports: undefined, takeOut: undefined, action: undefined }, { tile }).parts);
   parts.push(quiet(face));
-  if (place.more) parts.push(quiet(el("span", "stack-pill", `+${place.more}`)));
-  const left = cards[0].ports && cards[0].ports.left;
+  const first = cards.find((card) => front.lit.has(card.id)) || cards[0];
+  const left = first.ports && first.ports.left;
   if (left) parts.push(quiet(el("span", ["port l", left !== true && left].filter(Boolean).join(" "))));
-  return { parts, lamp: null, nums: new Map(), projects: null };
+  const pill = front.count && place.holds.length > 1 ? front.words : place.more && `+${place.more}`;
+  if (pill) parts.push(quiet(el("span", "stack-pill", pill)));
+  return parts;
+}
+
+// A stack's parts drawn again: a part that stays keeps its node, so its look (style.css) moves to the
+// new one, and only what is in it changes.
+function putStack(node, parts) {
+  const base = (part) => part.className.split(" ")[0];
+  const old = [...node.children];
+  let same = 0;
+  while (same < old.length && same < parts.length && base(old[same]) === base(parts[same])) same++;
+  parts.slice(0, same).forEach((part, i) => {
+    const kept = old[i];
+    kept.className = part.className;
+    Object.assign(kept.style, { top: part.style.top, height: part.style.height });
+    if (part.dataset.lift === undefined) delete kept.dataset.lift;
+    else kept.dataset.lift = part.dataset.lift;
+    if (part.children.length) kept.replaceChildren(...part.children);
+    else kept.textContent = part.textContent;
+  });
+  for (const gone of old.slice(same)) gone.remove();
+  node.append(...parts.slice(same));
 }
 
 // What a strip shows before a card's name: the card's own tile (drawn small by style.css), else its
@@ -215,9 +239,10 @@ function collapseParts(place) {
   return { parts, lamp: null, nums: new Map(), projects: null };
 }
 
-// What a stack's parts depend on: its name and pill, its size, and the words of the cards it draws.
-function stackKey(place, byId) {
-  return JSON.stringify([place.kind, place.name, place.more, place.h, place.cardH, place.holds.slice(0, STACK_SHOWS).map((id) => wordsKey(byId.get(id) || {}))]);
+// What a stack's parts depend on: its pill, its size, and the words of the cards it draws and whether
+// each is lit.
+function stackKey(place, front, byId) {
+  return JSON.stringify([place.kind, place.more, place.h, place.cardH, front.count, front.cards.map((id) => [wordsKey(byId.get(id) || {}), front.lit.has(id)])]);
 }
 
 // Everything a block's parts depend on (its tile too), as one key: they are drawn again only when
@@ -384,7 +409,8 @@ export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}
 // its place and says why, and neither it nor Delete removes anything). After the blocks the area
 // holds the hit of each such link (a button for a keyboard: Enter opens, Delete removes), in
 // reading order, and one ×. aimAgain() has the × say again what it does, as the hooks say now.
-// A non-empty `lit` (the blocks and "from>to" links on the path of the selection) dims all else.
+// A non-empty `lit` (the blocks and "from>to" links on the path of the selection) dims all else; a
+// stack on the path brings its lit cards to its front and counts them (map.js stackFront).
 // When `selected` is a block, each lit link that is not a bypass line gets an accent line, in 180 ms;
 // letting go takes it away in 160 ms. When `selected` is a link's key, that link is picked: it keeps
 // its × and gets no accent line. glance(lit | null) lights a path the same way with no accent line,
@@ -434,6 +460,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
   const moving = new Set(); // the blocks with a move
   const waiting = []; // what waits for every motion to end
   let last = null; // the layout drawn last
+  let lastById = new Map(); // ... and its model's blocks
   let folds = new Set(); // the blocks that fold, as the last draw read them
   let size = { w: 0, h: 0 }; // the last layout's size
   let shown = null; // the size the area has now
@@ -590,18 +617,21 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
-      node.title = block.takeOut || block.title || name;
-      node.setAttribute("aria-label", blockLabel(block));
-      const words = group ? JSON.stringify([name, block.icon]) : stacked ? stackKey(place, byId) : wordsKey(block);
-      if (words !== item.words) {
-        item.words = words;
-        if (group) captionWords(node, name, block.icon);
-        else {
-          const drawn = stacked ? stackParts(place, byId, { tile }) : place.kind === "collapse" ? collapseParts(place) : blockParts(block, { tile });
-          node.replaceChildren(...drawn.parts);
-          if (canMove()) liven(drawn, block, item.shown);
-          item.shown = shownOf(drawn, block, item.shown);
-          item.tag = drawn.projects;
+      if (stacked) fillStack(item, place, lit, byId);
+      else {
+        node.title = block.takeOut || block.title || name;
+        node.setAttribute("aria-label", blockLabel(block));
+        const words = group ? JSON.stringify([name, block.icon]) : wordsKey(block);
+        if (words !== item.words) {
+          item.words = words;
+          if (group) captionWords(node, name, block.icon);
+          else {
+            const drawn = place.kind === "collapse" ? collapseParts(place) : blockParts(block, { tile });
+            node.replaceChildren(...drawn.parts);
+            if (canMove()) liven(drawn, block, item.shown);
+            item.shown = shownOf(drawn, block, item.shown);
+            item.tag = drawn.projects;
+          }
         }
       }
       if (motion === "project" && canMove()) popTag(item);
@@ -616,6 +646,18 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
     Object.assign(item, { kind: place.kind, w: place.w, h: place.h, home: { x: place.x, y: place.y }, growsFrom: block.growsFrom || null, growMs: block.growMs || GROW_MS, grows: Boolean(block.grows) });
     const counting = place.kind !== "column" && !item.div && place.kind !== "group" && folds.has(place.id);
     syncCount(item, counting ? block : null, open.has(place.id));
+  }
+
+  // A stack's cards, and what it says, as `lit` (all that lights) leaves them.
+  function fillStack(item, place, lit, byId) {
+    const front = stackFront(place, lit);
+    const said = stackSaid(place, front, (id) => byId.get(id)?.name || "");
+    item.node.title = said;
+    item.node.setAttribute("aria-label", said);
+    const words = stackKey(place, front, byId);
+    if (words === item.words) return;
+    item.words = words;
+    putStack(item.node, stackParts(place, front, byId, { tile }));
   }
 
   // A block that is a caption now and a button later (or back) gets a new node in the same place.
@@ -1275,6 +1317,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
     box.classList.toggle("finding", Boolean(found));
     size = { w: layout.columns.reduce((most, column) => Math.max(most, column.x + column.w), 0), h: layout.height + ROOM };
     last = layout;
+    lastById = byId;
     for (const [key, until] of drawsIn) {
       drawIn(key, LINK_MS);
       links.get(key).free = until;
@@ -1460,6 +1503,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
       item.lit = on;
       paint(item);
     }
+    for (const place of last ? last.blocks : []) if (place.kind === "stack") fillStack(blocks.get(place.id), place, shown, lastById);
     // A link on its way out is left as it is.
     for (const item of links.values()) if (!item.exit) setLook(item, linkLook(item.link, shown), canMove());
   }
