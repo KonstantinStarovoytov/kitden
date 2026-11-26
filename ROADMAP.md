@@ -17,6 +17,10 @@ What Kitden does today and what comes next. Ideas and bugs:
   Apply. Its name opens the plugin's Details in the Library, whose Details now say what a plugin or
   a skill takes of the list, with a link back to its group. The two boxes "Description sent" and
   "Name only" are gone for Claude Code and Codex.
+- **Codex's limit line where Kitden can only count:** when Kitden cannot rebuild your last Codex
+  list, for example because a skill's file is gone, it counts your next chat with your skills as
+  they are now and says so, and the limit line is there with its places, as for Claude Code. With
+  no window known, a line says why there is no limit line and what brings it back.
 - **What you turn off on Context looks off at once:** a skill or a plugin you turn off moves under
   "Turned off" right after Apply, also when Kitden cannot replay your last chat's list and the page
   shows that list. A plugin goes off as a whole: while its switch waits, all of its skills stand

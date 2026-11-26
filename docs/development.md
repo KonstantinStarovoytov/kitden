@@ -95,7 +95,7 @@ needs no other test. The table lists those written so far, in product order:
 | 16 | A Codex skill inside another skill's folder: its switch on Context, and the review of the outer skill's removal, Apply and Undo | `test_codex_nested.py` |
 | 17 | A plugin of the Claude account: its group in the Library, its Details and switch (Apply and Undo), and its skill on Context naming it and offering its switch | `test_account_plugins.py` |
 | 18 | A stack under a selection: a client selected or pointed at lights only its own cards on a stack that mixes two clients (Library and Gateway), with the stacks either side of a page, and nothing moves | `test_map_stacks.py` |
-| 19 | A plugin turned off from Context: its switch waiting in the preview counts in the verdict and on the limit line; after Apply its skills stand under Turned off at once, also where Kitden can only count, and Undo puts them back | `test_context_off.py` |
+| 19 | A plugin turned off from Context: its switch waiting in the preview counts in the verdict and on the limit line; after Apply its skills stand under Turned off at once, also where Kitden can only count, and Undo puts them back; Codex's limit line where Kitden can only count | `test_context_off.py` |
 | 20 | Context's groups by source: a plugin turned off from its group's header counts in the estimate at once and is one tray row with its skill's Details; a header opens its group with the mouse and the keyboard; a plugin's Details in the Library say what it takes and open its group | `test_context_groups.py` |
 
 Flows 3 to 5 and 13 use the `sample` fixture: the demo's sample, not in demo mode, with the
@@ -368,7 +368,8 @@ A release is one pull request. You review it and merge it; the rest happens on i
 
 1. In GitHub, open Actions → Release prep → Run workflow, on `main`. Keep the version on
    **Auto** and the agent picks the next minor or patch, or pick **Features (0.X.0)** for the
-   next minor or **Fixes (0.0.X)** for the next patch. The run opens one pull request,
+   next minor, **Fixes (0.0.X)** for the next patch or **Major (X.0.0)** for the next major
+   (0.12.x gives 1.0.0; the agent never picks a major itself). The run opens one pull request,
    "Kitden X.Y.Z": the version in all eight places, `docs/releases/vX.Y.Z.md`, ROADMAP
    ("### Not yet released" becomes the version), README and policy edits, the guide and the
    plugin README when they change, and the checks from
