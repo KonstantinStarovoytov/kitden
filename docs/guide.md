@@ -107,12 +107,11 @@ allows it; Cursor has no switch. A skill built into Claude Code, such as `datavi
 **built-in**: it is not a file, so the Library does not list it, but most have the same switch,
 for all projects. A skill of a plugin that Claude Code installed follows its plugin: its Details
 name the plugin first, say that the switch is the plugin's and what it holds, and offer **Turn
-off** for the whole plugin. While it waits in the preview, all of the plugin's skills stand
-together under **Off after Apply**, on one line with the plugin's name and how many skills go with
-it, and the preview's row says what goes ("Turns off all of plugin-dev: 7 skills, 1 command and 3
-agents."). It counts in the estimate and on the limit line as a skill's own switch does, whether
-you pressed it here or in the Library. After Apply the plugin's skills stand together under
-**Turned off**, with one **Turn on**. When Kitden has no switch
+off** for the whole plugin, the same switch as on its group's header. While it waits in the
+preview, the plugin's group says **Off after Apply** and all of its skills go together, and the
+preview's row says what goes ("Turns off all of plugin-dev: 7 skills, 1 command and 3 agents.").
+It counts in the estimate and on the limit line as a skill's own switch does, whether you pressed
+it here or in the Library. After Apply the whole group says **Off**, with one **Turn on**. When Kitden has no switch
 for a skill, such as one the Claude app adds, its Details say so and why. A skill of a plugin
 from your Claude account names that plugin, and its Details offer the plugin's own switch. A skill
 that is off now is drawn off in its group (struck through), where you can turn it on again: right
