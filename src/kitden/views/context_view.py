@@ -2149,8 +2149,9 @@ def _codex(
         checked = then_found and base is not None
     if moved and not checked:
         then_budget = None
-    # Not rebuilt: Kitden counts the next chats with the rule on today's skills, each description as
-    # its file has it, else as the chat sent it (a file gone or changed). It says it is a count.
+    # Not rebuilt: Kitden counts the next chats with the rule on today's skills, each description
+    # as its file has it now (also one a plugin update changed: the next chat sends the new text),
+    # else, when its file is gone, as the chat sent it. It says it is a count.
     counted = not checked and budget is not None
     rows_est = rows_now
     if counted:

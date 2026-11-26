@@ -542,8 +542,8 @@ CODEX_COUNTED = (
     "not checked against that list."
 )
 CODEX_LIMIT_COUNTED = (
-    "Kitden could not rebuild this chat's list, so it counts with your skills as they are now. A "
-    "skill whose file is gone or changed counts as the chat sent it."
+    "Kitden could not rebuild this chat's list, so it counts with your skills as they are now, "
+    "each description as its file has it. A skill whose file is gone counts as the chat sent it."
 )
 # Codex with no window known and no limit set: no estimate and no limit line, said beside the bar.
 CODEX_NO_WINDOW = (

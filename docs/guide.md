@@ -176,7 +176,8 @@ leaves the estimate.
 Codex's line works the same way, in tokens: when Codex cut descriptions short or left skills
 out, drag it in steps of 500 tokens, up to 10,000, the most Codex allows. When Kitden cannot
 rebuild Codex's last list (a skill's file is gone or changed since), it counts your next chat with
-your skills as they are now, each description as its file has it, else as the chat sent it, and
+your skills as they are now, each description as its file has it, or as the chat sent it when the
+file is gone, and
 says so above the bar; the bar is then the estimate and the line has its places all the same. When
 it does not know the window of the chat's model and no limit is set, a line says there is no limit
 line, and that one new Codex chat brings it back. The line snaps to the

@@ -314,3 +314,17 @@ def test_with_no_window_and_no_limit_the_page_says_why_there_is_no_line(home):
     cx = view(home)["codex"]
     assert cx["message"] == words.CODEX_NO_WINDOW
     assert cx["limit"]["steps"] == []
+
+
+def test_a_description_an_update_changed_counts_as_its_file_has_it_now(home):
+    # The next chat sends the new text, so the count takes it; only a file that is gone counts as
+    # the chat sent it.
+    budget = cut_chat(home)
+    beta = home / ".agents/skills/beta/SKILL.md"
+    beta.write_text("---\nname: beta\ndescription: Short now.\n---\n")
+    (home / ".agents/skills/gamma/SKILL.md").unlink()
+    cx = view(home)["codex"]
+    assert cx["checked"] is False and cx["now"]["budget"] == budget
+    assert "beta" in cx["now"]["sent"]
+    assert cx["limit"]["counted"] == [words.CODEX_LIMIT_COUNTED]
+    assert "each description as its file has it" in words.CODEX_LIMIT_COUNTED
