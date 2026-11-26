@@ -533,6 +533,23 @@ HOW_CODEX_CHECK = (
 )
 HOW_CODEX_SAME = "It does: the same {n}."
 HOW_CODEX_DOES = "It does."
+HOW_CODEX_COUNTED = (
+    "This time it does not, so Kitden counts your next chat with your skills as they are now."
+)
+# Codex, when the rule does not rebuild the last chat: the estimates are Kitden's count.
+CODEX_COUNTED = (
+    "Kitden could not rebuild your last Codex list, so this is its own count for your next chat, "
+    "not checked against that list."
+)
+CODEX_LIMIT_COUNTED = (
+    "Kitden could not rebuild this chat's list, so it counts with your skills as they are now, "
+    "each description as its file has it. A skill whose file is gone counts as the chat sent it."
+)
+# Codex with no window known and no limit set: no estimate and no limit line, said beside the bar.
+CODEX_NO_WINDOW = (
+    "Kitden cannot draw the limit line: it does not know the window of this chat's model. Start "
+    "one new Codex chat and Kitden reads it."
+)
 HOW_CODEX_SETTING = "The limit is skills.max_context_tokens in Codex's config.toml."
 HOW_CODEX_SIZES = (
     "Full sizes come from your skill files today. They may have changed since the chat{when}."

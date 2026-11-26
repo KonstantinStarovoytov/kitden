@@ -877,9 +877,13 @@ def test_an_added_codex_skill_takes_its_place_in_the_order_of_the_list(home):
     assert set(codex(home)["now"]["sent"]) == {"abc", "alpha"}
 
 
-def test_a_codex_chat_the_rule_does_not_rebuild_says_it_cannot_estimate_and_why(home):
+def test_a_codex_chat_the_rule_does_not_rebuild_gets_kitdens_count_said_as_a_count(home):
     paths = codex_home(home, window=272_000)
     codex_chat(home, [f"- alpha: {CODEX_A[:20]} (file: {paths['alpha']})"])
     cx = codex(home)
     assert cx["checked"] is False
-    assert cx["changed"] == [CHANGED, NO_RULE.format("Codex")] and cx["now"] is None
+    keeps = "Estimate: On a 272K window, every skill would keep its full description."
+    assert cx["changed"] == [CHANGED, words.CODEX_COUNTED, keeps]
+    assert cx["now"]["say"] == keeps
+    assert cx["limit"]["counted"] == [words.CODEX_LIMIT_COUNTED]
+    assert words.HOW_CODEX_COUNTED in " ".join(cx["how"])

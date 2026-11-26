@@ -2149,6 +2149,18 @@ def _codex(
         checked = then_found and base is not None
     if moved and not checked:
         then_budget = None
+    # Not rebuilt: Kitden counts the next chats with the rule on today's skills, each description
+    # as its file has it now (also one a plugin update changed: the next chat sends the new text),
+    # else, when its file is gone, as the chat sent it. It says it is a count.
+    counted = not checked and budget is not None
+    rows_est = rows_now
+    if counted:
+        rows_est = [r if r.full is not None else replace(r, full=r.sent or "") for r in rows_now]
+
+    def run_est(states: dict[str, str], budget: int) -> tuple[list[CodexSkill], CodexFit]:
+        return run(states, budget, rows_est)
+
+    est = base if checked else run_est(states_now, budget) if counted and budget else None
 
     fact = _codex_fact(rows, names_only, when, as_shown, codex_table(roots))
     bad = fact.pop("bad")
@@ -2173,15 +2185,23 @@ def _codex(
         title = words.WINDOW_TITLE.format(size=_size(window or 0))
         models = sent_list.model or ""
     windows = [_window_card(title, models, _tag(date), then_budget, fact)]
-    lengths = {r.name: len(r.full or "") for r in rows_now}
+    lengths = {r.name: len(r.full or "") for r in rows_est}
     # The limit line counts what the preview's changes leave (as for Claude Code).
     changes = _changes(draft, states, SWITCHES[client])
 
     def limit_with(states: dict[str, str], keep: bool) -> dict:
-        ran = run(states, budget) if budget and known else None
-        return _codex_limit_card(
-            window, limit, budget, ran, checked, lengths, lambda b: run(states, b)[1], keep
+        ran = run_est(states, budget) if budget and est is not None else None
+        card = _codex_limit_card(
+            window,
+            limit,
+            budget,
+            ran,
+            checked or counted,
+            lengths,
+            lambda b: run_est(states, b)[1],
+            keep,
         )
+        return card | {"counted": [words.CODEX_LIMIT_COUNTED]} if counted else card
 
     keep = (_asked_tokens(asked, window) or 0) > (budget or 0)
     if changes and not keep:
@@ -2196,6 +2216,14 @@ def _codex(
         if expect["misfit"] is None:
             left = f"{budget - base[1].used:,}"
             expect["room"] = words.ROOM_LEFT.format(left=left, unit="tokens")
+    if counted and est is not None and budget:
+        on = words.WITH_LIMIT if limit is not None else _on(window)
+        expect = _codex_estimate(est[0], est[1], on, words.ESTIMATE)
+        if expect["misfit"] is None:
+            left = f"{budget - est[1].used:,}"
+            expect["room"] = words.ROOM_LEFT.format(left=left, unit="tokens")
+        changed = [words.SKILLS_CHANGED] if new or other_skills else []
+        changed += [words.CODEX_COUNTED, expect["say"]]
     if checked and (expect or not_counted):
         shown = words.TOKENS.format(n=f"{budget:,}")
         if not then_found:
@@ -2205,12 +2233,12 @@ def _codex(
         else:
             changed = [words.LIMIT_CHANGED.format(share=shown)]
         changed += [expect["say"]] if expect else []
-    if not checked and (new or other_skills):
+    if not checked and not counted and (new or other_skills):
         # As for Claude Code: no estimate for the skills as they are now, said with why.
         cannot = words.NOW_NO_LIMIT if budget is None else words.NOW_NO_RULE
         changed = [words.SKILLS_CHANGED, cannot.format(client=CLIENT_WORDS[client])]
     uncounted = []
-    if checked and not_counted:
+    if (checked or counted) and not_counted:
         line = _many(len(not_counted), words.CODEX_NOT_COUNTED_ONE, words.CODEX_NOT_COUNTED_MANY)
         uncounted = [line.format(names=_names(not_counted))]
         changed += uncounted
@@ -2236,10 +2264,10 @@ def _codex(
     new_budget = _asked_tokens(asked, window) if limit_card["now"] is not None else None
     if new_budget == budget:
         new_budget = None
-    if base is not None and budget and checked and (changes or new_budget is not None):
+    if est is not None and budget and (changes or new_budget is not None):
         budget_after = new_budget if new_budget is not None else budget
-        skills, fit = run(states_now | changes, budget_after)
-        was, now = _codex_full(base[1], lengths), _codex_full(fit, lengths)
+        skills, fit = run_est(states_now | changes, budget_after)
+        was, now = _codex_full(est[1], lengths), _codex_full(fit, lengths)
         gets = [r.name for r in rows_now if r.name not in changes and r.name in now - was]
         loses = [r.name for r in rows_now if r.name not in changes and r.name in was - now]
         on = words.WITH_LIMIT if limit is not None or new_budget is not None else _on(window)
@@ -2295,6 +2323,8 @@ def _codex(
     version = f" {sent_list.version}" if sent_list.version else ""
     if checked:
         check = words.HOW_CODEX_SAME.format(n=bad) if bad else words.HOW_CODEX_DOES
+    elif counted:
+        check = words.HOW_CODEX_COUNTED
     else:
         check = words.HOW_NOT_MATCHED if base is not None else words.HOW_NOT_RUN
     how = [
@@ -2305,13 +2335,15 @@ def _codex(
         words.HOW_CODEX_SIZES.format(when=when),
         words.HOW_CODEX_TOKENS,
         *uncounted,
+        *limit_card.get("counted", []),
         *([limit_card["why"]] if limit_card["why"] else []),
     ]
     return _card(
         client,
         lede=words.CONTEXT_LEDE + lede,
         lamp="warn" if bad else "none" if unknown else "ok",
-        message=None,
+        # No window and no limit: the page says why there is no limit line, and what brings it.
+        message=words.CODEX_NO_WINDOW if budget is None else None,
         fact={
             "date": date,
             "surface": None,
