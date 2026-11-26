@@ -28,7 +28,7 @@ the client's instruction files ("3 files"); commands and agents are not counted,
 that has only those says "Commands and agents only". A client with nothing says "Nothing
 loaded".
 
-When a client loads one plugin or skill more than once, its row says how many times ("Cursor
+When a client loads one plugin or skill more than once, its row counts the copies ("Cursor
 loads it 3 times"), the same number as the Overview's card. **Keep one…** on that card opens the
 item in the Library with its **Details**, which list each copy with its folder and whose it is.
 **Keep this one…** beside a copy adds the removal of the others to the preview; a copy in another
