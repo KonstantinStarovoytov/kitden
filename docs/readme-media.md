@@ -13,7 +13,7 @@ is about, taken at 1.5 pixels per CSS pixel and shown at its CSS size or smaller
 
 - `library` (a PNG): the Library map, which agent loads which plugin and skill. The four
   skills under "Your skills" start folded as a stack, as on the page. No pointer.
-- `context` (a PNG): Context for Claude Code, from the client tabs down to the two boxes. The
+- `context` (a PNG): Context for Claude Code, from the client tabs down to the groups of skills. The
   last chat's skill list is over its limit, so four skills show only a name; the 1M window is
   an estimate. Taken on the sample `kitden demo` opens (its medium size), so a reader who
   runs the demo sees the same. No pointer.

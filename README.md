@@ -54,8 +54,8 @@ last chat's log and shows which skills went in whole, and says how the list stan
 guess for another window is marked Estimate. Cursor gets no verdict: Kitden cannot see what it
 sends.
 
-<img src="docs/images/readme/context-light.png#gh-light-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Two boxes list the sixteen skills whose description was sent and the four sent by name only.">
-<img src="docs/images/readme/context-dark.png#gh-dark-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Two boxes list the sixteen skills whose description was sent and the four sent by name only.">
+<img src="docs/images/readme/context-light.png#gh-light-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Under it the skills stand in groups by source: Built into Claude Code, 15 skills, 7,604 characters; the plugin superpowers, 2 skills, 1 showed only a name, with its Turn off switch; Your skills, 3 skills, all 3 showed only a name.">
+<img src="docs/images/readme/context-dark.png#gh-dark-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Under it the skills stand in groups by source: Built into Claude Code, 15 skills, 7,604 characters; the plugin superpowers, 2 skills, 1 showed only a name, with its Turn off switch; Your skills, 3 skills, all 3 showed only a name.">
 
 ### Everything your agents load, on one map
 

@@ -79,7 +79,25 @@ window, for your setup now, or for a switch you are about to make, show only whi
 rebuilds that last list; all but another window's also come from a count (below). Claude Code's log does not say the window, so Kitden names it only when one window alone
 gives that list. When Claude Code's settings set the limit, with `skillListingBudgetFraction` or
 `SLASH_COMMAND_TOOL_CHAR_BUDGET`, Kitden uses that limit, and `skillListingMaxDescChars` for the
-length of a description. Cursor gets no verdict, because Kitden cannot see what Cursor sends. Skills
+length of a description. Cursor gets no verdict, because Kitden cannot see what Cursor sends.
+
+For Claude Code and Codex the skills stand in groups by where they come from, with the Library's
+names: each plugin (with its marketplace), **Your skills**, a project's skills, the plugins from your
+Claude account, and **Built into Claude Code**. Each group's header says how many skills it has, how
+many characters of the list they take (Codex: tokens), and how many showed only a name or were cut,
+in the same numbers as the bar and the sentence above: the last chat's, or the estimate when your
+setup changed or a change waits. The group that takes the most comes first, so the first thing on
+the page is the most useful thing to turn off. A plugin's header has its switch, **Turn off**: it
+adds the same change as the Library's, and the estimate, the bar and the limit line count it at
+once, before you apply it. Its name opens the plugin's Details in the Library. A group without a
+switch says why when you open it, and where to turn it off. Press a header to open the group to its
+skills; with more than three groups they start closed. A group that is off says **Off** and what it
+took in your last chat, and a group you are turning off says **Off after Apply** and about how much
+it frees. A plugin's or a skill's Details in the Library say what it takes of the skill list now,
+with **Show in Context**, which opens its group here. Cursor's skills stay in two boxes: those the
+agent can pick, and those it uses only when you ask.
+
+Skills
 whose descriptions are sent go from grey to orange with the length of their description, so the
 few that take most of the list stand out. For Claude Code a skill's size also counts its
 `when_to_use`, as Claude Code does. A skill's **Details** shows its description, with
@@ -97,9 +115,9 @@ you pressed it here or in the Library. After Apply the plugin's skills stand tog
 **Turned off**, with one **Turn on**. When Kitden has no switch
 for a skill, such as one the Claude app adds, its Details say so and why. A skill of a plugin
 from your Claude account names that plugin, and its Details offer the plugin's own switch. A skill
-that is off now waits under **Turned off**, where you can turn it on again: right after Apply, even
-when the page still shows the last chat's list, which had it, and after your next chat, when it is
-no longer in the list. That holds for your own and built-in Claude Code skills and for the skills
+that is off now is drawn off in its group (struck through), where you can turn it on again: right
+after Apply, even when the page still shows the last chat's list, which had it (its part of the bar
+is faded then), and after your next chat, when it is no longer in the list. That holds for your own and built-in Claude Code skills and for the skills
 of a plugin that is off. A skill that a project's own settings set has no switch here.
 The change goes through preview, **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
 did not fit. `kitden show context`, which the plugin's `context` skill runs, also prints each
@@ -158,11 +176,11 @@ or changed the limit, two lines under it say so and what Kitden expects now:
 >
 > **Estimate:** On a 1M window, 23 of 96 skills would show only a name. The agent may not use them.
 
-The bar, then named **Skill list now, estimate**, and the two boxes show that estimate. When
+The bar, then named **Skill list now, estimate**, and the group headers show that estimate. When
 everything would fit, a line says about how much room is left. When Kitden can only count, it says
 "every skill would keep its description" and shows that too, or about how many would show only a
 name ("about 3 of 92 skills would show only a name. Kitden counted them and cannot tell which."),
-and the bar and the boxes stay the last chat's. When it cannot estimate at all, because its count
+and the bar and the groups stay the last chat's. When it cannot estimate at all, because its count
 does not explain the last chat or it does not know the limit, the second line says that and why.
 
 For Codex the estimate says how many descriptions would be cut short, or how many skills left out.

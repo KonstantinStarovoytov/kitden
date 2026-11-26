@@ -368,7 +368,7 @@ def scene_find(page: Page, film: Film, pointer: Pointer) -> None:
 def open_context(page: Page, link: str) -> None:
     page.goto(link)
     page.goto(link.split("/?")[0] + "/#context")
-    page.locator(".ctx-sides").wait_for()
+    page.locator(".ctx-groups").wait_for()
     time.sleep(1.2)  # the bars have grown
 
 
@@ -386,7 +386,7 @@ def scene_context(page: Page, film: Film, pointer: Pointer) -> None:
 # the last frame to the first changes every pixel.
 VIEWS = {
     "find": {"width": 1280, "height": 1000},
-    "context": {"width": 1280, "height": 900},
+    "context": {"width": 1280, "height": 1250},
     "tools": {"width": 1280, "height": 780},
 }
 OPEN = {"library": open_library, "find": open_find, "context": open_context}
@@ -395,7 +395,7 @@ OPEN = {"library": open_library, "find": open_find, "context": open_context}
 SCENES = (
     ("library", scene_library, (180, 255, 520, 370)),  # the clients and their plugins, a still
     ("find", scene_find, (661, 110, 580, 850)),  # two add panels after a search, a still
-    ("context", scene_context, (175, 190, 960, 645)),  # the last chat's skill list, a still
+    ("context", scene_context, (175, 190, 960, 850)),  # the last chat's skill list and its groups, a still
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
     ("tools", scene_tools, (180, 205, 860, 550)),  # memory, its tools and the changes waiting
 )

@@ -9,6 +9,14 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Context groups your skills by where they come from:** for Claude Code and Codex the skills
+  stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
+  and the built-in ones, with the Library's names, largest first. Each header says how many skills,
+  how many characters they take and how many showed only a name, in the same numbers as the bar,
+  and a plugin's header has its switch: pressed, the estimate and the limit line count it before
+  Apply. Its name opens the plugin's Details in the Library, whose Details now say what a plugin or
+  a skill takes of the list, with a link back to its group. The two boxes "Description sent" and
+  "Name only" are gone for Claude Code and Codex.
 - **What you turn off on Context looks off at once:** a skill or a plugin you turn off moves under
   "Turned off" right after Apply, also when Kitden cannot replay your last chat's list and the page
   shows that list. A plugin goes off as a whole: while its switch waits, all of its skills stand

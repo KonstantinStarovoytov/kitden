@@ -481,7 +481,7 @@ function groupNode(card, facts, view, after, heat, opened, id, arrived, focus) {
   const meta = el("span", "ctx-gmeta");
   line.forEach((part, i) => {
     const tag = i === 0 && (facts.state === "off" || facts.state === "going" || facts.state === "back");
-    const short = facts.short && part.startsWith(`${facts.short} `) && !part.endsWith(" off");
+    const short = Boolean(facts.short) && /only a name|cut short/.test(part);
     meta.append(el("span", tag ? "ctx-gstate" : short ? "ctx-gshort" : null, part));
   });
   head.append(toggle, name);
