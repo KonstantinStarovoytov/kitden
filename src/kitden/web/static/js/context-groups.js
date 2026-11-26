@@ -77,11 +77,14 @@ export function factsOf(card, group, view) {
   };
 }
 
-// The groups of a card, largest first by what they take without the tray's changes, those off now
-// last (by what they took in the last chat); the server's order breaks ties.
+// The groups of a card, largest first by what they take without the tray's changes, built-in ones
+// after the rest, those off now last (by what they took in the last chat); the server's order
+// breaks ties.
 export function groupsOf(card, view) {
   const all = (card.groups || []).map((group) => factsOf(card, group, view));
-  const key = (f) => (f.state === "off" ? [1, -f.was.size] : [0, -f.base]);
+  // The groups you can turn off come first, the biggest first; the client's built-in skills,
+  // which have no switch for all of them, after them; groups that are off last.
+  const key = (f) => (f.state === "off" ? [2, -f.was.size] : f.group.kind === "built_in" ? [1, -f.base] : [0, -f.base]);
   return all.map((f, i) => [key(f), i, f]).sort(([a, i], [b, j]) => a[0] - b[0] || a[1] - b[1] || i - j).map(([, , f]) => f);
 }
 

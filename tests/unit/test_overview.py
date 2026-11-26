@@ -74,8 +74,11 @@ def test_unreadable_file_becomes_an_attention_card(tmp_path):
     first = overview(build_inventory(home), None)["cards"][0]
     assert first["name"] == "Could not read state.vscdb"
     assert first["line"] == (
-        "The file format is not recognized, so items from Cursor may be missing or wrong."
+        "In your Cursor settings: the file format is not recognized, so items from Cursor may "
+        "be missing or wrong."
     )
+    # The card names no path; its button copies it (02-N05).
+    assert first["action"] == {"label": "Copy path", "copy": str(db)}
 
 
 def test_untested_version_is_an_attention_card(home, monkeypatch):
@@ -291,7 +294,8 @@ def test_a_server_that_skips_the_gateway_is_a_move_in_card_with_its_body(home):
         "group": "improve",
         "icon": "globe",
         "name": "github",
-        "line": "Skips the gateway, so Kitden's rules don't reach it.",
+        # What a move gives, not a fault (05-P5).
+        "line": "In the gateway you can turn each of its tools on or off.",
         "clients": row["columns"],
         "action": {
             "label": "Move in…",
@@ -334,7 +338,7 @@ def test_more_than_three_servers_give_one_more_card(tmp_path):
     assert len(moves) == 3
     [more] = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Show…"]
     assert more["name"] == f"{len(rows) - 3} more servers can move in"
-    assert more["line"] == "Kitden's rules don't reach them."
+    assert more["line"] == "In the gateway you can turn each of their tools on or off."
     assert more["group"] == "improve"
     assert more["action"] == {
         "label": "Show…",
@@ -488,14 +492,14 @@ def test_a_duplicate_card_opens_the_item(home):
     assert skill["line"] == "Two copies of one skill load; keep one."
 
 
-def test_unreadable_and_untested_cards_have_no_button(home, monkeypatch):
+def test_an_unreadable_card_copies_its_path_and_an_untested_one_has_no_button(home, monkeypatch):
     monkeypatch.setattr(
         version_cache, "cached_version", lambda home, c: "2.0.0" if c == "claude_code" else None
     )
     (cursor_db(home)).write_bytes(b"this is not a database")
     data = overview(build_inventory(home), None)
     unread = next(c for c in data["cards"] if c["name"] == "Could not read state.vscdb")
-    assert unread["action"] is None
+    assert unread["action"]["label"] == "Copy path"
     assert unread["icon"] == "file-text"
     assert unread["clients"] == ["cursor"]
     assert unread["focus"] == {"clients": ["cursor"], "block": None}
@@ -626,7 +630,9 @@ def test_no_card_or_map_field_holds_a_path(home, monkeypatch):
     data = overview(build_inventory(home), None, held=held)
     kinds = {c["action"]["label"] for c in data["cards"] if c["action"]}
     assert {"Keep one…", "Update…", "Move in…", "Connect…"} <= kinds
-    for text in _strings({"cards": data["cards"], "map": data["map"]}):
+    # "Copy path" holds the path for the clipboard; nothing the card shows does.
+    shown = [c | {"action": c["action"] and {**c["action"], "copy": None}} for c in data["cards"]]
+    for text in _strings({"cards": shown, "map": data["map"]}):
         assert str(home) not in text and not text.startswith(("/", "~")), text
         assert "\\" not in text and "/." not in text, text
 
@@ -768,16 +774,27 @@ def test_a_codex_list_that_was_cut_gets_a_card(tmp_path):
     home = _context_home(tmp_path)
     _codex_chat(home, "cut")
     [card] = _context_cards(home)
-    assert card["line"] == "2 skills were cut short in your last Codex chat"
+    # Context's suggested limit is the card's one press, with its cost (05-P3).
+    assert card["line"] == (
+        "2 skills were cut short in your last Codex chat. Set to 500 tokens fits them: about 29 "
+        "more tokens in every chat."
+    )
     assert card["clients"] == ["codex"]
-    assert card["action"]["go"] == {"view": "context", "sel": "client:codex"}
+    assert card["action"] == {
+        "label": "Set to 500 tokens…",
+        "body": {
+            "action": "skill.limit",
+            "targets": [{"client": "codex"}],
+            "params": {"tokens": 500},
+        },
+    }
 
 
 def test_a_codex_list_that_left_a_skill_out_says_so(tmp_path):
     home = _context_home(tmp_path)
     _codex_chat(home, "out")
     [card] = _context_cards(home)
-    assert card["line"] == "1 skill was left out of your last Codex chat"
+    assert card["line"].startswith("1 skill was left out of your last Codex chat. Set to ")
 
 
 def test_a_list_that_fits_gets_no_card(tmp_path):
@@ -796,7 +813,8 @@ def test_cursor_and_clients_without_a_chat_get_no_card(tmp_path):
     assert _context_cards(home) == []
 
 
-def test_the_cards_come_after_the_came_back_cards(tmp_path):
+def test_the_skill_list_card_comes_first(tmp_path):
+    # What hurts most first: a list that cut skills costs every chat (02-N06).
     home = _context_home(tmp_path)
     _claude_chat_with_names_only(home)
     back = [{"name": "docs", "client": "codex", "app": None}]
@@ -806,7 +824,7 @@ def test_the_cards_come_after_the_came_back_cards(tmp_path):
         came_back=back,
         context_cards=view(home).values(),
     )
-    assert [c["icon"] for c in data["cards"]] == ["server", "gauge"]
+    assert [c["icon"] for c in data["cards"]] == ["gauge", "server"]
     assert data["counts"]["attention"] == 2
 
 
@@ -850,3 +868,43 @@ def test_a_context_read_that_fails_leaves_the_rest_of_the_overview(tmp_path, mon
     assert answer.status_code == 200
     assert not [c for c in answer.json()["cards"] if c["icon"] == "gauge"]
     assert "counts" in answer.json()
+
+
+def test_four_cards_of_one_kind_fold_into_one_row(home, monkeypatch):
+    # 02-N06: 35 "Keep one…" cards came before the skill list cards. From four on, one row
+    # with a count holds them, and the lede still counts each.
+    from kitden.views import overview as view_module
+
+    def copies(inventory, findings):
+        return [
+            view_module._card(
+                f"d{i}", "attention", "sparkles", f"s{i}", "x", ["codex"], None, "library"
+            )
+            for i in range(5)
+        ]
+
+    monkeypatch.setattr(view_module, "_duplicates", copies)
+    data = overview(build_inventory(home), None)
+    [row] = [c for c in data["cards"] if c.get("cards")]
+    assert row["name"] == "5 skills load more than once"
+    assert row["line"] == "Open the list to keep one copy of each."
+    assert row["action"] == {"label": "Show…", "fold": True}
+    assert [c["name"] for c in row["cards"]] == [f"s{i}" for i in range(5)]
+    assert data["counts"]["attention"] == 5
+
+
+def test_three_cards_of_one_kind_stay_cards():
+    from kitden.views.overview import _card, _fold
+
+    cards = [_card(str(i), "attention", "puzzle", "p", "x", [], None, "library") for i in range(3)]
+    assert _fold(cards, "duplicate") == cards
+
+
+def test_an_unreadable_file_in_a_project_names_the_project(tmp_path):
+    # 02-N05: the sample's first card named no project and did nothing.
+    home = build_demo_home(tmp_path, "medium")
+    cards = overview(build_inventory(home), None)["cards"]
+    card = next(c for c in cards if c["name"] == "Could not read mcp.json")
+    assert card["line"].startswith("In project website: the file has a syntax error")
+    path = home / "work/website/.cursor/mcp.json"
+    assert card["action"] == {"label": "Copy path", "copy": str(path)}

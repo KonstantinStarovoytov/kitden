@@ -75,10 +75,20 @@ function renderPlace() {
   }
   glide($(".nav"), $('.nav a[aria-current="page"]'), "nav");
   renderShell();
+  searchWords();
   drawChip(MAP_PAGES.includes(state.view) ? found : null);
   // The tray's line depends on the place ("Click one on the map to take it out." only on the
   // Gateway's map). A redraw of the page never takes the dock from a toast.
   drawTray(tray, { toastStays: true });
+}
+
+// The search box promises what it finds from here: the Gateway finds its servers and tools; every
+// other place sends a search to the Library, which has no servers.
+export const SEARCH_WORDS = { gateway: "Search servers and tools", other: "Search skills, plugins and marketplaces" };
+function searchWords() {
+  const words = SEARCH_WORDS[state.view === "gateway" ? "gateway" : "other"];
+  $("#q").placeholder = `${words}…`;
+  $("#q").setAttribute("aria-label", words);
 }
 
 // The Overview's count in the rail and the Where list follow the data.

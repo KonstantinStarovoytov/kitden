@@ -271,7 +271,12 @@ CLAUDE_WOULD_SHORT = "{bad} of {n} would show only a name"
 CODEX_WOULD_SHORT = "{bad} of {n} would be cut short"
 # An estimate's sentence. "{on}" is ON_WINDOW, or WITH_LIMIT when the window is not known.
 ESTIMATE = "Estimate: {}"
+# A Claude Code skill's use, from Claude Code's own count, in its Details on Context.
+USED_ONE = "Once, last on {date}"
+USED_MANY = "{n} times, last on {date}"
+USED_NONE = "Claude Code has no record of its use"
 AFTER_APPLY = "After Apply, estimate: {}"
+BEFORE_APPLY = "Without the change, estimate: {}"
 ON_WINDOW = "On a {size} window"
 WITH_LIMIT = "With this limit"
 CLAUDE_WOULD_DROP = (
@@ -343,6 +348,10 @@ GROUP_WORDS = {
 GROUP_WHY_BUILT_IN = (
     "Built into Claude Code: there is no switch for all of them. Most have a switch of their "
     "own, in their Details."
+)
+# Your own skills, or a project's: no switch for the group, one for each skill.
+GROUP_WHY_OWN = (
+    "There is no switch for all of these skills. Each has a switch of its own, in its Details."
 )
 GROUP_WHY_PLUGIN = "Kitden has no switch for this plugin here. Turn it off in the Library."
 # A Codex plugin that is off and that the last list did not hold.
@@ -573,7 +582,6 @@ LIMIT_BAD_SHARE = "The skill list limit must be one of the shares Kitden offers,
 LIMIT_AFTER = "Limit {share}"
 LIMIT_AFTER_DEFAULT = "Limit {share}, the default"
 CODEX_AFTER_DEFAULT = "Limit 2% of the window, the default"
-HOW_CLAUDE_REST = "The rest of the window (system prompt, tools, MCP, the chat) is not measured."
 HOW_CODEX_LIST = "Last chat: the list Codex{version} sent{when}, read from its chat log."
 HOW_CODEX_RULE = (
     "Estimates follow Codex's source code: 2% of the window, at most 1,024 characters per "

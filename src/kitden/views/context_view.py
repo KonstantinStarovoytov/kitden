@@ -735,9 +735,17 @@ def _group(
         folder = Path(item.project).name
         name = words.SOURCE_PROJECT.format(folder)
         key = f"project:{item.project}"
-        return {"key": key, "kind": "project", "name": name, "from": None, "lookup": None}
-    name = words.GROUP_WORDS["own"]
-    return {"key": "own", "kind": "own", "name": name, "from": None, "lookup": None}
+        why = words.GROUP_WHY_OWN
+        return {
+            "key": key,
+            "kind": "project",
+            "name": name,
+            "from": None,
+            "lookup": None,
+            "why": why,
+        }
+    name, why = words.GROUP_WORDS["own"], words.GROUP_WHY_OWN
+    return {"key": "own", "kind": "own", "name": name, "from": None, "lookup": None, "why": why}
 
 
 def _grouped(
@@ -775,6 +783,18 @@ def _grouped(
             group["why"] = None
         skill["group"] = found["key"]
     return list(groups.values())
+
+
+def _before(estimate: dict, windows: list[dict]) -> str | None:
+    """The estimate for the setup as it is, said beside the one after Apply when it differs from
+    the last chat's own count (Kitden could not rebuild the chat): the change is then read
+    estimate against estimate (02-N13). None when the counts agree."""
+    fact = windows[0]["result"] if windows else None
+    if fact is None or (estimate.get("misfit") or {}).get("n") == (fact.get("misfit") or {}).get(
+        "n"
+    ):
+        return None
+    return estimate["say"]
 
 
 def _plugin_words(plugin_id: str) -> str:
@@ -1202,19 +1222,37 @@ def _added_lines(extras, states) -> list[str]:
     return [_many(n, words.LIMIT_ADDED_ONE, words.LIMIT_ADDED_MANY).format(n=n)] if n else []
 
 
-def _claude_weights(claude: ClaudeFolder, at_ms: int) -> dict[str, float]:
-    """Each skill's use, aged from the chat's time.
+def _claude_usage(claude: ClaudeFolder) -> dict[str, tuple[int, int]]:
+    """Each skill's use count and last use (ms), as Claude Code keeps them.
 
     # checked 2026-11-09 (real ~/.claude.json): skillUsage maps a skill's name, as the log
     # writes it (plugin prefix too), to {usageCount, lastUsedAt (ms)}.
     """
     state = as_dict(Reader("claude_code").json(claude.state))
-    weights = {}
+    usage = {}
     for name, entry in as_dict(state.get("skillUsage")).items():
         count, last = as_dict(entry).get("usageCount"), as_dict(entry).get("lastUsedAt")
         if _whole(count) and _whole(last):
-            weights[name] = claude_weight(count, last, at_ms)
-    return weights
+            usage[name] = (count, last)
+    return usage
+
+
+def _claude_weights(claude: ClaudeFolder, at_ms: int) -> dict[str, float]:
+    """Each skill's use, aged from the chat's time."""
+    return {
+        name: claude_weight(count, last, at_ms)
+        for name, (count, last) in _claude_usage(claude).items()
+    }
+
+
+def _used(usage: dict[str, tuple[int, int]], name: str) -> str:
+    """A skill's line in its Details: "6 times, last Oct 1", or that Claude Code has no record."""
+    if name not in usage:
+        return words.USED_NONE
+    count, last = usage[name]
+    day = datetime.fromtimestamp(last / 1000).astimezone()
+    date = f"{MONTHS[day.month - 1]} {day.day}"
+    return _many(count, words.USED_ONE, words.USED_MANY).format(n=f"{count:,}", date=date)
 
 
 def _claude_run(
@@ -1710,6 +1748,8 @@ def _claude(
             say = f"{result['say']} {_swap(client, gets, loses)}".strip()
             after = {"say": say, "gets": gets, "loses": loses, "result": result}
             after["budget"] = budget_after
+            before = _claude_estimate(base[0], base[1], with_limit, words.BEFORE_APPLY, cap)
+            after["before"] = _before(before, windows)
         elif not checked and fits_next is not None and (new_share is not None or holds):
             # A count says what a limit gives; with a switch alone it has to hold for the chat.
             expect = count_says(states_next, budget_after, words.AFTER_APPLY)
@@ -1808,9 +1848,12 @@ def _claude(
         words.HOW_CLAUDE_SETTING if setting is not None else words.HOW_CLAUDE_SHELL,
         *([words.HOW_CLAUDE_CAP.format(n=f"{cap:,}")] if cap != CLAUDE_DESCRIPTION_CAP else []),
         words.HOW_CLAUDE_SURFACE,
-        words.HOW_CLAUDE_REST,
         *([limit_card["why"]] if limit_card["why"] else []),
     ]
+    # How often each skill was used, where the user decides what to turn off (05-P4).
+    usage = _claude_usage(claude)
+    for skill in skills:
+        skill["used"] = _used(usage, skill["name"])
     return _card(
         client,
         lede=_claude_lede(files),
@@ -2428,6 +2471,7 @@ def _codex(
         say = f"{result['say']} {_swap(client, gets, loses)}".strip()
         after = {"say": say, "gets": gets, "loses": loses, "result": result}
         after["budget"] = budget_after
+        after["before"] = _before(_codex_estimate(est[0], est[1], on, words.BEFORE_APPLY), windows)
 
     plugins = _plugin_items(inventory, client, sent_list.folder)
 

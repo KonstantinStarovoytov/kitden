@@ -8,6 +8,7 @@ import { previewButton, syncTrayIn } from "./details.js";
 import { $, button, el, icon, joinWords, plural, reportError } from "./dom.js";
 import { SETUP_NOTE } from "./gateway-details.js";
 import { loadLibraryFor, noClients } from "./library.js";
+import { copyText } from "./library-details.js";
 import { layoutTree, litFrom } from "./map.js";
 import { mapView } from "./map-view.js";
 import { headActions } from "./map-page.js";
@@ -15,7 +16,7 @@ import { animateTo, countUp, D, rise, riseHead, rollTo } from "./motion.js";
 import { toast } from "./panel.js";
 import { banner, folderName, mark, setHint, skeleton, staleNote, versionWords } from "./parts.js";
 import { current, currentError, data, go, goTo, libraryChoice, loadMap, parseSel, projectPath, retry, state } from "./store.js";
-import { keyFor, onTray } from "./tray.js";
+import { CONTEXT_NOTE, keyFor, onTray } from "./tray.js";
 
 const TITLE = "Overview";
 const HINT = "Hover a card to see it on the map · a button adds a preview · click Kitden gateway or Library to open it";
@@ -180,7 +181,7 @@ function groupNode(group, cards, leaving, shown, { fresh, order }) {
   const list = el("div", "ov-cards");
   section.append(caption, list);
   const nodes = cards.map((card) => {
-    const node = cardNode(card, group);
+    const node = card.cards ? foldCardNode(card, group, shown, section) : cardNode(card, group);
     shown.set(card.id, { card, node, list, group: section, at: 0 });
     if (!fresh && page.gone.delete(card.id)) comeBack(node);
     return node;
@@ -229,13 +230,49 @@ function cardNode(card, group) {
   return node;
 }
 
-// A change for the tray ("Move in…", "Connect…", "Update…": the button says "In preview" while it
-// waits there), or a page to open ("Keep one…", "Show…").
+// A row for many cards of one kind ("35 skills load more than once"): its "Show…" opens and closes
+// its cards right under it, as a note row of many does. It stays open across draws.
+function foldCardNode(card, group, shown, section) {
+  const box = el("div", "ov-card-fold");
+  const head = cardNode(card, group);
+  const toggle = head.querySelector("button[aria-expanded]");
+  const list = el("div", "ov-cards ov-fold-cards");
+  list.hidden = !page.openRows.has(card.id);
+  list.append(...card.cards.map((inner) => {
+    const node = cardNode(inner, group);
+    shown.set(inner.id, { card: inner, node, list, group: section, at: 0 });
+    return node;
+  }));
+  const show = (open) => {
+    list.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.textContent = open ? "Hide" : card.action.label;
+  };
+  toggle.addEventListener("click", () => {
+    const open = list.hidden;
+    if (open) page.openRows.add(card.id);
+    else page.openRows.delete(card.id);
+    show(open);
+    if (open) rise([...list.children], { step: 40 });
+  });
+  show(!list.hidden);
+  box.append(head, list);
+  return box;
+}
+
+// A change for the tray ("Move in…", "Connect…", "Update…", a new skill list limit: the button says
+// "In preview" while it waits there), a page to open ("Keep one…", "Show…"), a fold to open, or a
+// path to copy ("Copy path": the card shows no path).
 function actionButton({ id, action }, look) {
   if (!action) return null;
-  const node = action.body
-    ? previewButton(action.label, action.body, { note: action.body.action.startsWith("setup_server.") ? SETUP_NOTE : null, look })
-    : button(action.label, () => openPlace(action.go), look);
+  const notes = { setup_server: SETUP_NOTE, skill: CONTEXT_NOTE };
+  let node;
+  if (action.body) node = previewButton(action.label, action.body, { note: notes[action.body.action.split(".")[0]] || null, look });
+  else if (action.fold) {
+    node = button(action.label, () => {}, look);
+    node.setAttribute("aria-expanded", "false");
+  } else if (action.copy) node = button(action.label, () => copyText(action.copy, node), "btn");
+  else node = button(action.label, () => openPlace(action.go), look);
   node.dataset.focus = `card:${id}`;
   return node;
 }

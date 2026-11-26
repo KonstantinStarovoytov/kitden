@@ -15,6 +15,7 @@ from kitden.changes.actions import (
     KITDEN_GATEWAY,
     SETUP_SERVER_ENABLE,
     SETUP_SERVER_UPDATE,
+    SKILL_LIMIT,
 )
 from kitden.clients.base import SETUP_SERVER, found_clients
 from kitden.clients.versions import MINIMUM_VERSIONS
@@ -56,7 +57,11 @@ GROUP_ICONS = {"move": "globe", "local": "hard-drive"}
 GROUP_WORDS = {"move": "Remote", "local": "Local"}
 # Server cards before one card says how many more there are.
 SERVER_CARDS = 3
-SKIPS = "Skips the gateway, so Kitden's rules don't reach it."
+# Items with exactly the same words fold into one row from this many on (overview.js, FOLD_FROM,
+# has the same number).
+FOLD_FROM = 4
+# What a move gives, not a fault: a server outside the gateway is a normal setup.
+SKIPS = "In the gateway you can turn each of its tools on or off."
 NOT_CONNECTED = "Not connected to the gateway yet."
 
 
@@ -76,16 +81,25 @@ def _card(id, group, icon, name, line, clients, action, block) -> dict:
 
 
 def _unreadable(inventory) -> list[dict]:
+    """A card per file Kitden could not read. Its line says where the file is (a project's
+    folder name, or the client's own settings), and "Copy path" gives the path: main pages show
+    no path."""
     cards = []
+    projects = sorted((p.path for p in inventory.projects), key=len, reverse=True)
     for problem in inventory.problems:
         where = problem.path or CLIENT_WORDS.get(problem.owner_client, problem.owner_client)
         why = READ_PROBLEMS.get(problem.unknown_reason, "It could not be read")
         client = CLIENT_WORDS.get(problem.owner_client, problem.owner_client)
         title = f"Could not read {Path(str(where)).name}"
-        text = f"{why}, so items from {client} may be missing or wrong."
+        path = str(problem.path) if problem.path else None
+        project = next((p for p in projects if path and path.startswith(p.rstrip("/") + "/")), None)
+        place = f"project {Path(project).name}" if project else f"your {client} settings"
+        why = why[0].lower() + why[1:]
+        text = f"In {place}: {why}, so items from {client} may be missing or wrong."
         clients = [problem.owner_client] if problem.owner_client in CLIENTS else []
         card_id = _hash("unreadable", where)
-        cards.append(_card(card_id, "attention", "file-text", title, text, clients, None, None))
+        action = {"label": "Copy path", "copy": path} if path else None
+        cards.append(_card(card_id, "attention", "file-text", title, text, clients, action, None))
     return cards
 
 
@@ -198,7 +212,8 @@ def _came_back(back: list[dict]) -> list[dict]:
 
 def _context(clients: list[dict]) -> list[dict]:
     """A card per client whose last chat did not fit its skill list (the Context page's lamp is
-    "warn"; Cursor never is). "Show…" opens Context on that client."""
+    "warn"; Cursor never is). Its button is Context's suggested limit, for the tray, with its
+    cost in the line; with none, "Show…" opens Context on that client."""
     cards = []
     for card in clients:
         misfit = card["lamp"] == "warn" and card["windows"][0]["result"]["misfit"]
@@ -210,10 +225,45 @@ def _context(clients: list[dict]) -> list[dict]:
         were = "was" if n == 1 else "were"
         line = CONTEXT_CARD_LINES[misfit["kind"]].format(skills=skills, were=were, client=word)
         action = {"label": "Show…", "go": {"view": "context", "sel": f"client:{client}"}}
+        # The cheapest fix, when Context offers one: its new limit, one press away, at its cost.
+        offer = (card.get("limit") or {}).get("offer")
+        if offer:
+            param = card["limit"].get("param") or "fraction"
+            params = {param: offer[param]}
+            body = {"action": SKILL_LIMIT, "targets": [{"client": client}], "params": params}
+            action = {"label": f"{offer['label']}…", "body": body}
+            cost = offer["cost"][0].lower() + offer["cost"][1:]
+            line = f"{line}. {offer['label']} fits them: {cost}."
         card_id = _hash("context", client)
         title = SKILL_LIST_IN.format(client=word)
         cards.append(_card(card_id, "attention", "gauge", title, line, [client], action, "library"))
     return cards
+
+
+# Cards of one kind fold into one row from this many on, as the notes do (FOLD_FROM below).
+FOLDS = {
+    "duplicate": ("{n} {things} load more than once", "Open the list to keep one copy of each."),
+    "unreadable": ("Could not read {n} files", "Items from them may be missing or wrong."),
+}
+
+
+def _fold(cards: list[dict], kind: str) -> list[dict]:
+    """FOLD_FROM or more cards of one kind are one row that holds them (`cards`): its "Show…"
+    opens and closes the list right under it, so one kind cannot push the rest down."""
+    if len(cards) < FOLD_FROM:
+        return cards
+    name, line = FOLDS[kind]
+    icons = {c["icon"] for c in cards}
+    things = {"sparkles": "skills", "puzzle": "plugins", "server": "servers"}
+    thing = things.get(next(iter(icons)), "items") if len(icons) == 1 else "items"
+    clients = sorted({x for c in cards for x in c["clients"]}, key=client_order)
+    blocks = {c["focus"]["block"] for c in cards}
+    block = blocks.pop() if len(blocks) == 1 else None
+    title = name.format(n=len(cards), things=thing)
+    icon = cards[0]["icon"] if len(icons) == 1 else "layers"
+    action = {"label": "Show…", "fold": True}
+    row = _card(_hash("fold", kind), "attention", icon, title, line, clients, action, block)
+    return [row | {"cards": cards}]
 
 
 def _move_ins(groups: dict) -> list[dict]:
@@ -251,7 +301,9 @@ def _move_ins(groups: dict) -> list[dict]:
         n = len(rest)
         # The same set as the cards above: servers a move can take, not every one outside.
         name = f"{n} more {'server' if n == 1 else 'servers'} can move in"
-        line = f"Kitden's rules don't reach {'it' if n == 1 else 'them'}."
+        line = (
+            f"In the gateway you can turn each of {'its' if n == 1 else 'their'} tools on or off."
+        )
         go = {"view": "gateway", "sel": "group:outside", "mode": "list"}
         action = {"label": "Show…", "go": go}
         card_id = _hash("move-in", "more")
@@ -335,11 +387,6 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
     }
 
 
-# Items with exactly the same words fold into one row from this many on (overview.js, FOLD_FROM,
-# has the same number).
-FOLD_FROM = 4
-
-
 def note_count(findings: Sequence[Any]) -> int:
     """The rows the folded notes draw, of findings or anything with their `names` and `type`.
     An item is one name; the words of its notes are its distinct note types, in the order they
@@ -375,14 +422,17 @@ def overview(
     `context_cards` the Context page's client cards (context_view.py), and `setups` which
     server each held name is (held_setups)."""
     findings = find_findings(inventory, project)
+    # What hurts most comes first: a skill list that cut skills costs every chat; a change that
+    # came undone, Kitden not starting in a client, and files it cannot read come next; a copy
+    # that loads twice last. Many cards of one kind fold into one row (`_fold`).
     cards = (
-        _unreadable(inventory)
+        _context(list(context_cards or []))
+        + _came_back(came_back or [])
+        + _old_entries(inventory)
+        + _fold(_unreadable(inventory), "unreadable")
         + ([_gateway_unreadable()] if problem else [])
         + _untested(inventory)
-        + _old_entries(inventory)
-        + _duplicates(inventory, findings)
-        + _came_back(came_back or [])
-        + _context(list(context_cards or []))
+        + _fold(_duplicates(inventory, findings), "duplicate")
     )
     # Servers outside the gateway and clients not connected are options, not problems. The rows
     # are the Gateway page's, so a server in two clients is one card. Nothing moves into the
@@ -401,7 +451,10 @@ def overview(
         "notes": note_count(info),
         "map": setup,
         "counts": {
-            "attention": sum(c["group"] == "attention" for c in cards),
+            # A folded row counts each card it holds.
+            "attention": sum(
+                len(c.get("cards") or [c]) for c in cards if c["group"] == "attention"
+            ),
             # The map's clients: the Desktop Code tab counts as Claude Code.
             "clients": sum(c["on"] for c in setup["clients"]),
             "projects": len(inventory.projects),
