@@ -91,3 +91,16 @@ def test_the_library_says_what_a_plugin_takes_and_opens_its_group(page, demo):
     group.get_by_role("button", name="superpowers: Details in the Library").click()
     wait_until(lambda: page.evaluate("location.hash").startswith("#library"))
     expect(page.get_by_role("complementary", name="Details")).to_contain_text("superpowers")
+
+
+def test_a_plugins_skill_in_the_library_says_what_it_takes_and_opens_its_group(page, demo):
+    open_context(page)
+    page.evaluate("location.hash = '#library?kind=plugin&view=list&sel=skill:brainstorming'")
+    details = page.get_by_role("complementary", name="Details")
+    expect(details).to_contain_text("brainstorming")
+    expect(details).to_contain_text(
+        re.compile(r"Takes [\d,]+ characters of Claude Code's skill list\.")
+    )
+    details.get_by_role("button", name=re.compile(r"^Show in Context")).first.click()
+    wait_until(lambda: page.evaluate("location.hash").startswith("#context"))
+    expect(page.locator(GROUP).locator(".ctx-gtoggle")).to_be_focused()

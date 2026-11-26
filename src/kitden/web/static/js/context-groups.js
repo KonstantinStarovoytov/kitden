@@ -105,14 +105,19 @@ export function groupLine(card, facts, estimate) {
 
 // The Library's line for a plugin or a skill on a card: what it takes of that client's skill list
 // now (the estimate for the setup now, else the last chat), with the group it is in; null when the
-// card does not hold it. `match`: { plugin } (a plugin's id, "superpowers@market") or { items } (a
-// skill's item ids).
+// card does not hold it. `match`: { plugin } (a plugin's id, "superpowers@market"), { plugin, skill }
+// (a skill inside that plugin, by its own name) or { items } (a skill's item ids).
 export function takesLine(card, match) {
   const groups = card.groups || [];
   const fact = (card.windows && card.windows[0] && card.windows[0].result) || { sent: {} };
   const base = card.now || fact;
   const client = CLIENT_WORDS[card.client] || card.client;
   const unit = card.unit || "characters";
+  if (match.plugin && match.skill) {
+    const group = groups.find((g) => g.lookup === match.plugin);
+    const skill = group && card.skills.find((s) => s.group === group.key && s.shown === match.skill);
+    return skill ? skillLine(card, skill, base, client, unit) : null;
+  }
   if (match.plugin) {
     const group = groups.find((g) => g.lookup === match.plugin);
     if (!group) return null;
@@ -122,7 +127,11 @@ export function takesLine(card, match) {
   }
   const ids = new Set(match.items || []);
   const skill = card.skills.find((s) => s.item && ids.has(s.item));
-  if (!skill) return null;
+  return skill ? skillLine(card, skill, base, client, unit) : null;
+}
+
+// One skill's line: what it takes now, only its name, or off.
+function skillLine(card, skill, base, client, unit) {
   if (skill.state === "off") return { group: skill.group, client: card.client, say: `Off now: not in ${client}'s next skill list.` };
   const size = (base.sent || {})[skill.name];
   const say = size ? `Takes ${fmt(size)} ${unit} of ${client}'s skill list.` : `Shows only its name in ${client}'s skill list.`;

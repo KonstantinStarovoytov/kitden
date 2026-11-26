@@ -265,7 +265,8 @@ function takesNode(item, id) {
   for (const card of model.clients || []) {
     const own = (item.items || {})[card.client];
     if (!own || !own.length) continue;
-    const line = takesLine(card, item.kind === "plugin" ? { plugin: item.plugin } : { items: own });
+    const match = item.kind === "plugin" ? { plugin: item.plugin } : item.kind === "part" ? { plugin: item.plugin, skill: item.skill } : { items: own };
+    const line = takesLine(card, match);
     if (line) lines.push(line);
   }
   if (!lines.length) return null;
@@ -555,6 +556,11 @@ function showLibrary(id, { step = null } = {}) {
   const card = cardOf(thing, context(thing.answer), id);
   const block = thing.block;
   if (block && (block.kind === "plugin" || block.kind === "skill")) card.after = afterOf(card.after, takesNode(block.item, id));
+  // A skill inside a plugin: what it takes, found by its plugin and its own name.
+  if (block && block.kind === "part" && block.label.words === "Skill") {
+    const part = { kind: "part", plugin: block.plugin.plugin, skill: block.name, items: block.plugin.items };
+    card.after = afterOf(card.after, takesNode(part, id));
+  }
   const nodes = openCard(card, { type: "library", id }, () => showLibrary(id), () => showLibrary(id), step);
   return Promise.resolve(nodes);
 }

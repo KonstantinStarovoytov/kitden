@@ -77,6 +77,10 @@ test("the Library's line says what a plugin or a skill takes now, and which grou
   assert.equal(takesLine(CARD, { plugin: 'r@m' }), null);
   assert.equal(takesLine(CARD, { items: ['i-a'] }).say, "Takes 300 characters of Claude Code's skill list.");
   assert.equal(takesLine(CARD, { items: ['i-c'] }).say, "Shows only its name in Claude Code's skill list.");
+  // A skill inside a plugin, by its plugin and its own name.
+  assert.deepEqual(takesLine(CARD, { plugin: 'p@m', skill: 'x' }), { group: 'plugin:p@m', client: 'claude_code', say: "Takes 600 characters of Claude Code's skill list." });
+  assert.equal(takesLine(CARD, { plugin: 'p@m', skill: 'y' }).say, "Shows only its name in Claude Code's skill list.");
+  assert.equal(takesLine(CARD, { plugin: 'p@m', skill: 'zz' }), null);
   // The estimate for the setup now wins over the last chat.
   const now = { sent: { a: 310, 'p:x': 520 }, over: {} };
   assert.equal(takesLine({ ...CARD, now }, { plugin: 'p@m' }).say, "Takes 520 characters of Claude Code's skill list.");
