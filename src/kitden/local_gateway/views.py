@@ -14,6 +14,7 @@ from typing import Any
 
 from kitden.changes.actions import GATEWAY_RULE, KITDEN_GATEWAY, secrets_out
 from kitden.clients.base import SETUP_NAME, mcp_item
+from kitden.clients.entries import setup_key
 from kitden.gateways import data_dir
 from kitden.local_gateway import keychain
 from kitden.local_gateway.project import project_chain
@@ -214,6 +215,12 @@ def held_servers(
             }
         )
     return cards
+
+
+def held_setups(settings: dict) -> dict[str, str]:
+    """Each server the Kitden gateway holds, by name: its `setup_key`. An outside entry of its
+    name with another key cannot move in (gateway_view). It stays server-side."""
+    return {n: setup_key(s) for n, s in settings["servers"].items() if isinstance(s, dict)}
 
 
 # Words in a tool's name that suggest it changes something. A guess: the page says so.

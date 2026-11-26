@@ -141,7 +141,7 @@ test('a server in two groups adds and removes only its own entries; a gateway cl
 });
 
 test('a server that stays says why instead of Move', () => {
-  const stays = "docs is in the project's own files; it stays there.";
+  const stays = "docs is in the project's own files, so it cannot move into the Kitden gateway.";
   const kept = outsideCard({ ...DOCS, stays }, 'move', [def('a', 'claude_code')], { view: VIEW, clients: FOUND, linked: ['claude_code'] });
   assert.ok(!labels(kept).includes('Move into the gateway…'));
   assert.equal(textOf(kept.after), stays);
@@ -313,7 +313,7 @@ test("Move all leaves out a name set up differently in two clients, as the mediu
   const pair = gatewayCard(KITDEN, { view: { ...VIEW, groups: { move: [DOCS], local: [DOCS_LOCAL], plugin: [] } }, setup: SETUP, projects: PROJECTS, clients: FOUND });
   assert.deepEqual(moreLabels(pair), ['Add a server…']);
   // A stays reason keeps a row out too.
-  const stays = "docs is in the project's own files; it stays there.";
+  const stays = "docs is in the project's own files, so it cannot move into the Kitden gateway.";
   const kept = gatewayCard(KITDEN, { view: { ...VIEW, groups: { move: [{ ...GITHUB, stays }], local: [FILES], plugin: [] } }, setup: SETUP, projects: PROJECTS, clients: FOUND });
   assert.equal(kept.more[1].label, 'Move all 1…');
 });

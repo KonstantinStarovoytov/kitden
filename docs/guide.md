@@ -242,6 +242,10 @@ An agent that calls a tool that is off, by a switch, a project rule or strict mo
 "<name> is turned off in Kitden."
 A server that must start in its own folder starts there in the gateway, so it also works in
 Cursor, which has no such setting.
+If the gateway already has a server of that name, moving another one in works only when it is
+the same server; a new token for it is fine, and the review says so. A different server of that
+name is refused until you keep one. When a client keeps its own server of a name the gateway
+also has, the review says it will have both.
 A server's secrets, in its env, headers or arguments such as `--api-key=…`, go to the macOS
 Keychain or the Linux keyring; the gateway's settings keep a reference. If a server moved in by
 an earlier Kitden still has one in plain text, its **Details** offer **Move secrets to the
@@ -251,7 +255,9 @@ Keychain…**.
 
 Look at each change first. Apply keeps a backup for Undo. **Show changes** shows the exact
 edit; Apply writes it and checks the result. Open **Changes → Undo** to restore it.
-If Undo would overwrite newer edits, Kitden stops. Changes also offers **Redo…** and
+If Undo would overwrite newer edits, Kitden stops. When a newer change to the same setting is
+still applied, undo the newer one first. When **Apply all** fails, the tray names the change that
+did not go through, and why; Kitden puts every file back. Changes also offers **Redo…** and
 **See it on the map**.
 If an app such as Pen writes a removed server back, the review warns you first and Changes
 says it is back.

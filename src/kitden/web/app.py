@@ -135,6 +135,7 @@ from kitden.local_gateway.views import (
     access_rows,
     gateway_items,
     held_servers,
+    held_setups,
     load_proxy,
     own_rules,
     refresh_tools,
@@ -278,6 +279,10 @@ def change_dict(change: Change) -> dict:
         "state": str(change.state),
         "error": change.error,
         "refused_by": change.refused_by,
+        # The tray row whose step did not go through, when Apply failed at one.
+        "failed_row": step_rows(change.rows or []).get(change.failed_step)
+        if change.failed_step is not None
+        else None,
         "restart_needed": change.restart_needed,
         "shared_file_warning": change.shared_file_warning,
         "target": change.target,
@@ -1227,6 +1232,7 @@ def create_app(
             problem=problem,
             came_back=back,
             context_cards=context,
+            setups=held_setups(load_settings(home)) if home is not None else None,
         )
         return JSONResponse(answer)
 
@@ -1290,7 +1296,8 @@ def create_app(
 
     def _gateway_view(request, project, path):
         held, problem = _kitden(path)
-        view = gateway_view(state.inventory, path, kitden=held, problem=problem)
+        setups = held_setups(load_settings(home)) if home is not None else None
+        view = gateway_view(state.inventory, path, kitden=held, problem=problem, setups=setups)
         # The picked project's own rules, for the scope bar; 0 for all projects, and None when
         # the gateway settings could not be read.
         rules = own_rules(load_settings(home), _chain(path)) if home is not None else 0

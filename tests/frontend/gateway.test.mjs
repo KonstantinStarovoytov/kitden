@@ -286,7 +286,7 @@ test('one name in two groups is two rows', () => {
 });
 
 test('a row that stays gets no Move in…', () => {
-  const stays = "docs is in the project's own files; it stays there.";
+  const stays = "docs is in the project's own files, so it cannot move into the Kitden gateway.";
   const view = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, move: [{ ...MEDIUM_VIEW.groups.move[0], stays }, MEDIUM_VIEW.groups.move[1]], plugin: [{ name: 'linear', clients: ['claude_code'], columns: ['claude_code'], items: [], stays: 'linear comes with a plugin; it stays with the plugin.' }] } };
   const rows = listRows(gatewayTree(view, OPTS), new Set());
   assert.equal(rows.find((r) => r.id === 'outside:move:docs').action, 'open');
@@ -371,7 +371,7 @@ test('no grip where the row stays', () => {
   const view = { ...MEDIUM_VIEW, groups: {
     move: [
       row('github'),
-      row('docs', { stays: "docs is in the project's own files; it stays there." }),
+      row('docs', { stays: "docs is in the project's own files, so it cannot move into the Kitden gateway." }),
       row('secret', { stays: 'secret uses ${API_KEY}; Kitden cannot move a value it does not know.' }),
       row('kept', { stays: 'From the last good read at 14:02; Kitden can change it once it reads .claude.json again.' }),
       row('empty', { items: [] }),
@@ -398,7 +398,7 @@ test('a name set up differently in two clients of one group has no grip and no "
 
 test('an outside server Kitden does not know to be on has a dashed line and says "Not known"', () => {
   // A project's .mcp.json server Claude Code has not approved yet: no entry of it is known on.
-  const notes = { name: 'notes', clients: ['claude_code'], columns: ['claude_code'], items: [], stays: "notes is in the project's own files; it stays there.", override: false, unknown: true };
+  const notes = { name: 'notes', clients: ['claude_code'], columns: ['claude_code'], items: [], stays: "notes is in the project's own files, so it cannot move into the Kitden gateway.", override: false, unknown: true };
   const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, local: [notes] } }, OPTS);
   const shown = block(tree, 'outside:local:notes');
   assert.equal(shown.state, 'unk');

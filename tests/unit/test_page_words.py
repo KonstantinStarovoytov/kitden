@@ -2067,7 +2067,8 @@ def test_the_add_forms_and_the_add_choice_say_in_preview():
 def test_a_failed_change_does_not_claim_a_restore_on_the_page():
     # The engine's error says "The original settings were restored." only when it is true.
     assert "were put back" not in panel()
-    assert "The change did not check out. Kitden put the files back." in panel()
+    assert '"The change did not check out."' in panel()
+    assert '"Kitden put the files back."' in panel()
     assert "Failed, put back" not in script("changes.js")
 
 
@@ -3125,7 +3126,7 @@ def test_the_changes_page_says_the_mockups_words():
 
 def test_the_undo_toast_names_the_change_and_offers_redo():
     review = script("review.js")
-    assert "`Undid “${changeTitle(entry.title_parts)}”. The backup is back in place.`" in review
+    assert "`Undid “${changeTitle(entry.title_parts)}”. The previous settings are back.`" in review
     assert '{ label: "Redo…", run: () => redoChange(entry) }' in review
     # Redo… only adds tray rows: a fresh preview, never a write.
     assert "await addToTray(body, { picked: body.picked });" in review

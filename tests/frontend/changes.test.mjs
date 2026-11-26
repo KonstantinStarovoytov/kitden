@@ -401,7 +401,7 @@ test('See it on the map opens the item; a removed item says This item is no long
   assert.equal(buttonIn(drawer, 'See it on the map'), null);
 });
 
-test('Undo draws the strike and the toast says Undid “…”. The backup is back in place. with Redo…', async () => {
+test('Undo draws the strike and the toast says Undid “…”. The previous settings are back. with Redo…', async () => {
   await fresh();
   show();
   reduced = false;
@@ -430,7 +430,7 @@ test('Undo draws the strike and the toast says Undid “…”. The backup is ba
     assert.equal(byClass(cell('c1', 'act'), 'going').length, 0);
     // Truth first: the toast came after the verified Undo, with the title and Redo….
     const toast = byClass(pages['#dock'], 'toast')[0];
-    assert.equal(text(toast.children[1]), 'Undid “Allow Push files c1 and 1 more”. The backup is back in place.');
+    assert.equal(text(toast.children[1]), 'Undid “Allow Push files c1 and 1 more”. The previous settings are back.');
     assert.ok(byClass(toast, 'tk').length, 'a green check');
     assert.ok(buttonIn(toast, 'Redo…'));
     assert.equal(buttonIn(toast, 'Undo'), null);

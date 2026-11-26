@@ -163,6 +163,8 @@ class Item:
     # Equal for two MCP entries the Kitden gateway would run the same way (entries.entry_key).
     # Its values can be secrets, so it stays on the server: item_dict leaves it out.
     entry_key: str | None = field(default=None, repr=False)
+    # Equal for two MCP entries of one server whatever their secret values (entries.setup_key).
+    setup_key: str | None = field(default=None, repr=False)
 
     @property
     def id(self) -> str:
@@ -365,6 +367,8 @@ class Change:
     steps: list[Step] = field(default_factory=list)
     error: str | None = None
     refused_by: str | None = None
+    # Set when Apply fails: the index of the step that did not go through, when one did not.
+    failed_step: int | None = None
     # Set at Apply: the backup or the record keeps a secret (an old or new entry's value).
     holds_secret: bool = False
     # Where the steps go (views/review.py change_target), set at preview: the review's title
