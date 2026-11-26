@@ -63,10 +63,12 @@ def test_a_header_opens_its_group_with_the_mouse_and_the_keyboard(page, demo):
     expect(pill).to_be_visible()
     page.keyboard.press("Space")
     expect(toggle).to_have_attribute("aria-expanded", "false")
-    # The switch is reachable without opening, by Tab from the name.
-    page.keyboard.press("Tab")
+    # The switch is reachable without opening, by Tab from the name. WebKit on a Mac, as Safari,
+    # moves to buttons with Option+Tab.
+    tab = "Alt+Tab" if page.context.browser.browser_type.name == "webkit" else "Tab"
+    page.keyboard.press(tab)
     expect(page.locator(":focus")).to_have_attribute("aria-label", re.compile(r"^superpowers: "))
-    page.keyboard.press("Tab")
+    page.keyboard.press(tab)
     expect(page.locator(":focus")).to_have_attribute("aria-label", "Turn off superpowers")
 
 
