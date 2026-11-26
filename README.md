@@ -42,9 +42,6 @@ It changes nothing until you press Apply, and every change can be undone.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/releases/latest"><img src="https://img.shields.io/github/v/release/KonstantinStarovoytov/kitden?label=latest%20release" alt="Latest release"></a>
   <a href="https://pypi.org/project/kitden/"><img src="https://img.shields.io/pypi/v/kitden?label=PyPI" alt="Kitden on PyPI"></a>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
-  <a href="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden"><img src="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden/badges/score.svg" alt="Kitden on Glama"></a>
-  <a href="https://mcprush.com/to/kitden-mcp?ref=badge"><img src="https://mcprush.com/badge/kitden-mcp/score.svg" alt="Kitden MCP on mcprush"></a>
-  <a href="https://m8ven.ai/mcp/konstantinstarovoytov-kitden-14dddz?s=readme"><img src="https://m8ven.ai/badge/mcp/konstantinstarovoytov-kitden-14dddz" alt="M8ven Score"></a>
 </p>
 
 ### See whether your skills fit
@@ -152,4 +149,7 @@ Want to help? [Pick a good first issue](https://github.com/KonstantinStarovoytov
 [Issues](https://github.com/KonstantinStarovoytov/kitden/issues) ·
 [Contributing](https://github.com/KonstantinStarovoytov/kitden/blob/main/CONTRIBUTING.md) ·
 [Apache-2.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE)
+
+<p align="center"><sub>Listed on</sub><br><a href="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden"><img src="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden/badges/score.svg" alt="Kitden on Glama"></a> <a href="https://mcprush.com/to/kitden-mcp?ref=badge"><img src="https://mcprush.com/badge/kitden-mcp/score.svg" alt="Kitden MCP on mcprush"></a> <a href="https://m8ven.ai/mcp/konstantinstarovoytov-kitden-14dddz?s=readme"><img src="https://m8ven.ai/badge/mcp/konstantinstarovoytov-kitden-14dddz" alt="M8ven Score"></a></p>
+
 <!-- mcp-name: io.github.KonstantinStarovoytov/kitden -->
