@@ -328,7 +328,11 @@ def refused(home, wanted, words):
 
 def test_project_file_entries_and_shell_values_are_refused_with_reasons(home):
     for client, name in (("claude_code", "docs"), ("cursor", "site-db"), ("codex", "api-docs")):
-        refused(home, (client, name), f"{name} is in the project's own files; it stays there.")
+        refused(
+            home,
+            (client, name),
+            f"{name} is in the project's own files, so it cannot move into the Kitden gateway.",
+        )
 
     shell = "{} needs values its client fills in when it starts; it stays direct for now."
     api = {"type": "http", "url": "https://api.invalid/mcp"}
@@ -373,7 +377,7 @@ def test_project_file_entries_and_shell_values_are_refused_with_reasons(home):
     refused(home, ("cursor", "kitden"), "Kitden's own entry stays in each client.")
 
     # A trusted project changes Codex's neon in its own .codex/config.toml.
-    words = "neon is in the project's own files; it stays there."
+    words = "neon is in the project's own files, so it cannot move into the Kitden gateway."
     refused(home, ("codex", "neon", "user"), words)
 
     # A project placeholder in the arguments is filled in by the gateway, so it may move.
@@ -411,6 +415,20 @@ def test_two_different_entries_with_one_name_are_refused(home):
         ("claude_code", "local-db"),
         "local-db is set up differently in two places in Claude Code; keep one first.",
     )
+
+
+def test_a_different_server_under_a_name_the_gateway_holds_is_refused(home):
+    write_json(gateway_file(home), {"servers": {"files": FILES}, "rules": {}})
+    words = "files is set up differently in the Kitden gateway and Cursor; keep one first."
+    # Another program under the same name.
+    add_cursor(home, "files", {"command": "npx", "args": ["other-files"]})
+    refused(home, ("cursor", "files"), words)
+    # The same program without the token the gateway has: moving it in would drop the token.
+    add_cursor(home, "files", {"command": "npx", "args": ["files-mcp"]})
+    refused(home, ("cursor", "files"), words)
+    # A remote server under that name.
+    add_cursor(home, "files", {"url": "https://files.invalid/mcp"})
+    refused(home, ("cursor", "files"), words)
 
 
 def waits(home, wanted, **options):
@@ -742,7 +760,8 @@ def test_a_server_the_gateway_holds_is_updated_from_a_changed_direct_entry(home)
         assert "SENTINEL" not in answer.text
         assert change["after"][0]["note"] == (
             "Codex and Cursor will offer its tools through Kitden. "
-            f"files in the Kitden gateway is updated. {TO_KEYCHAIN} Applies to new sessions. "
+            f"files in the Kitden gateway gets the new token. {TO_KEYCHAIN} "
+            "Applies to new sessions. "
             "Codex's own switches for files do not carry over; the gateway keeps its rules."
         )
 
@@ -1225,11 +1244,10 @@ def test_a_held_server_with_the_same_secret_arguments_writes_no_secret_again(hom
     apply(home, move(home, ("claude_code", "files")))
     add_claude(home, "files", ARGS)
     assert held_step(move(home, ("claude_code", "files"))) == []
-    # Another plain argument: the entry is written again, its secrets are not.
+    # Another plain argument is another setup: refused, so the gateway's stays as it is.
     add_claude(home, "files", {**ARGS, "args": [*ARGS["args"][:-1], "--level=info"]})
-    [step] = held_step(move(home, ("claude_code", "files")))
-    assert step.edit.after["args"][-1] == "--level=info"
-    assert step.keychain == []
+    words = "files is set up differently in the Kitden gateway and Claude Code; keep one first."
+    refused(home, ("claude_code", "files"), words)
 
 
 def test_an_item_already_there_is_replaced_and_keeps_the_new_value_on_undo(home, fake_keychain):
@@ -1594,3 +1612,29 @@ def test_a_move_leaves_a_kitden_entry_whose_program_is_gone_alone(home, real_pro
         assert applied["state"] == "verified", applied
     assert codex(home)["mcp_servers"]["kitden"] == entry
     assert claude(home)["mcpServers"]["kitden"]["command"] == str(gone)
+
+
+def test_a_client_that_keeps_its_own_server_of_that_name_is_told(home):
+    # Codex has the gateway and its own docs, a different server, which stays direct.
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    add_codex(home, "kitden", f'command = "{KITDEN}"\nargs = ["mcp"]')
+    add_codex(home, "files", 'command = "npx"\nargs = ["other-files"]')
+    with page_for(home) as page:
+        answer = preview(page, home, ("claude_code", "files"))
+        assert answer.status_code == 200, answer.json()
+        notes = {a["client"]: a.get("note", "") for a in answer.json()["after"]}
+        both = "Codex keeps its own files too, so it will have two servers named files."
+        assert both in notes["codex"]
+        assert "two servers" not in notes["claude_code"]
+
+    # Connecting Cursor, which has its own files, says the same.
+    add_cursor(home, "files", {"command": "npx", "args": ["other-files"]})
+    apply(home, move(home, ("claude_code", "files")))
+    with page_for(home) as page:
+        body = {"action": "setup_server.register", "targets": [{"client": "cursor"}], "params": {}}
+        answer = page.post("/api/changes/preview", json=body, headers=POST)
+        assert answer.status_code == 200, answer.json()
+        [after] = answer.json()["after"]
+        assert after["note"] == (
+            "Cursor keeps its own files too, so it will have two servers named files."
+        )

@@ -1195,3 +1195,75 @@ def test_a_client_write_to_the_entry_during_apply_stops_it(tmp_path, claude_json
     assert change.state is ChangeState.RESTORED
     assert "changed since preview" in change.error
     assert json.loads(claude_json.read_text()) == newer
+
+
+def test_undo_out_of_order_on_one_entry_is_refused_and_every_order_ends_right(tmp_path):
+    # Off, then on again, in two changes; Undo the older first.
+    path = tmp_path / "settings.json"
+    path.write_text('{\n  "theme": "dark"\n}\n')
+    start = path.read_bytes()
+    engine = make_engine(tmp_path)
+
+    def applied(after):
+        key = ("skillOverrides", "brandkit")
+        edit = FileEdit(path=str(path), fmt="json", key=key, after=after)
+        step = Step(client="claude_code", scope=Scope.USER, name="brandkit", edit=edit)
+        change = engine.preview("skill.rule", [step])
+        engine.apply(change.id)
+        assert change.state is ChangeState.VERIFIED, change.error
+        return change
+
+    off = applied("off")
+    on = applied(ABSENT)
+    now = path.read_bytes()
+    for _ in range(2):  # and when tried again
+        engine.undo(off.id)
+        assert off.state is ChangeState.UNDO_BLOCKED
+        assert off.error == (
+            f"{path} was changed again by a later change that is still applied; undo that one "
+            "first, so nothing was changed"
+        )
+        assert path.read_bytes() == now
+    engine.undo(on.id)
+    assert on.state is ChangeState.UNDONE, on.error
+    engine.undo(off.id)
+    assert off.state is ChangeState.UNDONE, off.error
+    assert off.error is None  # the refusal is no longer true
+    assert path.read_bytes() == start
+
+    # Newest first stays byte for byte.
+    off, on = applied("off"), applied(ABSENT)
+    engine.undo(on.id)
+    engine.undo(off.id)
+    assert (on.state, off.state) == (ChangeState.UNDONE, ChangeState.UNDONE)
+    assert path.read_bytes() == start
+
+
+def test_a_failed_apply_names_the_step_and_why(tmp_path, config):
+    # The second step's file cannot be written: the change says which step, and why.
+    folder = tmp_path / "locked"
+    folder.mkdir()
+    locked = folder / "mcp.json"
+    locked.write_text('{"mcpServers": {}}')
+    edit = FileEdit(path=str(locked), fmt="json", key=("mcpServers", "gw"), after={"url": "x"})
+    steps = [
+        toml_step(config, ("mcp_servers", "gw"), GATEWAY),
+        Step(client="cursor", scope=Scope.USER, name="gw", edit=edit),
+    ]
+    engine = make_engine(tmp_path)
+    change = engine.preview("mcp.add", steps)
+    folder.chmod(0o500)
+    locked.chmod(0o400)
+    try:
+        engine.apply(change.id)
+    finally:
+        folder.chmod(0o700)
+        locked.chmod(0o600)
+    assert change.state is ChangeState.RESTORED
+    assert change.failed_step == 1
+    assert change.error == (
+        f"Kitden could not change {locked}: Permission denied. The original settings were restored."
+    )
+    change.rows = [{"id": "r0", "steps": [0]}, {"id": "r1", "steps": [1]}]
+    assert change_dict(change)["failed_row"] == "r1"  # the tray names that row
+    assert config.read_text() == CONFIG

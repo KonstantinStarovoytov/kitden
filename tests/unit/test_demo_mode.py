@@ -213,16 +213,17 @@ def move_all_items(view):
 
 def test_move_all_on_the_kitden_gateway_previews_the_medium_sample(tmp_path):
     # docs is remote in Claude Code and local in Codex: with it, the move is refused (422).
+    # Cursor's files lacks the token the gateway's files has: it stays out too.
     with demo_page(tmp_path) as page:
         items = move_all_items(page.get("/api/gateway-view").json())
-        assert len(items) == 5
+        assert len(items) == 4
         targets = [{"item": item} for item in items]
         change = preview(page, "gateway.move", targets, {"gateway": KITDEN_GATEWAY})
     assert change["state"] == "previewed"
     # The servers it takes out of a client (as parts.js movedNames): not the kitden entry it adds.
     leaving = [s for s in change["steps"] if s["client"] not in ("gateway", "kitden")]
     moved = {s["name"] for s in leaving if s["name"] != "kitden"}
-    assert moved == {"analytics", "browser-tools", "files", "github", "n8n"}
+    assert moved == {"analytics", "browser-tools", "github", "n8n"}
 
 
 def test_about_names_the_keyring_on_linux(tmp_path, system):

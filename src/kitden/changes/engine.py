@@ -276,6 +276,11 @@ def _back_already(steps: list[Step], data: bytes | None) -> bool:
         return False
 
 
+def _overlap(a: tuple, b: tuple) -> bool:
+    """Whether two keys name one entry, or one holds the other."""
+    return a[: len(b)] == b[: len(a)]
+
+
 def _same_folder(path: str, content_hash: str | None) -> bool:
     """The folder still hashes as it did; False when it cannot be read (or is a link)."""
     try:
@@ -746,13 +751,16 @@ class Engine:
         copied: list[Step] = []
         removed: list[Step] = []
         stored: list[KeychainItem] = []
+        at: Step | None = None  # the step being made or checked
         try:
             # The Keychain first: the settings file then names items that are there.
             self._store_secrets(change, stored)
             for step in copy_steps:
+                at = step
                 self._apply_copy(step, copied)
                 tick(step)
             for step in removal_steps:
+                at = step
                 self._apply_removal(change.id, step, removed)
                 tick(step)
             # Steps on one file run in order, each on the result of the one before.
@@ -760,6 +768,7 @@ class Engine:
             expected: dict[str, bytes | None] = {}
             written: set[str] = set()
             for step in file_steps:
+                at = step
                 path = step.file_edit.path
                 fresh = _read(path)
                 if fresh != working[path]:
@@ -779,6 +788,7 @@ class Engine:
                 expected[path] = result
                 tick(step)
             for step in file_steps:
+                at = step
                 self._verify(step, step.file_edit.after, expected[step.file_edit.path])
         except Exception as error:  # noqa: BLE001 - any error must be taken back
             lost = self._roll_back(current, ran, copied, removed, stored)
@@ -787,7 +797,14 @@ class Engine:
             except Exception:  # noqa: BLE001 - when unsure, the backups count as secret
                 change.holds_secret = True
             change.move_to(ChangeState.RESTORED)
+            change.failed_step = (
+                next(i for i, s in enumerate(change.steps) if s is at) if at else None
+            )
             said = str(error) or type(error).__name__
+            if isinstance(error, OSError) and error.filename and error.strerror:
+                # The file the step writes, not the temporary one beside it.
+                where = at.edit.path if at is not None and at.edit is not None else error.filename
+                said = f"Kitden could not change {where}: {error.strerror}."
             change.error = f"{said} {' '.join(lost) if lost else PUT_BACK}"
             client = getattr(error, "client", None)
             if client:
@@ -1011,6 +1028,12 @@ class Engine:
         plans: dict[str, bytes | None] = {}
         for path, steps in by_path.items():
             data = _read(path)
+            if self._changed_again(change, steps, data):
+                return self._blocked(
+                    change,
+                    f"{path} was changed again by a later change that is still applied; undo "
+                    "that one first, so nothing was changed",
+                )
             if _back_already(steps, data):
                 continue  # a blocked Undo put it back before
             first = steps[0].file_edit
@@ -1124,10 +1147,29 @@ class Engine:
                 kept.append(f"{item.server}/{item.key} stays in your {store}.")
         self.on_progress(change.id, len(change.steps), len(change.steps), None)
         change.move_to(ChangeState.UNDONE)
-        if kept:
-            change.error = " ".join(kept)
+        change.error = " ".join(kept) or None  # a refusal from an earlier try is over
         self._finish(change)
         return change
+
+    def _changed_again(self, change: Change, steps: list[Step], data: bytes | None) -> bool:
+        """Whether a later change that is still applied changed these entries again: they no
+        longer read as this change left them, and another applied change edits one of them (or
+        a part of one). Its Undo goes first; this one would undo or keep the wrong value."""
+        try:
+            if all(same_value(_value(s.file_edit, data), s.file_edit.after) for s in steps):
+                return False
+        except (UnrecognizedFormatError, UnicodeDecodeError):
+            return False  # the other checks refuse it
+        keys = [(s.file_edit.path, s.file_edit.key) for s in steps]
+        applied = (ChangeState.VERIFIED, ChangeState.UNDO_BLOCKED)
+        return any(
+            other.edit.path == path and _overlap(other.edit.key, key)
+            for later in self.changes.values()
+            if later is not change and later.state in applied
+            for other in later.steps
+            if other.edit is not None
+            for path, key in keys
+        )
 
     def _interrupted(self, change: Change) -> None:
         """A record still Applying: Kitden stopped in the middle of that Apply. Nothing is put

@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from kitden.clients import version_cache
-from kitden.clients.entries import app_of, entry_key, entry_refusal
+from kitden.clients.entries import app_of, entry_key, entry_refusal, setup_key
 from kitden.clients.versions import is_supported
 from kitden.local_gateway.settings import as_dict
 from kitden.model import (
@@ -262,6 +262,7 @@ def mcp_item(
         stays_direct=entry_refusal(name, entry),
         app=app_of(entry),
         entry_key=entry_key(entry),
+        setup_key=setup_key(entry),
     )
 
 

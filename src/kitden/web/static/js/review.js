@@ -597,7 +597,7 @@ function undidToast(id) {
     return;
   }
   const extra = redoStands(entry) ? { label: "Redo…", run: () => redoChange(entry) } : null;
-  toast(`Undid “${changeTitle(entry.title_parts)}”. The backup is back in place.`, null, { ok: true, extra });
+  toast(`Undid “${changeTitle(entry.title_parts)}”. The previous settings are back.`, null, { ok: true, extra });
 }
 
 // Undo, from the toast or the Changes page. Whatever the answer, the page reloads first: the

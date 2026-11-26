@@ -104,7 +104,10 @@ def test_outside_rows_name_their_columns_and_why_they_stay(tmp_path):
     with demo_page(tmp_path) as page:  # medium
         groups = page.get("/api/gateway-view").json()["groups"]
         assert {r["name"]: r["columns"] for r in groups["local"]}["docs"] == ["codex"]
-        assert all(r["stays"] is None for r in groups["move"] + groups["local"])
+        # Cursor's files has no token, unlike the gateway's files: another setup, so it stays.
+        stays = {r["name"]: r["stays"] for r in groups["move"] + groups["local"] if r["stays"]}
+        apart = "files is set up differently in the Kitden gateway and Cursor; keep one first."
+        assert stays == {"files": apart}
         # An entry that reads a header from the shell stays.
         claude = page.home / ".claude.json"
         data = json.loads(claude.read_text())
@@ -179,7 +182,10 @@ def test_a_project_definition_that_replaces_a_shared_one_is_an_override(tmp_path
         everywhere = page.get("/api/gateway-view").json()["groups"]
     docs = next(r for r in groups["move"] if r["name"] == "docs")
     assert docs["override"] is True
-    assert docs["stays"] == "docs is in the project's own files; it stays there."
+    assert (
+        docs["stays"]
+        == "docs is in the project's own files, so it cannot move into the Kitden gateway."
+    )
     assert not any(r["override"] for g in everywhere.values() for r in g)
 
 

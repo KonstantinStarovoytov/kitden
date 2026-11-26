@@ -21,7 +21,7 @@ from kitden.changes.actions import (
     claude_allows_kitden,
 )
 from kitden.changes.json_splice import ABSENT
-from kitden.clients.base import SETUP_NAME
+from kitden.clients.base import SETUP_NAME, SETUP_SERVER
 from kitden.clients.claude_code import local_files
 from kitden.clients.claude_folder import ClaudeFolder, claude_folder
 from kitden.context.tables import CLAUDE_SHARE
@@ -44,7 +44,7 @@ from kitden.model import CLIENT_WORDS, CLIENTS, Change, ItemKind, Scope, SourceK
 from kitden.redact import redact
 from kitden.system import secret_store_name
 from kitden.views.effective import effective_view
-from kitden.views.setup_server import kitden_on, setup_server_state
+from kitden.views.setup_server import is_own_entry, kitden_on, setup_server_state
 from kitden.views.skills import lost_inside
 from kitden.views.words import (
     AFTER_WORDS,
@@ -329,6 +329,28 @@ def _offered_words(inventory, state: str, word: str, line: str, after: str) -> l
     return out
 
 
+def _two_of_a_name(inventory, client: str, names, leaving: set) -> str | None:
+    """The words for a client that will offer gateway servers named like direct entries of its
+    own that stay (not in `leaving`, its (client, name) pairs): it will have both."""
+    both = sorted(
+        {
+            i.name
+            for i in inventory.items
+            if i.kind is ItemKind.MCP_SERVER
+            and i.client == client
+            and i.name in names
+            and i.via_gateway is None
+            and (i.client, i.name) not in leaving
+            and not is_own_entry(i)
+        }
+    )
+    if not both:
+        return None
+    named = f"named {both[0]}" if len(both) == 1 else "of each of those names"
+    who = CLIENT_WORDS[client]
+    return f"{who} keeps its own {join_words(both)} too, so it will have two servers {named}."
+
+
 def _kitden_move_words(
     change: Change, inventory, home: Path | None, claude: ClaudeFolder | None
 ) -> list[dict]:
@@ -339,17 +361,20 @@ def _kitden_move_words(
     offering |= {s.client for s in change.steps if s.client in CLIENTS and s.name == SETUP_NAME}
     leaving = [s for s in change.steps if s.client in CLIENTS and s.name != SETUP_NAME]
     removed = {s.client for s in leaving}
+    gone = {(s.client, s.name) for s in leaving}
     written = moved_in(change)
     servers = list(dict.fromkeys([*written, *(s.name for s in leaving)]))
     # A held server is updated when its entry was there before, and kept when it is the same.
-    updated = [
-        s.edit.key[1]
+    # A move updates it only with new secret values or a longer start time (actions.py).
+    updates = [
+        s
         for s in change.steps
         if s.client == KITDEN
         and s.edit is not None
         and s.edit.key[0] == "servers"
         and s.edit.before not in (ABSENT, None)
     ]
+    updated = [s.edit.key[1] for s in updates if s.edit is not None]
     kept = [name for name in servers if name not in written]
     known = [p.path for p in inventory.projects]
     settings = load_settings(home) if home is not None else None
@@ -384,8 +409,9 @@ def _kitden_move_words(
         whose = "its" if len(servers) == 1 else "their"
         what = f"{whose} tools" if offered == servers else f"the tools of {join_words(offered)}"
         line.append(f"{who} will offer {what} through Kitden.")
-    if updated:
-        line.append(f"{join_words(updated)} in the Kitden gateway {_is(updated)} updated.")
+    for step in updates:
+        what = "the new token" if step.keychain else "a longer start time"
+        line.append(f"{step.name} in the Kitden gateway gets {what}.")
     if kept:
         line.append(f"{join_words(kept)} {_is(kept)} in the Kitden gateway already.")
     line += said
@@ -418,6 +444,8 @@ def _kitden_move_words(
             dict.fromkeys(s.name for s in leaving if s.client == client and s.switches_left)
         )
         notes = [entry.get("note")]
+        if client in offering:
+            notes.append(_two_of_a_name(inventory, client, servers, gone))
         if client == "cursor" and client in removed:
             notes.append(CURSOR_SWITCHES)
         if left:
@@ -921,6 +949,12 @@ def after_words(
         ):
             state, word = "on", "Loads once"
         out.append({"client": step.client, "state": state, "word": word})
+    if change.action == SETUP_SERVER and home is not None:
+        held = load_settings(home)["servers"]
+        for entry in out:
+            note = _two_of_a_name(inventory, entry["client"], held, set())
+            if note:
+                entry["note"] = note
     to_claude = any(s.client == "claude_code" for s in change.steps)
     # Cursor imports only Claude Code's user plugins; with a copy of its own it still loads one.
     user_install = any(s.client == "claude_code" and s.scope is Scope.USER for s in change.steps)

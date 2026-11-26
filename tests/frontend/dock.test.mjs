@@ -284,6 +284,15 @@ test('barWords says Nothing was changed only when true', () => {
     head: 'Nothing was changed', line: 'The change did not check out. Kitden put the files back.', cancel: 'Cancel all',
     apply: 'Try again', applyWaits: false, retry: true, changes: false,
   });
+  // One row did not go through: the bar names it, and why, with only a file's name.
+  const why = 'Kitden could not change /Users/me/.cursor/mcp.json: Permission denied. The original settings were restored.';
+  const rows = [{ ...row('a'), id: 'r1' }, { ...row('Add linear-mcp to Cursor'), id: 'r2' }];
+  assert.equal(failed({ state: 'restored', error: why, failed_row: 'r2' }, rows).line,
+    '“Add linear-mcp to Cursor” did not go through. Kitden could not change mcp.json: Permission denied. Kitden put the files back.');
+  // A cause that names a command stays on Changes.
+  const command = '`npx x` failed. The original settings were restored.';
+  assert.equal(failed({ state: 'restored', error: command, failed_row: 'r2' }, rows).line,
+    '“Add linear-mcp to Cursor” did not go through. Kitden put the files back.');
   // The client itself refused the change: the toast names the client.
   const refusedByClient = failed({
     state: 'restored',

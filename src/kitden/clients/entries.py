@@ -10,7 +10,9 @@ import re
 from pathlib import Path
 from typing import Any
 
+from kitden.local_gateway.keychain import is_arg_reference, is_reference
 from kitden.local_gateway.settings import fill_placeholders
+from kitden.redact import SECRET, redact
 
 # Keys whose values come from the shell or from another program (checked 2026-10-21): Cursor
 # `envFile`; Codex `env_vars`, `bearer_token_env_var`, `env_http_headers` and
@@ -24,7 +26,7 @@ FROM_ELSEWHERE = (
     "headersHelper",
 )
 # Why an entry in a project's own file (or a project layer) stays where it is.
-IN_PROJECT_FILES = "{} is in the project's own files; it stays there."
+IN_PROJECT_FILES = "{} is in the project's own files, so it cannot move into the Kitden gateway."
 # A command inside a Mac app: "/Applications/Pen.app/Contents/...".
 IN_APP = re.compile(r"(?:^|/)([^/]+)\.app/Contents/")
 
@@ -45,6 +47,24 @@ def entry_key(entry: dict) -> str:
     """Equal for two entries the Kitden gateway would run the same way, as a move compares
     them: a hash of `gateway_entry`, so the key itself says nothing of a secret in it."""
     text = json.dumps(gateway_entry(entry), sort_keys=True, default=str)
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def setup_key(entry: dict) -> str:
+    """Equal for two entries that set up the same server, whatever their secret values: a hash
+    of `gateway_entry` with each secret, and each secret-store reference in the gateway's own
+    entry, hidden as `redact` hides it. A server the gateway holds can take a moved entry with
+    the same key (a new token, say); another key under its name is another server."""
+    server = gateway_entry(entry)
+    for field in ("env", "headers"):
+        if isinstance(server.get(field), dict):
+            values = server[field].items()
+            server[field] = {k: SECRET if is_reference(v) else v for k, v in values}
+    if isinstance(server.get("args"), list):
+        server["args"] = [
+            f"{a.get('prefix', '')}{SECRET}" if is_arg_reference(a) else a for a in server["args"]
+        ]
+    text = json.dumps(redact(server)[0], sort_keys=True, default=str)
     return hashlib.sha256(text.encode()).hexdigest()
 
 

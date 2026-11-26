@@ -62,15 +62,17 @@ def gateway_view(
     project: str | None,
     kitden: list[dict] | None = None,
     problem: str | None = None,
+    setups: dict[str, str] | None = None,
 ) -> dict:
     """With `kitden` (the servers it holds; see `held_servers`), the Kitden gateway is listed
     and servers, local ones too, can move into it. `problem` says why its settings could not
-    be read.
+    be read, and `setups` (`held_setups`) which server each held name is.
 
     Each outside row has the client columns that load it (the Desktop Code tab counts as
     Claude Code) and, per column, the entries a remove can take (`client_items`, for the map's
     line from that client), whether one of its entries is the project's own and replaces an
-    all-projects one (`override`), the first reason a move would refuse it (`stays`), or None,
+    all-projects one (`override`), the first reason a move would refuse it (`stays`: also an
+    entry that sets up another server than the gateway holds under its name), or None,
     and whether no entry of it is known to be on (`unknown`: a project's `.mcp.json` server
     Claude Code has not approved yet). A move takes the row's entries together, so two of them
     set up differently are a reason it refuses."""
@@ -87,8 +89,13 @@ def gateway_view(
         "plugin": False,
     }
     loaded, replacing = loaded_mcp(inventory, project)
+    # The servers the Kitden gateway holds: an entry of one's name that sets up another server
+    # cannot move in (local_move_steps refuses it), so its row says so.
+    held_keys = setups or {}
     # The first entry of each row a move takes, which the others must equal.
     firsts: dict[tuple[str, str], Item] = {}
+    # Per row, the first client whose entry sets up another server than the gateway holds.
+    apart: dict[tuple[str, str], str] = {}
     for item in loaded:
         if item.via_gateway:
             names = connections.get(item.via_gateway, {}).get(column_of(item.client))
@@ -123,6 +130,13 @@ def gateway_view(
                 app = first.app or item.app
                 why = set_up_differently(item.name, first.client, item.client, app)
                 row["stays"] = row["stays"] or why
+            held = held_keys.get(item.name)
+            if held and item.setup_key != held:
+                apart.setdefault((group, item.name), item.client)
+    # After the row's own reasons, as the move checks them.
+    for (group, name), client in apart.items():
+        row = groups[group][name]
+        row["stays"] = row["stays"] or set_up_differently(name, KITDEN_GATEWAY, client)
     for rows in groups.values():
         for row in rows.values():
             loads = {column_of(c) for c in row["clients"]}

@@ -557,11 +557,11 @@ test('an apply that did not run keeps its rows, and Try again drops the preview'
   assert.equal(tray.phase, 'ready');
 });
 
-test('a failure keeps who refused the change, so the bar can name them', async () => {
+test('a failure keeps who refused the change and its row, so the bar can name them', async () => {
   await fresh();
   await twoRows();
   const error = '`codex plugin install` failed: not allowed. The original settings were restored.';
-  const failure = { state: 'restored', error, refused_by: 'codex' };
+  const failure = { state: 'restored', error, refused_by: 'codex', failed_row: 'r2' };
   queue('/api/changes/c2/apply', { status: 500, json: { id: 'c2', ...failure } });
   await applyTray();
   assert.equal(tray.phase, 'failed');

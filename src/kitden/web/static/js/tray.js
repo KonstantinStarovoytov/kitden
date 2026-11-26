@@ -450,6 +450,7 @@ export async function applyTray() {
           state: after ? after.state : null,
           error: (after && after.error) || null,
           ...(after && after.refused_by ? { refused_by: after.refused_by } : {}),
+          ...(after && after.failed_row ? { failed_row: after.failed_row } : {}),
         },
       });
     }

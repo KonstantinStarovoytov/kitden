@@ -361,6 +361,7 @@ def overview(
     problem: str | None = None,
     came_back: list[dict] | None = None,
     context_cards: list[dict] | None = None,
+    setups: dict[str, str] | None = None,
 ) -> dict:
     """The Overview page's `cards`, `notes` (how many rows the folded notes draw), `map` (the
     "Your setup" map) and `counts` (for the lede). `held` are the servers the Kitden gateway
@@ -368,7 +369,8 @@ def overview(
     counts, `gateway_rules` the known projects with gateway rules of their own, `problem`
     why the Kitden gateway settings could not be read (None: they could), and `came_back` the
     servers a change took out of a client that are back there now (changes_view.py), and
-    `context_cards` the Context page's client cards (context_view.py)."""
+    `context_cards` the Context page's client cards (context_view.py), and `setups` which
+    server each held name is (held_setups)."""
     findings = find_findings(inventory, project)
     cards = (
         _unreadable(inventory)
@@ -383,7 +385,7 @@ def overview(
     # are the Gateway page's, so a server in two clients is one card. Nothing moves into the
     # gateway when Kitden cannot read its settings.
     if held is not None and not problem:
-        groups = gateway_view(inventory, project, kitden=held)["groups"]
+        groups = gateway_view(inventory, project, kitden=held, setups=setups)["groups"]
         cards += _move_ins(groups)
     if held and not problem:
         cards += _connects(inventory)

@@ -29,7 +29,7 @@ from kitden.clients.base import (
 from kitden.clients.claude_account import is_account_plugin
 from kitden.clients.claude_code import holds, user_folder
 from kitden.clients.claude_folder import ClaudeFolder
-from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
+from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry, setup_key
 from kitden.context.rules import listed_share
 from kitden.context.tables import (
     CLAUDE_RULED,
@@ -922,10 +922,11 @@ def tools_to_read(
 def set_up_differently(name: str, first: str, other: str, app: str | None = None) -> str:
     """Why a move refuses a name whose entries differ: the gateway runs one entry per name.
     `first` and `other` are the clients of the first entry and of the one that differs; `app`
-    is the Mac app that runs one of them, which writes its own entry for each client."""
+    is the Mac app that runs one of them, which writes its own entry for each client. A
+    `first` that is no client is the Kitden gateway."""
     if app:
         return APP_SET_UP.format(name=name, app=app)
-    a, b = CLIENT_WORDS[first], CLIENT_WORDS[other]
+    a, b = CLIENT_WORDS.get(first, "the Kitden gateway"), CLIENT_WORDS[other]
     where = f"two places in {a}" if a == b else f"{a} and {b}"
     return f"{name} is set up differently in {where}; keep one first."
 
@@ -951,9 +952,11 @@ def local_move_steps(
     it). An existing Codex `kitden` entry gets the timeouts it lacks. An entry that must stay
     direct is refused, with the reason, before any step.
 
-    A server the gateway holds already keeps its rules: a different entry replaces the held one
-    (a new token, say), and the same entry only leaves the clients. A client's removal step is
-    marked (`switches_left`) when that client had tools or the server off, which do not carry.
+    A server the gateway holds already keeps its rules. The same entry only leaves the clients;
+    one that differs only in its secret values or start time updates it (a new token, say);
+    any other entry under that name is refused, as two different entries moved together are.
+    A client's removal step is marked (`switches_left`) when that client had tools or the
+    server off, which do not carry.
 
     `sign_in` asks a remote server what access it needs, and `keychain_run` reads the
     Keychain; None is `access_needed` and the real Keychain (the demo passes its stand-ins).
@@ -992,6 +995,9 @@ def local_move_steps(
         raise ValueError(NEEDS_COMMAND)
     name = next(iter(servers))
     servers[name] = _with_access(servers[name], headers, signed_in, alone=len(servers) == 1)
+    for name, server in servers.items():
+        if isinstance(held.get(name), dict) and not _same_server(server, held[name]):
+            raise ValueError(set_up_differently(name, KITDEN_GATEWAY, found[name][0][0].client))
     for name, server in servers.items():
         if "url" in server:
             check_access(name, server, sign_in, [TOKEN_FIELD], bool(headers), signed_in)
@@ -1066,6 +1072,15 @@ def secrets_out(name: str, server: dict) -> tuple[dict, list[KeychainItem]]:
                 arg = {**item.ref, "prefix": prefix} if prefix else item.ref
             entry["args"].append(arg)
     return entry, items
+
+
+def _same_server(server: dict, held: dict) -> bool:
+    """Whether a moved entry is the server the gateway holds: the same but for its secret
+    values, its start time and its sign-in. A held entry that cannot be read counts as the
+    same: its step says so."""
+    if not all(isinstance(held.get(f) or {}, dict) for f in SECRET_FIELDS):
+        return True
+    return setup_key(server) == setup_key(held)
 
 
 def _server_step(

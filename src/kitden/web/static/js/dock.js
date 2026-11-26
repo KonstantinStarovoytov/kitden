@@ -41,22 +41,28 @@ export function rowWords(part, body, note, goes = null) {
 const STALE = "Settings changed since this preview.";
 const CHECK_CHANGES = "Check Changes before trying again.";
 const IN_PREVIEW = " changes in preview";
+const PUT_BACK = "The original settings were restored."; // engine.py PUT_BACK
 
 // How a tray that did not go through ends: the head and line, and what Apply's place holds.
 // "Nothing was changed" only when that is true (nothingChanged, review.js); the engine's own words
 // name paths and commands, so they stay behind Details and on Changes. An add that the server
 // refused after a failed Apply keeps those words and adds the reason to the line.
-function endWords({ failure, refused }, reason) {
+// A row whose step did not go through is named, with the engine's reason when it names no
+// command (a file's path shows as its name).
+function endWords({ failure, refused, rows = [] }, reason) {
   if (refused && !failure) return { head: "Could not prepare the preview", line: reason, apply: "Try again", retry: true };
-  const { state: ended = null, error = null, refused_by = null } = failure || {};
+  const { state: ended = null, error = null, refused_by = null, failed_row = null } = failure || {};
   let words;
   if (nothingChanged({ state: ended, error })) {
     const who = refused_by ? clientName(refused_by) : null;
+    const row = rows.find((candidate) => candidate.id === failed_row);
+    const why = baseNames((error || "").replace(PUT_BACK, "").trim());
+    const what = row ? [`“${row.title}” did not go through.`, why.includes("`") ? "" : why] : ["The change did not check out."];
     const line = ended === "stale"
       ? STALE
       : who
         ? `${who} refused the change. Kitden put the files back.`
-        : "The change did not check out. Kitden put the files back.";
+        : [...what, "Kitden put the files back."].filter(Boolean).join(" ");
     words = { head: "Nothing was changed", line, apply: "Try again", retry: true };
   } else {
     words = { head: ended === "restored" ? "Not everything was put back" : "Could not confirm the result", line: CHECK_CHANGES, apply: null, changes: true };
