@@ -2,19 +2,28 @@
 comes from, named with the Library's words, with its plugin's own switch on the group (spec
 context-by-source, 2026-11-26)."""
 
+import pytest
+
 from kitden.views import words
 from kitden.views.library_map import ACCOUNT, OTHER, SKILLS
 from tests.unit.test_context_now import codex
-from tests.unit.test_context_view import (  # noqa: F401
+from tests.unit.test_context_view import (
     claude_chat,
     codex_chat,
     codex_home,
-    home,
     plugin,
     skill,
     view,
     write_json,
 )
+
+
+@pytest.fixture
+def home(tmp_path):
+    home = tmp_path / "home"
+    for root in (".claude", ".codex", ".cursor"):
+        (home / root).mkdir(parents=True)
+    return home
 
 
 def groups_of(card) -> dict[str, dict]:
@@ -83,7 +92,8 @@ def test_a_project_skill_is_in_its_project_group(home):
     claude_chat(home, {"local": "Does local."}, folder=str(project))
     card = view(home, folder=str(project))["claude_code"]
     (group,) = card["groups"]
-    assert (group["kind"], group["name"], group["skills"]) == ("project", "Project atlas", ["local"])
+    assert (group["kind"], group["name"]) == ("project", "Project atlas")
+    assert group["skills"] == ["local"]
 
 
 def test_an_off_plugins_group_offers_to_turn_it_on_after_a_new_chat(home):

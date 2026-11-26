@@ -395,7 +395,7 @@ OPEN = {"library": open_library, "find": open_find, "context": open_context}
 SCENES = (
     ("library", scene_library, (180, 255, 520, 370)),  # the clients and their plugins, a still
     ("find", scene_find, (661, 110, 580, 850)),  # two add panels after a search, a still
-    ("context", scene_context, (175, 190, 960, 850)),  # the last chat's skill list and its groups, a still
+    ("context", scene_context, (175, 190, 960, 850)),  # the skill list and its groups, a still
     ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
     ("tools", scene_tools, (180, 205, 860, 550)),  # memory, its tools and the changes waiting
 )
