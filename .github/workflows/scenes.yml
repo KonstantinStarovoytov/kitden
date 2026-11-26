@@ -22,6 +22,12 @@ on:
 
 permissions: {}
 
+# One run per pull request. Two events for one push started two runs; the second waited for a
+# macOS runner past the time limit and failed the check, though the recording was fine.
+concurrency:
+  group: scenes-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   scenes:
     runs-on: macos-latest

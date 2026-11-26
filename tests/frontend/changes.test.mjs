@@ -214,6 +214,12 @@ test('the week counts changes since Monday', () => {
   assert.equal(weekCount(days, wednesday), 2);
 });
 
+test('an Apply of two tray rows counts two changes, as its toast says', () => {
+  const wednesday = new Date(2026, 9, 28, 9, 0);
+  const both = { day: '2026-10-28', rows: [{ title: 'a' }, { title: 'b' }] };
+  assert.equal(weekCount([both, { day: '2026-10-27', rows: [] }], wednesday), 3);
+});
+
 test('the head says Changes, the lede, the scope with this week\'s count and the hint', async () => {
   await fresh();
   show();

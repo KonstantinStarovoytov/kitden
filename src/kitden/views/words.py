@@ -645,9 +645,10 @@ SCAN_FOUND_NO_VERSION = "{name} (version unknown)"
 SCAN_HAVE = "On this computer: {have}"
 SCAN_NONE = "nothing yet"
 # Under that line when a chat's skill count is shown too. The two numbers differ: this one
-# counts every skill Kitden finds for the client, on or off, in the user's folders and in each
-# project; the chat's list is the client's own, for one project, with skills Kitden does not
-# count (built into the client, or from the Claude app or a Codex plugin).
+# counts each skill Kitden finds for the client once by name, on or off, in the user's folders
+# and in each project, as the Library lists them (a plugin's skills are in its plugin); the
+# chat's list is the client's own, for one project, with skills Kitden does not count here
+# (built into the client, or from a plugin, the Claude app or a Codex plugin).
 SCAN_COUNT_NOTE = "A chat lists only one project's skills, and {client}'s own too."
 # A client's status after its name, when it has no version line: plain words, not the ids of
 # `scan --json`.
@@ -666,6 +667,13 @@ SCAN_MORE = "+{n} more"
 # the one scanned.
 SCAN_CHAT_FOLDER = "That chat was in {folder}."
 SCAN_LOADS = "{client} loads {kind} '{name}' {times}"
+
+
+def times(n: int) -> str:
+    """How many times a client loads one thing, the same words wherever copies are counted."""
+    return "twice" if n == 2 else f"{n} times"
+
+
 SCAN_WARNINGS = "{n} {warnings}: {said}."
 # The notes are the findings that need no fix (severity info).
 SCAN_NOTES = "{n} {notes} (nothing to fix): {command}"

@@ -1438,8 +1438,11 @@ def _claude(
     by_name = turned_off | loaded
     plugins = _claude_plugins(inventory, home, claude, found.folder)
     rows = []
+    sent_names: set[str] = set()
     for name, text in found.skills:
-        item = by_name.get(name)
+        # A user skill named like a built-in one: the list sends both; the second is the other.
+        item = None if name in sent_names and name in CLAUDE_BUILT_IN else by_name.get(name)
+        sent_names.add(name)
         path = item.source.path if item else _app_path(home, claude, name)
         rows.append(
             _claude_row(

@@ -134,7 +134,7 @@ const CARDS = [
   { id: 'm1', group: 'improve', icon: 'globe', name: 'analytics', line: SKIPS, clients: ['codex'], action: { label: 'Move in…', body: MOVE('a1') }, focus: { clients: ['codex'], block: 'gateway' } },
   { id: 'm2', group: 'improve', icon: 'globe', name: 'github', line: SKIPS, clients: ['claude_code'], action: { label: 'Move in…', body: MOVE('g1') }, focus: { clients: ['claude_code'], block: 'gateway' } },
   { id: 'm3', group: 'improve', icon: 'hard-drive', name: 'notes', line: SKIPS, clients: ['cursor'], action: { label: 'Move in…', body: MOVE('n1') }, focus: { clients: ['cursor'], block: 'gateway' } },
-  { id: 'more', group: 'improve', icon: 'server', name: '4 more servers skip the gateway', line: "Kitden's rules don't reach them.", clients: ['claude_code', 'codex', 'cursor'], action: { label: 'Show…', go: { view: 'gateway', sel: 'group:outside', mode: 'list' } }, focus: { clients: ['claude_code', 'codex', 'cursor'], block: 'gateway' } },
+  { id: 'more', group: 'improve', icon: 'server', name: '4 more servers can move in', line: "Kitden's rules don't reach them.", clients: ['claude_code', 'codex', 'cursor'], action: { label: 'Show…', go: { view: 'gateway', sel: 'group:outside', mode: 'list' } }, focus: { clients: ['claude_code', 'codex', 'cursor'], block: 'gateway' } },
   { id: 'conn', group: 'improve', icon: { client: 'cursor' }, name: 'Cursor', line: 'Not connected to the gateway yet.', clients: ['cursor'], action: { label: 'Connect…', body: CONNECT }, focus: { clients: ['cursor'], block: 'gateway' } },
 ];
 const MAP = {
@@ -415,7 +415,7 @@ test('three server cards and one more card', async () => {
   // Review Focus: past three servers that skip the gateway, one card says how many more.
   show(MODEL, { again: true });
   const can = CARDS.filter((c) => c.group === 'improve').map((c) => [card(c.id).children[1].children[0].textContent, words(cardButton(c.id))]);
-  assert.deepEqual(can, [['analytics', 'Move in…'], ['github', 'Move in…'], ['notes', 'Move in…'], ['4 more servers skip the gateway', 'Show…'], ['Cursor', 'Connect…']]);
+  assert.deepEqual(can, [['analytics', 'Move in…'], ['github', 'Move in…'], ['notes', 'Move in…'], ['4 more servers can move in', 'Show…'], ['Cursor', 'Connect…']]);
   // Show… opens the Gateway's List at the outside group.
   fire(cardButton('more'), 'click');
   await flush();

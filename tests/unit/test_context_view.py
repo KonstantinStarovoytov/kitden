@@ -1889,3 +1889,14 @@ def test_the_rule_rebuilds_a_list_cut_by_the_joined_size_of_when_to_use(home):
     claude = view(home)["claude_code"]
     assert claude["checked"] is True
     assert len(claude["windows"][0]["result"]["sent"]) == 19
+
+
+def test_a_user_skill_named_like_a_built_in_one_is_its_own_row_and_the_built_in_stays(home):
+    """The chat lists `dataviz` twice: Claude Code's own and the user's. One row is built in."""
+    skill(home / ".claude/skills", "dataviz", "My charts.")
+    names = ["dataviz", "dataviz"]
+    content = "- dataviz: Charts.\n- dataviz: My charts."
+    write_chat(home, "p", "chat", [list_entry(names, content), assistant("claude-opus-5-5")], 100)
+    rows = [s for s in view(home)["claude_code"]["skills"] if s["name"] == "dataviz"]
+    assert sorted(r["built_in"] for r in rows) == [False, True]
+    assert sorted(r["item"] is None for r in rows) == [False, True]

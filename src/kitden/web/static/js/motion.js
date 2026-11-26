@@ -113,6 +113,15 @@ export function finishTransition() {
 
 // Run a DOM change as a View Transition where the browser has one; otherwise just run it.
 // Hidden tabs skip it: the browser would hold the change until the tab is visible.
+// Run `fn` on the next frame after a place change has drawn the new page (and set its scroll), or
+// on the next frame when none is under way: a scroll asked for while a change waits keeps.
+export function afterDrawn(fn) {
+  const t = activeTransition;
+  const later = () => requestAnimationFrame(fn);
+  if (t && t.updateCallbackDone) t.updateCallbackDone.then(later, later);
+  else later();
+}
+
 export function transition(change, extraClass) {
   finishTransition();
   if (!document.startViewTransition || reducedMotion.matches || document.hidden) {

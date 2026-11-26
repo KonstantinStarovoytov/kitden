@@ -201,6 +201,44 @@ function rowsButton(label, bodies, look = "btn", goes = null) {
   return node;
 }
 
+// The copies a client loads of one thing (`item.copies`, library_map.py): each copy's folder (a
+// plugin's marketplace) and whose it is, and "Keep this one…", which adds a Remove of every other
+// copy to the tray. A copy Kitden cannot remove leaves its others without the button. Null with none.
+const KEEP_ONE = "Keep this one…";
+function copiesNode(item) {
+  const copies = item.copies || {};
+  const clients = Object.keys(copies).sort(byClientOrder);
+  if (!clients.length) return null;
+  const box = el("div", "copies");
+  for (const client of clients) {
+    const { say, list } = copies[client];
+    const rows = el("ul", "copy-list");
+    rows.setAttribute("aria-label", `Copies in ${CLIENT_NAMES[client]}`);
+    list.forEach((copy, index) => {
+      const row = el("li", "copy-row");
+      row.append(el("span", "copy-where", `${copy.where} · ${copyOwner(copy, client)}`));
+      const others = list.filter((_, at) => at !== index);
+      const bodies = others.filter((other) => other.remove).map((other) => ({ action: item.kind === "plugin" ? "plugin.remove" : "skill.remove", targets: [{ item: other.remove }], params: {} }));
+      if (bodies.length && bodies.length === others.length) {
+        const keep = rowsButton(KEEP_ONE, bodies);
+        keep.dataset.focus = `keep:${client}:${index}`;
+        row.append(keep);
+      }
+      rows.append(row);
+    });
+    box.append(el("p", "muted", say), rows);
+  }
+  return box;
+}
+// Whose a copy is: the client's own, a folder clients share, or another client's (removing it there
+// removes it for that client too, which the tray row says).
+function copyOwner(copy, client) {
+  if (copy.owner === client) return `${CLIENT_NAMES[client]}'s own`;
+  const also = (copy.also || []).map((one) => CLIENT_NAMES[one]);
+  if (copy.owner === "shared") return also.length ? `shared with ${joinWords(also)}` : "shared";
+  return `${CLIENT_NAMES[copy.owner] || copy.owner}'s`;
+}
+
 // The tray holds this very row: its key, and the same state (a skill rule's states share a key).
 export function queued(body) {
   const row = trayRow(keyFor(body));
@@ -308,7 +346,7 @@ export function pluginCard(item, c, { addStep = () => {}, commandsStep = () => {
   const more = [...removeActions(item), ...commandsAction(pluginEntries(item), commandsStep)];
   // Cursor's own plugin has no switch or Remove here: its Details say where it is changed.
   const cursorOnly = (item.by || {}).cursor && !(item.through || {}).cursor && !Object.keys(item.by).some((client) => client !== "cursor");
-  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: [loadsSay(item, c), item.note, item.no_switch, cursorOnly ? CURSOR_REMOVES : null].filter(Boolean).join(" "), actions, more, after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
+  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, list: copiesNode(item), why: [loadsSay(item, c), item.note, item.no_switch, cursorOnly ? CURSOR_REMOVES : null].filter(Boolean).join(" "), actions, more, after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
 }
 
 // A plugin's switches, the one answer Library Details and Context's group header read (`only`: one
@@ -383,7 +421,7 @@ export function skillCard(item, c, { someStep = () => {}, addStep = () => {} } =
   if ((item.by || {}).cursor === "on") notes.push(NO_CURSOR_SWITCH);
   const why = [loadsSay(item, { folder: c.project ? c.folder : "", noun: "this skill" }), ...notes].join(" ");
   const after = afterOf(projectLine(item, c), outsideLine(item, c));
-  return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, list: switches, actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
+  return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, list: afterOf(copiesNode(item), switches), actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
 }
 
 // A skill's switches for one project, the one answer the Library's and Context's Details read

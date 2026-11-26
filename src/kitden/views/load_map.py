@@ -39,6 +39,8 @@ from kitden.views.words import (
     ORIGIN_WORDS,
     ROUTE_WORDS,
     STALE,
+    join_words,
+    times,
 )
 
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
@@ -204,32 +206,44 @@ def _warning(text: str, client: str, fix: str, fix_action: str | None) -> dict:
     }
 
 
-def _cross_client_fix(client: str, via: str, kind: ItemKind) -> str:
-    """One copy is the client's own, the other is loaded from another client's folder."""
-    own, other = CLIENT_WORDS.get(client, client), CLIENT_WORDS.get(via, via)
+def _cross_client_fix(client: str, owners: list[str], kind: ItemKind, n: int) -> str:
+    """Some copies are the client's own, others load from another client's folder: name each."""
+    own = CLIENT_WORDS.get(client, client)
+    names = ["its own"] if client in owners else []
+    names += [
+        "the shared folder's" if o == "shared" else f"{CLIENT_WORDS.get(o, o)}'s"
+        for o in owners
+        if o != client
+    ]
+    count = "Two" if n == 2 else str(n)
+    said = f"{count} copies load in {own}: {join_words(names)}."
     if client == "cursor" and kind is ItemKind.PLUGIN:
+        via = next(o for o in owners if o != client)
+        other = CLIENT_WORDS.get(via, via)
         return (
-            f"Two copies load in {own}: its own and {other}'s. To keep one: remove it in Cursor "
+            f"{said} To keep one: remove it in Cursor "
             "(Customize → Plugins), or turn off Include Third-Party Plugins in Cursor Settings. "
             f"Turning it off in {other} also turns it off for {other}."
         )
+    if n == 2 and len(names) == 2:
+        other = names[1].removesuffix("'s")
+        return f"{said} Keep one; removing {other}'s copy also removes it for {other}."
     return (
-        f"Two copies load in {own}: its own and {other}'s. Keep one; removing {other}'s copy "
-        f"also removes it for {other}."
+        f"{said} Keep one; removing a copy in another client's folder also removes it for that "
+        "client."
     )
 
 
 def _flag(finding, item: Item, copies: list[Item]) -> dict | None:
     """A short flag for the row; warnings also carry the fix in words and the action."""
     if finding.type is FindingType.DUPLICATE_IN_CLIENT:
-        text = f"{CLIENT_WORDS.get(finding.client, finding.client)} loads it twice"
-        others = sorted(
-            {c.source.owner_client for c in copies if c.source.owner_client != finding.client}
-        )
+        n = len(copies)
+        text = f"{CLIENT_WORDS.get(finding.client, finding.client)} loads it {times(n)}"
+        owners = list(dict.fromkeys(c.source.owner_client for c in copies))
+        others = [o for o in owners if o != finding.client]
         if others:
-            flag = _warning(
-                text, finding.client, _cross_client_fix(finding.client, others[0], item.kind), None
-            )
+            fix = _cross_client_fix(finding.client, owners, item.kind, n)
+            flag = _warning(text, finding.client, fix, None)
             return {**flag, "via": others[0]}
         fix, action = DUPLICATE_FIXES.get(item.kind, ("Remove one copy to keep the other.", None))
         return _warning(text, finding.client, fix, action)

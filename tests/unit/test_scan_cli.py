@@ -271,7 +271,8 @@ def test_scan_says_so_when_it_cannot_tell(bare, capsys):
     cursor = lines.index("Cursor (version unknown)")
     assert lines[cursor + 1 : cursor + 4] == [
         "  Kitden cannot see what Cursor sends, so it cannot tell if your skills fit.",
-        "  On this computer: 2 skills",
+        # One skill: Cursor's copy of Claude Code's is the same one, with a warning of its own.
+        "  On this computer: 1 skill",
         "",
     ]
 
@@ -323,7 +324,7 @@ def test_scan_counts_each_kind_in_one_line(home, capsys):
     lines = _summary(home, capsys)
     claude = lines.index("Claude Code (version unknown)")
     on = lines.index(
-        "  On this computer: 3 plugins, 4 skills, 4 MCP servers, 1 hook, 5 instruction", claude
+        "  On this computer: 2 plugins, 3 skills, 4 MCP servers, 1 hook, 5 instruction", claude
     )
     assert lines[on + 1] == "  files, 1 marketplace"
     assert set(words.SCAN_KINDS) == {str(kind) for kind in ItemKind}
@@ -438,21 +439,27 @@ def test_scan_words_are_singular_for_one(bare, capsys):
 # The findings line, from the answer `kitden show findings` gives
 
 
-def _finding(severity, client="codex", items=("a",), text="It is so."):
+def _finding(severity, client="codex", items=("a",), text="It is so.", kind="x"):
     return {
         "severity": severity,
-        "type": "x",
+        "type": kind,
         "client": client,
         "items": list(items),
+        "names": list(items),
         "explanation": text,
     }
+
+
+def _notes(n):
+    """`n` notes that do not fold: each its own item and words."""
+    return [_finding("info", items=(f"i{k}",), kind=f"t{k}") for k in range(n)]
 
 
 def test_findings_lines_count_the_notes():
     assert cli._findings_lines([_finding("info")], {}) == [
         "1 note (nothing to fix): kitden show findings"
     ]
-    notes = [_finding("info")] * 61
+    notes = _notes(61)
     assert cli._findings_lines(notes, {}) == ["61 notes (nothing to fix): kitden show findings"]
     assert cli._findings_lines([], {}) == []
 
@@ -464,7 +471,7 @@ def test_findings_lines_with_warnings_only_still_say_where_to_look():
 
 def test_findings_lines_name_the_first_few_warnings_and_fit_80_columns():
     warnings = [_finding("warning", text=f"Warning number {n} is here") for n in range(1, 6)]
-    assert cli._findings_lines(warnings + [_finding("info")] * 2, {}) == [
+    assert cli._findings_lines(warnings + _notes(2), {}) == [
         "5 warnings: Warning number 1 is here; Warning number 2 is here; Warning number 3",
         "  is here +2 more. 2 notes (nothing to fix): kitden show findings",
     ]
@@ -475,7 +482,7 @@ def test_findings_lines_name_the_first_few_warnings_and_fit_80_columns():
 
 def test_findings_lines_keep_the_command_whole():
     warning = _finding("warning", text="Cursor loads plugin 'superpowers' twice.")
-    assert cli._findings_lines([warning] + [_finding("info")] * 61, {}) == [
+    assert cli._findings_lines([warning, *_notes(61)], {}) == [
         "1 warning: Cursor loads plugin 'superpowers' twice. 61 notes (nothing to fix):",
         "  kitden show findings",
     ]
@@ -493,4 +500,42 @@ def test_the_count_of_more_stays_on_one_line():
     assert cli._findings_lines(warnings * 2, {}) == [
         "6 warnings: Warning one is here; Warning two is here too; Warning three is",
         "  +3 more. See: kitden show findings",
+    ]
+
+
+def test_scan_counts_a_plugin_once_however_many_projects_set_it(tmp_path):
+    """A project's own entry for a plugin is the same plugin: Codex has browser and superpowers
+    (atlas turns browser off), Claude Code superpowers, its account plugin and one more."""
+    from kitden.demo import build_demo_home, demo_build
+
+    home = build_demo_home(tmp_path, "medium")
+    atlas = home / "work/atlas/.codex/config.toml"
+    atlas.parent.mkdir(parents=True, exist_ok=True)
+    atlas.write_text('[plugins."browser@openai-bundled"]\nenabled = false\n')
+    inventory = demo_build(home)()
+    counts = cli._have_counts(inventory)
+    names = {
+        client: {i.name for i in inventory.items if i.client == client and i.kind == "plugin"}
+        for client in ("claude_code", "codex")
+    }
+    assert counts[("codex", "plugin")] == len(names["codex"])
+    assert counts[("claude_code", "plugin")] == len(names["claude_code"])
+    # A plugin's skills count with their plugin, not again as skills.
+    own = {
+        i.name
+        for i in inventory.items
+        if i.client == "claude_code" and i.kind == "skill" and i.scope != "plugin"
+    }
+    assert counts[("claude_code", "skill")] == len(own)
+
+
+def test_scan_counts_notes_as_the_overview_folds_them():
+    """Four items with the same note are one row on the Overview; the scan says the same."""
+
+    def note(name, kind="bypasses_gateway"):
+        return {"type": kind, "severity": "info", "items": [], "names": [name], "client": None}
+
+    findings = [note(n) for n in ("a", "b", "c", "d")] + [note("e", "scope_override")]
+    assert cli._findings_lines(findings, {}) == [
+        "2 notes (nothing to fix): kitden show findings".replace(" ", " ")
     ]
