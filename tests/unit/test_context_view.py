@@ -827,11 +827,24 @@ def test_a_plugin_turned_off_after_the_chat_is_turned_on_again_from_its_skill(ho
     assert row["note"] == words.NOTE_OFF
 
 
-def test_an_off_plugins_skills_are_not_listed_after_a_new_chat(home):
+def test_an_off_plugins_skills_wait_off_after_a_new_chat_with_the_way_back(home):
     plugin(home, on=False)
     skill(home / ".claude/skills", "alpha", "Does alpha.")
     claude_chat(home, {"alpha": "Does alpha."})
-    assert set(rows_of(home)) == {"alpha"}
+    rows = rows_of(home)
+    assert set(rows) == {"alpha", "plug:tool"}
+    # Not in the list: it waits off, and its plugin's switch turns it on again.
+    row = rows["plug:tool"]
+    assert (row["side"], row["state"], row["note"]) == (None, "off", words.NOTE_OFF)
+    assert row["plugin_switch"]["label"] == "Turn on plug"
+
+
+def test_turning_an_off_plugin_on_in_the_preview_counts_its_skills(home):
+    plugin(home, on=False)
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"alpha": "Does alpha."})
+    card = view(home, draft={"claude_code": {"plug:tool": "on"}})["claude_code"]
+    assert "plug:tool" in card["after"]["result"]["sent"]
 
 
 def test_two_plugins_with_one_name_offer_no_switch_for_a_command(home):

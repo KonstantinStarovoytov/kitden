@@ -717,14 +717,18 @@ def _limit_steps(
     as they are (spec limit-line-control). `points`: (value, limit, short, used, head, now) per
     place, `value` as a tray row sends it, `limit` in the card's unit, `short` how many skills the
     limit would still cut and `used` what the list would send (both None with no estimate), and
-    `head` the share or the limit in words. `n`: the skills on the list. `unknown_words`:
+    `head` the share or the limit in words; a seventh part, when there is one, is how many a count
+    expects it to cut where `short` is not known. `n`: the skills on the list. `unknown_words`:
     what a place says whose `short` is not known."""
     out = []
-    for value, limit, short, used, head, now in points:
+    for value, limit, short, used, head, now, *more in points:
+        about = more[0] if more else None
         parts = [head]
         if short is not None:
             fit = words.LIMIT_STEP_ALL.format(n=n)
             parts.append(fit if short == 0 else short_words.format(short=short, n=n))
+        elif about:
+            parts.append(words.LIMIT_STEP_ABOUT.format(short=about, n=n))
         elif unknown_words is not None:
             parts.append(unknown_words)
         if used is not None and now_used is not None and used != now_used:
@@ -753,6 +757,8 @@ class _Fits:
     # many of its skills showed only a name, and are not Name only or Off now. The place of today
     # says it where the count cannot.
     short_now: int | None = None
+    # By a count: about how many skills a limit leaves with only a name, where not all fit.
+    about: Callable[[int], int] | None = None
 
 
 def _claude_steps(
@@ -772,7 +778,9 @@ def _claude_steps(
         if here and fit is None:
             short = fits.short_now
         used = fit.used if fit is not None else None
-        return (value, claude_budget(*pair, at), short, used, head, here)
+        limit = claude_budget(*pair, at)
+        about = fits.about(limit) if short is None and fits.about else None
+        return (value, limit, short, used, head, here, about)
 
     points = []
     if back:
@@ -963,12 +971,14 @@ def _claude_counted(
     cap: int,
     same_limit: bool,
     replayed: bool,
+    weights: dict[str, float] | None = None,
 ) -> _Fits:
     """`_Fits` by count, at today's limit `budget`. `used`: what the chat's list used. `sent`: the
     skills it sent inside its limit, when no setting changed since: it shows that they fit.
     `extras`: the skills that were not in its list. `changed`: the limit was changed after it.
     `same_limit`: the chat was sent under today's limit, and no change in the preview waits.
-    `replayed`: the rule rebuilds the chat; only a size it needs for the next ones is missing."""
+    `replayed`: the rule rebuilds the chat; only a size it needs for the next ones is missing.
+    `weights`: each skill's use, for about how many a limit leaves with only a name."""
     # A skill the chat sent, off or Name only now, leaves room: the chat's numbers say less then.
     same_limit = same_limit and not any(
         r.sent is not None and states[r.name] in ("off", "name-only") for r in rows
@@ -1012,7 +1022,22 @@ def _claude_counted(
     if same_limit and not any(states[r.name] != "off" for r in extras):
         names = sum(r.sent is None and states[r.name] not in ("off", "name-only") for r in chat)
         short_now = names or None
-    return _Fits(skills, now_used, at, why, lines, True, short_now)
+
+    def about(limit: int) -> int:
+        return _claude_about(rows, states, weights or {}, limit, cap)[0]
+
+    return _Fits(skills, now_used, at, why, lines, True, short_now, about)
+
+
+def _claude_about(rows, states, weights, budget: int, cap: int) -> tuple[int, int]:
+    """About how many of the skills listed show only a name at this limit, by a count: the rule,
+    with each description as `_claude_count` takes it and each skill's use. Which ones is not
+    known, as the rule does not rebuild the chat; how many is close. And how many are listed."""
+    rows = [_as_counted(r, cap) for r in rows]
+    run = _claude_run(rows, states, weights, budget, "x" * min(cap, budget + 1), cap=cap)
+    assert run is not None  # every size is given
+    skills, fit = run
+    return len(skills) - len(fit.full) - sum(s.name_only for s in skills), len(skills)
 
 
 def _added_lines(extras, states) -> list[str]:
@@ -1282,11 +1307,14 @@ def _claude(
     # rebuilds the list.
     rows = [_tagged(r) for r in rows]
     # Off before the chat, so in no list: they wait on the page, and count once the tray turns one
-    # on. Your own skills, and the built-in ones a setting keeps out; a plugin's come back with it.
+    # on. Your own skills, the built-in ones a setting keeps out, and those of a plugin that is off
+    # when Kitden has its switch: the switch brings them back together.
     waiting = [
         _claude_row(name, None, item, item.source.path)
         for name, item in turned_off.items()
-        if name not in listed and name not in loaded and not from_plugin(item)
+        if name not in listed
+        and name not in loaded
+        and (not from_plugin(item) or plugins.of(_Row(name, None, item, None)) is not None)
     ]
     waiting += [
         _tagged(_Row(name, None, None, None))
@@ -1419,7 +1447,7 @@ def _claude(
         is_new = then_share is not None
         same = then_budget == budget and not waits
         return _claude_counted(
-            rows, new, states, budget, fact["used"], known, is_new, cap, same, checked
+            rows, new, states, budget, fact["used"], known, is_new, cap, same, checked, weights
         )
 
     fits_now = fits_in(states_now, base, False)
@@ -1438,8 +1466,11 @@ def _claude(
         """The estimate for a limit by a count: `result` is None where not everything fits."""
         skills, fit = _claude_count(rows_now, states, limit, cap)
         if fit is None:
-            say = frame.format(words.CLAUDE_WOULD_NOT_FIT.format(on=_on(window)))
-            return {"say": say, "result": None, "full": frozenset()}
+            # Which descriptions fit is not known; about how many do is.
+            bad, n = _claude_about(rows_now, states, weights, limit, cap)
+            some = _many(n, "skill", "skills")
+            body = words.CLAUDE_WOULD_DROP_ABOUT.format(on=_on(window), bad=bad, n=n, skills=some)
+            return {"say": frame.format(body), "result": None, "full": frozenset()}
         result = _claude_estimate(skills, fit, _on(window), frame, cap)
         return {"say": result["say"], "result": result, "full": fit.full}
 
@@ -1475,6 +1506,10 @@ def _claude(
             changed = [words.LIMIT_CHANGED.format(share=shown), say]
         else:
             changed = [words.SKILLS_CHANGED, say] if other_skills else [say]
+    elif other_skills:
+        # The skills changed and Kitden has no estimate for them: it says so, and why.
+        cannot = words.NOW_NO_LIMIT if budget is None else words.NOW_NO_RULE
+        changed = [words.SKILLS_CHANGED, cannot.format(client=CLIENT_WORDS[client])]
     if base is not None and checked and setting is None and window in CLAUDE_OTHER_WINDOW:
         other, per_token = CLAUDE_OTHER_WINDOW[window]
         shown = ""  # which models have that window is not in any file Kitden can read
@@ -2165,6 +2200,10 @@ def _codex(
         else:
             changed = [words.LIMIT_CHANGED.format(share=shown)]
         changed += [expect["say"]] if expect else []
+    if not checked and (new or other_skills):
+        # As for Claude Code: no estimate for the skills as they are now, said with why.
+        cannot = words.NOW_NO_LIMIT if budget is None else words.NOW_NO_RULE
+        changed = [words.SKILLS_CHANGED, cannot.format(client=CLIENT_WORDS[client])]
     uncounted = []
     if checked and not_counted:
         line = _many(len(not_counted), words.CODEX_NOT_COUNTED_ONE, words.CODEX_NOT_COUNTED_MANY)

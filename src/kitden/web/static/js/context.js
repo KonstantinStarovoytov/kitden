@@ -361,9 +361,9 @@ function sidesFor(card, result, after, estimate, heat) {
     if (states[skill.name] === "off") continue;
     const back = turnedOn(skill, states);
     const side = sideOf(card, skill, result, estimate, back, Boolean(after && after.result), states[skill.name]);
-    // Off, and not in this list (an estimate leaves it out): it waits under Turned off, so it can
-    // come back.
-    const out = skill.state === "off" && !back && (estimate || !clouds[side]);
+    // Off now: it waits under Turned off, so it can come back, also where the page shows the last
+    // chat's list, which still held it. The verdict and the bar keep that chat's fact.
+    const out = skill.state === "off" && !back;
     (out ? off : clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
   }
   const wrap = el("div");
@@ -850,9 +850,19 @@ function howFor(lines) {
 
 // The tray's skill rules for the clients of `model`: client -> skill name -> state; and its
 // skill list limits under `limits`: client -> Claude Code's share or Codex's tokens (or "default").
+// A plugin's own switch, from Context or the Library (one row, `switch:<item>`), sets each skill
+// that follows that plugin.
 function draftFrom(model) {
   const draft = {};
   for (const { body } of tray.rows) {
+    if (body.action === "plugin.disable" || body.action === "plugin.enable") {
+      const item = (body.targets || [])[0]?.item;
+      const value = body.action === "plugin.disable" ? "off" : "on";
+      for (const card of (model && model.clients) || []) {
+        for (const skill of card.skills) if (skill.plugin_switch && skill.plugin_switch.item === item) (draft[card.client] ||= {})[skill.name] = value;
+      }
+      continue;
+    }
     if (body.action === "skill.limit") {
       const params = body.params || {};
       const value = "tokens" in params ? params.tokens : params.fraction;

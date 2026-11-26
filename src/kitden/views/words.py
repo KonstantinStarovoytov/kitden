@@ -266,8 +266,11 @@ CLAUDE_WOULD_DROP = (
     "{on}, {bad} of {n} {skills} would show only a name. The agent may not use {them}."
 )
 CLAUDE_WOULD_KEEP = "{on}, every skill would keep its description."
-# By a count, when the rule cannot say which descriptions a limit keeps.
-CLAUDE_WOULD_NOT_FIT = "{on}, not all descriptions would fit."
+# By a count, when the rule cannot say which descriptions a limit keeps: only about how many.
+CLAUDE_WOULD_DROP_ABOUT = (
+    "{on}, about {bad} of {n} {skills} would show only a name. Kitden counted them and cannot "
+    "tell which."
+)
 CLAUDE_WOULD_KEEP_CHOSEN = "{on}, everything would fit. {chosen} only a name, as you chose."
 CODEX_WOULD_LEAVE_OUT = "{on}, {out} of {n} {skills} would be left out and no description sent."
 CODEX_WOULD_CUT = "{on}, {bad} of {n} {descriptions} would be cut to about {cap} {characters}."
@@ -440,6 +443,12 @@ LIMIT_CHANGED = (
 SKILLS_CHANGED = (
     "Your skills changed after this list was sent. Your next chat will show the real list."
 )
+# After SKILLS_CHANGED or LIMIT_CHANGED, when Kitden has no estimate for the setup now.
+NOW_NO_LIMIT = "Kitden cannot estimate your next chat's list: it does not know its limit."
+NOW_NO_RULE = (
+    "Kitden cannot estimate your next chat's list: its copy of {client}'s rule does not give "
+    "your last list, so it cannot tell what changes."
+)
 LIMIT_AND_SKILLS_CHANGED = (
     "The limit and your skills changed after this list was sent: the limit is {share} now. Your "
     "next chat will show the real list."
@@ -482,6 +491,8 @@ LIMIT_STEP_ALL = "all {n} fit"
 LIMIT_STEP_SHORT = "{short} of {n} show only a name"
 # A place a count cannot say more of: which descriptions it keeps is not known.
 LIMIT_STEP_NOT_ALL = "not all fit"
+# The same where a count expects about how many.
+LIMIT_STEP_ABOUT = "about {short} of {n} show only a name"
 LIMIT_STEP_MORE = "about {n} more {unit} per chat"
 LIMIT_STEP_LESS = "about {n} fewer {unit} per chat"
 # The same for Codex (`[skills] max_context_tokens` in config.toml), in tokens, its own unit.

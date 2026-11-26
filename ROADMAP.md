@@ -7,6 +7,16 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not yet released
+
+- **What you turn off on Context looks off at once:** a skill or a plugin you turn off moves under
+  "Turned off" right after Apply, also when Kitden cannot replay your last chat's list and the page
+  shows that list. The skills of a plugin that is off wait there after your next chat too, with
+  its switch to turn it on again. A plugin's switch waiting in the preview, from Context or the
+  Library, now counts in the estimate and on the limit line, as a skill's switch does. Where
+  Kitden can only count, the estimate says about how many skills would show only a name
+  ("about 3 of 92"), and where it cannot estimate at all it says why.
+
 ### 0.13.0
 
 - **A stack on the map shows whose cards it holds:** with a client selected or pointed at, a folded

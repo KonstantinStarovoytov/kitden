@@ -113,7 +113,7 @@ const quietly = async (fn) => {
 
 const { controlOf, placesOf, renderContext, roomFor, stepAt } = await import('../../src/kitden/web/static/js/context.js');
 const { arrival, data, loadContext, reload, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
-const { cancelTray, CONTEXT_NOTE, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, cancelTray, CONTEXT_NOTE, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { closePanel } = await import('../../src/kitden/web/static/js/panel.js');
 const { syncTray } = await import('../../src/kitden/web/static/js/details.js');
 
@@ -980,7 +980,7 @@ test('After Apply by a count: where all fit the picture follows it, else only it
   assert.equal(text(byClass(verdict(), 'ctx-est')[0]), 'After Apply, estimate:');
   assert.equal(pillOf('gamma').classList.contains('back'), true);
   assert.notEqual(pieceOf('gamma'), undefined);
-  const not = { say: 'After Apply, estimate: On a 200K window, not all descriptions would fit.', gets: [], loses: [], budget: 12000, result: null };
+  const not = { say: 'After Apply, estimate: On a 200K window, about 2 of 10 skills would show only a name. Kitden counted them and cannot tell which.', gets: [], loses: [], budget: 12000, result: null };
   show(answer({ ...UNCHECKED, after: not }, CODEX, CURSOR));
   assert.equal(text(verdict()), not.say);
   // No claim about which skills fit: the picture and the sides stay the last chat's.
@@ -1221,8 +1221,9 @@ test('a skill that is off stands under Turned off, and its Details turn it on ag
   show(answer({ ...TIGHT, skills: [TIGHT.skills[0], late, TIGHT.skills[2], gone] }, CODEX, CURSOR));
   const [off] = byClass(main, 'ctx-off');
   assert.equal(text(byClass(off, 'ctx-off-head')[0]), 'Turned off');
-  assert.deepEqual(pills(off).map((p) => p.dataset.skill), ['dataviz']);
-  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'beta'], ['gamma']]);
+  // Off now goes there also where the page shows the last chat's list, which still held beta.
+  assert.deepEqual(pills(off).map((p) => p.dataset.skill), ['beta', 'dataviz']);
+  assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha'], ['gamma']]);
   await fire(pillOf('dataviz'), 'click');
   assert.match(text(drawer), /Off: your next chat does not list it\./);
   queue(PREVIEW, previewed('c1'));
@@ -1264,6 +1265,24 @@ test("a plugin's skill turns its plugin off from Details, and a second press tak
   assert.equal(tray.rows.length, 0);
 });
 
+test("a plugin's switch waiting in the tray asks for the estimate with each of its skills off, from Context or the Library", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const tool = skill('plug:tool', 10, 0, { plugin: 'plug', shown: 'tool', switch: [], plugin_switch: PLUG });
+  const start = skill('plug:start', 7, 1, { plugin: 'plug', shown: 'start', switch: [], plugin_switch: PLUG });
+  const card = { ...TIGHT, skills: [...TIGHT.skills, tool, start] };
+  show(answer(card, CODEX, CURSOR));
+  const off = draftUrl({ 'plug:tool': 'off', 'plug:start': 'off' });
+  queue(PREVIEW, previewed('c1'));
+  queue(off, { status: 200, json: answer({ ...card, after: AFTER }, CODEX, CURSOR) });
+  // The Library's row for the plugin is the same row as the one its Details add here.
+  await addToTray({ action: 'plugin.disable', targets: [{ item: 'p1' }], params: {} }, {});
+  await flush();
+  await flush();
+  assert.ok(asked.some((a) => a.url === off));
+  assert.equal(text(verdict()), AFTER.say);
+});
+
 test('a skill with no plugin switch draws no plugin button', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };
@@ -1280,7 +1299,8 @@ test('on an estimate a skill turned off since the chat stands under Turned off',
   other.result.sent = { alpha: 4000, gamma: 3000 };
   const skills = [TIGHT.skills[0], skill('beta', 1990, 0, { state: 'off' }), TIGHT.skills[2]];
   show(answer({ ...TIGHT, windows: [...TIGHT.windows, other], skills }, CODEX, CURSOR));
-  assert.equal(byClass(main, 'ctx-off').length, 0);
+  // On the last chat's window too: off now is off, whatever the page can estimate.
+  assert.deepEqual(pills(byClass(main, 'ctx-off')[0]).map((p) => p.dataset.skill), ['beta']);
   await fire(cards()[1], 'click');
   assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha', 'gamma'], []]);
   assert.deepEqual(pills(byClass(main, 'ctx-off')[0]).map((p) => p.dataset.skill), ['beta']);
@@ -1418,9 +1438,10 @@ test('Codex skills added or turned off after the chat are where the estimate for
   assert.equal(text(pillOf('lint')), 'lint340 of 560');
   assert.deepEqual(pills(byClass(main, 'ctx-off')[0]).map((p) => p.dataset.skill), ['gone']);
   assert.deepEqual(apart(), ['link']);
-  // With no estimate, the last chat's own picture.
+  // With no estimate, the last chat's own picture; what is off now is still under Turned off.
   show(answer(CLAUDE, { ...CODEX_CHANGED, changed: [], now: null }, CURSOR));
-  assert.deepEqual(placed(), [['a', 'gone'], ['b']]);
+  assert.deepEqual(placed(), [['a'], ['b']]);
+  assert.deepEqual(pills(byClass(main, 'ctx-off')[0]).map((p) => p.dataset.skill), ['gone']);
   assert.deepEqual(apart(), ['lint', 'note', 'link']);
 });
 

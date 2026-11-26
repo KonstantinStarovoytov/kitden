@@ -88,11 +88,15 @@ switch it to **On**, **Name only** (Claude Code) or **Off** where the client
 allows it; Cursor has no switch. A skill built into Claude Code, such as `dataviz`, is marked
 **built-in**: it is not a file, so the Library does not list it, but most have the same switch,
 for all projects. A skill of a plugin that Claude Code installed follows its plugin: its Details
-say what the plugin holds and offer **Turn off** for the whole plugin. When Kitden has no switch
+say what the plugin holds and offer **Turn off** for the whole plugin. That switch, waiting in the
+preview, counts in the estimate and on the limit line as a skill's own switch does, whether you
+pressed it here or in the Library. When Kitden has no switch
 for a skill, such as one the Claude app adds, its Details say so and why. A skill of a plugin
-from your Claude account names that plugin, and its Details offer the plugin's own switch. Your own and built-in
-Claude Code skills that are off, and so were not in the last list, wait under **Turned off**,
-where you can turn them on again. A skill that a project's own settings set has no switch here.
+from your Claude account names that plugin, and its Details offer the plugin's own switch. A skill
+that is off now waits under **Turned off**, where you can turn it on again: right after Apply, even
+when the page still shows the last chat's list, which had it, and after your next chat, when it is
+no longer in the list. That holds for your own and built-in Claude Code skills and for the skills
+of a plugin that is off. A skill that a project's own settings set has no switch here.
 The change goes through preview, **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
 did not fit. `kitden show context`, which the plugin's `context` skill runs, also prints each
 skill's description, so your agent sees it too. With no chat in the current folder, it shows the
@@ -123,8 +127,8 @@ shows it as the limit now, offers the shares of the list above it (none above 4%
 The line also works when Kitden cannot replay the last chat's list exactly: a newer Claude Code
 may choose other descriptions, or a listed skill may have no file Kitden can find. Then Kitden
 counts what all descriptions need. A step that has room for all of them says "all 92 fit"; a
-step that does not says only "not all fit", because without the replay Kitden cannot tell which
-ones it would keep. The details say that it is a count, and how many skills have no description
+step that does not says about how many would show only a name ("about 3 of 92 show only a
+name"), because without the replay Kitden cannot tell which ones it would keep. The details say that it is a count, and how many skills have no description
 Kitden can find: those count at the longest a description can be (1,536 characters, or your
 `skillListingMaxDescChars`), so the share may be a step higher than you need. A skill built into
 Claude Code has no file: when an earlier chat's list sent its description, it counts at that
@@ -137,8 +141,8 @@ The share is for your next chats, so skills you added or turned on after the las
 counted too, and the details say how many. Changes waiting in the preview count as well: turn
 skills off, set them to Name only or turn them on again, and the line's steps and note count the
 same skills as the estimate above. The handle stays while they wait, even when everything fits.
-A count gives an estimate for a switch too: "every skill would keep its description" or "not all
-descriptions would fit".
+A count gives an estimate for a switch too: "every skill would keep its description" or "about 3
+of 92 skills would show only a name".
 
 ### When your setup changed after the last chat
 
@@ -152,9 +156,10 @@ or changed the limit, two lines under it say so and what Kitden expects now:
 
 The bar, then named **Skill list now, estimate**, and the two boxes show that estimate. When
 everything would fit, a line says about how much room is left. When Kitden can only count, it says
-"every skill would keep its description" and shows that too, or "not all descriptions would fit",
-and the bar and the boxes stay the last chat's. It says nothing when its count does not explain
-the last chat itself.
+"every skill would keep its description" and shows that too, or about how many would show only a
+name ("about 3 of 92 skills would show only a name. Kitden counted them and cannot tell which."),
+and the bar and the boxes stay the last chat's. When it cannot estimate at all, because its count
+does not explain the last chat or it does not know the limit, the second line says that and why.
 
 For Codex the estimate says how many descriptions would be cut short, or how many skills left out.
 A skill you added has the line Codex would give it, so it counts. Two kinds do not: a skill that
