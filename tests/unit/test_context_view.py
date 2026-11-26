@@ -809,6 +809,8 @@ def test_a_plugins_skill_offers_to_turn_its_plugin_off_and_says_what_goes(home):
         "item": item.id,
         "action": "plugin.disable",
         "label": "Turn off plug",
+        # What goes with it, for its tray row too.
+        "goes": "Turns off all of plug: 2 skills, 1 command, 1 agent and 1 MCP server.",
         # The three lines of the last list: 24, 13 and 22 characters.
         "say": "Turns off all of plug: 2 skills, 1 command, 1 agent and 1 MCP server. "
         "About 59 fewer characters in the list.",
@@ -823,7 +825,9 @@ def test_a_plugin_turned_off_after_the_chat_is_turned_on_again_from_its_skill(ho
     assert (row["side"], row["state"], row["source"]) == (0, "off", "Plugin plug")
     assert row["plugin_switch"]["action"] == "plugin.enable"
     assert row["plugin_switch"]["label"] == "Turn on plug"
-    assert row["plugin_switch"]["say"] is None
+    # What comes back with it: the switch is the plugin's.
+    turns_on = "Turns on all of plug: 1 skill, 1 command, 1 agent and 1 MCP server."
+    assert row["plugin_switch"]["say"] == row["plugin_switch"]["goes"] == turns_on
     assert row["note"] == words.NOTE_OFF
 
 

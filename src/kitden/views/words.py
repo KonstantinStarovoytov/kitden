@@ -331,6 +331,7 @@ NOTE_NO_ITEM = "Kitden did not find this skill's file, so it has no switch here.
 PLUGIN_TURN_OFF = "Turn off {}"
 PLUGIN_TURN_ON = "Turn on {}"
 PLUGIN_GOES = "Turns off all of {plugin}: {parts}."
+PLUGIN_COMES = "Turns on all of {plugin}: {parts}."
 PLUGIN_FREES = "About {n} fewer characters in the list."
 PLUGIN_PARTS = (
     ("skills", "skill", "skills"),

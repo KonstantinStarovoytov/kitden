@@ -562,18 +562,23 @@ class _Plugins:
         if item is None or action is None:
             return None
         name = item.name.split("@")[0]
-        offer = {"item": item.id, "action": action}
-        if action == PLUGIN_ENABLE:
-            return offer | {"label": words.PLUGIN_TURN_ON.format(name), "say": None}
+        offer: dict[str, str | None] = {"item": item.id, "action": action}
         held = self.inside.get(item.name, {})
         parts = [
             f"{len(held[key])} {_many(len(held[key]), one, many)}"
             for key, one, many in words.PLUGIN_PARTS
             if held.get(key)
         ]
+        # What goes, or comes back, with the plugin, for its tray row too: the switch is the
+        # plugin's, not one skill's.
+        whole = words.PLUGIN_GOES if action == PLUGIN_DISABLE else words.PLUGIN_COMES
+        goes = whole.format(plugin=name, parts=words.join_words(parts)) if parts else None
+        offer["goes"] = goes
+        if action == PLUGIN_ENABLE:
+            return offer | {"label": words.PLUGIN_TURN_ON.format(name), "say": goes}
         say = []
-        if parts:
-            say.append(words.PLUGIN_GOES.format(plugin=name, parts=words.join_words(parts)))
+        if goes:
+            say.append(goes)
         # Each line of the list, with the break after it.
         lines = [r for r in rows if self.of(r) is item]
         size = sum(

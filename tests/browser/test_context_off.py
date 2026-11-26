@@ -22,8 +22,16 @@ def turn_off_from_context(page) -> None:
     """The plugin's switch in the Details of one of its skills."""
     page.locator(f'.ctx-pill[data-skill="{SKILLS[0]}"]').click()
     details = page.get_by_role("complementary", name="Details")
+    # The plugin first: the switch is its, not the skill's.
+    expect(details.locator("dt").first).to_have_text("Plugin")
+    expect(details).to_contain_text("The switch is superpowers's: it turns the whole plugin off")
     expect(details).to_contain_text("Turns off all of superpowers: 2 skills.")
     details.get_by_role("button", name="Turn off superpowers").click()
+
+
+def going(page) -> list[str]:
+    """The skills under Off after Apply, with the line of their plugin."""
+    return page.locator(".ctx-going .ctx-pill").evaluate_all("(n) => n.map((p) => p.dataset.skill)")
 
 
 def off_now(page) -> list[str]:
@@ -36,6 +44,10 @@ def test_a_plugins_switch_waiting_in_the_preview_counts_in_the_verdict_and_on_th
     expect(handle).to_have_attribute("aria-valuetext", "1% now · 4 of 20 show only a name")
     turn_off_from_context(page)
     expect(verdict).to_contain_text("After Apply, estimate: On a 200K window, 1 of 18 skills")
+    # The whole plugin goes, together, and its row in the preview says what goes with it.
+    wait_until(lambda: going(page) == list(SKILLS))
+    expect(page.locator(".ctx-going .ctx-offline")).to_have_text("superpowers · 2 skills")
+    expect(page.locator("#dock")).to_contain_text("Turns off all of superpowers: 2 skills.")
     expect(handle).to_have_attribute("aria-valuetext", "1% now · 1 of 18 show only a name")
     # Taken out of the preview, everything counts as before.
     page.get_by_role("complementary", name="Details").get_by_role(
@@ -81,6 +93,10 @@ class TestCounted:
         # The last chat's fact stays; what is off now is drawn off, with no new chat.
         expect(main).to_contain_text("4 of 20 skills showed only a name")
         wait_until(lambda: off_now(page) == list(SKILLS))
+        # In one place, with one way back.
+        shelf = page.locator(".ctx-off:not(.ctx-going) .ctx-offplug")
+        expect(shelf).to_have_count(1)
+        expect(shelf.get_by_role("button", name="Turn on superpowers")).to_be_visible()
         expect(main).to_contain_text(f"Estimate: On a 200K window, {about}")
         undo.click()
         wait_until(lambda: SETTINGS(demo).read_bytes() == before, seconds=10)

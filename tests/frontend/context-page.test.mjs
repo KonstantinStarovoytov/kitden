@@ -1503,3 +1503,50 @@ test('while changes wait the handle stays with nothing to suggest', async () => 
   assert.doesNotMatch(text(drawer), /Suggested|Cost|Set to/);
   closePanel({ instant: true });
 });
+
+// A plugin goes off as a whole (spec context-by-source, the owner's words of 2026-11-26): its
+// skills go together, the row says what goes with it, and its skill's Details name the plugin.
+const WHOLE = { item: 'p1', action: 'plugin.disable', label: 'Turn off plug', goes: 'Turns off all of plug: 2 skills and 1 command.', say: 'Turns off all of plug: 2 skills and 1 command. About 59 fewer characters in the list.' };
+const BACK_ON = { item: 'p2', action: 'plugin.enable', label: 'Turn on plug2', goes: 'Turns on all of plug2: 1 skill.', say: 'Turns on all of plug2: 1 skill.' };
+const plugged = () => {
+  const tool = skill('plug:tool', 1990, 0, { plugin: 'plug', shown: 'tool', switch: [], source: 'Plugin plug', plugin_switch: WHOLE, note: "A plugin's skill follows its plugin: it has no switch of its own." });
+  const start = skill('plug:start', 790, 1, { plugin: 'plug', shown: 'start', switch: [], source: 'Plugin plug', plugin_switch: WHOLE });
+  const old = skill('plug2:old', 490, 0, { plugin: 'plug2', shown: 'old', switch: [], source: 'Plugin plug2', plugin_switch: BACK_ON, state: 'off' });
+  return { ...TIGHT, skills: [...TIGHT.skills, tool, start, old] };
+};
+const shelf = (name) => byClass(main, 'ctx-off').find((n) => n.getAttribute('aria-label') === name);
+
+test("a plugin skill's Details name the plugin first and say the switch is the plugin's", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(plugged(), CODEX, CURSOR));
+  await fire(pillOf('plug:tool'), 'click');
+  const facts = walk(drawer).filter((n) => n.tagName === 'DT').map(text);
+  assert.equal(facts[0], 'Plugin');
+  assert.match(text(drawer), /The switch is plug's: it turns the whole plugin off, not one skill\./);
+  assert.doesNotMatch(text(drawer), /it has no switch of its own/);
+});
+
+test('while the plugin\'s switch waits, all of its skills go off together, and its row says what goes', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const card = plugged();
+  show(answer(card, CODEX, CURSOR));
+  queue(PREVIEW, previewed('c1'));
+  queue(draftUrl({ 'plug:tool': 'off', 'plug:start': 'off', }), { status: 200, json: answer(card, CODEX, CURSOR) });
+  await fire(pillOf('plug:tool'), 'click');
+  await fire(buttonIn(drawer, 'Turn off plug'), 'click');
+  await flush();
+  await flush();
+  assert.equal(tray.rows[0].goes, WHOLE.goes);
+  const going = shelf('Off after Apply');
+  const row = byClass(going, 'ctx-offplug')[0];
+  assert.equal(text(byClass(row, 'ctx-offline')[0]), 'plug · 2 skills');
+  assert.deepEqual(pills(row).map((p) => p.dataset.skill), ['plug:tool', 'plug:start']);
+  syncTray();
+  assert.equal(buttonIn(row, 'Turn off plug').getAttribute('aria-pressed'), 'true');
+  // An off plugin waits in one place too, with one way back.
+  const off = byClass(shelf('Turned off'), 'ctx-offplug')[0];
+  assert.equal(text(byClass(off, 'ctx-offline')[0]), 'plug2 · 1 skill');
+  assert.ok(buttonIn(off, 'Turn on plug2'));
+});

@@ -88,9 +88,13 @@ switch it to **On**, **Name only** (Claude Code) or **Off** where the client
 allows it; Cursor has no switch. A skill built into Claude Code, such as `dataviz`, is marked
 **built-in**: it is not a file, so the Library does not list it, but most have the same switch,
 for all projects. A skill of a plugin that Claude Code installed follows its plugin: its Details
-say what the plugin holds and offer **Turn off** for the whole plugin. That switch, waiting in the
-preview, counts in the estimate and on the limit line as a skill's own switch does, whether you
-pressed it here or in the Library. When Kitden has no switch
+name the plugin first, say that the switch is the plugin's and what it holds, and offer **Turn
+off** for the whole plugin. While it waits in the preview, all of the plugin's skills stand
+together under **Off after Apply**, on one line with the plugin's name and how many skills go with
+it, and the preview's row says what goes ("Turns off all of plugin-dev: 7 skills, 1 command and 3
+agents."). It counts in the estimate and on the limit line as a skill's own switch does, whether
+you pressed it here or in the Library. After Apply the plugin's skills stand together under
+**Turned off**, with one **Turn on**. When Kitden has no switch
 for a skill, such as one the Claude app adds, its Details say so and why. A skill of a plugin
 from your Claude account names that plugin, and its Details offer the plugin's own switch. A skill
 that is off now waits under **Turned off**, where you can turn it on again: right after Apply, even

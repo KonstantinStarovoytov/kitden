@@ -11,7 +11,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **What you turn off on Context looks off at once:** a skill or a plugin you turn off moves under
   "Turned off" right after Apply, also when Kitden cannot replay your last chat's list and the page
-  shows that list. The skills of a plugin that is off wait there after your next chat too, with
+  shows that list. A plugin goes off as a whole: while its switch waits, all of its skills stand
+  together under "Off after Apply" and the preview's row says what goes with it; after Apply they
+  stand together with one "Turn on". A plugin skill's Details name the plugin first. The skills of a plugin that is off wait there after your next chat too, with
   its switch to turn it on again. A plugin's switch waiting in the preview, from Context or the
   Library, now counts in the estimate and on the limit line, as a skill's switch does. Where
   Kitden can only count, the estimate says about how many skills would show only a name
