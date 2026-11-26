@@ -30,7 +30,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   ("3 times", not "twice"). `kitden scan` counts a plugin once however many projects set it, and
   its notes as the Overview folds them. The Overview's server card says how many more can move in;
   Changes counts an Apply of several rows as the toast does; a skill named like a built-in one no
-  longer hides it on Context.
+  longer hides it on Context (#230).
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,
