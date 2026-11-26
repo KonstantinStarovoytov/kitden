@@ -634,6 +634,16 @@ def _claude_plugins(inventory, home: Path, claude: ClaudeFolder, folder: str | N
     )
 
 
+def _codex_plugin(plugins: list[Item], plugin_id: str | None) -> Item | None:
+    """The Codex plugin whose switch Kitden offers here: the user's entry, unless the project's
+    own settings set that plugin too (Codex has no switch for one project, and the user's would
+    change all projects and leave this one as its settings say)."""
+    found = [p for p in plugins if p.name == plugin_id]
+    if any(p.scope is not Scope.USER for p in found):
+        return None
+    return found[0] if found else None
+
+
 def _codex_switch(item: Item | None) -> dict | None:
     """A Codex plugin's own switch, for all projects: the Library's row for it."""
     if item is None or item.scope is not Scope.USER:
@@ -664,7 +674,8 @@ def _group(
         why = None
         if not skill["plugin_switch"]:
             why = known.change_hint if known is not None and known.change_hint else None
-            why = why or words.GROUP_WHY_PLUGIN
+            here = any(p.name == plugin_id and p.scope is not Scope.USER for p in plugins)
+            why = why or (words.GROUP_WHY_PROJECT if here else words.GROUP_WHY_PLUGIN)
         return {
             "key": f"plugin:{plugin_id}",
             "kind": "account" if account else "plugin",
@@ -715,7 +726,7 @@ def _grouped(
         if client == "codex" and found["kind"] == "plugin" and not skill["plugin_switch"]:
             # Codex: a skill of a plugin Kitden knows, with no item of its own (or one that is off),
             # takes the plugin's switch too, so its group and the estimate have it.
-            known = next((p for p in plugins if f"plugin:{p.name}" == found["key"]), None)
+            known = _codex_plugin(plugins, found["key"].removeprefix("plugin:"))
             skill["plugin_switch"] = _codex_switch(known)
             if skill["plugin_switch"] and skill["note"] == words.NOTE_PLUGIN:
                 skill["note"] = words.NOTE_PLUGIN_SWITCH
@@ -2404,7 +2415,7 @@ def _codex(
         """The Codex plugin's own switch, for a skill of a plugin."""
         if item is None or not from_plugin(item):
             return None
-        return _codex_switch(next((p for p in plugins if p.name == plugin_of(item)), None))
+        return _codex_switch(_codex_plugin(plugins, plugin_of(item)))
 
     skills = []
     for r in rows:
@@ -2472,7 +2483,7 @@ def _codex(
     on_page = {s["name"] for s in skills}
     waiting: list[Item | None] = []
     for plugin in plugins:
-        offer = _codex_switch(plugin)
+        offer = _codex_switch(_codex_plugin(plugins, plugin.name))
         if plugin.enabled is not Enabled.OFF or offer is None:
             continue
         for name, text in _codex_plugin_skills(codex_home, plugin.name):

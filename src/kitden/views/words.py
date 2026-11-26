@@ -331,6 +331,10 @@ GROUP_WHY_BUILT_IN = (
     "own, in their Details."
 )
 GROUP_WHY_PLUGIN = "Kitden has no switch for this plugin here. Turn it off in the Library."
+GROUP_WHY_PROJECT = (
+    "This project's own settings set this plugin, so it has no switch here: one for all projects "
+    "would leave this project as its settings say."
+)
 # One skill's Details line.
 NOTE_BUILT_IN = (
     "Kitden has not checked that Claude Code can turn this skill off, so it has no switch here."

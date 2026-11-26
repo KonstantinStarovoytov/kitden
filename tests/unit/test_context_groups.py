@@ -6,6 +6,8 @@ import pytest
 
 from kitden.views import words
 from kitden.views.library_map import ACCOUNT, OTHER, SKILLS
+from tests.unit.test_context_codex_log import meta, turn, write_log
+from tests.unit.test_context_codex_log import skills as codex_list_entry
 from tests.unit.test_context_now import codex
 from tests.unit.test_context_view import (
     claude_chat,
@@ -187,3 +189,26 @@ def test_an_off_codex_plugin_with_no_version_folder_keeps_its_skills(home):
     card = codex(home)
     group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
     assert group["skills"] == ["plug:tool"]
+
+
+def test_a_codex_plugin_a_project_sets_has_no_switch_for_all_projects(home):
+    # The user's entry has it on, the project's has it off: a switch for all projects would leave
+    # this project off, so the group offers none and says why.
+    paths = codex_home(home, window=20_000)
+    tool = codex_plugin(home)
+    project = home / "work/a"
+    (project / ".codex").mkdir(parents=True)
+    (project / ".codex/config.toml").write_text('[plugins."plug@market"]\nenabled = false\n')
+    config = home / ".codex/config.toml"
+    trusted = f'\n[projects."{project}"]\ntrust_level = "trusted"\n'
+    config.write_text(config.read_text() + trusted)
+    lines = [
+        f"- alpha: Does alpha. (file: {paths['alpha']})",
+        f"- plug:tool: Does one. (file: {tool})",
+    ]
+    text = "<skills_instructions>\n" + "\n".join(lines) + "\n</skills_instructions>"
+    log = [meta(folder=str(project)), turn(), codex_list_entry(text, at="2026-10-30T12:00:00Z")]
+    write_log(home / ".codex", "a", log, 100)
+    card = view(home, folder=str(project))["codex"]
+    group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
+    assert group["switch"] is None and group["why"] == words.GROUP_WHY_PROJECT
