@@ -2484,11 +2484,15 @@ def _codex(
     # group, with its switch to turn it on again (as for Claude Code).
     on_page = {s["name"] for s in skills}
     waiting: list[Item | None] = []
-    for plugin in plugins:
-        offer = _codex_switch(_codex_plugin(plugins, plugin.name))
-        if plugin.enabled is not Enabled.OFF or offer is None:
+    for plugin_id in dict.fromkeys(p.name for p in plugins):
+        # The entry that decides here: the project's own when it has one, else the user's. With
+        # the project's, there is no switch; the group says why.
+        entries = [p for p in plugins if p.name == plugin_id]
+        deciding = next((p for p in entries if p.scope is not Scope.USER), entries[0])
+        if deciding.enabled is not Enabled.OFF:
             continue
-        for name, text in _codex_plugin_skills(codex_home, plugin.name):
+        offer = _codex_switch(_codex_plugin(plugins, plugin_id))
+        for name, text in _codex_plugin_skills(codex_home, plugin_id):
             if name in on_page:
                 continue
             skills.append(
