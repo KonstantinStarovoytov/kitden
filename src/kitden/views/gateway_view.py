@@ -104,6 +104,8 @@ def gateway_view(
     # Per row, the first client whose entry sets up another server than the gateway holds.
     apart: dict[tuple[str, str], str] = {}
     for item in [*loaded, *off]:
+        if item.via_gateway and item.enabled is Enabled.OFF:
+            continue  # a client entry that is off does not connect it to the gateway
         if item.via_gateway:
             names = connections.get(item.via_gateway, {}).get(column_of(item.client))
             if names is not None and item.name not in names:
