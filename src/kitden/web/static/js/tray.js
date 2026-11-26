@@ -243,7 +243,7 @@ function accept(change, refused = null) {
     const found = answers.get(row.id);
     if (!found) continue;
     row.part = partOf(change, found);
-    const { title, detail } = wordsFor(row.part, row.body, row.note);
+    const { title, detail } = wordsFor(row.part, row.body, row.note, row.goes);
     Object.assign(row, { title, detail, project: found.project || null, status: "" });
   }
   Object.assign(tray, { change, phase: "ready", refused, failure: null, done: 0, total: 0, stale: false });
@@ -306,12 +306,13 @@ function empty() {
 // when the server refused it (`tray.refused` says why, and the tray is as it was), or when it
 // cannot join now: a change is being written, or has just been applied. `picked` is the project
 // it is asked in: the one picked now, or the old row's when a row's own review asks again.
-export async function addToTray(body, { key = keyFor(body), note = null, icon = iconFor(body), picked = state.project || null } = {}) {
+// `goes`: what goes with the change, said on its row ("Turns off all of plug: 2 skills.").
+export async function addToTray(body, { key = keyFor(body), note = null, icon = iconFor(body), picked = state.project || null, goes = null } = {}) {
   if (writing() || busy.change) return false;
   const before = tray.rows;
   const was = tray.phase;
   const old = before.find((row) => row.key === key) || { title: "", detail: "", project: null, part: null };
-  const row = { id: `r${++rowCount}`, key, body, note, icon, picked, title: old.title, detail: old.detail, project: old.project, part: old.part, status: "", waits: null, works: false };
+  const row = { id: `r${++rowCount}`, key, body, note, goes, icon, picked, title: old.title, detail: old.detail, project: old.project, part: old.part, status: "", waits: null, works: false };
   tray.rows = [...before.filter((other) => other.key !== key), row];
   // A row that needs access joins as waiting; the others are then asked for again.
   const answer = await askAll(readyRows());

@@ -603,8 +603,8 @@ def test_a_chat_the_rule_does_not_rebuild_gets_the_first_share_that_fits_the_cou
         # 12,059 - 7,251 characters, at 4 characters per token
         "cost": "About 4,800 more characters in every chat (about 1,200 tokens)",
     }
-    # A count cannot say which skills a lower limit keeps. The chat, sent under today's limit,
-    # says it for today's.
+    # A count cannot say which skills a lower limit keeps, only about how many. The chat, sent
+    # under today's limit, says it for today's.
     places = {step["value"]: step for step in limit["steps"]}
     assert list(places) == list(CLAUDE_SHARES)
     assert places[0.01] == {
@@ -618,7 +618,7 @@ def test_a_chat_the_rule_does_not_rebuild_gets_the_first_share_that_fits_the_cou
         "value": 0.015,
         "limit": 12_000,
         "short": None,
-        "say": "1.5% · not all fit",
+        "say": "1.5% · about 1 of 10 show only a name",
     }
     assert places[0.017] == {
         "value": 0.017,
@@ -707,8 +707,9 @@ def test_a_skill_added_after_the_chat_moves_the_counted_offer_up(home):
         "1.7% · all 11 fit · "
     )
     assert limit["counted"] == [REPLAY, ADDED] and ADDED in cc["how"]
-    # The chat's list does not hold the new skill, so it does not say what today's limit gives.
-    assert limit["steps"][0]["say"] == "1% now · not all fit"
+    # The chat's list does not hold the new skill, so it does not say what today's limit gives:
+    # a count says about how many.
+    assert limit["steps"][0]["say"] == "1% now · about 5 of 11 show only a name"
     # It is still no skill of the chat.
     assert cc["windows"][0]["result"]["say"].startswith("In your last chat on Nov 6, 4 of 10 ")
     # Turned off in the tray, it is not in the next list.
@@ -934,7 +935,8 @@ def test_after_apply_of_a_share_that_does_not_fit_names_no_skill(home):
     counted_chat(home)
     after = view(home, draft={"limits": {"claude_code": 0.015}})["claude_code"]["after"]
     assert after == {
-        "say": "After Apply, estimate: On a 200K window, not all descriptions would fit.",
+        "say": "After Apply, estimate: On a 200K window, about 1 of 10 skills would show only a "
+        "name. Kitden counted them and cannot tell which.",
         "gets": [],
         "loses": [],
         "result": None,
@@ -948,7 +950,8 @@ def test_after_apply_of_a_share_that_does_not_fit_names_no_skill(home):
     after = view(home, draft={"claude_code": {"j": "off"}})["claude_code"]["after"]
     assert (after["result"], after["budget"]) == (None, 8_000)
     assert after["say"] == (
-        "After Apply, estimate: On a 200K window, not all descriptions would fit."
+        "After Apply, estimate: On a 200K window, about 3 of 9 skills would show only a name. "
+        "Kitden counted them and cannot tell which."
     )
     assert view(home, draft={"limits": {"claude_code": 0.01}})["claude_code"]["after"] is None
 
@@ -968,15 +971,23 @@ def test_after_the_limit_was_set_the_counted_chat_keeps_its_own_limit(home):
     assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
     assert limit["now"] == "2% of the context window: 16,000 characters"
     assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
-    # A count says only where everything fits: from 1.7% (13,600 of the 12,059 needed).
+    # A count says which fit only where everything fits: from 1.7% (13,600 of the 12,059
+    # needed). Below, about how many show only a name.
+    about = "show only a name"
     unknown = [
-        {"value": at, "limit": round(at * 800_000), "short": None, "say": f"{p} · not all fit"}
-        for at, p in ((0.011, "1.1%"), (0.012, "1.2%"), (0.013, "1.3%"), (0.014, "1.4%"))
+        {"value": at, "limit": round(at * 800_000), "short": None, "say": f"{p} · {n} {about}"}
+        for at, p, n in (
+            (0.011, "1.1%", "about 3 of 10"),
+            (0.012, "1.2%", "about 3 of 10"),
+            (0.013, "1.3%", "about 2 of 10"),
+            (0.014, "1.4%", "about 1 of 10"),
+        )
     ]
+    default = "1%, the default · about 4 of 10 show only a name"
     assert limit["steps"] == [
-        {"value": "default", "limit": 8_000, "short": None, "say": "1%, the default · not all fit"},
+        {"value": "default", "limit": 8_000, "short": None, "say": default},
         *unknown,
-        {"value": 0.015, "limit": 12_000, "short": None, "say": "1.5% · not all fit"},
+        {"value": 0.015, "limit": 12_000, "short": None, "say": f"1.5% · about 1 of 10 {about}"},
         {"value": 0.017, "limit": 13_600, "short": 0, "say": "1.7% · all 10 fit"},
         {"value": 0.02, "limit": 16_000, "short": 0, "say": "2% now · all 10 fit", "now": True},
     ]
@@ -988,20 +999,23 @@ def test_after_a_share_that_fits_not_all_the_counted_chat_offers_the_next(home):
     write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.015})
     cc = view(home)["claude_code"]
     assert cc["windows"][0]["budget"] == 8_000
-    assert cc["changed"][1] == "Estimate: On a 200K window, not all descriptions would fit."
+    assert cc["changed"][1] == (
+        "Estimate: On a 200K window, about 1 of 10 skills would show only a name. Kitden counted "
+        "them and cannot tell which."
+    )
     limit = cc["limit"]
     assert limit["offer"]["fraction"] == 0.017
     # The chat was sent under 1%: its 7,251 characters are not what the list uses at 12,000. The
     # count's run at 12,000 keeps nine descriptions, 10,857 characters: 12,059 is 1,202 more.
     assert limit["offer"]["cost"] == "About 1,200 more characters in every chat (about 300 tokens)"
-    # The chat's list was sent under another limit: the place of today cannot say more.
+    # The chat's list was sent under another limit: the place of today says only a count.
     assert [s["say"] for s in limit["steps"][:6]] == [
-        "1%, the default · not all fit",
-        "1.1% · not all fit",
-        "1.2% · not all fit",
-        "1.3% · not all fit",
-        "1.4% · not all fit",
-        "1.5% now · not all fit",
+        "1%, the default · about 4 of 10 show only a name",
+        "1.1% · about 3 of 10 show only a name",
+        "1.2% · about 3 of 10 show only a name",
+        "1.3% · about 2 of 10 show only a name",
+        "1.4% · about 1 of 10 show only a name",
+        "1.5% now · about 1 of 10 show only a name",
     ]
     step = next(s for s in limit["steps"] if s["value"] == 0.017)
     assert step["say"] == "1.7% · all 10 fit · about 1,200 more characters per chat"
@@ -1203,7 +1217,7 @@ def test_with_no_earlier_chat_a_settings_write_leaves_the_chats_limit_unknown(ho
     write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.01})
     cc = view(home)["claude_code"]
     assert cc["windows"][0]["budget"] is None
-    assert cc["limit"]["steps"][0]["say"] == "1% now · not all fit"
+    assert cc["limit"]["steps"][0]["say"] == "1% now · about 2 of 9 show only a name"
 
 
 def test_a_chat_at_its_limit_by_built_in_skills_finds_its_share_after_a_change(home):
@@ -1219,7 +1233,7 @@ def test_a_chat_at_its_limit_by_built_in_skills_finds_its_share_after_a_change(h
     assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
     # The 8,100 characters fit from 1.1% (8,800) on.
     assert [s["say"] for s in limit["steps"]] == [
-        "1%, the default · not all fit",
+        "1%, the default · about 2 of 9 show only a name",
         "1.1% · all 9 fit",
         "1.2% · all 9 fit",
         "1.3% · all 9 fit",

@@ -31,7 +31,15 @@ from tests.unit.test_skill_limit import NAMES, TEXT, counted_chat, cut_chat, nea
 
 CHANGED = "Your skills changed after this list was sent. Your next chat will show the real list."
 KEEPS = "Estimate: On a 200K window, every skill would keep its description."
-NOT_ALL = "Estimate: On a 200K window, not all descriptions would fit."
+NO_RULE = words.NOW_NO_RULE.format(client="{}")
+
+
+def about(bad: int, n: int) -> str:
+    """The estimate by a count where not all fit: about how many, not which."""
+    return (
+        f"Estimate: On a 200K window, about {bad} of {n} skills would show only a name. "
+        "Kitden counted them and cannot tell which."
+    )
 
 
 @pytest.fixture
@@ -207,8 +215,8 @@ def test_by_a_count_skills_added_after_the_chat_are_said(home):
     cc = claude(home)
     assert not cc["checked"]
     # Which skills the limit keeps is not known: no numbers, and no estimate for the picture.
-    assert cc["changed"] == [CHANGED, NOT_ALL] and cc["now"] is None
-    assert places(cc)[0.01] == "1% now · not all fit"
+    assert cc["changed"] == [CHANGED, about(5, 11)] and cc["now"] is None
+    assert places(cc)[0.01] == "1% now · about 5 of 11 show only a name"
 
 
 def test_by_a_count_everything_can_fit_now(home):
@@ -219,14 +227,14 @@ def test_by_a_count_everything_can_fit_now(home):
     assert set(cc["now"]["sent"]) == set("efghij")
 
 
-def test_by_a_count_that_already_fits_a_chat_that_did_not_get_everything_nothing_is_said(home):
+def test_by_a_count_that_already_fits_a_chat_that_did_not_get_everything_says_it_cannot(home):
     for name in "ab":
         skill(home / ".claude/skills", name, f"Does {name}.")
     # Both fit easily, yet the log shows b as a name only: the count does not explain that chat.
     claude_chat(home, {"a": "Does a.", "b": None})
     skill(home / ".claude/skills", "later", "Does later.")
     cc = claude(home)
-    assert cc["changed"] == [] and cc["now"] is None
+    assert cc["changed"] == [CHANGED, NO_RULE.format("Claude Code")] and cc["now"] is None
     assert claude(home, {"later": "off"})["after"] is None
 
 
@@ -238,7 +246,7 @@ def test_by_a_count_the_place_of_today_does_not_count_a_list_that_changed(home):
     assert places(claude(home))[0.01] == "1% now · 3 of 9 show only a name"
     # One that was sent leaves room for another: how many show only a name is not known.
     overrides(home, b="off")
-    assert places(claude(home))[0.01] == "1% now · not all fit"
+    assert places(claude(home))[0.01] == "1% now · about 3 of 9 show only a name"
 
 
 # The limit line's places, with the preview's changes
@@ -339,14 +347,12 @@ def test_the_preview_changes_the_places_and_not_the_sentence_at_rest(home):
 def test_by_a_count_the_places_count_the_preview(home):
     counted_chat(home)
     cc = claude(home, {"j": "off"})
-    # Nine take 9 x 1,205 + 8 = 10,853 characters.
-    assert places(cc)[0.01] == "1% now · not all fit"
-    assert places(cc)[0.013] == "1.3% · not all fit"
+    # Nine take 9 x 1,205 + 8 = 10,853 characters: not all fit, about three do not.
+    assert places(cc)[0.01] == "1% now · about 3 of 9 show only a name"
+    assert places(cc)[0.013] == "1.3% · about 1 of 9 show only a name"
     assert places(cc)[0.014].startswith("1.4% · all 9 fit")
     assert cc["limit"]["offer"]["say"] == "1.4%: all 9 skills get their description"
-    assert cc["after"]["say"] == (
-        "After Apply, estimate: On a 200K window, not all descriptions would fit."
-    )
+    assert cc["after"]["say"] == about(3, 9).replace("Estimate:", "After Apply, estimate:")
     off = dict.fromkeys("abcd", "off")
     cc = claude(home, off)
     assert places(cc)[0.01] == "1% now · all 6 fit"
@@ -871,9 +877,9 @@ def test_an_added_codex_skill_takes_its_place_in_the_order_of_the_list(home):
     assert set(codex(home)["now"]["sent"]) == {"abc", "alpha"}
 
 
-def test_a_codex_chat_the_rule_does_not_rebuild_says_nothing_of_the_skills(home):
+def test_a_codex_chat_the_rule_does_not_rebuild_says_it_cannot_estimate_and_why(home):
     paths = codex_home(home, window=272_000)
     codex_chat(home, [f"- alpha: {CODEX_A[:20]} (file: {paths['alpha']})"])
     cx = codex(home)
     assert cx["checked"] is False
-    assert cx["changed"] == [] and cx["now"] is None
+    assert cx["changed"] == [CHANGED, NO_RULE.format("Codex")] and cx["now"] is None

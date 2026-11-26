@@ -171,7 +171,8 @@ export function offersSome(item, c) {
 
 // A button that adds every row of `bodies` to the tray, one after the other. While they all wait
 // there it says "In preview" and takes no press, as a preview button does (details.js).
-function rowsButton(label, bodies, look = "btn") {
+// `goes`: what goes with each row, said on it (a plugin's parts).
+function rowsButton(label, bodies, look = "btn", goes = null) {
   const words = el("span", "cut", label);
   const node = el("button", look);
   node.type = "button";
@@ -181,7 +182,7 @@ function rowsButton(label, bodies, look = "btn") {
   const waiting = () => bodies.every(queued);
   pressOnce(node, async () => {
     if (waiting()) return;
-    for (const body of bodies) if (!queued(body)) await review(body);
+    for (const body of bodies) if (!queued(body)) await review(body, { goes });
   });
   followTray(node, keyFor(bodies[0] || {}), () => previewLook(node, words, label, waiting()));
   return node;
@@ -200,7 +201,16 @@ export function queued(body) {
 // and a link's ×.
 const onLabel = (client) => `Turn on in ${CLIENT_NAMES[client]}…`;
 const removeLabel = (client) => `Remove from ${CLIENT_NAMES[client]}…`;
-const onActions = (item) => onBodies(item).map(({ client, body }) => ({ label: onLabel(client), body }));
+const onActions = (item) => onBodies(item).map(({ client, body }) => ({ label: onLabel(client), body, goes: goesWords(item, "on") }));
+
+// What goes with a plugin's switch, as Context's own switch says it: "Turns off all of plug: 2
+// skills, 1 command and 3 agents." Null for a skill, or when Kitden read nothing inside.
+const GOES_PARTS = [["skills", "skill", "skills"], ["commands", "command", "commands"], ["agents", "agent", "agents"], ["hooks", "hook", "hooks"], ["mcp_servers", "MCP server", "MCP servers"]];
+function goesWords(item, way) {
+  const inside = item.kind === "plugin" ? item.inside : null;
+  const parts = GOES_PARTS.filter(([key]) => ((inside || {})[key] || []).length).map(([key, one, more]) => plural(inside[key].length, one, more));
+  return parts.length ? `Turns ${way} all of ${item.name}: ${joinWords(parts)}.` : null;
+}
 const removeActions = (item) => removeBodies(item).map(({ client, body }) => ({ label: removeLabel(client), body }));
 // They act only on a client's own entry for all projects. Where the picked project's own settings
 // decide (`can.project`), one quiet line says so instead: its local settings (`can.local`), its
@@ -246,7 +256,7 @@ export function pluginCard(item, c, { addStep = () => {}, commandsStep = () => {
   const adds = (item.can && item.can.add) || [];
   if (adds.length) actions.push({ label: addLabel(adds), run: addStep, primary: true });
   const off = offBodies(item);
-  if (off.length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, off) });
+  if (off.length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, off, "btn", goesWords(item, "off")) });
   const here = hereBody(item, c);
   if (here) actions.push({ label: OFF_HERE, node: rowsButton(OFF_HERE, [here]) });
   const back = sharedBody(item, c);

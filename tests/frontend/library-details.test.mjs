@@ -363,6 +363,16 @@ test("a skill's Turn off for all projects adds one skill.rule row per client tha
   assert.deepEqual(offBodies(SUPERPOWERS), [{ action: 'plugin.disable', targets: [{ item: 'cc-sp' }], params: {} }]);
 });
 
+test("a plugin's row from the Library says what goes with it, as Context's does", async () => {
+  await reset();
+  const box = await showMap();
+  press(node(box, 'block:item:p2'));
+  await flush();
+  press(node(drawer, 'action:Turn off for all projects…'));
+  await flush();
+  assert.equal(tray.rows.at(-1).goes, 'Turns off all of superpowers: 3 skills and 1 command.');
+});
+
 test('Turn off in some projects… uses the project checklist', async () => {
   await reset();
   const skill = MEDIUM.groups[1].items[0];

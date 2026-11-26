@@ -355,16 +355,22 @@ function sidesFor(card, result, after, estimate, heat) {
     return cloud;
   });
   const apart = el("div", "ctx-cloud ctx-apart");
-  const off = el("div", "ctx-cloud");
+  const off = [];
+  const going = [];
   for (const skill of card.skills) {
-    // A skill the tray turns off leaves the list.
-    if (states[skill.name] === "off") continue;
+    // A skill the tray turns off leaves the list: it waits under Off after Apply, with the rest of
+    // its plugin when its plugin's switch turns it off.
+    if (states[skill.name] === "off") {
+      if (skill.state !== "off") going.push(skill);
+      continue;
+    }
     const back = turnedOn(skill, states);
     const side = sideOf(card, skill, result, estimate, back, Boolean(after && after.result), states[skill.name]);
-    // Off, and not in this list (an estimate leaves it out): it waits under Turned off, so it can
-    // come back.
-    const out = skill.state === "off" && !back && (estimate || !clouds[side]);
-    (out ? off : clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
+    // Off now: it waits under Turned off, so it can come back, also where the page shows the last
+    // chat's list, which still held it. The verdict and the bar keep that chat's fact.
+    const out = skill.state === "off" && !back;
+    if (out) off.push(skill);
+    else (clouds[side] || apart).append(pillFor(card, skill, states, after, heat, result));
   }
   const wrap = el("div");
   // What the number on a pill is: the same for every client (the Codex limit is in tokens, a pill's
@@ -372,13 +378,57 @@ function sidesFor(card, result, after, estimate, heat) {
   if (card.skills.some((s) => s.size)) wrap.append(el("p", "ctx-pillnote", PILL_NUMBERS));
   wrap.append(box);
   if (apart.children.length) wrap.append(apart);
-  if (off.children.length) {
-    const shelf = el("section", "ctx-off ctx-apart");
-    shelf.setAttribute("aria-label", "Turned off");
-    shelf.append(el("p", "ctx-off-head", "Turned off"), off);
-    wrap.append(shelf);
-  }
+  if (going.length) wrap.append(shelfFor(card, OFF_SHELVES.going, going, states, after, heat, result));
+  if (off.length) wrap.append(shelfFor(card, OFF_SHELVES.off, off, states, after, heat, result));
   return wrap;
+}
+
+// The shelves under the two sides: what the tray turns off, and what is off now.
+const OFF_SHELVES = { going: { head: "Off after Apply", look: "ctx-off ctx-going" }, off: { head: "Turned off", look: "ctx-off" } };
+
+// A shelf of skills that go off, or are off: those of one plugin together, on a line that names the
+// plugin, how many skills go with it and its one switch (the way back, or the row that waits); the
+// others as pills.
+function shelfFor(card, { head, look }, skills, states, after, heat, result) {
+  const shelf = el("section", `${look} ctx-apart`);
+  shelf.setAttribute("aria-label", head);
+  shelf.append(el("p", "ctx-off-head", head));
+  const plugins = new Map();
+  const alone = el("div", "ctx-cloud");
+  for (const skill of skills) {
+    const offer = skill.plugin_switch;
+    if (offer) plugins.set(offer.item, [...(plugins.get(offer.item) || []), skill]);
+    else alone.append(pillFor(card, skill, states, after, heat, result));
+  }
+  for (const members of plugins.values()) {
+    const offer = members[0].plugin_switch;
+    const row = el("div", "ctx-offplug");
+    const name = members[0].plugin || pluginName(offer);
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-label", name);
+    const line = el("p", "ctx-offline");
+    line.append(el("b", null, name), ` · ${members.length} ${members.length === 1 ? "skill" : "skills"}`);
+    const cloud = el("div", "ctx-cloud");
+    cloud.append(...members.map((skill) => pillFor(card, skill, states, after, heat, result)));
+    row.append(line, pluginButton(offer), cloud);
+    shelf.append(row);
+  }
+  if (alone.children.length) shelf.append(alone);
+  return shelf;
+}
+
+// The plugin's switch as one small button: the same row as its skills' Details.
+function pluginButton(offer) {
+  const body = { action: offer.action, targets: [{ item: offer.item }], params: {} };
+  const key = keyFor(body);
+  const node = button(offer.label, () => (trayRow(key) ? takeOut(key) : addToTray(body, { note: CONTEXT_NOTE, goes: offer.goes || null })), "btn small");
+  node.dataset.focus = `offplug:${offer.item}`;
+  followTray(node, key, () => {
+    const waits = Boolean(trayRow(key));
+    node.setAttribute("aria-pressed", String(waits));
+    node.classList.toggle("pending", waits);
+  });
+  return node;
 }
 
 // A skill's pill: its name and size, warmed by its heat on the first side; a cut one says how much
@@ -455,10 +505,13 @@ function openSkill(client, name) {
   if (!skill) return;
   // No size when Kitden could not read the description: 0 would be a claim.
   const facts = [];
+  // A plugin's skill names its plugin first: its switch is the plugin's, not the skill's.
+  const plugin = !skill.switch.length && skill.plugin_switch ? skill.plugin || pluginName(skill.plugin_switch) : null;
+  if (plugin) facts.push({ label: "Plugin", value: plugin });
   if (skill.size) facts.push({ label: "Size", value: `${fmt(skill.size)} characters` });
   if (skill.source) facts.push({ label: "Source", value: skill.source });
-  const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(skill.plugin_switch) : null;
-  const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: skill.note, text: describe(skill) });
+  const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(skill.plugin_switch, plugin) : null;
+  const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: plugin ? null : skill.note, text: describe(skill) });
   openPanel(content);
   panelState.current = { type: "context-skill", client, name };
   keepFrom(() => openSkill(client, name), content);
@@ -496,19 +549,24 @@ function ruleBody(card, skill, value) {
   return { action: "skill.rule", targets: [{ client: card.client, ...which }], params };
 }
 
-// A plugin skill's plugin: the server's sentence on what goes with it, and one button that adds the
-// Library's own row for the plugin (a second press takes it out).
-function pluginSwitch(offer) {
+// The plugin's name from its switch's label ("Turn off plug").
+const pluginName = (offer) => offer.label.replace(/^Turn (off|on) /, "");
+
+// A plugin skill's plugin: whose switch it is, the server's sentence on what goes with it, and one
+// button that adds the Library's own row for the plugin (a second press takes it out). The row says
+// what goes with it too. `plugin`: the plugin's name, for the line that says the switch is its.
+function pluginSwitch(offer, plugin = null) {
   const box = el("div", "ctx-plugin");
   const body = { action: offer.action, targets: [{ item: offer.item }], params: {} };
   const key = keyFor(body);
-  const node = button(offer.label, () => (trayRow(key) ? takeOut(key) : addToTray(body, { note: CONTEXT_NOTE })), "btn");
+  const node = button(offer.label, () => (trayRow(key) ? takeOut(key) : addToTray(body, { note: CONTEXT_NOTE, goes: offer.goes || null })), "btn");
   node.dataset.focus = `plugin:${offer.item}`;
   followTray(node, key, () => {
     const waits = Boolean(trayRow(key));
     node.setAttribute("aria-pressed", String(waits));
     node.classList.toggle("pending", waits);
   });
+  if (plugin) box.append(el("p", "why", `The switch is ${plugin}'s: it turns the whole plugin ${offer.action === "plugin.disable" ? "off" : "on"}, not one skill.`));
   if (offer.say) box.append(el("p", "why", offer.say));
   box.append(node);
   return box;
@@ -850,9 +908,19 @@ function howFor(lines) {
 
 // The tray's skill rules for the clients of `model`: client -> skill name -> state; and its
 // skill list limits under `limits`: client -> Claude Code's share or Codex's tokens (or "default").
+// A plugin's own switch, from Context or the Library (one row, `switch:<item>`), sets each skill
+// that follows that plugin.
 function draftFrom(model) {
   const draft = {};
   for (const { body } of tray.rows) {
+    if (body.action === "plugin.disable" || body.action === "plugin.enable") {
+      const item = (body.targets || [])[0]?.item;
+      const value = body.action === "plugin.disable" ? "off" : "on";
+      for (const card of (model && model.clients) || []) {
+        for (const skill of card.skills) if (skill.plugin_switch && skill.plugin_switch.item === item) (draft[card.client] ||= {})[skill.name] = value;
+      }
+      continue;
+    }
     if (body.action === "skill.limit") {
       const params = body.params || {};
       const value = "tokens" in params ? params.tokens : params.fraction;

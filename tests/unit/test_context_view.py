@@ -809,6 +809,8 @@ def test_a_plugins_skill_offers_to_turn_its_plugin_off_and_says_what_goes(home):
         "item": item.id,
         "action": "plugin.disable",
         "label": "Turn off plug",
+        # What goes with it, for its tray row too.
+        "goes": "Turns off all of plug: 2 skills, 1 command, 1 agent and 1 MCP server.",
         # The three lines of the last list: 24, 13 and 22 characters.
         "say": "Turns off all of plug: 2 skills, 1 command, 1 agent and 1 MCP server. "
         "About 59 fewer characters in the list.",
@@ -823,15 +825,30 @@ def test_a_plugin_turned_off_after_the_chat_is_turned_on_again_from_its_skill(ho
     assert (row["side"], row["state"], row["source"]) == (0, "off", "Plugin plug")
     assert row["plugin_switch"]["action"] == "plugin.enable"
     assert row["plugin_switch"]["label"] == "Turn on plug"
-    assert row["plugin_switch"]["say"] is None
+    # What comes back with it: the switch is the plugin's.
+    turns_on = "Turns on all of plug: 1 skill, 1 command, 1 agent and 1 MCP server."
+    assert row["plugin_switch"]["say"] == row["plugin_switch"]["goes"] == turns_on
     assert row["note"] == words.NOTE_OFF
 
 
-def test_an_off_plugins_skills_are_not_listed_after_a_new_chat(home):
+def test_an_off_plugins_skills_wait_off_after_a_new_chat_with_the_way_back(home):
     plugin(home, on=False)
     skill(home / ".claude/skills", "alpha", "Does alpha.")
     claude_chat(home, {"alpha": "Does alpha."})
-    assert set(rows_of(home)) == {"alpha"}
+    rows = rows_of(home)
+    assert set(rows) == {"alpha", "plug:tool"}
+    # Not in the list: it waits off, and its plugin's switch turns it on again.
+    row = rows["plug:tool"]
+    assert (row["side"], row["state"], row["note"]) == (None, "off", words.NOTE_OFF)
+    assert row["plugin_switch"]["label"] == "Turn on plug"
+
+
+def test_turning_an_off_plugin_on_in_the_preview_counts_its_skills(home):
+    plugin(home, on=False)
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"alpha": "Does alpha."})
+    card = view(home, draft={"claude_code": {"plug:tool": "on"}})["claude_code"]
+    assert "plug:tool" in card["after"]["result"]["sent"]
 
 
 def test_two_plugins_with_one_name_offer_no_switch_for_a_command(home):

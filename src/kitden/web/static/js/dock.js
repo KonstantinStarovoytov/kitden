@@ -32,8 +32,10 @@ export function outcomeLine(change) {
 
 // A row's words, from its own part of the preview: the title of the change, then what it will do
 // (or the note the caller gave it).
-export function rowWords(part, body, note) {
-  return { title: changeWords(part, body).title, detail: outcomeLine(part) || note || "" };
+// `goes`: what goes with the change, before its outcome ("Turns off all of plug: 2 skills."). A
+// plugin's switch says it whether Context or the Library added the row (`addToTray`'s `goes`).
+export function rowWords(part, body, note, goes = null) {
+  return { title: changeWords(part, body).title, detail: [goes, outcomeLine(part) || note].filter(Boolean).join(" ") };
 }
 
 const STALE = "Settings changed since this preview.";

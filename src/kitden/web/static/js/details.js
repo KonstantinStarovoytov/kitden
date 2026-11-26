@@ -135,7 +135,7 @@ export function factsBlock(rows) {
 // One action of a card as a button: `run()` on press, else a preview button that adds `body`, with
 // its `note`, to the tray; or a control the card made itself (`node`). The whole label stays in the
 // hover text when the column cuts it.
-function cardButton({ label, run, body, note = null, primary = false, node: own = null }) {
+function cardButton({ label, run, body, note = null, goes = null, primary = false, node: own = null }) {
   if (own) return own;
   const look = primary ? "btn primary" : "btn";
   let node = null;
@@ -144,7 +144,7 @@ function cardButton({ label, run, body, note = null, primary = false, node: own 
     node.title = label;
     node.append(el("span", "cut", label));
   } else {
-    node = previewButton(label, body, { note, look });
+    node = previewButton(label, body, { note, look, goes });
   }
   node.dataset.focus = `action:${label}`;
   return node;
@@ -333,7 +333,7 @@ export function switchNode(on, press, key = null, label = null) {
 // so it keeps focus and a keyboard user stays where they were: while its add is asked it shows
 // the busy spinner after a moment (aria-busy) and takes no second press. The hover text keeps
 // what it does.
-export function previewButton(label, body, { note = null, look = "btn", back = null } = {}) {
+export function previewButton(label, body, { note = null, look = "btn", back = null, goes = null } = {}) {
   const key = keyFor(body);
   const words = el("span", "cut", label);
   const node = el("button", look);
@@ -349,7 +349,7 @@ export function previewButton(label, body, { note = null, look = "btn", back = n
       node.classList.add("busy");
       node.setAttribute("aria-busy", "true");
     }, 150);
-    Promise.resolve(review(body, { note, back })).catch(reportError).finally(() => {
+    Promise.resolve(review(body, { note, back, goes })).catch(reportError).finally(() => {
       clearTimeout(slow);
       delete node.dataset.working;
       if (!shown) return;

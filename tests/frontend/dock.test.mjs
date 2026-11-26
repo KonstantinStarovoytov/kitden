@@ -385,6 +385,8 @@ test('rowWords is the title of the change and its outcome, else the note', () =>
   assert.deepEqual(rowWords({ ...remove, after }, {}, 'A note.'), { title: changeWords(remove, {}).title, detail: 'Claude Code: Off.' });
   assert.equal(rowWords({ ...remove, after: [] }, {}, 'A note.').detail, 'A note.');
   assert.equal(rowWords({ ...remove, after: [] }, {}, null).detail, '');
+  // What goes with the change comes first: a plugin's switch from Context names its parts.
+  assert.equal(rowWords({ ...remove, after }, {}, 'A note.', 'Turns off all of plug: 2 skills.').detail, 'Turns off all of plug: 2 skills. Claude Code: Off.');
 });
 
 test("the outcome line groups the After chips by word, else the first note's first sentence", () => {
