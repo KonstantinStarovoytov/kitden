@@ -33,6 +33,9 @@ nothing from it.
   the app gives it. When you turn one off on the page and press Apply, Kitden writes its key in
   `enabledPlugins` of Claude Code's settings, with a backup you can undo. Nothing goes to your
   account.
+- In a project that is a git worktree, the `.git` file in its folder, which names the main
+  checkout. Kitden uses it to tell which plugins and servers serve that project, and runs no git
+  command.
 - Versions and plugin lists, from the clients' own commands.
 - A client you turned off in Kitden is not read, and none of its commands are run.
 

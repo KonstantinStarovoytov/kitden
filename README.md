@@ -50,7 +50,7 @@ It changes nothing until you press Apply, and every change can be undone.</p>
 
 Every chat starts with the list of your skills, and that list has a small budget: 1% of the context window in Claude Code (or the share you set in its settings), 2% in Codex. Past it, Claude Code sends some skills by name
 only and Codex shortens or drops them, so the agent may never reach for them. Kitden reads the
-last chat's log and shows which skills went in whole, so you can turn off the ones you do not use, or drag the limit line to give the list more room. A skill's Details shows its description, with the part the agent did not get in grey. A
+last chat's log and shows which skills went in whole, and says how the list stands now if you added or turned off skills since. Turn off the ones you do not use, or drag the limit line to give the list more room. A skill's Details shows its description, with the part the agent did not get in grey. A
 guess for another window is marked Estimate. Cursor gets no verdict: Kitden cannot see what it
 sends.
 
@@ -61,7 +61,7 @@ sends.
 
 Claude Code, Codex and Cursor each keep their own settings. Kitden puts their plugins, skills,
 MCP servers and instruction files on one map, so what one agent has and another lacks shows
-at a glance. Add what an agent is missing, turn an item off or remove it, on the same page.
+at a glance. Pick an agent to see just what it loads. Add what an agent is missing, turn an item off or remove it, on the same page.
 
 <img src="docs/images/readme/library-light.png#gh-light-mode-only" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
 <img src="docs/images/readme/library-dark.png#gh-dark-mode-only" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
