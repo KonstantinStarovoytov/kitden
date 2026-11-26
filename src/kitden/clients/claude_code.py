@@ -41,6 +41,7 @@ from kitden.clients.base import (
     skill_items,
     toggle_action,
 )
+from kitden.clients.claude_account import AccountPlugin, account_plugins, is_account_plugin
 from kitden.clients.claude_folder import ClaudeFolder, claude_folder
 from kitden.clients.versions import highest_version, is_supported
 from kitden.local_gateway.project import main_checkout
@@ -71,6 +72,15 @@ NEW_SESSION = "Start a new Claude Code session (or a new Code tab chat) for this
 LIMIT_KEY = "skillListingBudgetFraction"
 RELOAD = "Run /reload-plugins in Claude Code, or start a new session, for this to take effect."
 ACCOUNT_HINT = "Stored in your Claude account. Change it in the Claude app or on claude.ai."
+# A plugin of the Claude account that the Claude app gives Claude Code (claude_account.py).
+ACCOUNT_PLUGIN_HINT = (
+    "The Claude app adds it from your Claude account. Turned off here, it stays in your account: "
+    "to remove it there, turn it off in the Claude app or on claude.ai."
+)
+ACCOUNT_REQUIRED_HINT = (
+    "Your organization requires it in your Claude account, so it has no switch here."
+)
+ACCOUNT_OFF_HINT = "Off in your Claude account. Turn it on in the Claude app or on claude.ai."
 DESKTOP = "claude_desktop_code_tab"
 # In kitden.system's Claude Desktop folder. On Linux (a beta for Ubuntu 22.04+ and Debian 12+,
 # support.claude.com, checked 2026-11-03) the folder is assumed to be ~/.config/Claude, like
@@ -395,6 +405,8 @@ class ClaudeCodeAdapter(ClientAdapter):
 
     def plugin_step(self, item: Item, enable: bool) -> Step:
         check_toggle(self, item, enable)
+        if is_account_plugin(item):
+            return self._account_plugin_step(item, enable)
         if item.scope is Scope.PROJECT:
             need_folder(item.project)
         edit = FileEdit(
@@ -414,6 +426,20 @@ class ClaudeCodeAdapter(ClientAdapter):
             cwd=item.project if item.scope is Scope.PROJECT else None,
             restart_note=RELOAD,
             shared_file=item.scope is Scope.PROJECT,
+        )
+
+    # checked 2026-11-26 (Claude Code 2.1.330 and 2.1.311, a made-up plugin given with
+    # --plugin-dir and over stdin, in a sandbox home): `"<name>@inline": false` in enabledPlugins
+    # keeps the plugin out of the session; `"<name>@synced": false` does not. `claude plugin
+    # enable <name>@inline` after a disable also writes `"<name>@synced": false`, a key the
+    # review would not show, so Kitden writes the one key itself, with true to turn it on.
+    def _account_plugin_step(self, item: Item, enable: bool) -> Step:
+        """A plugin of the Claude account turned on or off in the user's settings."""
+        edit = FileEdit(
+            path=str(item.source.path), fmt="json", key=("enabledPlugins", item.name), after=enable
+        )
+        return Step(
+            client=CLIENT, scope=Scope.USER, name=item.name, edit=edit, restart_note=NEW_SESSION
         )
 
     def _rule_files(self, project: str | None, key: tuple[str, str], off: bool) -> list[Path]:
@@ -599,8 +625,10 @@ class ClaudeCodeAdapter(ClientAdapter):
         return roots
 
     def plugin_folders(self) -> dict[str, Path]:
-        """Plugin id -> its install folder, the first one in `installed_plugins.json` on disk."""
-        record = as_dict(Reader(CLIENT).json(self.folder.plugins / "installed_plugins.json"))
+        """Plugin id -> its install folder, the first one in `installed_plugins.json` on disk;
+        then the folders of the Claude account's plugins in the Claude app's folder."""
+        read = Reader(CLIENT)
+        record = as_dict(read.json(self.folder.plugins / "installed_plugins.json"))
         out: dict[str, Path] = {}
         for plugin_id, installs in as_dict(record.get("plugins")).items():
             for install in installs if isinstance(installs, list) else []:
@@ -608,6 +636,8 @@ class ClaudeCodeAdapter(ClientAdapter):
                 if isinstance(where, str) and Path(where).is_dir():
                     out[plugin_id] = Path(where)
                     break
+        for plugin in account_plugins(claude_desktop_dir(self.home), read):
+            out.setdefault(plugin.id, plugin.folder)
         return out
 
     def setup_server_step(self, command: str, args: list[str]) -> Step:
@@ -763,6 +793,8 @@ class ClaudeCodeAdapter(ClientAdapter):
                 where = as_dict(install).get("installPath", "")
                 if isinstance(where, str):
                     scan.items += self._plugin_parts(read, Path(where), state_on)
+        for plugin in account_plugins(claude_desktop_dir(self.home), read):
+            scan.items += self._account_plugin(read, plugin, enabled, settings_known)
         account = Source(
             kind=SourceKind.ACCOUNT,
             path=None,
@@ -948,7 +980,44 @@ class ClaudeCodeAdapter(ClientAdapter):
         items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
         return items, (rules if known else None), hooks_rule
 
-    def _plugin_parts(self, read: Reader, root: Path, enabled: Enabled) -> list[Item]:
+    def _account_plugin(
+        self, read: Reader, plugin: AccountPlugin, enabled: dict, known: bool
+    ) -> list[Item]:
+        """A plugin of the Claude account and its parts. Its key in the user's settings turns it
+        on or off, as any plugin's; with no key, plugin.json's `defaultEnabled` does (checked
+        2026-11-26, Claude Code 2.1.330: `false` there kept a made-up plugin off). One that the
+        organization requires, or that the account has off, has no switch here."""
+        ruled = known and plugin.id in enabled
+        if plugin.off_in_account:
+            state = Enabled.OFF
+        elif not known:
+            state = Enabled.UNKNOWN
+        elif ruled:
+            state = Enabled.OFF if enabled[plugin.id] is False else Enabled.ON
+        else:
+            state = Enabled.ON if plugin.on_by_default else Enabled.OFF
+        hint = ACCOUNT_PLUGIN_HINT
+        source = file_source(self.folder.settings, CLIENT, f"enabledPlugins.{plugin.id}")
+        if plugin.off_in_account or plugin.required:
+            hint = ACCOUNT_OFF_HINT if plugin.off_in_account else ACCOUNT_REQUIRED_HINT
+            source = Source(kind=SourceKind.ACCOUNT, path=None, owner_client=CLIENT)
+        item = Item(
+            client=CLIENT,
+            kind=ItemKind.PLUGIN,
+            name=plugin.id,
+            source=source,
+            scope=Scope.USER,
+            enabled=state,
+            state_scope=Scope.USER if ruled else None,
+            change_hint=hint,
+        )
+        return [item, *self._plugin_parts(read, plugin.folder, state, plugin.id)]
+
+    def _plugin_parts(
+        self, read: Reader, root: Path, enabled: Enabled, plugin: str | None = None
+    ) -> list[Item]:
+        """A plugin's skills and MCP servers. `plugin` names the plugin when its folder's path
+        does not (match.plugin_of)."""
         if not root.is_dir():
             return []
         items = skill_items(
@@ -956,9 +1025,10 @@ class ClaudeCodeAdapter(ClientAdapter):
         )
         mcp_path = root / ".mcp.json"
         servers = as_dict(read.json(mcp_path)).get("mcpServers")
-        return items + mcp_items(
+        items += mcp_items(
             CLIENT, servers, mcp_path, Scope.PLUGIN, enabled=enabled, kind=SourceKind.PLUGIN
         )
+        return [replace(i, plugin=plugin) for i in items] if plugin else items
 
 
 def user_folder(adapters: Mapping[str, ClientAdapter], home: Path) -> ClaudeFolder:

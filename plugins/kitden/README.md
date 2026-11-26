@@ -51,7 +51,7 @@ includes the limits Claude Code's settings set for the skill list (`skillListing
 and `skillListingMaxDescChars`); only the Kitden page, after your Apply, can raise the first,
 and Codex's `[skills] max_context_tokens`. For
 the context check it also reads what the client sent in your last chats, from the client's own
-chat files, the skills the Claude app gives Claude Code, from the app's own folder, and Codex's
+chat files, the skills and plugins the Claude app gives Claude Code, from the app's own folder, and Codex's
 model list (`models_cache.json`), for the size of its context window. For Codex it also reads
 the skill files of a plugin's newest version, when an update removed the version the chat used,
 and whether a skill's `agents/openai.yaml` keeps it off the list.

@@ -1091,13 +1091,14 @@ def test_the_list_has_the_two_tabs_and_one_column_per_client(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     answer = _list(home)
     assert [c["id"] for c in answer["columns"]] == ["claude_code", "codex", "cursor"]
-    # One group row per source, as the map draws them: marketplaces, Other plugins (here only the
-    # account's), then Your skills and Your settings. Every item has one cell per client.
+    # One group row per source, as the map draws them: marketplaces, From your Claude account
+    # (here only the account row), then Your skills and Your settings. Every item has one cell per
+    # client.
     assert [(g["key"], g["kind"]) for g in answer["groups"]] == [
         ("marketplace:cursor-public", "marketplace"),
         ("marketplace:demo-market", "marketplace"),
         ("marketplace:openai-bundled", "marketplace"),
-        ("other", "other"),  # Claude account plugins and connectors
+        ("account", "account"),  # Claude account plugins and connectors
         ("skills", "skills"),
         ("settings", "settings"),
     ]
@@ -1280,8 +1281,8 @@ def test_a_plugin_kitden_read_nothing_inside_keeps_its_skills_and_account_plugin
     # Search and Differences see them too.
     assert "documents" in _items(_list(home, q="pptx"))
     assert "documents" in _items(_list(home, show="diff"))
-    # Claude Code keeps some plugins in the account: Unknown, under "Other plugins".
-    other = next(g for g in _list(home)["groups"] if g["key"] == "other")
+    # Claude Code keeps some plugins in the account: Unknown, under "From your Claude account".
+    other = next(g for g in _list(home)["groups"] if g["key"] == "account")
     account = next(
         i for i in other["items"] if i["name"] == "Claude account plugins and connectors"
     )
@@ -1313,7 +1314,7 @@ def test_an_instruction_file_cell_is_unknown_for_a_client_kitden_could_not_read(
 
 def test_the_account_row_says_why_and_goes_with_its_hidden_column(tmp_path):
     home = build_demo_home(tmp_path, "medium")
-    other = next(g for g in _list(home)["groups"] if g["key"] == "other")
+    other = next(g for g in _list(home)["groups"] if g["key"] == "account")
     account = other["items"][0]
     assert (account["name"], account["account"]) == ("Claude account plugins and connectors", True)
     assert account["reason"] == (
@@ -1321,7 +1322,7 @@ def test_the_account_row_says_why_and_goes_with_its_hidden_column(tmp_path):
     )
     # Only Claude Code has it: with Claude Code hidden it is left out, and so is its group.
     hidden = _list(home, hidden=frozenset({"claude_code"}))
-    assert "other" not in [g["key"] for g in hidden["groups"]]
+    assert "account" not in [g["key"] for g in hidden["groups"]]
 
 
 def test_cursor_gets_nothing_through_claude_code_when_claude_code_is_not_found(home):

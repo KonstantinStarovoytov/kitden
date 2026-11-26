@@ -17,6 +17,7 @@ from datetime import datetime
 
 from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.clients.base import PLUGIN_REMOVE, REMOVE_DIRECT, SKILL_REMOVE, listed_columns
+from kitden.clients.claude_account import is_account_plugin
 from kitden.model import (
     CLIENT_WORDS,
     CLIENTS,
@@ -31,7 +32,14 @@ from kitden.model import (
 from kitden.views.effective import DESKTOP, column_of, effective_view, overrides
 from kitden.views.findings import base_name, find_bypasses, find_findings, group_of
 from kitden.views.match import Copies, is_compared, odd_sources, plugin_copies, plugin_of
-from kitden.views.words import CLIENT_UNREAD, NOT_SAME, ORIGIN_WORDS, ROUTE_WORDS, STALE
+from kitden.views.words import (
+    ACCOUNT_SOURCE,
+    CLIENT_UNREAD,
+    NOT_SAME,
+    ORIGIN_WORDS,
+    ROUTE_WORDS,
+    STALE,
+)
 
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
 
@@ -247,6 +255,8 @@ def load_map(inventory, project: str | None) -> list[Row]:
         key = row_key(item)
         if key not in rows:
             marketplace = item.name.partition("@")[2] if item.kind is ItemKind.PLUGIN else ""
+            if is_account_plugin(item):
+                marketplace = ACCOUNT_SOURCE  # no marketplace: the Claude app gives it
             rows[key] = Row(
                 key=key,
                 kind=item.kind,

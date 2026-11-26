@@ -24,11 +24,17 @@ from kitden.clients.base import (
     found_columns,
     from_plugin,
 )
+from kitden.clients.claude_account import FROM_APP, is_account_plugin
 from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, ClaudeCodeAdapter, local_files
 from kitden.clients.claude_folder import ClaudeFolder, claude_folder
 from kitden.clients.codex import skills_off
 from kitden.clients.versions import highest_version
-from kitden.context.claude_log import Unreadable, earlier_descriptions, last_claude_list
+from kitden.context.claude_log import (
+    INTERACTIVE,
+    Unreadable,
+    earlier_descriptions,
+    last_claude_list,
+)
 from kitden.context.codex_log import CodexSent, codex_window, codex_windows, last_codex_list
 from kitden.context.rules import (
     ClaudeFit,
@@ -371,7 +377,7 @@ def _source(item: Item | None, built_in: bool) -> str | None:
         return words.SOURCE_BUILT_IN if built_in else None
     if from_plugin(item):
         plugin = plugin_of(item)
-        return words.SOURCE_PLUGIN.format(plugin.split("@")[0]) if plugin else None
+        return _plugin_words(plugin) if plugin else None
     if item.project:
         return words.SOURCE_PROJECT.format(Path(item.project).name)
     return words.SOURCE_OWN
@@ -615,8 +621,24 @@ def _claude_plugins(inventory, home: Path, claude: ClaudeFolder, folder: str | N
     )
 
 
-def _plugin_note(note: str | None, offer: dict | None) -> str | None:
-    return words.NOTE_PLUGIN_SWITCH if offer and note == words.NOTE_PLUGIN else note
+def _plugin_words(plugin_id: str) -> str:
+    """ "Plugin garden", or "Plugin garden from your Claude account"."""
+    name = plugin_id.split("@")[0]
+    if plugin_id.endswith(FROM_APP):
+        return words.SOURCE_ACCOUNT_PLUGIN.format(name)
+    return words.SOURCE_PLUGIN.format(name)
+
+
+def _plugin_note(note: str | None, offer: dict | None, plugin: Item | None = None) -> str | None:
+    """The note of a plugin's part: its plugin's switch is here, or in the Library; a plugin of
+    the Claude account with no switch says where it is turned on or off."""
+    if note != words.NOTE_PLUGIN:
+        return note
+    if offer:
+        return words.NOTE_PLUGIN_SWITCH
+    if plugin is not None and is_account_plugin(plugin) and plugin.change_hint:
+        return plugin.change_hint
+    return note
 
 
 def _outside(row: _Row, plugins: _Plugins) -> tuple[str | None, str | None]:
@@ -625,8 +647,9 @@ def _outside(row: _Row, plugins: _Plugins) -> tuple[str | None, str | None]:
     prefix = row.name.rpartition(":")[0]
     if row.item is not None or not prefix:
         return None, None
-    if plugins.named(prefix):
-        return words.SOURCE_PLUGIN.format(prefix), words.NOTE_PLUGIN
+    named = plugins.named(prefix)
+    if named:
+        return _plugin_words(named[0].name), words.NOTE_PLUGIN
     # checked 2026-11-24 (code.claude.com/docs/en/skills): the name is reserved for skills synced
     # from claude.ai, which the Claude app may give to Claude Code as a plugin.
     if prefix == "anthropic-skills":
@@ -1244,10 +1267,14 @@ def _claude(
     # The skills there that the last chat's list does not hold: the next chat lists them, unless
     # they are off or only asked for.
     listed = {r.name for r in rows}
+    # The Claude app gives the plugins of the Claude account only to its own chats: after a
+    # terminal chat they are not the next chat's (the terminal gets them as `@synced` copies,
+    # which Kitden does not read; claude_account.py).
+    app_chat = found.surface == INTERACTIVE["claude-desktop"]
     extras = [
         _claude_row(name, None, item, item.source.path)
         for name, item in loaded.items()
-        if name not in listed
+        if name not in listed and (app_chat or not (plugin_of(item) or "").endswith(FROM_APP))
     ]
     files = _claude_files(home, claude, found.folder)
     rules = _built_in_rules(files)
@@ -1536,7 +1563,7 @@ def _claude(
                 r.item,
                 size,
                 side,
-                _plugin_note(outside or note, offer),
+                _plugin_note(outside or note, offer, plugins.of(r)),
                 r.built_in,
                 text,
                 seen,
@@ -1557,7 +1584,7 @@ def _claude(
                 r.item,
                 len(r.full or ""),
                 None,
-                project_rule if held else _plugin_note(note, offer),
+                project_rule if held else _plugin_note(note, offer, plugins.of(r)),
                 r.built_in,
                 description=r.page_text,
                 state=states[r.name],

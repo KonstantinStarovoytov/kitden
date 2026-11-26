@@ -1,0 +1,10 @@
+{
+  "lastUpdated": 1795000000000,
+  "plugins": [
+    {"id": "plugin_01GARDEN0000000000000000", "name": "00000000-0000-4000-8000-00000000c001", "displayName": "Garden", "marketplaceName": "anthropic-plugin-directory", "installationPreference": "available"},
+    {"id": "plugin_01NIMBUS0000000000000000", "name": "00000000-0000-4000-8000-00000000c002", "displayName": "Nimbus", "marketplaceName": "anthropic-plugin-directory", "installationPreference": "available"},
+    {"id": "plugin_01TOWER00000000000000000", "name": "00000000-0000-4000-8000-00000000c003", "displayName": "Tower", "marketplaceName": "made-up-org-library", "installationPreference": "required"},
+    {"id": "../outside", "name": "00000000-0000-4000-8000-00000000c004", "installationPreference": "available"},
+    {"id": "plugin_01GONE0000000000000000000", "name": "00000000-0000-4000-8000-00000000c005", "installationPreference": "available"}
+  ]
+}

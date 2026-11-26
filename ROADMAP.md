@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-11-25
+Last updated: 2026-11-26
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -13,6 +13,11 @@ What Kitden does today and what comes next. Ideas and bugs:
   stack brings that client's plugins, skills or servers to its front, dims the others in it, and
   its badge says how many are that client's ("3 of 55"). Before, every card on the front looked
   loaded by the client.
+- **The plugins of your Claude account are in the Library:** the plugins the Claude app gives
+  Claude Code from your Claude account have a group of their own, "From your Claude account".
+  Each shows what it holds and can be turned off for all projects or one, with Undo; it stays in
+  your account. On Context their skills name their plugin and offer its switch, instead of saying
+  they have none. The terminal's own copies of these plugins are not read yet (#219).
 - **Codex skills in sub-folders:** Kitden now finds a Codex skill in a sub-folder of a skills folder,
   also one inside another skill's folder. It has a row, a switch on Context, and counts in the
   estimates when you add it after the last chat. Removing the outer skill names the skills that go
@@ -788,6 +793,8 @@ Left for later in the alignment plan's phase notes:
 
 ## Later
 
+- The terminal's own copies of the Claude account's plugins (`~/.claude/plugins/synced`), once
+  a real install shows how that folder holds them.
 - Skills per project: turn skills on or off for one project, as tools are today.
 - A living map with connected comparison and access views, as designed in `design/kitden.pen`;
   prototype and test it before implementation.

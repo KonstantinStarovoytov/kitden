@@ -157,6 +157,9 @@ class Item:
     # `disableAllHooks`; a server's is "off", from `disabledMcpServers`). The effective view
     # applies the one for its project; the item itself shows the user's rule.
     project_rules: tuple[tuple[str, Enabled, Scope, str], ...] = ()
+    # A plugin's part whose path does not name its plugin (one of the Claude account's): the
+    # plugin's id. None: the path says it (match.plugin_of).
+    plugin: str | None = None
     # Equal for two MCP entries the Kitden gateway would run the same way (entries.entry_key).
     # Its values can be secrets, so it stays on the server: item_dict leaves it out.
     entry_key: str | None = field(default=None, repr=False)

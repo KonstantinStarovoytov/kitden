@@ -1,4 +1,4 @@
-"""Flow 17: a stack of the map under a selection. "Your skills" of the sample holds skills of Claude
+"""Flow 18: a stack of the map under a selection. "Your skills" of the sample holds skills of Claude
 Code and of Codex, so its stack mixes them. Selecting or pointing at a client brings that client's
 cards to the front of the stack, and no other card of it looks lit."""
 
