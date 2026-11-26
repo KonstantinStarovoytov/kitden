@@ -24,7 +24,8 @@ def test_docs_promise_no_undo_they_cannot_keep():
     guide = " ".join((ROOT / "docs/guide.md").read_text().split())
     assert "Look at each change first. Apply keeps a backup for Undo." in guide
     for name in ("README.md", "docs/guide.md"):
-        assert "any time" not in (ROOT / name).read_text(), name
+        # As words of their own: "how many times" is not the promise.
+        assert not re.search(r"\bany time\b", (ROOT / name).read_text()), name
 
 
 def test_readme_is_short_and_the_guide_names_the_page_words():
