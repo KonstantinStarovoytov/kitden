@@ -7,7 +7,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
-### Not yet released
+### 0.13.0
 
 - **A stack on the map shows whose cards it holds:** with a client selected or pointed at, a folded
   stack brings that client's plugins, skills or servers to its front, dims the others in it, and
