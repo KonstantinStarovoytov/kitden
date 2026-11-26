@@ -28,6 +28,7 @@ from kitden.clients.base import (
 from kitden.clients.claude_account import FROM_APP, is_account_plugin
 from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, ClaudeCodeAdapter, local_files
 from kitden.clients.claude_folder import ClaudeFolder, claude_folder
+from kitden.clients.codex import skills_in as codex_skills_in
 from kitden.clients.codex import skills_off
 from kitden.clients.versions import highest_version
 from kitden.context.claude_log import (
@@ -1882,8 +1883,9 @@ def _codex_plugin_skills(codex_home: Path, plugin_id: str) -> list[tuple[str, st
     versions = visible_folders(plugin)
     has_files = (plugin / ".codex-plugin").is_dir() or not versions
     folder = plugin if has_files else max(versions, key=lambda v: v.stat().st_mtime)
-    files = sorted((folder / "skills").glob("*/SKILL.md"))
-    return [(f"{name}:{f.parent.name}", _description(str(f))) for f in files]
+    # As Codex walks a skills folder: sub-folders too (`skills_in`, checked 2026-11-25).
+    found = codex_skills_in(folder / "skills")
+    return [(f"{name}:{skill}", _description(str(path))) for skill, path, _ in found]
 
 
 def _codex_policy(path: str) -> Path:

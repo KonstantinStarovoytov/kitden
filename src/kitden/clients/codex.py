@@ -122,7 +122,7 @@ def _on(value: Any) -> Enabled:
     return Enabled.OFF if value is False else Enabled.ON
 
 
-def _skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
+def skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
     """Skills in `folder`, sub-folders too, as Codex's own walk finds them: (name, real SKILL.md
     path, the skill's folder as found when a link leads to it).
 
@@ -627,7 +627,7 @@ class CodexAdapter(ClientAdapter):
         folder that the other links to is its real folder."""
         by_path: dict[str | None, Item] = {}
         for folder in (self.home / ".agents/skills", self.codex_home / "skills"):
-            for item in skill_items(CLIENT, folder, Scope.USER, CLIENT, find=_skills_in):
+            for item in skill_items(CLIENT, folder, Scope.USER, CLIENT, find=skills_in):
                 kept = by_path.get(item.source.path)
                 if kept is None or (kept.source.link_path and not item.source.link_path):
                     by_path[item.source.path] = item
@@ -687,7 +687,7 @@ class CodexAdapter(ClientAdapter):
                 Scope.PROJECT,
                 CLIENT,
                 project=str(root),
-                find=_skills_in,
+                find=skills_in,
             ):
                 items.append(
                     replace(item, enabled=Enabled.OFF) if item.source.path in off else item

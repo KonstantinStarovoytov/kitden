@@ -212,3 +212,16 @@ def test_a_codex_plugin_a_project_sets_has_no_switch_for_all_projects(home):
     card = view(home, folder=str(project))["codex"]
     group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
     assert group["switch"] is None and group["why"] == words.GROUP_WHY_PROJECT
+
+
+def test_an_off_codex_plugin_keeps_its_nested_skills(home):
+    # Codex finds a skill in a sub-folder of skills/, so Kitden does too.
+    paths = codex_home(home, window=20_000)
+    folder = home / ".codex/plugins/cache/market/plug"
+    skill(folder / "skills/tools", "tool", "Does one thing.")
+    (folder / ".codex-plugin").mkdir(parents=True)
+    (home / ".codex/config.toml").write_text('[plugins."plug@market"]\nenabled = false\n')
+    codex_chat(home, [f"- alpha: Does alpha. (file: {paths['alpha']})"])
+    card = codex(home)
+    group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
+    assert group["skills"] == ["plug:tool"] and group["switch"]["label"] == "Turn on plug"
