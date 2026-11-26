@@ -315,12 +315,28 @@ ACCOUNT_SOURCE = "Claude account"
 ACCOUNT_ONLY_CLAUDE = "Only Claude Code gets the plugins of your Claude account."
 SOURCE_PROJECT = "Project {}"
 SOURCE_OWN = "Your skills"
+# The groups that plugins and skills are put in by where they come from: one table for the
+# Library and the Context page (a plugin's group there is named after the plugin).
+GROUP_WORDS = {
+    "own": SOURCE_OWN,
+    "account": ACCOUNT_GROUP,
+    "other": "Other plugins",
+    "built_in": SOURCE_BUILT_IN,
+    "app": "The Claude app or your Claude account",
+    "unknown": "Skills Kitden cannot place",
+}
+# Why a group on the Context page has no switch of its own, and where to go instead.
+GROUP_WHY_BUILT_IN = (
+    "Built into Claude Code: there is no switch for all of them. Most have a switch of their "
+    "own, in their Details."
+)
+GROUP_WHY_PLUGIN = "Kitden has no switch for this plugin here. Turn it off in the Library."
 # One skill's Details line.
 NOTE_BUILT_IN = (
     "Kitden has not checked that Claude Code can turn this skill off, so it has no switch here."
 )
 # A skill of Claude Code's list that is no item here.
-SOURCE_APP = "The Claude app or your Claude account"
+SOURCE_APP = GROUP_WORDS["app"]
 NOTE_APP = "The Claude app or your Claude account adds this skill. Kitden has no switch for it."
 NOTE_OTHER_PLUGIN = (
     "{} is not a plugin Claude Code installed, so it has no switch here. "

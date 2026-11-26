@@ -1550,3 +1550,123 @@ test('while the plugin\'s switch waits, all of its skills go off together, and i
   assert.equal(text(byClass(off, 'ctx-offline')[0]), 'plug2 · 1 skill');
   assert.ok(buttonIn(off, 'Turn on plug2'));
 });
+
+// The skills by where they come from (spec context-by-source): Claude Code on TIGHT, with alpha and
+// gamma in Your skills and the plugin plug's two skills, one sent, one only a name; and plug2, off.
+const P1 = { item: 'p1', action: 'plugin.disable', label: 'Turn off plug', say: null };
+const P2 = { item: 'p2', action: 'plugin.enable', label: 'Turn on plug2', say: null };
+const GROUPED = {
+  ...TIGHT,
+  windows: [{ ...TIGHT.windows[0], result: { ...TIGHT.windows[0].result, sent: { alpha: 4000, 'plug:tool': 2000, 'plug2:old': 500 }, over: { gamma: 3000, 'plug:start': 800 } } }],
+  skills: [
+    skill('alpha', 3990, 0, { group: 'own' }), skill('gamma', 2998, 1, { group: 'own' }),
+    skill('plug:tool', 1990, 0, { group: 'plugin:plug@m', plugin: 'plug', shown: 'tool', switch: [], plugin_switch: P1 }),
+    skill('plug:start', 790, 1, { group: 'plugin:plug@m', plugin: 'plug', shown: 'start', switch: [], plugin_switch: P1 }),
+    skill('plug2:old', 490, 0, { group: 'plugin:plug2@m', plugin: 'plug2', shown: 'old', switch: [], plugin_switch: P2, state: 'off' }),
+  ],
+  groups: [
+    { key: 'own', kind: 'own', name: 'Your skills', from: null, lookup: null, switch: null, why: null, skills: ['alpha', 'gamma'] },
+    { key: 'plugin:plug@m', kind: 'plugin', name: 'plug', from: 'm', lookup: 'plug@m', switch: P1, why: null, skills: ['plug:tool', 'plug:start'] },
+    { key: 'plugin:plug2@m', kind: 'plugin', name: 'plug2', from: 'm', lookup: 'plug2@m', switch: P2, why: null, skills: ['plug2:old'] },
+  ],
+};
+const groupBoxes = () => byClass(main, 'ctx-group');
+const headOf = (key) => groupBoxes().find((n) => n.dataset.group === key);
+const toggleOf = (key) => byClass(headOf(key), 'ctx-gtoggle')[0];
+
+test('the skills are grouped by source, largest first, each header saying what it takes; the two boxes are gone', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(GROUPED, CODEX, CURSOR));
+  assert.equal(byClass(main, 'ctx-side').length, 0);
+  assert.deepEqual(groupBoxes().map((n) => n.dataset.group), ['own', 'plugin:plug@m', 'plugin:plug2@m']);
+  assert.equal(text(byClass(headOf('own'), 'ctx-gmeta')[0]), '2 skills4,000 characters1 showed only a name');
+  assert.equal(text(byClass(headOf('plugin:plug@m'), 'ctx-gfrom')[0]), 'm');
+  // Off now, also where the page shows the last chat's list: the header says Off, the pills too.
+  assert.equal(headOf('plugin:plug2@m').classList.contains('off'), true);
+  assert.equal(text(byClass(headOf('plugin:plug2@m'), 'ctx-gmeta')[0]), 'Offwas 1 skill, 500 characters in your last chat');
+  assert.equal(pillOf('plug2:old').classList.contains('off'), true);
+  assert.equal(pillOf('gamma').classList.contains('lo'), true);
+  // In its group a plugin's skill shows its own name only.
+  assert.equal(text(pillOf('plug:tool')), 'tool1,990');
+  // Three groups: open. The header is a button that opens and closes its group.
+  const toggle = toggleOf('own');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.match(toggle.getAttribute('aria-label'), /^Hide the skills of Your skills: 2 skills, 4,000 characters, 1 showed only a name$/);
+  await fire(toggle, 'click');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  // It stays closed across a redraw.
+  show(answer(GROUPED, CODEX, CURSOR), { again: true });
+  assert.equal(toggleOf('own').getAttribute('aria-expanded'), 'false');
+  assert.equal(toggleOf('plugin:plug@m').getAttribute('aria-expanded'), 'true');
+});
+
+test('more than three groups start closed', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  const extra = [1, 2].map((n) => ({ key: `x${n}`, kind: 'own', name: `X${n}`, from: null, lookup: null, switch: null, why: null, skills: [] }));
+  show(answer({ ...GROUPED, groups: [...GROUPED.groups, ...extra] }, CODEX, CURSOR));
+  assert.deepEqual(groupBoxes().map((n) => byClass(n, 'ctx-gtoggle')[0].getAttribute('aria-expanded')), ['false', 'false', 'false', 'false', 'false']);
+});
+
+test("a group's switch is its plugin's own: the same tray row as its skill's Details, and it counts in the estimate", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(GROUPED, CODEX, CURSOR));
+  const press = () => byClass(headOf('plugin:plug@m'), 'ctx-gswitch')[0];
+  assert.equal(press().getAttribute('aria-label'), 'Turn off plug');
+  assert.equal(text(press()), 'Turn off');
+  queue(PREVIEW, previewed('c1'));
+  queue(draftUrl({ 'plug:tool': 'off', 'plug:start': 'off' }), { status: 200, json: answer({ ...GROUPED, after: AFTER }, CODEX, CURSOR) });
+  await fire(press(), 'click');
+  await flush();
+  await flush();
+  const sent = asked.find((a) => a.url === PREVIEW).body.requests[0];
+  assert.deepEqual([sent.kind, sent.targets, sent.params], ['plugin.disable', [{ item: 'p1' }], {}]);
+  assert.equal(tray.rows.length, 1);
+  assert.equal(text(verdict()), AFTER.say);
+  syncTray();
+  assert.equal(press().getAttribute('aria-pressed'), 'true');
+  assert.equal(headOf('plugin:plug@m').classList.contains('going'), true);
+  // The Details of its skill show the same row pressed.
+  await fire(pillOf('plug:tool'), 'click');
+  syncTray();
+  assert.equal(buttonIn(drawer, 'Turn off plug').getAttribute('aria-pressed'), 'true');
+  await fire(press(), 'click');
+  await flush();
+  assert.equal(tray.rows.length, 0);
+});
+
+test("a plugin group's name opens the Library with that plugin, whose Details open there", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'claude_code' };
+  show(answer(GROUPED, CODEX, CURSOR));
+  const name = byClass(headOf('plugin:plug@m'), 'ctx-gname')[0];
+  assert.equal(name.getAttribute('aria-label'), 'plug: Details in the Library');
+  assert.equal(byClass(headOf('own'), 'ctx-gname')[0].tagName, 'SPAN');
+  await fire(name, 'click');
+  assert.equal(state.view, 'library');
+  assert.deepEqual(state.selected, { kind: 'plugin', name: 'plug@m' });
+  assert.equal(arrival.pending, true);
+});
+
+test("the Library's link opens Context on the group, opened and focused", async () => {
+  await fresh();
+  const { openContextGroup } = await import('../../src/kitden/web/static/js/context.js');
+  const extra = [1, 2].map((n) => ({ key: `x${n}`, kind: 'own', name: `X${n}`, from: null, lookup: null, switch: null, why: null, skills: [] }));
+  const read = answer({ ...GROUPED, groups: [...GROUPED.groups, ...extra] }, CODEX, CURSOR);
+  data.context = read;
+  data.scope.context = state.project;
+  queue('/api/context', { status: 200, json: read });
+  state.view = 'overview';
+  openContextGroup('claude_code', 'plugin:plug@m');
+  assert.equal(state.view, 'context');
+  // The place change draws the page; a draw again keeps the group open.
+  if (!groupBoxes().length) show(data.context);
+  await flush();
+  frames.splice(0).forEach((fn) => fn());
+  assert.equal(toggleOf('plugin:plug@m').getAttribute('aria-expanded'), 'true');
+  assert.equal(toggleOf('own').getAttribute('aria-expanded'), 'false');
+  assert.equal(headOf('plugin:plug@m').classList.contains('arrive'), true);
+  assert.equal(globalThis.document.activeElement, toggleOf('plugin:plug@m'));
+});

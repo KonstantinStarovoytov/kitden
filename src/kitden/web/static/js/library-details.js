@@ -13,7 +13,9 @@ import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect,
 import { copyBodies, offBodies, onBodies, removeBodies } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, SKILL_STATE_WORDS, STATE_WORDS } from "./parts.js";
-import { data, projectPath, state } from "./store.js";
+import { openContextGroup } from "./context.js";
+import { takesLine } from "./context-groups.js";
+import { current, data, loadContext, projectPath, state } from "./store.js";
 import { say } from "./toast.js";
 import { inTray, keyFor, ruleState, trayRow } from "./tray.js";
 
@@ -239,6 +241,43 @@ function afterOf(...nodes) {
   if (shown.length < 2) return shown[0] || null;
   const box = el("div");
   box.append(...shown);
+  return box;
+}
+
+// What a plugin or a skill takes of Claude Code's and Codex's skill lists, as the Context page counts
+// it, each with a link that opens its group there. The Context page's read is asked for once when
+// it is not there yet; these Details are drawn again quietly when it comes.
+const SHOW_IN_CONTEXT = "Show in Context";
+let contextAsked = "";
+function takesNode(item, id) {
+  const model = current("context");
+  if (!model) {
+    if (contextAsked !== state.project + id) {
+      contextAsked = state.project + id;
+      loadContext().then(() => {
+        const now = panelState.current;
+        if (current("context") && isPanelOpen() && now && now.type === "library" && now.id === id && !now.step) drawQuietly(() => showLibrary(id));
+      }).catch(() => {});
+    }
+    return null;
+  }
+  const lines = [];
+  for (const card of model.clients || []) {
+    const own = (item.items || {})[card.client];
+    if (!own || !own.length) continue;
+    const line = takesLine(card, item.kind === "plugin" ? { plugin: item.plugin } : { items: own });
+    if (line) lines.push(line);
+  }
+  if (!lines.length) return null;
+  const box = el("div", "takes");
+  for (const line of lines) {
+    const row = el("p", "muted");
+    const link = button(SHOW_IN_CONTEXT, () => { closePanel({ keepSelection: true, focus: false }); openContextGroup(line.client, line.group); }, "lnk");
+    link.setAttribute("aria-label", `${SHOW_IN_CONTEXT}: ${line.say}`);
+    link.dataset.focus = `takes:${line.client}`;
+    row.append(`${line.say} `, link);
+    box.append(row);
+  }
   return box;
 }
 
@@ -514,6 +553,8 @@ function showLibrary(id, { step = null } = {}) {
     return Promise.resolve();
   }
   const card = cardOf(thing, context(thing.answer), id);
+  const block = thing.block;
+  if (block && (block.kind === "plugin" || block.kind === "skill")) card.after = afterOf(card.after, takesNode(block.item, id));
   const nodes = openCard(card, { type: "library", id }, () => showLibrary(id), () => showLibrary(id), step);
   return Promise.resolve(nodes);
 }

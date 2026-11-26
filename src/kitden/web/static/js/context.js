@@ -8,12 +8,13 @@
 // after Apply.
 import { detailsCard, followTray, keepFrom } from "./details.js";
 import { chooseButton, offLine } from "./clients-choice.js";
-import { button, el, reportError } from "./dom.js";
+import { FOLD_ABOVE, groupLine, groupsOf, sideOf, turnedOn } from "./context-groups.js";
+import { button, el, icon, reportError } from "./dom.js";
 import { headActions } from "./map-page.js";
 import { animateTo, fold, riseHead } from "./motion.js";
 import { closePanel, openPanel, panelState, whenGone } from "./panel.js";
 import { banner, CLIENT_NAMES, mark, skeleton } from "./parts.js";
-import { current, currentError, data, loadContext, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
+import { current, currentError, data, go, goTo, loadContext, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
 import { addToTray, CONTEXT_NOTE, inTray, keyFor, onTray, ruleState, takeOut, tray, trayRow } from "./tray.js";
 
 const TITLE = "Do your skills fit?";
@@ -51,7 +52,9 @@ const SLICE = 2;
 // asked with, as JSON. `bar`: where each piece of the picture was, to move it from there. `how`:
 // "How this is counted" is open. `line`: where the limit line's parts stood last, to move them from
 // there as the bar's pieces move.
-const page = { windows: {}, client: null, open: null, hot: null, marks: new Map(), draft: "{}", bar: { at: "", spots: new Map() }, line: { at: "", lefts: new Map() }, how: false };
+// `groups`: per client, the keys of the groups opened (a group opens to its pills); `arrive`: the
+// group a link from the Library opens, glows and focuses once ({ client, key }).
+const page = { windows: {}, client: null, open: null, hot: null, marks: new Map(), draft: "{}", bar: { at: "", spots: new Map() }, line: { at: "", lefts: new Map() }, how: false, groups: {}, arrive: null, heads: new Map() };
 
 const fmt = (n) => n.toLocaleString("en-US");
 
@@ -116,7 +119,8 @@ function sentence(say, className) {
 }
 
 export function renderContext(main, { again = false } = {}) {
-  if (!again) Object.assign(page, { client: null, bar: { at: "", spots: new Map() }, line: { at: "", lefts: new Map() } });
+  // A new visit starts with the groups as they start (groupsFor); a link's group opens.
+  if (!again) Object.assign(page, { client: null, bar: { at: "", spots: new Map() }, line: { at: "", lefts: new Map() }, groups: {} });
   page.marks = new Map();
   // The title, with "Choose clients…" at its right, as the Library's head.
   const head = el("div", "page-head");
@@ -180,9 +184,16 @@ export function renderContext(main, { again = false } = {}) {
   const estimate = Boolean(planned || now) || index > 0;
   const heat = heatOf(card, result, estimate, Boolean(planned));
   // The chat's own limit line stays where it is; a new limit shows as a second line (limitControl).
-  const look = { name: now ? PICTURE.now : PICTURE.list, room: planned ? after.budget : now ? now.budget : null };
+  const look = { name: now ? PICTURE.now : PICTURE.list, room: planned ? after.budget : now ? now.budget : null, fact: !estimate };
   if (shown) main.append(zoom(card, shown, result, `${card.client}:${index}`, heat, index === 0 ? controlOf(card) : null, look));
-  if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
+  // Claude Code and Codex: the skills by where they come from. Cursor (and a card with no list to
+  // read): the two sides.
+  const grouped = shown && (card.groups || []).length;
+  if (grouped) {
+    const states = draftFrom(current("context"))[card.client] || {};
+    const view = { result, base: now || shown.result, fact: card.windows[0].result, estimate, planned: Boolean(planned), states };
+    main.append(groupsFor(card, view, after, heat));
+  } else if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
   if (card.how.length) main.append(howFor(card.how));
   markAll();
   followDraft();
@@ -194,8 +205,9 @@ export function renderContext(main, { again = false } = {}) {
 // per skill as wide as what was sent, the names' characters as one piece, then past the limit
 // line, hatched, what was not sent (Codex: cut off). The scale is the limit (or what was sent,
 // when it is larger) plus what did not fit. A sent piece takes its skill's heat.
-// `name`: what the bar shows; `room`: the limit an estimate on the chat's window goes by.
-function zoom(card, w, r, at, heat, control = null, { name = PICTURE.list, room = null } = {}) {
+// `name`: what the bar shows; `room`: the limit an estimate on the chat's window goes by; `fact`: the
+// bar is the last chat's, so a skill off now has a piece there, drawn faded.
+function zoom(card, w, r, at, heat, control = null, { name = PICTURE.list, room = null, fact = false } = {}) {
   const sent = r.sent || {};
   const over = r.over || {};
   const total = (part) => Object.values(part).reduce((sum, n) => sum + n, 0);
@@ -236,6 +248,7 @@ function zoom(card, w, r, at, heat, control = null, { name = PICTURE.list, room 
       if (kind === "sent") used += size;
       else past += size;
       if (kind === "sent" && heat.has(skill.name)) piece.style.setProperty("--heat", heat.get(skill.name));
+      if (fact && skill.state === "off") piece.classList.add("gone");
       lights(piece, skill.name);
       piece.addEventListener("click", () => openSkill(card.client, skill.name));
       bar.append(piece);
@@ -313,21 +326,7 @@ function moveFrom(at, spots) {
 
 // The two sides --------------------------------------------------------------------------------
 
-// A skill's side: on the last chat's window, the server's; on an estimate (another window, the setup
-// now, or after Apply), from that estimate, also when the last list did not hold it. Claude Code: a
-// skill whose description is sent, or one that shows only a name (no room for it, or set to Name
-// only). Codex: one with nothing cut off, or one that is cut or left out. A skill on no side (in no
-// list, or Kitden cannot tell) stays apart; one the tray turns on (`back`) has a side in the estimate
-// after Apply, and none in the others, which know nothing of the tray. `state`: the tray's state for it.
-function sideOf(card, skill, result, estimate, back = false, planned = false, state = undefined) {
-  if (back && estimate && !planned) return null;
-  if (!estimate) return skill.side;
-  // Codex may send a part of a description: such a skill has a piece sent and a piece over.
-  if (card.client === "codex" && skill.name in (result.over || {})) return 1;
-  if (skill.name in (result.sent || {})) return 0;
-  if (skill.name in (result.over || {})) return 1;
-  return (planned ? state || skill.state : skill.state) === "name-only" ? 1 : null;
-}
+// A skill's side: sideOf (context-groups.js).
 
 // How warm each skill on the first side is, grey to orange: its size against the largest there,
 // "0.00" to "1.00". The sizes to weigh at a glance; the other side stays grey.
@@ -337,9 +336,6 @@ function heatOf(card, result, estimate, planned) {
   const top = Math.max(0, ...first.map((s) => s.size));
   return new Map(first.map((s) => [s.name, (top ? s.size / top : 0).toFixed(2)]));
 }
-
-// An off skill that the tray sets to On or Name only.
-const turnedOn = (skill, states) => skill.state === "off" && skill.name in states && states[skill.name] !== "off";
 
 function sidesFor(card, result, after, estimate, heat) {
   const states = draftFrom(current("context"))[card.client] || {};
@@ -417,12 +413,14 @@ function shelfFor(card, { head, look }, skills, states, after, heat, result) {
   return shelf;
 }
 
-// The plugin's switch as one small button: the same row as its skills' Details.
-function pluginButton(offer) {
+// The plugin's switch as one small button: the same row as its skills' Details, saying what goes
+// with it. `words`: its text, when shorter than its name ("Turn off" on a group's header).
+function pluginButton(offer, { words = offer.label, className = "btn small", focus = "offplug" } = {}) {
   const body = { action: offer.action, targets: [{ item: offer.item }], params: {} };
   const key = keyFor(body);
-  const node = button(offer.label, () => (trayRow(key) ? takeOut(key) : addToTray(body, { note: CONTEXT_NOTE, goes: offer.goes || null })), "btn small");
-  node.dataset.focus = `offplug:${offer.item}`;
+  const node = button(words, () => (trayRow(key) ? takeOut(key) : addToTray(body, { note: CONTEXT_NOTE, goes: offer.goes || null })), className);
+  if (words !== offer.label) node.setAttribute("aria-label", offer.label);
+  node.dataset.focus = `${focus}:${offer.item}`;
   followTray(node, key, () => {
     const waits = Boolean(trayRow(key));
     node.setAttribute("aria-pressed", String(waits));
@@ -431,18 +429,146 @@ function pluginButton(offer) {
   return node;
 }
 
+// The groups -----------------------------------------------------------------------------------
+
+// The words of a group's parts, and of a pill's state inside it.
+const GROUP = { library: "Details in the Library", show: "Show the skills of", hide: "Hide the skills of", off: "Off", going: "Off after Apply" };
+
+// The skills by where they come from: a group per source, largest first (groupsOf), each with its
+// header (the name, what it takes, its switch) and its pills. More than a few start closed; the
+// ones a person opened stay open across a redraw.
+function groupsFor(card, view, after, heat) {
+  const wrap = el("div", "ctx-grouped");
+  if (card.skills.some((s) => s.size)) wrap.append(el("p", "ctx-pillnote", PILL_NUMBERS));
+  const all = groupsOf(card, view);
+  if (!(card.client in page.groups)) page.groups[card.client] = new Set(all.length <= FOLD_ABOVE ? all.map((f) => f.group.key) : []);
+  const opened = page.groups[card.client];
+  // A link's group: opened and lit for the draws of its first moments (the page reads again as it
+  // arrives), focused once.
+  const link = page.arrive && page.arrive.client === card.client && performance.now() < page.arrive.until ? page.arrive : null;
+  const arrive = link ? link.key : null;
+  if (arrive) opened.add(arrive);
+  const focus = Boolean(link && !link.focused);
+  if (link) link.focused = true;
+  const list = el("div", "ctx-groups");
+  page.heads = new Map();
+  all.forEach((facts, i) => list.append(groupNode(card, facts, view, after, heat, opened, `ctx-g-${card.client}-${i}`, facts.group.key === arrive, focus)));
+  wrap.append(list);
+  return wrap;
+}
+
+function groupNode(card, facts, view, after, heat, opened, id, arrived, focus) {
+  const { group } = facts;
+  const open = opened.has(group.key);
+  const box = el("section", `ctx-group ${facts.state}`);
+  box.dataset.group = group.key;
+  box.setAttribute("aria-label", group.name);
+  // The header: the toggle, the name (the Library's Details of a plugin), the marketplace, what the
+  // group takes, and the group's switch. A press anywhere else on it opens or closes the group too.
+  const head = el("div", "ctx-ghead");
+  const line = groupLine(card, facts, view.estimate);
+  const toggle = button("", () => setOpen(!opened.has(group.key)), "ctx-gtoggle");
+  toggle.dataset.focus = `group:${card.client}:${group.key}`;
+  page.heads.set(group.key, toggle);
+  toggle.setAttribute("aria-controls", id);
+  toggle.append(icon("chevron-right", 14));
+  const name = group.lookup ? button(group.name, () => openInLibrary(group), "ctx-gname act") : el("span", "ctx-gname", group.name);
+  if (group.lookup) {
+    name.setAttribute("title", GROUP.library);
+    name.setAttribute("aria-label", `${group.name}: ${GROUP.library}`);
+    name.dataset.focus = `library:${card.client}:${group.key}`;
+  }
+  const meta = el("span", "ctx-gmeta");
+  line.forEach((part, i) => {
+    const tag = i === 0 && (facts.state === "off" || facts.state === "going" || facts.state === "back");
+    const short = facts.short && part.startsWith(`${facts.short} `) && !part.endsWith(" off");
+    meta.append(el("span", tag ? "ctx-gstate" : short ? "ctx-gshort" : null, part));
+  });
+  head.append(toggle, name);
+  if (group.from) head.append(el("span", "ctx-gfrom", group.from));
+  head.append(meta);
+  if (group.switch) head.append(groupSwitch(group.switch));
+  head.addEventListener("click", (event) => { if (!event.target || !event.target.closest || !event.target.closest("button")) setOpen(!opened.has(group.key)); });
+  // The pills: sent first, then only a name or cut, then in no list, then off.
+  const body = el("div", "fold ctx-gbody");
+  body.id = id;
+  const inner = el("div", "fold-in");
+  if (group.why) inner.append(el("p", "ctx-gwhy", group.why));
+  const cloud = el("div", "ctx-cloud");
+  const order = { sent: 0, lo: 1, apart: 2, going: 3, off: 4 };
+  const members = [...facts.members].sort((a, b) => order[a.look] - order[b.look]);
+  // A pill says Off, or Off after Apply, where its header does not say it for the whole group.
+  const whole = facts.state === "off" || facts.state === "going";
+  cloud.append(...members.map((m) => pillFor(card, m.skill, view.states, after, heat, view.result, m.look, whole)));
+  inner.append(cloud);
+  body.append(inner);
+  box.append(head, body);
+  // Lights the group's pieces on the bar while the pointer or the focus is on its header.
+  for (const node of [toggle, head]) {
+    node.addEventListener("mouseenter", () => light(group.skills));
+    node.addEventListener("mouseleave", () => light(null));
+  }
+  toggle.addEventListener("focus", () => light(group.skills));
+  toggle.addEventListener("blur", () => light(null));
+  const show = (now) => {
+    toggle.setAttribute("aria-expanded", String(now));
+    toggle.setAttribute("aria-label", `${now ? GROUP.hide : GROUP.show} ${group.name}: ${line.join(", ")}`);
+    box.classList.toggle("open", now);
+    body.classList.toggle("open", now);
+    inner.inert = !now;
+  };
+  function setOpen(now) {
+    if (now) opened.add(group.key);
+    else opened.delete(group.key);
+    show(now);
+  }
+  show(open);
+  if (arrived) box.classList.add("arrive");
+  if (arrived && focus) {
+    requestAnimationFrame(() => {
+      if (box.scrollIntoView) box.scrollIntoView({ block: "nearest" });
+      // The header drawn last: the page may have been drawn again meanwhile.
+      (page.heads.get(facts.group.key) || toggle).focus();
+    });
+  }
+  return box;
+}
+
+// The group's switch on its header: the plugin's own, the same row as its Details and the Library
+// add (one row, `switch:<item>`); a second press takes it out.
+function groupSwitch(offer) {
+  const words = offer.action === "plugin.disable" ? "Turn off" : "Turn on";
+  return pluginButton(offer, { words, className: "btn small ctx-gswitch", focus: "gswitch" });
+}
+
+// The Library with the group's plugin selected: it opens the same Details as there. Back returns.
+function openInLibrary(group) {
+  closePanel({ keepSelection: true, focus: false });
+  goTo("library", { kind: "plugin", name: group.lookup });
+}
+
+// Context on a client's group, opened, lit and focused: the Library's link to it.
+// The time it stays lit, as the Library's own arrival glows.
+const ARRIVE_MS = 1200;
+export function openContextGroup(client, key) {
+  page.arrive = { client, key, until: performance.now() + ARRIVE_MS, focused: false };
+  go("context", { selected: { kind: "client", name: client } });
+}
+
 // A skill's pill: its name and size, warmed by its heat on the first side; a cut one says how much
 // of its description was sent. A dashed line while the tray changes it; after Apply, a skill that
 // gets its description is filled, one that loses it is lit amber.
-function pillFor(card, skill, states, after, heat, result) {
+function pillFor(card, skill, states, after, heat, result, look = null, whole = false) {
   const node = button("", () => openSkill(card.client, skill.name), "ctx-pill");
+  // In a group (`look`): only a name (or cut), in no list, off now, or going off after Apply.
+  if (look && look !== "sent") node.classList.add(look);
   node.dataset.skill = skill.name;
   if (heat.has(skill.name)) node.style.setProperty("--heat", heat.get(skill.name));
   node.dataset.focus = `skill:${card.client}:${skill.name}`;
-  // A plugin's skill shows its plugin before its name, quieter ("venture:" and "review"); the hover
-  // words and the name a screen reader hears carry both.
+  // A plugin's skill shows its plugin before its name, quieter ("venture:" and "review"), unless
+  // its group says it; the hover words and the name a screen reader hears carry both.
   if (skill.plugin) {
-    node.append(el("span", "ctx-plug", `${skill.plugin}:`));
+    if (!look) node.append(el("span", "ctx-plug", `${skill.plugin}:`));
     node.setAttribute("title", skill.name);
   }
   node.append(el("span", null, skill.shown));
@@ -459,6 +585,7 @@ function pillFor(card, skill, states, after, heat, result) {
     size.setAttribute("title", `${part} characters sent`);
     node.append(size);
   } else if (skill.size) node.append(el("u", null, fmt(skill.size)));
+  if ((look === "off" || look === "going") && !whole) node.append(el("i", "ctx-tag", look === "off" ? GROUP.off : GROUP.going));
   const changed = skill.name in states && states[skill.name] !== skill.state;
   node.classList.toggle("chg", changed);
   node.classList.toggle("back", Boolean(after && after.gets.includes(skill.name)));
@@ -479,6 +606,7 @@ function lights(node, name) {
   node.addEventListener("blur", off);
 }
 
+// `name`: one skill's name, a group's names, or null.
 function light(name) {
   page.hot = name;
   markAll();
@@ -488,7 +616,7 @@ function markAll() {
   const open = page.open && page.open.client === page.client ? page.open.name : null;
   for (const [name, nodes] of page.marks) {
     for (const node of nodes) {
-      node.classList.toggle("hot", name === page.hot);
+      node.classList.toggle("hot", Array.isArray(page.hot) ? page.hot.includes(name) : name === page.hot);
       node.classList.toggle("sel", name === open);
     }
   }

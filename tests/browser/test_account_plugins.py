@@ -74,6 +74,12 @@ def test_the_library_groups_them_and_turns_one_off_with_undo(page, demo):
 
 def test_on_context_its_skill_names_the_plugin_and_offers_its_switch(page, demo):
     page.get_by_role("link", name="Context", exact=True).click()
+    # Its group, named after it, says where it comes from; it opens to its skill.
+    group = page.locator(f'.ctx-group[data-group="plugin:{GARDEN}"]')
+    expect(group.locator(".ctx-gfrom")).to_have_text("From your Claude account")
+    expect(group.get_by_role("button", name="Turn off garden")).to_be_visible()
+    if group.locator(".ctx-gtoggle").get_attribute("aria-expanded") == "false":
+        group.locator(".ctx-gtoggle").click()
     page.locator(f'.ctx-pill[data-skill="{SKILL}"]').click()
     details = page.get_by_role("complementary", name="Details")
     expect(details).to_contain_text("Plugin garden from your Claude account")

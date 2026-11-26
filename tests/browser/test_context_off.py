@@ -35,7 +35,7 @@ def going(page) -> list[str]:
 
 
 def off_now(page) -> list[str]:
-    return page.locator(".ctx-off .ctx-pill").evaluate_all("(n) => n.map((p) => p.dataset.skill)")
+    return page.locator(".ctx-pill.off").evaluate_all("(n) => n.map((p) => p.dataset.skill)")
 
 
 def test_a_plugins_switch_waiting_in_the_preview_counts_in_the_verdict_and_on_the_line(page, demo):
