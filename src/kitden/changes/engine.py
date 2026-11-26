@@ -15,6 +15,7 @@ import difflib
 import hashlib
 import json
 import os
+import tomllib
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -273,6 +274,20 @@ def _back_already(steps: list[Step], data: bytes | None) -> bool:
     try:
         return all(same_value(_value(s.file_edit, data), s.file_edit.before) for s in steps)
     except (UnrecognizedFormatError, UnicodeDecodeError):
+        return False
+
+
+def _same_content(fmt: str, a: bytes | None, b: bytes | None) -> bool:
+    """Whether two versions of a settings file hold the same settings, in any order."""
+    parse = {"toml": tomllib.loads, "json": json.loads}.get(fmt)
+    try:
+        return (
+            parse is not None
+            and a is not None
+            and b is not None
+            and parse(a.decode()) == parse(b.decode())
+        )
+    except (ValueError, UnicodeDecodeError):
         return False
 
 
@@ -1129,6 +1144,15 @@ class Engine:
                     )
             self.on_write(step.edit.path, _sha(_read(step.edit.path)))
             tick(step)
+        # A command puts an entry back where the client likes, often at the end. When the file
+        # then holds exactly what its backup holds, the backup's own bytes go back, in its order.
+        for path in by_command:
+            first = next(s.file_edit for s in change.steps if s.edit and s.edit.path == path)
+            now = _read(path)
+            if first.backup_path and os.path.exists(first.backup_path):
+                old = Path(first.backup_path).read_bytes()
+                if now != old and _same_content(first.fmt, now, old):
+                    self._write(path, old)
         for path, data in plans.items():
             self._write(path, data)
         for step in change.steps:

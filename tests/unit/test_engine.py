@@ -1267,3 +1267,37 @@ def test_a_failed_apply_names_the_step_and_why(tmp_path, config):
     change.rows = [{"id": "r0", "steps": [0]}, {"id": "r1", "steps": [1]}]
     assert change_dict(change)["failed_row"] == "r1"  # the tray names that row
     assert config.read_text() == CONFIG
+
+
+def test_undo_of_a_command_puts_back_the_files_own_order(tmp_path):
+    # Codex adds a plugin's table back at the end of the file; the backup had it in the middle.
+    path = tmp_path / "config.toml"
+    start = '[plugins."browser@b"]\nenabled = true\n\n[mcp_servers.gw]\ncommand = "gw"\n'
+    path.write_text(start)
+    table = '\n[plugins."browser@b"]\nenabled = true\n'
+
+    def run(command, cwd):
+        text = path.read_text()
+        if command[-2] == "remove":
+            path.write_text(text.replace('[plugins."browser@b"]\nenabled = true\n\n', ""))
+        else:
+            path.write_text(text + table)
+        return CommandResult(0, "")
+
+    edit = FileEdit(path=str(path), fmt="toml", key=("plugins", "browser@b"), after=ABSENT)
+    step = Step(
+        client="codex",
+        scope=Scope.USER,
+        name="browser@b",
+        edit=edit,
+        mechanism="client_cli",
+        command=["codex", "plugin", "remove", "browser@b"],
+        undo_command=["codex", "plugin", "add", "browser@b"],
+    )
+    engine = make_engine(tmp_path, run=run)
+    change = engine.preview("plugin.remove", [step])
+    engine.apply(change.id)
+    assert change.state is ChangeState.VERIFIED, change.error
+    engine.undo(change.id)
+    assert change.state is ChangeState.UNDONE, change.error
+    assert path.read_text() == start
