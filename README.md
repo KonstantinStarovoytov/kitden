@@ -44,6 +44,7 @@ It changes nothing until you press Apply, and every change can be undone.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <a href="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden"><img src="https://glama.ai/mcp/servers/KonstantinStarovoytov/kitden/badges/score.svg" alt="Kitden on Glama"></a>
   <a href="https://mcprush.com/to/kitden-mcp?ref=badge"><img src="https://mcprush.com/badge/kitden-mcp/score.svg" alt="Kitden MCP on mcprush"></a>
+  <a href="https://m8ven.ai/mcp/konstantinstarovoytov-kitden-14dddz?s=readme"><img src="https://m8ven.ai/badge/mcp/konstantinstarovoytov-kitden-14dddz" alt="M8ven Score"></a>
 </p>
 
 ### See whether your skills fit
