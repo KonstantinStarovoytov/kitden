@@ -369,7 +369,11 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
       const leaving = columns.length > 0 && leaves.size === columns.length;
       // Off in every client that has it (`row.off`): an off block, its lines dashed.
       const offAll = columns.length > 0 && columns.every((c) => (row.off || []).includes(c));
-      const meta = `${offAll ? "Off in" : "In"} ${joinWords(columns.map((c) => CLIENT_NAMES[c]))}`;
+      // Off in some clients only: the words name both sides, as the dashed lines do.
+      const names = (list) => joinWords(list.map((c) => CLIENT_NAMES[c]));
+      const offIn = columns.filter((c) => (row.off || []).includes(c));
+      const onIn = columns.filter((c) => !offIn.includes(c));
+      const meta = offAll ? `Off in ${names(columns)}` : offIn.length ? `In ${names(onIn)} · Off in ${names(offIn)}` : `In ${names(columns)}`;
       const targets = movesTo(view, group, row);
       const tag = picked && row.override ? ORIGIN_WORDS.override : null;
       // A drop moves into the Kitden gateway, so a grip needs it; a move already in the tray
