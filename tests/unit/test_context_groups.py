@@ -174,3 +174,16 @@ def test_a_codex_plugin_turned_off_after_the_chat_lists_its_skill_once(home):
     assert [s["name"] for s in card["skills"]].count("plug:tool") == 1
     group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
     assert group["switch"]["label"] == "Turn on plug"
+
+
+def test_an_off_codex_plugin_with_no_version_folder_keeps_its_skills(home):
+    # Codex may keep a plugin's files in its own folder, with no version folder under it.
+    paths = codex_home(home, window=20_000)
+    folder = home / ".codex/plugins/cache/market/plug"
+    skill(folder / "skills", "tool", "Does one thing.")
+    (folder / ".codex-plugin").mkdir(parents=True)
+    (home / ".codex/config.toml").write_text('[plugins."plug@market"]\nenabled = false\n')
+    codex_chat(home, [f"- alpha: Does alpha. (file: {paths['alpha']})"])
+    card = codex(home)
+    group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
+    assert group["skills"] == ["plug:tool"]

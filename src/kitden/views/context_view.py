@@ -23,6 +23,7 @@ from kitden.clients.base import (
     Reader,
     found_columns,
     from_plugin,
+    visible_folders,
 )
 from kitden.clients.claude_account import FROM_APP, is_account_plugin
 from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, ClaudeCodeAdapter, local_files
@@ -1859,22 +1860,18 @@ def _codex_off(inventory, codex_home: Path, folder: str | None) -> Callable[[str
 
 
 def _codex_plugin_skills(codex_home: Path, plugin_id: str) -> list[tuple[str, str | None]]:
-    """The skills in a Codex plugin's newest installed version, as its list names them
-    ("plug:tool"), with their descriptions; none when Kitden finds no folder.
-
-    # checked 2026-11-13 (real files, Codex 0.167.0): plugins are kept at
-    # ~/.codex/plugins/cache/<market>/<plugin>/<version>/, and an update removes the old version.
-    """
+    """The skills of a Codex plugin as its list names them ("plug:tool"), with their descriptions,
+    from its folder in Codex's plugin cache; none when Kitden finds no folder. The folder is the
+    one the adapter reads (`CodexAdapter.plugin_folders`): the plugin's own folder when its files
+    sit there, else its newest version folder."""
     name, _, market = plugin_id.partition("@")
-    folder = codex_home / "plugins/cache" / market / name
-    try:
-        versions = [p.name for p in folder.iterdir() if p.is_dir()]
-    except OSError:
+    plugin = codex_home / "plugins/cache" / market / name
+    if not plugin.is_dir():
         return []
-    newest = highest_version(versions)
-    if newest is None:
-        return []
-    files = sorted((folder / newest / "skills").glob("*/SKILL.md"))
+    versions = visible_folders(plugin)
+    has_files = (plugin / ".codex-plugin").is_dir() or not versions
+    folder = plugin if has_files else max(versions, key=lambda v: v.stat().st_mtime)
+    files = sorted((folder / "skills").glob("*/SKILL.md"))
     return [(f"{name}:{f.parent.name}", _description(str(f))) for f in files]
 
 
