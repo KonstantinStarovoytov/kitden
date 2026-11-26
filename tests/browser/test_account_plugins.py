@@ -78,6 +78,8 @@ def test_on_context_its_skill_names_the_plugin_and_offers_its_switch(page, demo)
     group = page.locator(f'.ctx-group[data-group="plugin:{GARDEN}"]')
     expect(group.locator(".ctx-gfrom")).to_have_text("From your Claude account")
     expect(group.get_by_role("button", name="Turn off garden")).to_be_visible()
+    # The plugin is the Library's item (`garden@inline`, a user plugin): its name opens its Details.
+    expect(group.get_by_role("button", name="garden: Details in the Library")).to_be_visible()
     if group.locator(".ctx-gtoggle").get_attribute("aria-expanded") == "false":
         group.locator(".ctx-gtoggle").click()
     page.locator(f'.ctx-pill[data-skill="{SKILL}"]').click()
