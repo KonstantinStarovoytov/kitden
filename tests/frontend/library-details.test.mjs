@@ -291,6 +291,16 @@ test('plugin Details show the facts and Add to <client>… steps to a checklist;
   assert.equal(document.activeElement, node(drawer, 'action:Add to Codex…'));
 });
 
+test('a plugin of the Claude account says the app adds it and where its switch is', async () => {
+  await reset();
+  const note = 'The Claude app adds it from your Claude account. Turned off here, it stays in your account: to remove it there, turn it off in the Claude app or on claude.ai.';
+  const garden = { ...SUPERPOWERS, name: 'garden', source: 'From your Claude account', plugin: 'garden@inline', by: { claude_code: 'on' }, through: {}, can: { add: [], off: ['claude_code'], on: [], remove: [] }, note };
+  const card = details.pluginCard(garden, c());
+  assert.equal(card.id, 'From your Claude account');
+  assert.equal(card.why, `Claude Code loads it in every project. ${note}`);
+  assert.deepEqual(labels(card), [['Turn off for all projects…', false]]);
+});
+
 test('Cursor is never a choice for a plugin', async () => {
   await reset();
   const both = { ...SUPERPOWERS, items: {}, by: {}, can: { add: ['claude_code', 'codex'], off: [] } };

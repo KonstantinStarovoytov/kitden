@@ -7,6 +7,7 @@ Copies of real client settings, used to test reading and writing without touchin
 ```text
 tests/fixtures/
 ├── claude_code/<version>/   # for example 2.1.302/
+├── claude_app/<version>/    # the Claude app's folder, with made-up plugins of a Claude account
 ├── codex/<version>/         # for example 0.163.0/
 ├── cursor/<version>/        # for example 3.21.16/
 ├── fake_mcp/                # a tiny MCP server that the gateway tests start

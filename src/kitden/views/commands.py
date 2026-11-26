@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
 from kitden.clients.base import ClientAdapter
+from kitden.clients.claude_account import is_account_plugin
 from kitden.model import Item, ItemKind, Scope
 from kitden.redact import redact_text
 from kitden.views.words import LOADS_PLUGINS
@@ -119,7 +120,7 @@ def commands_for(item: Item, adapters: dict[str, ClientAdapter]) -> list[Command
         return _marketplace(item, adapters)
     if item.kind is not ItemKind.PLUGIN:
         return []
-    if item.scope is Scope.ACCOUNT or "@" not in item.name:
+    if item.scope is Scope.ACCOUNT or "@" not in item.name or is_account_plugin(item):
         return [Command("Change it", note=item.change_hint)] if item.change_hint else []
     if item.client == CLAUDE:
         return _claude_plugin(item, adapters)
