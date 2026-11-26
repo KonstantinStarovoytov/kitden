@@ -96,6 +96,8 @@ export function groupLine(card, facts, estimate) {
     const was = n ? `was ${many(n, "skill", "skills")}, ${fmt(size)} ${unit} in your last chat` : many(facts.members.length, "skill", "skills");
     return ["Off", was];
   }
+  // A Codex plugin that is on and that the last list did not hold: no skills to count yet.
+  if (!facts.members.length) return ["On"];
   if (facts.state === "going") return ["Off after Apply", ...(facts.base ? [`frees about ${fmt(facts.base)} ${unit}`] : [])];
   const parts = facts.state === "back" ? ["On after Apply"] : [];
   parts.push(many(facts.n, "skill", "skills"));
@@ -105,37 +107,43 @@ export function groupLine(card, facts, estimate) {
   return parts;
 }
 
-// The Library's line for a plugin or a skill on a card: what it takes of that client's skill list
-// now (the estimate for the setup now, else the last chat), with the group it is in; null when the
-// card does not hold it. `match`: { plugin } (a plugin's id, "superpowers@market"), { plugin, skill }
-// (a skill inside that plugin, by its own name) or { items } (a skill's item ids).
+// The Library's line for a plugin or a skill on a card, in the words Context draws it with: a
+// plugin's group line, a skill's look in its group. Read from the same result as the page (the
+// estimate for the setup now, else the last chat); null when the card has no list to read (Cursor,
+// a project with no chat), does not hold it, or holds nothing of it (a Codex plugin the last list
+// did not hold). `match`: { plugin } (a plugin's id, "superpowers@market"), { plugin, skill } (a
+// skill inside that plugin, by its own name) or { items } (a skill's item ids).
 export function takesLine(card, match) {
-  const groups = card.groups || [];
-  const fact = (card.windows && card.windows[0] && card.windows[0].result) || { sent: {} };
+  const fact = card.windows && card.windows[0] && card.windows[0].result;
   const base = card.now || fact;
+  if (!base) return null;
+  const view = { result: base, base, fact: fact || { sent: {} }, estimate: Boolean(card.now), planned: false, states: {} };
+  const groups = card.groups || [];
   const client = CLIENT_WORDS[card.client] || card.client;
-  const unit = card.unit || "characters";
-  if (match.plugin && match.skill) {
+  if (match.plugin && !match.skill) {
     const group = groups.find((g) => g.lookup === match.plugin);
-    const skill = group && card.skills.find((s) => s.group === group.key && s.shown === match.skill);
-    return skill ? skillLine(card, skill, base, client, unit) : null;
+    const facts = group && factsOf(card, group, view);
+    if (!facts || !facts.members.length) return null;
+    return { group: group.key, client: card.client, say: `In ${client}'s skill list: ${groupLine(card, facts, view.estimate).join(" · ")}.` };
   }
+  let skill = null;
   if (match.plugin) {
     const group = groups.find((g) => g.lookup === match.plugin);
-    if (!group) return null;
-    const facts = factsOf(card, group, { result: base, base, fact, estimate: Boolean(card.now), planned: false, states: {} });
-    if (facts.state === "off") return { group: group.key, client: card.client, say: `Off now. Took ${fmt(facts.was.size)} ${unit} of ${client}'s skill list in your last chat.` };
-    return { group: group.key, client: card.client, say: `Takes ${fmt(facts.size)} ${unit} of ${client}'s skill list.` };
+    skill = group && card.skills.find((s) => s.group === group.key && s.shown === match.skill);
+  } else {
+    const ids = new Set(match.items || []);
+    skill = card.skills.find((s) => s.item && ids.has(s.item));
   }
-  const ids = new Set(match.items || []);
-  const skill = card.skills.find((s) => s.item && ids.has(s.item));
-  return skill ? skillLine(card, skill, base, client, unit) : null;
+  const group = skill && groups.find((g) => g.key === skill.group);
+  const member = group && factsOf(card, group, view).members.find((m) => m.skill === skill);
+  const say = member && LOOK_WORDS[member.look] && LOOK_WORDS[member.look](client, card, skill);
+  return say ? { group: group.key, client: card.client, say } : null;
 }
 
-// One skill's line: what it takes now, only its name, or off.
-function skillLine(card, skill, base, client, unit) {
-  if (skill.state === "off") return { group: skill.group, client: card.client, say: `Off now: not in ${client}'s next skill list.` };
-  const size = (base.sent || {})[skill.name];
-  const say = size ? `Takes ${fmt(size)} ${unit} of ${client}'s skill list.` : `Shows only its name in ${client}'s skill list.`;
-  return { group: skill.group, client: card.client, say };
-}
+// One skill's look on Context, in words: its description sent (the size its pill and Details give),
+// only its name or cut short, or off. A skill in no list says nothing.
+const LOOK_WORDS = {
+  sent: (client, card, skill) => (skill.size ? `Sends its description (${fmt(skill.size)} characters) in ${client}'s skill list.` : `Sends its description in ${client}'s skill list.`),
+  lo: (client, card) => (card.client === "codex" ? `Cut short in ${client}'s skill list.` : `Shows only its name in ${client}'s skill list.`),
+  off: (client) => `Off now: not in ${client}'s next skill list.`,
+};

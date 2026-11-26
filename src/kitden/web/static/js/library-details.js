@@ -93,6 +93,7 @@ function loadsSay(item, { folder = "", noun = "it" } = {}) {
   }
   const off = clientsBy(item, "off");
   if (off.length) lines.push(`It is off in ${joinWords(names(off))}.`);
+  lines.push(...(item.off_where || []));
   const unknown = clientsBy(item, "unknown");
   if (unknown.length) lines.push(`Kitden can't tell whether ${joinWords(names(unknown))} ${verb(unknown, "loads", "load")} it.`);
   if (clientsBy(item, "via").length) lines.push("Cursor gets it once Claude Code adds it.");
@@ -109,7 +110,9 @@ function stateFact(item) {
 
 // The clients that load it, by their tiles and names ("Claude Code, Cursor"), or by how many.
 function clientsFact(item, { count = false } = {}) {
-  const clients = inOrder(clientsBy(item, "on"));
+  // An item that is off where it is set up names those clients: it is there, not "None yet".
+  const on = clientsBy(item, "on");
+  const clients = inOrder(on.length ? on : clientsBy(item, "off"));
   if (!clients.length) return { label: "Clients", value: "None yet", quiet: true, text: "None yet" };
   const text = count ? plural(clients.length, "client", "clients") : names(clients).join(", ");
   return { label: "Clients", value: tiles(clients, text), text };
@@ -246,18 +249,18 @@ function afterOf(...nodes) {
 
 // What a plugin or a skill takes of Claude Code's and Codex's skill lists, as the Context page counts
 // it, each with a link that opens its group there. The Context page's read is asked for once when
-// it is not there yet; these Details are drawn again quietly when it comes.
+// it is not there yet (an Apply drops it, store.js reload), one read at a time; these Details are
+// drawn again quietly when it comes.
 const SHOW_IN_CONTEXT = "Show in Context";
-let contextAsked = "";
+let contextAsked = null;
 function takesNode(item, id) {
   const model = current("context");
   if (!model) {
-    if (contextAsked !== state.project + id) {
-      contextAsked = state.project + id;
-      loadContext().then(() => {
+    if (!contextAsked) {
+      contextAsked = loadContext().then(() => {
         const now = panelState.current;
         if (current("context") && isPanelOpen() && now && now.type === "library" && now.id === id && !now.step) drawQuietly(() => showLibrary(id));
-      }).catch(() => {});
+      }).catch(() => {}).finally(() => { contextAsked = null; });
     }
     return null;
   }
@@ -304,7 +307,7 @@ export function pluginCard(item, c, { addStep = () => {}, commandsStep = () => {
   actions.push(...onActions(item));
   const tech = item.technical || {};
   const more = [...removeActions(item), ...commandsAction(pluginEntries(item), commandsStep)];
-  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: [loadsSay(item, c), item.note].filter(Boolean).join(" "), actions, more, after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
+  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: [loadsSay(item, c), item.note, item.no_switch].filter(Boolean).join(" "), actions, more, after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
 }
 
 // A thing a plugin holds: Plugin, Kind, Source and Clients, and "Follows its plugin." It has no

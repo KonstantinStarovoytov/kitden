@@ -396,8 +396,15 @@ def _record(change: Change) -> dict:
         "target": change.target,
         "rows": change.rows,
         "request": change.request,
+        "applied_order": change.applied_order,
         "steps": steps,
     }
+
+
+def _after(later: Change, change: Change) -> bool:
+    """Whether `later` was applied after `change`; records from before the order was kept
+    go by when they were previewed."""
+    return (later.applied_order, later.id) > (change.applied_order, change.id)
 
 
 def _from_record(record: dict) -> Change:
@@ -451,6 +458,7 @@ def _from_record(record: dict) -> Change:
         target=record.get("target"),
         rows=record.get("rows"),
         request=record.get("request"),
+        applied_order=record.get("applied_order", 0),
     )
 
 
@@ -752,6 +760,7 @@ class Engine:
         self._back_up(change.id, file_steps, current)
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
+        change.applied_order = 1 + max((c.applied_order for c in self.changes.values()), default=0)
         # Saved before the first change, so a crash leaves a record that says so at the next
         # start, next to the backups. Without it nothing is written.
         try:
@@ -769,7 +778,9 @@ class Engine:
         at: Step | None = None  # the step being made or checked
         try:
             # The Keychain first: the settings file then names items that are there.
-            self._store_secrets(change, stored)
+            for step in change.steps:
+                at = step
+                self._store_secrets(step, stored)
             for step in copy_steps:
                 at = step
                 self._apply_copy(step, copied)
@@ -935,15 +946,14 @@ class Engine:
             holds_secret(s.file_edit.before) or holds_secret(s.file_edit.after) for s in file_steps
         )
 
-    def _store_secrets(self, change: Change, stored: list[KeychainItem]) -> None:
-        """Write each secret to the Keychain; `store` reads it back. The value there before
-        is read first, so a failed Apply can put it back."""
-        for step in change.steps:
-            for item in step.keychain:
-                item.old = keychain.read(item.ref, run=self._security())
-                item.existed = item.old is not None
-                stored.append(item)  # before the write: one that fails halfway is taken back
-                keychain.store(item.server, item.key, item.value, run=self._security())
+    def _store_secrets(self, step: Step, stored: list[KeychainItem]) -> None:
+        """Write the step's secrets to the Keychain; `store` reads it back. The value there
+        before is read first, so a failed Apply can put it back."""
+        for item in step.keychain:
+            item.old = keychain.read(item.ref, run=self._security())
+            item.existed = item.old is not None
+            stored.append(item)  # before the write: one that fails halfway is taken back
+            keychain.store(item.server, item.key, item.value, run=self._security())
 
     @staticmethod
     def _forget_secrets(change: Change) -> None:
@@ -1177,8 +1187,9 @@ class Engine:
 
     def _changed_again(self, change: Change, steps: list[Step], data: bytes | None) -> bool:
         """Whether a later change that is still applied changed these entries again: they no
-        longer read as this change left them, and another applied change edits one of them (or
-        a part of one). Its Undo goes first; this one would undo or keep the wrong value."""
+        longer read as this change left them, and a change applied after this one edits one of
+        them (or a part of one). Its Undo goes first; this one would undo or keep the wrong
+        value. An older change never blocks it."""
         try:
             if all(same_value(_value(s.file_edit, data), s.file_edit.after) for s in steps):
                 return False
@@ -1189,7 +1200,7 @@ class Engine:
         return any(
             other.edit.path == path and _overlap(other.edit.key, key)
             for later in self.changes.values()
-            if later is not change and later.state in applied
+            if later is not change and later.state in applied and _after(later, change)
             for other in later.steps
             if other.edit is not None
             for path, key in keys

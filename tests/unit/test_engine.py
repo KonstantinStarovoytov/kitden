@@ -1301,3 +1301,54 @@ def test_undo_of_a_command_puts_back_the_files_own_order(tmp_path):
     engine.undo(change.id)
     assert change.state is ChangeState.UNDONE, change.error
     assert path.read_text() == start
+
+
+def test_a_keychain_write_that_fails_names_its_step(tmp_path, config):
+    # Lantern on #227: the tray names the row whose secret could not be stored.
+    from kitden.model import KeychainItem
+
+    engine, _ = keychain_engine(tmp_path)
+    second = tmp_path / "second.toml"
+    second.write_text('model = "o3"\n')
+    steps = [
+        toml_step(config, ("mcp_servers", "a"), GATEWAY),
+        toml_step(second, ("mcp_servers", "gw"), GATEWAY),
+    ]
+    steps[1].keychain = [KeychainItem("gw", "GW_KEY", "SENTINEL_SECRET_NEW")]
+    change = engine.preview("mcp.add", steps)
+
+    def refuse(*args, **kwargs):
+        raise ValueError("the Keychain said no")
+
+    import kitden.changes.engine as engine_module
+
+    real = engine_module.keychain.store
+    engine_module.keychain.store = refuse
+    try:
+        engine.apply(change.id)
+    finally:
+        engine_module.keychain.store = real
+    assert change.state is ChangeState.RESTORED
+    assert change.failed_step == 1
+
+
+def test_an_older_applied_change_does_not_block_undo(tmp_path):
+    # Lantern on #227: Off, then On, then Off by hand. Undo of On has nothing later to wait for.
+    path = tmp_path / "settings.json"
+    path.write_text('{\n  "theme": "dark"\n}\n')
+    engine = make_engine(tmp_path)
+
+    def applied(after):
+        key = ("skillOverrides", "brandkit")
+        edit = FileEdit(path=str(path), fmt="json", key=key, after=after)
+        step = Step(client="claude_code", scope=Scope.USER, name="brandkit", edit=edit)
+        change = engine.preview("skill.rule", [step])
+        engine.apply(change.id)
+        assert change.state is ChangeState.VERIFIED, change.error
+        return change
+
+    applied("off")
+    on = applied(ABSENT)
+    path.write_text('{\n  "theme": "dark",\n  "skillOverrides": {"brandkit": "off"}\n}\n')
+    engine.undo(on.id)
+    assert on.error is None or "later change" not in on.error

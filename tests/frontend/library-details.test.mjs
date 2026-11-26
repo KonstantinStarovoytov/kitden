@@ -261,8 +261,9 @@ test('plugin Details show the facts and Add to <client>… steps to a checklist;
   const card = details.pluginCard(SUPERPOWERS, c());
   assert.deepEqual([card.kind, card.title, card.id], ['Plugin', 'superpowers', 'demo-market']);
   assert.deepEqual(facts(card), [['State', 'On'], ['Inside', '3 skills · 1 command'], ['Clients', 'Claude Code, Cursor'], ['Comes from', 'All projects']]);
-  // A plugin no client has on: "None yet", as the mockup says.
-  assert.deepEqual(facts(details.pluginCard(MEDIUM.groups[0].items[0], c()))[2], ['Clients', 'None yet']);
+  // A plugin that is off where it is installed names those clients: it is there, not "None yet".
+  assert.deepEqual(facts(details.pluginCard(MEDIUM.groups[0].items[0], c()))[2], ['Clients', 'Claude Code, Cursor']);
+  assert.deepEqual(facts(details.pluginCard({ ...SUPERPOWERS, by: {} }, c()))[2], ['Clients', 'None yet']);
   assert.equal(card.why, 'Claude Code loads it in every project. Cursor gets it through Claude Code.');
   assert.deepEqual(labels(card), [['Add to Codex…', true], ['Turn off for all projects…', false]]);
   // Paths only under Technical details.

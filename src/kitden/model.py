@@ -369,6 +369,9 @@ class Change:
     refused_by: str | None = None
     # Set when Apply fails: the index of the step that did not go through, when one did not.
     failed_step: int | None = None
+    # Set at Apply: 1 more than any change applied before it, so Undo knows which came later.
+    # Kept in the record; 0 in a record from before it was kept.
+    applied_order: int = 0
     # Set at Apply: the backup or the record keeps a secret (an old or new entry's value).
     holds_secret: bool = False
     # Where the steps go (views/review.py change_target), set at preview: the review's title

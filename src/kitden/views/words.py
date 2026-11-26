@@ -290,6 +290,8 @@ LOSES = {
 # Window cards.
 LAST_CHAT_TAG = "Last chat · {date}"
 LAST_CHAT = "Last chat"
+# With All projects picked, the last chat's folder: its list holds that project's skills.
+IN_FOLDER = " · in {folder}"
 ESTIMATE_TAG = "Estimate"
 WINDOW_TITLE = "{size} window"
 UNKNOWN_WINDOW = "Unknown window"
@@ -337,9 +339,23 @@ CODEX_OFF_PLUGIN = (
     "come back after you turn it on and start a new chat."
 )
 GROUP_WHY_PROJECT = (
-    "This project's own settings set this plugin, so it has no switch here: one for all projects "
-    "would leave this project as its settings say."
+    "{project}'s own settings set this plugin, so it has no switch here: one for all projects "
+    "would leave {project} as its settings say."
 )
+
+
+def why_project(folder: str) -> str:
+    """Why a plugin a project's own settings set has no switch, with the project's name: the same
+    words on Context and in the Library."""
+    return GROUP_WHY_PROJECT.format(project=folder.rstrip("/").rpartition("/")[2] or folder)
+
+
+# The Library with All projects: a plugin a project's own settings turn off.
+OFF_IN_PROJECT = "It is off in {project}: {project}'s own settings set this plugin."
+
+
+# A Codex plugin that is on and that the last list did not hold.
+CODEX_ON_PLUGIN = "Codex lists its skills after your next Codex chat."
 # One skill's Details line.
 NOTE_BUILT_IN = (
     "Kitden has not checked that Claude Code can turn this skill off, so it has no switch here."
@@ -584,7 +600,12 @@ HOW_CURSOR = (
     "Cursor does not publish a limit for this list, and Kitden found no log that shows what it "
     "sends. Checked 2026-11-06.",
     "Sizes and the Only when asked setting come from your skill files.",
-    "Cursor's own built-in skills and one plugin with no local name are not counted.",
+    "Cursor's own built-in skills are not counted.",
+)
+# Cursor loads plugins (Claude Code's too), but Kitden does not read their skills for Cursor.
+CURSOR_PLUGINS = (
+    "The skills inside its {n} plugin are not listed: Kitden does not read them for Cursor.",
+    "The skills inside its {n} plugins are not listed: Kitden does not read them for Cursor.",
 )
 HOW_NO_CHAT = (
     "Kitden shows a result only after it reads a real chat log. Before that it shows the skills it "
