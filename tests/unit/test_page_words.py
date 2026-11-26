@@ -1344,7 +1344,7 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     )
     assert "if (note && !afterNotes.includes(note)) body.append(callout(note));" in code
     # The row keeps the note, and its review shows it.
-    assert "addToTray(previewBody, { note })" in code
+    assert "addToTray(previewBody, { note, goes })" in code
     # An add's choice of a row with a repeated name names its source.
     assert "rowTitle(row)" in text
 
