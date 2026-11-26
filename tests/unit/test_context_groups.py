@@ -124,3 +124,53 @@ def test_a_codex_skill_turned_off_after_the_chat_stays_in_its_group(home):
     gamma = next(s for s in card["skills"] if s["name"] == "gamma")
     assert (gamma["state"], gamma["group"]) == ("off", "own")
     assert [g["key"] for g in card["groups"]] == ["own"]
+
+
+def codex_plugin(home, enabled: bool = True):
+    """The Codex plugin plug@market with one skill, and its entry in config.toml."""
+    inside = home / ".codex/plugins/cache/market/plug/1.0/skills"
+    tool = skill(inside, "tool", "Does one thing.").resolve()
+    (home / ".codex/plugins/cache/market/plug/1.0/.codex-plugin").mkdir(exist_ok=True)
+    state = "true" if enabled else "false"
+    (home / ".codex/config.toml").write_text(f'[plugins."plug@market"]\nenabled = {state}\n')
+    return tool
+
+
+def test_a_codex_plugin_group_has_its_switch_and_its_skills_take_it(home):
+    paths = codex_home(home, window=20_000)
+    tool = codex_plugin(home)
+    codex_chat(
+        home,
+        [
+            f"- alpha: Does alpha. (file: {paths['alpha']})",
+            f"- plug:tool: Does one thing. (file: {tool})",
+        ],
+    )
+    card = codex(home)
+    group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
+    assert group["switch"]["label"] == "Turn off plug" and group["skills"] == ["plug:tool"]
+    row = next(s for s in card["skills"] if s["name"] == "plug:tool")
+    assert row["plugin_switch"] == group["switch"]
+
+
+def test_an_off_codex_plugin_keeps_its_group_after_a_chat_without_it(home):
+    paths = codex_home(home, window=20_000)
+    codex_plugin(home, enabled=False)
+    codex_chat(home, [f"- alpha: Does alpha. (file: {paths['alpha']})"])
+    card = codex(home)
+    group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
+    assert group["switch"]["label"] == "Turn on plug"
+    (row,) = [s for s in card["skills"] if s["group"] == "plugin:plug@market"]
+    assert (row["state"], row["side"], row["note"]) == ("off", None, words.NOTE_OFF)
+
+
+def test_a_codex_plugin_turned_off_after_the_chat_lists_its_skill_once(home):
+    paths = codex_home(home, window=20_000)
+    tool = codex_plugin(home)
+    lines = [f"- alpha: Does alpha. (file: {paths['alpha']})"]
+    codex_chat(home, [*lines, f"- plug:tool: Does one thing. (file: {tool})"])
+    codex_plugin(home, enabled=False)
+    card = codex(home)
+    assert [s["name"] for s in card["skills"]].count("plug:tool") == 1
+    group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
+    assert group["switch"]["label"] == "Turn on plug"

@@ -711,6 +711,13 @@ def _grouped(
                 (p.name for p in plugins if p.name.split("@")[0] == skill["plugin"]), None
             )
         found = _group(client, skill, item, plugins, plugin_id)
+        if client == "codex" and found["kind"] == "plugin" and not skill["plugin_switch"]:
+            # Codex: a skill of a plugin Kitden knows, with no item of its own (or one that is off),
+            # takes the plugin's switch too, so its group and the estimate have it.
+            known = next((p for p in plugins if f"plugin:{p.name}" == found["key"]), None)
+            skill["plugin_switch"] = _codex_switch(known)
+            if skill["plugin_switch"] and skill["note"] == words.NOTE_PLUGIN:
+                skill["note"] = words.NOTE_PLUGIN_SWITCH
         group = groups.setdefault(found["key"], found | {"switch": None, "skills": []})
         group.setdefault("why", None)
         group["skills"].append(skill["name"])
@@ -1851,6 +1858,26 @@ def _codex_off(inventory, codex_home: Path, folder: str | None) -> Callable[[str
     return is_off
 
 
+def _codex_plugin_skills(codex_home: Path, plugin_id: str) -> list[tuple[str, str | None]]:
+    """The skills in a Codex plugin's newest installed version, as its list names them
+    ("plug:tool"), with their descriptions; none when Kitden finds no folder.
+
+    # checked 2026-11-13 (real files, Codex 0.167.0): plugins are kept at
+    # ~/.codex/plugins/cache/<market>/<plugin>/<version>/, and an update removes the old version.
+    """
+    name, _, market = plugin_id.partition("@")
+    folder = codex_home / "plugins/cache" / market / name
+    try:
+        versions = [p.name for p in folder.iterdir() if p.is_dir()]
+    except OSError:
+        return []
+    newest = highest_version(versions)
+    if newest is None:
+        return []
+    files = sorted((folder / newest / "skills").glob("*/SKILL.md"))
+    return [(f"{name}:{f.parent.name}", _description(str(f))) for f in files]
+
+
 def _codex_policy(path: str) -> Path:
     return Path(path).parent / "agents/openai.yaml"
 
@@ -2409,15 +2436,38 @@ def _codex(
             )
         )
     # A skill that is off is in no loaded item: its group goes by the item that is off.
-    off_items = {
-        os.path.realpath(i.source.path): i
-        for i in _off_skills(inventory, client, sent_list.folder).values()
-        if i.source.path
-    }
+    turned_off = _off_skills(inventory, client, sent_list.folder)
+    off_items = {os.path.realpath(i.source.path): i for i in turned_off.values() if i.source.path}
     members = [
         r.item or off_items.get(os.path.realpath(r.file)) if r.file else r.item for r in rows
     ]
-    groups = _grouped(client, skills, [*members, *extras], plugins)
+    # The skills of a plugin that is off and that the last list did not hold: Codex lists none of
+    # them, so Kitden reads them from the plugin's folder. They wait on the page in their plugin's
+    # group, with its switch to turn it on again (as for Claude Code).
+    on_page = {s["name"] for s in skills}
+    waiting: list[Item | None] = []
+    for plugin in plugins:
+        offer = _codex_switch(plugin)
+        if plugin.enabled is not Enabled.OFF or offer is None:
+            continue
+        for name, text in _codex_plugin_skills(codex_home, plugin.name):
+            if name in on_page:
+                continue
+            skills.append(
+                _skill(
+                    client,
+                    name,
+                    None,
+                    len(text or ""),
+                    None,
+                    words.NOTE_OFF,
+                    description=text,
+                    state="off",
+                    plugin_switch=offer,
+                )
+            )
+            waiting.append(None)
+    groups = _grouped(client, skills, [*members, *extras, *waiting], plugins)
 
     version = f" {sent_list.version}" if sent_list.version else ""
     if checked:
