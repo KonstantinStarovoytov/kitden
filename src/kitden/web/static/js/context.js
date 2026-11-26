@@ -509,7 +509,7 @@ function openSkill(client, name) {
   const plugin = !skill.switch.length && skill.plugin_switch ? skill.plugin || pluginName(skill.plugin_switch) : null;
   if (plugin) facts.push({ label: "Plugin", value: plugin });
   if (skill.size) facts.push({ label: "Size", value: `${fmt(skill.size)} characters` });
-  if (skill.source && !plugin) facts.push({ label: "Source", value: skill.source });
+  if (skill.source) facts.push({ label: "Source", value: skill.source });
   const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(skill.plugin_switch, plugin) : null;
   const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: plugin ? null : skill.note, text: describe(skill) });
   openPanel(content);

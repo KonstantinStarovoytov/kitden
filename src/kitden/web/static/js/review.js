@@ -297,7 +297,8 @@ export function canShowReview(result) {
 // why when the server refuses it). Add missing is the one change asked with nothing chosen yet, so
 // its list opens in Details first. `note` goes with the row, shown above its review. `back`, from a
 // tool list, hears how the add went: `{ queued: true }`, or `{ error }` with the reason.
-export async function review(previewBody, { note = null, back = null } = {}) {
+// `goes`: what goes with the change, said on its row (a plugin's parts).
+export async function review(previewBody, { note = null, back = null, goes = null } = {}) {
   const params = previewBody.params || {};
   if (previewBody.action === "project.align" && !params.chosen) {
     await chooseMissing(previewBody, note);
@@ -306,7 +307,7 @@ export async function review(previewBody, { note = null, back = null } = {}) {
   // A refusal of this add is a new `tray.refused`; an add that could not even be asked (a change
   // is being written) leaves the one before as it was, and says nothing of it.
   const before = tray.refused;
-  const joined = await addToTray(previewBody, { note });
+  const joined = await addToTray(previewBody, { note, goes });
   if (!back) return;
   if (joined) await back({ queued: true });
   else if (tray.refused && tray.refused !== before) await back({ error: baseNames(tray.refused.reason) });
@@ -522,7 +523,7 @@ function takeOutButton(row) {
 // With nothing ticked there is nothing to add: the row stays as it is.
 async function chooseAgain(row, keys) {
   if (!keys.length) return;
-  await addToTray({ ...row.body, params: { ...row.body.params, chosen: keys } }, { note: row.note, icon: row.icon, picked: row.picked });
+  await addToTray({ ...row.body, params: { ...row.body.params, chosen: keys } }, { note: row.note, goes: row.goes, icon: row.icon, picked: row.picked });
 }
 
 // The engine put back everything a change that did not check out wrote: its words then end "The
