@@ -366,7 +366,8 @@ A release is one pull request. You review it and merge it; the rest happens on i
 
 1. In GitHub, open Actions → Release prep → Run workflow, on `main`. Keep the version on
    **Auto** and the agent picks the next minor or patch, or pick **Features (0.X.0)** for the
-   next minor or **Fixes (0.0.X)** for the next patch. The run opens one pull request,
+   next minor, **Fixes (0.0.X)** for the next patch or **Major (X.0.0)** for the next major
+   (0.12.x gives 1.0.0; the agent never picks a major itself). The run opens one pull request,
    "Kitden X.Y.Z": the version in all eight places, `docs/releases/vX.Y.Z.md`, ROADMAP
    ("### Not yet released" becomes the version), README and policy edits, the guide and the
    plugin README when they change, and the checks from
