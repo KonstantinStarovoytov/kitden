@@ -11,7 +11,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **Safer changes:** moving a server into the gateway no longer replaces a different server of
   the same name, the review says when a client keeps its own server of that name, Undo out of
-  order is refused instead of ending wrong, and a failed **Apply all** names the change and why.
+  order is refused instead of ending wrong, and a failed **Apply all** names the change and why (#227).
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,
