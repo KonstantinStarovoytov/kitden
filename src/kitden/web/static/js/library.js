@@ -14,6 +14,7 @@ import { projectNote } from "./offer.js";
 import { isPanelOpen, openInfo, panelState, previewButton, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, shownClients, skeleton, socket, sourceLines, staleNote } from "./parts.js";
 import { afterShared, arrival, current, currentError, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { markedRows, onTray, rowsAbout } from "./tray.js";
 
 // The List's tabs, as on the Map, and what it shows of Plugins and skills.
 const TABS = [["plugin", "Plugins and skills"], ["instructions", "Instructions"]];
@@ -149,8 +150,25 @@ export function cellNode(row, client) {
   const node = socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason, stale: Boolean(cell.stale_at) });
   const hint = cellHint(cell);
   if (hint) node.title = hint;
+  if ((cell.items || []).length) {
+    node.dataset.items = cell.items.join(" ");
+    markWaiting(node);
+  }
   return node;
 }
+
+// A change to the cell's item waits in the tray: its dashed ring and "in preview", as the maps and
+// the Gateway mark it (tray.js rowsAbout). Marked in place when the tray changes.
+function markWaiting(node) {
+  const waits = rowsAbout(markedRows(), { items: node.dataset.items.split(" ") }).length > 0;
+  node.classList.toggle("pv", waits);
+  const tag = node.querySelector(":scope > .row-wait");
+  if (waits && !tag) node.append(el("span", "row-wait", "in preview"));
+  if (!waits && tag) tag.remove();
+}
+onTray(() => {
+  for (const node of document.querySelectorAll("#main .socket[data-items]")) markWaiting(node);
+});
 
 // A cell's hover text: where it applies (in full, where the cell may cut it), how the client
 // gets the item, then why: "This project. Through Codex's folder. <reason>".

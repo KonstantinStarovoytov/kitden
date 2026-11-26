@@ -439,6 +439,11 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .s-review { color: var(--lamp-warn); } .s-review .dot::after { transform: scale(0.5); border-radius: 50%; }
 /* Kept from the last good read: the state's own colour, with a dashed ring. */
 .socket.stale .dot { border-style: dashed; }
+/* A change to it waits in the tray: the preview's dashed ring, and "in preview" in the accent, the
+   same on the Library's and the Gateway's lists as on their maps. */
+.socket.pv .dot { border-style: dashed; border-color: var(--preview-line); }
+.socket.pv .dot::after { transform: scale(0); }
+.row-wait { color: var(--route); font-size: 12px; white-space: nowrap; margin-left: 6px; }
 .s-none, .s-missing { color: var(--ink-4); }
 .socket .word { color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }
 /* The tag of a cell in a project view ("This project", "Only this project"): the accent family. */
@@ -629,6 +634,8 @@ div.map .block.page .block-label { color: var(--ink-4); }
 /* A server's or a tool's dot: filled when on, hollow when off. */
 .tg-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--lamp-off); }
 .tg-dot.on { background: var(--lamp-on); border-color: var(--lamp-on); }
+/* A change to the server waits in the tray (gateway.js markServer). */
+.tg-dot.pv { border-style: dashed; border-color: var(--preview-line); background: transparent; }
 .tg-used { display: flex; align-items: center; gap: 3px; }
 .tg-tools { color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tg-action { display: flex; justify-content: flex-end; }

@@ -16,7 +16,7 @@ import { afterOldPage, rise, riseHead } from "./motion.js";
 import { banner, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
 import { busy, current, currentError, data, projectPath, render, retry, setState, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
-import { addToTray, inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray } from "./tray.js";
+import { addToTray, IN_PREVIEW_MARK, inTray, keyFor, LEAVES, linksWait, onTray, rowsAbout, TAKE_OUT, takeOut, toggleInTray, tray } from "./tray.js";
 
 export const LEDE = "The plugins, skills and instruction files your agents load, and where each comes from.";
 const MAP_HINT = "Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details";
@@ -207,6 +207,12 @@ export function withWaiting(model, rows, project) {
   for (const block of model.blocks.filter((b) => b.drags)) {
     const wait = waitOn(block, addsOf(block.item, rows), project, clients, model);
     if (wait.rows.length) Object.assign(block, waitLook(wait));
+  }
+  // Any other change to it that waits (a switch, a rule): marked as on every tab. A removal says
+  // Leaving instead (withLeaving).
+  const staying = rows.filter((row) => !LEAVES.test((row.body || {}).action || ""));
+  for (const block of model.blocks.filter((b) => b.item && b.item.items && b.state !== "preview")) {
+    if (rowsAbout(staying, { items: Object.values(block.item.items).flat() }).length) Object.assign(block, { lamp: "preview", wait: IN_PREVIEW_MARK, pinned: true });
   }
   return withNewCards(model, rows, project, clients);
 }

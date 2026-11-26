@@ -21,10 +21,16 @@ from kitden.clients.claude_account import is_account_plugin
 from kitden.clients.claude_code import holds, local_files, rule_file
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Enabled, Item, ItemKind, Scope
 from kitden.views.catalog import catalog, installed_inside, plugin_folders
-from kitden.views.effective import in_project
+from kitden.views.effective import effective_view, in_project
 from kitden.views.load_map import Row, load_map, row_key
 from kitden.views.skills import skill_catalog
-from kitden.views.words import GROUP_WORDS, ORIGIN_WORDS, STATE_WORDS
+from kitden.views.words import (
+    GROUP_WORDS,
+    OFF_IN_PROJECT,
+    ORIGIN_WORDS,
+    STATE_WORDS,
+    why_project,
+)
 
 # A found client that loads nothing in the view shown.
 NOTHING_LOADED = "Nothing loaded"
@@ -273,6 +279,30 @@ def _off_in(inventory, own: list[Item]) -> list[str]:
     return [p.id for p in inventory.projects if p.path in paths]
 
 
+def _plugin_off_in(inventory, row: Row) -> list[str]:
+    """What the Library says of a plugin with All projects: each project whose own settings turn
+    it off (Codex's project config.toml, Claude Code's project settings)."""
+    folders = dict.fromkeys(
+        i.project
+        for i in inventory.items
+        if i.kind is ItemKind.PLUGIN
+        and i.name == row.lookup
+        and i.project is not None
+        and i.enabled is Enabled.OFF
+    )
+    return [OFF_IN_PROJECT.format(project=Path(f).name) for f in folders if f]
+
+
+def _no_switch(row: Row, can: dict, deciding: dict[str, list[Item]], project: str | None):
+    """Why a plugin has no switch in the picked project: Codex's project settings set it there,
+    and Kitden does not write them. The same words as Context's group."""
+    if row.kind is not ItemKind.PLUGIN or not project or "codex" not in can.get("project", []):
+        return None
+    if not any(i.project == project for i in deciding.get("codex", [])):
+        return None
+    return why_project(project)
+
+
 def _skill_offers(inventory, adapters) -> dict[str, dict]:
     """The skill catalog's row for each skill name, a client's own skill first: what a skill of
     "Your skills" is copied from (its id) and the clients that can take a copy (its routes)."""
@@ -399,6 +429,13 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     entries = _marketplace_entries(inventory)
     outside = _rule_outside(inventory, adapters, project)
 
+    # A skill's own state (Name only) as the client reads it there, a project's local file too.
+    states = {
+        i.id: i.skill_state
+        for client in found
+        for i in effective_view(inventory, client, project).items
+        if i.kind is ItemKind.SKILL
+    }
     groups: dict[str, dict] = {}
     for row in load_map(inventory, project):
         items = present.get(row.key, [])
@@ -440,15 +477,20 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             entry["skill"] = skill["id"]
         if row.kind is ItemKind.SKILL:
             entry["off_in"] = _off_in(inventory, own)
-            states = [i.skill_state for i in own if i.skill_state and i.skill_state != "off"]
-            if states:
-                entry["skill_state"] = states[0]
+            said = [states.get(i.id, i.skill_state) for i in own]
+            said = [state for state in said if state and state != "off"]
+            if said:
+                entry["skill_state"] = said[0]
         account = next((i for i in own if is_account_plugin(i)), None)
         if account is not None and account.change_hint:
             entry["note"] = account.change_hint
         technical: dict[str, str] = {}
         if row.kind is ItemKind.PLUGIN:
             entry["plugin"] = row.lookup
+            if project is None and (off_in := _plugin_off_in(inventory, row)):
+                entry["off_where"] = off_in
+            if why := _no_switch(row, entry["can"], deciding, project):
+                entry["no_switch"] = why
             if row.lookup in held:
                 entry["inside"] = held[row.lookup]
                 entry["count"] = sum(len(names) for names in held[row.lookup].values())

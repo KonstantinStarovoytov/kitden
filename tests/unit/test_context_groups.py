@@ -200,7 +200,7 @@ def test_a_codex_plugin_a_project_sets_has_no_switch_for_all_projects(home):
     write_log(home / ".codex", "a", log, 100)
     card = view(home, folder=str(project))["codex"]
     group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
-    assert group["switch"] is None and group["why"] == words.GROUP_WHY_PROJECT
+    assert group["switch"] is None and group["why"] == words.why_project(str(project))
 
 
 def test_a_codex_plugin_a_project_turns_off_stands_off_with_why_no_switch(home):
@@ -219,7 +219,7 @@ def test_a_codex_plugin_a_project_turns_off_stands_off_with_why_no_switch(home):
     card = view(home, folder=str(project))["codex"]
     group = next(g for g in card["groups"] if g["key"] == "plugin:plug@market")
     assert (group["skills"], group["off"]) == ([], True)
-    assert group["switch"] is None and group["why"] == words.GROUP_WHY_PROJECT
+    assert group["switch"] is None and group["why"] == words.why_project(str(project))
 
 
 def test_a_codex_skill_is_in_the_plugin_its_file_comes_from_when_two_share_a_name(home):

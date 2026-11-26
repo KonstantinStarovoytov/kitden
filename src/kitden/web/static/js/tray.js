@@ -165,6 +165,28 @@ export function iconFor(body) {
 export function readyRows(t = tray) { return t.rows.filter((row) => !row.waits); }
 export function waitingRows(t = tray) { return t.rows.filter((row) => row.waits); }
 
+// The rows of `rows` (those a page draws from the tray) about one thing: a change to one of its
+// items (`items`, by id) or to its server in the Kitden gateway (`server`, by name: a gateway
+// change, not one to a server of that name outside it). Every row and
+// card that shows the thing reads it, so each marks a waiting change the same way: the dashed lamp
+// and "in preview" (IN_PREVIEW_MARK).
+export function rowsAbout(rows, { items = [], server = null } = {}) {
+  const ids = new Set(items);
+  return rows.filter((row) => {
+    const body = row.body || {};
+    const gateway = String(body.action || "").startsWith("gateway.");
+    return (body.targets || []).some((t) => ids.has(t.item)) || (server !== null && gateway && (body.params || {}).server === server);
+  });
+}
+export const IN_PREVIEW_MARK = "\u00a0· in preview";
+// A removal: a map says Leaving for it, not "in preview".
+export const LEAVES = /\.remove$/;
+// The tray's rows a row or a card marks: those the preview took (or that wait for access), none
+// once applied.
+export function markedRows(t = tray) {
+  return t.phase === "applied" ? [] : t.rows.filter((row) => row.part || row.waits);
+}
+
 // The row with this key, if it is in the tray. Keys are unique there.
 export const trayRow = (key) => tray.rows.find((row) => row.key === key);
 export const inTray = (key) => Boolean(trayRow(key));

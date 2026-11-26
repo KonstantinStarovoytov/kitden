@@ -79,9 +79,7 @@ def test_the_library_says_what_a_plugin_takes_and_opens_its_group(page, demo):
     )
     details = page.get_by_role("complementary", name="Details")
     expect(details).to_contain_text("superpowers")
-    expect(details).to_contain_text(
-        re.compile(r"Takes [\d,]+ characters of Claude Code's skill list\.")
-    )
+    expect(details).to_contain_text(re.compile(r"In Claude Code's skill list: 2 skills · "))
     details.get_by_role("button", name=re.compile(r"^Show in Context")).first.click()
     wait_until(lambda: page.evaluate("location.hash").startswith("#context"))
     group = page.locator(GROUP)
@@ -99,7 +97,7 @@ def test_a_plugins_skill_in_the_library_says_what_it_takes_and_opens_its_group(p
     details = page.get_by_role("complementary", name="Details")
     expect(details).to_contain_text("brainstorming")
     expect(details).to_contain_text(
-        re.compile(r"Takes [\d,]+ characters of Claude Code's skill list\.")
+        re.compile(r"Sends its description \([\d,]+ characters\) in Claude Code's skill list\.")
     )
     details.get_by_role("button", name=re.compile(r"^Show in Context")).first.click()
     wait_until(lambda: page.evaluate("location.hash").startswith("#context"))

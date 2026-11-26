@@ -17,7 +17,7 @@ import { banner, CLIENT_NAMES, folderName, kitdenClients, kitdenHouse, mark, ope
 import { arrival, busy, current, currentError, data, gatewayShows, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { openAccess } from "./access-form.js";
-import { inTray, keyFor, linksWait, onTray, TAKE_OUT, takeOut, toggleInTray, tray, trayRow, undone, writing } from "./tray.js";
+import { IN_PREVIEW_MARK, inTray, keyFor, LEAVES, linksWait, markedRows, onTray, rowsAbout, TAKE_OUT, takeOut, toggleInTray, tray, trayRow, undone, writing } from "./tray.js";
 
 // The group of servers outside the gateway: the List's words, and the map's, which asks for a drag.
 const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
@@ -314,8 +314,12 @@ export function gatewayTree(view, { setup, clients = [], picked = "", rows = [],
     blocks.push({ id: `gateway:${kitden.id}`, column: "gateway", kind: "slot", name: "No gateway yet", meta: "One place for servers, rules and logins.", gateway: kitden, unread: null, ...action });
   } else if (kitden) {
     const waiting = waitingTools(rows, picked);
+    const staying = rows.filter((row) => !LEAVES.test(row.body.action || ""));
     const server = (block, word) => {
       kitdenServer(block, word, picked, waiting);
+      // A change to it or one of its tools waits: marked as on every tab. A removal says Leaving
+      // instead (leaveParts).
+      if (rowsAbout(staying, { server: block.server.name }).length) Object.assign(block, { lamp: "preview", wait: IN_PREVIEW_MARK });
       for (const tool of block.server.tool_list || []) {
         const shown = toolBlock(block, tool, picked, waiting);
         tools.push(shown);
@@ -1575,6 +1579,21 @@ function selectedRow(rows, byId) {
 
 const cell = (className, text) => gridCell("gridcell", className, text);
 
+// A change to a server in the gateway, or to one of its tools, waits in the tray: the List's row
+// marks it as the map's card does, with the dashed dot and "in preview" (tray.js rowsAbout). The
+// List shows no tray rows, so it is marked in place when the tray changes.
+function markServer(name) {
+  const waits = rowsAbout(markedRows(), { server: name.dataset.server }).length > 0;
+  const dot = name.querySelector(":scope > .tg-dot");
+  if (dot) dot.classList.toggle("pv", waits);
+  const tag = name.querySelector(":scope > .row-wait");
+  if (waits && !tag) name.append(el("span", "row-wait", "in preview"));
+  if (!waits && tag) tag.remove();
+}
+onTray(() => {
+  for (const name of document.querySelectorAll("#main .tg-row [data-server]")) markServer(name);
+});
+
 // One row: a fold mark where it folds, what it is (a client's tile, a gateway's mark, the dot of a
 // server or tool, filled when on), its name, tags and quiet words; then the clients that use it,
 // its tools, and › or "Move in…". A click opens its Details, or folds it on the fold mark; a
@@ -1598,6 +1617,10 @@ function listRow(row, block, { current, selected, view, press }) {
   if (accent) name.append(el("span", "tag", accent));
   if (row.kind === "tool" && row.tag) name.append(el("span", "hint", row.tag));
   if (row.meta) name.append(el("span", "meta", row.meta));
+  if (row.kind === "held") {
+    name.dataset.server = row.name;
+    markServer(name);
+  }
   if (row.group) {
     name.setAttribute("aria-colspan", "4");
     node.append(name);

@@ -46,6 +46,10 @@ does not count them for the next chat.
 
 The preview names the clients and projects affected. Adds on the map go to all projects;
 the List offers a project scope where supported. Start a new client session to load a change.
+While a change waits in the preview, every row and card that shows the thing says **in preview**
+with a dashed ring: in the Library and the Gateway, as a list and as a map. With **All projects**,
+a plugin's Details also name a project whose own settings turn it off; in that project they say
+why it has no switch there.
 
 ## Choose your clients
 
@@ -79,7 +83,10 @@ window, for your setup now, or for a switch you are about to make, show only whi
 rebuilds that last list; all but another window's also come from a count (below). Claude Code's log does not say the window, so Kitden names it only when one window alone
 gives that list. When Claude Code's settings set the limit, with `skillListingBudgetFraction` or
 `SLASH_COMMAND_TOOL_CHAR_BUDGET`, Kitden uses that limit, and `skillListingMaxDescChars` for the
-length of a description. Cursor gets no verdict, because Kitden cannot see what Cursor sends.
+length of a description. Cursor gets no verdict, because Kitden cannot see what Cursor sends; the
+skills inside its plugins are not listed, and the card says so. With **All projects**, the window
+card names the folder of the last chat ("Last chat · Nov 6 · in atlas"): its list held that
+project's skills and followed its settings. A project that sets its own share shows that share.
 
 For Claude Code and Codex the skills stand in groups by where they come from, with the Library's
 names: each plugin (with its marketplace), **Your skills**, a project's skills, the plugins from your
@@ -92,9 +99,11 @@ adds the same change as the Library's, and the estimate, the bar and the limit l
 once, before you apply it. Its name opens the plugin's Details in the Library. A group without a
 switch says why when you open it, and where to turn it off. Press a header to open the group to its
 skills; with more than three groups they start closed. A group that is off says **Off** and what it
-took in your last chat (a Codex plugin that is off and was not in that chat shows no skills, as Codex does not list them, with its **Turn on**), and a group you are turning off says **Off after Apply** and about how much
-it frees. A plugin's or a skill's Details in the Library say what it takes of the skill list now,
-with **Show in Context**, which opens its group here. Cursor's skills stay in two boxes: those the
+took in your last chat (a Codex plugin that was not in that chat shows no skills, as Codex does not list them: off, with its **Turn on**, or on, until your next Codex chat lists them), and a group you are turning off says **Off after Apply** and about how much
+it frees. A plugin's Details in the Library repeat its group's line here, and a skill's say what
+its pill says (its description sent, only its name, cut short or off), with **Show in Context**,
+which opens its group here. Where Context has no list to read (Cursor, or a project with no chat)
+they say nothing of the skill list. Cursor's skills stay in two boxes: those the
 agent can pick, and those it uses only when you ask.
 
 Skills

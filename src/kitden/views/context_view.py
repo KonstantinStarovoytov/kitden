@@ -401,9 +401,17 @@ def _disk_card(client: str, items: list[Item], message: str, how: list[str]) -> 
     return _card(client, message=message, sides=sides, skills=skills, how=how)
 
 
-def _no_list(client: str, items: list[Item], found: Unreadable | None) -> dict:
-    """The card when there is no list to read: a log Kitden cannot read, or no chat yet."""
+def _no_list(
+    client: str, items: list[Item], found: Unreadable | None, lede: str | None = None
+) -> dict:
+    """The card when there is no list to read: a log Kitden cannot read, or no chat yet. `lede`:
+    the card's lede when the settings set the limit."""
     name = CLIENT_WORDS[client]
+    card = _no_list_card(client, items, found, name)
+    return card | ({"lede": lede} if lede else {})
+
+
+def _no_list_card(client: str, items: list[Item], found: Unreadable | None, name: str) -> dict:
     if isinstance(found, Unreadable):
         which = words.THIS_VERSION.format(client=name)
         if found.version:
@@ -431,7 +439,16 @@ def _on_date(date: str) -> str:
     return words.ON_DATE.format(date=date) if date else ""
 
 
-def _tag(date: str) -> str:
+def _tag(date: str, chat_folder: str | None = None, folder: str | None = None) -> str:
+    """ "Last chat · Nov 6", and " · in atlas" when the chat was in another folder than the one
+    picked (with All projects, any folder)."""
+    tag = _date_tag(date)
+    if chat_folder and chat_folder != folder:
+        tag += words.IN_FOLDER.format(folder=Path(chat_folder).name or chat_folder)
+    return tag
+
+
+def _date_tag(date: str) -> str:
     return words.LAST_CHAT_TAG.format(date=date) if date else words.LAST_CHAT
 
 
@@ -491,6 +508,18 @@ def _claude_files(home: Path, claude: ClaudeFolder, folder: str | None) -> list[
         project = Path(folder)
         files += [project / ".claude/settings.json", *local_files(project, home)]
     return files
+
+
+def _claude_lede(files: list[Path]) -> str:
+    """The Claude Code card's lede: the limit its settings files set, the share they set, or the
+    default share. One for a card with a chat and one without."""
+    setting = _claude_setting(files)
+    if setting is not None:
+        return words.CONTEXT_LEDE + words.CONTEXT_LIMIT_SET["claude_code"].format(n=f"{setting:,}")
+    fraction = _claude_fraction(files)
+    if fraction is not None:
+        return words.CONTEXT_LEDE + words.CLAUDE_SHARE_SET.format(share=_percent(fraction))
+    return words.CONTEXT_LEDE + words.CONTEXT_LIMITS["claude_code"]
 
 
 def _claude_setting(files: list[Path]) -> int | None:
@@ -673,8 +702,11 @@ def _group(
         why = None
         if not skill["plugin_switch"]:
             why = known.change_hint if known is not None and known.change_hint else None
-            here = any(p.name == plugin_id and p.scope is not Scope.USER for p in plugins)
-            why = why or (words.GROUP_WHY_PROJECT if here else words.GROUP_WHY_PLUGIN)
+            here = next(
+                (p for p in plugins if p.name == plugin_id and p.scope is not Scope.USER), None
+            )
+            mine = words.why_project(here.project) if here and here.project else None
+            why = why or mine or words.GROUP_WHY_PLUGIN
         return {
             "key": f"plugin:{plugin_id}",
             "kind": "account" if account else "plugin",
@@ -1394,7 +1426,8 @@ def _claude(
     if found is None and anywhere and folder is not None:
         found = last_claude_list(claude.config, None)
     if found is None or isinstance(found, Unreadable):
-        return _no_list(client, _skills(inventory, client, folder), found)
+        lede = _claude_lede(_claude_files(home, claude, folder))
+        return _no_list(client, _skills(inventory, client, folder), found, lede)
     if not found.skills:
         return _disk_card(client, [], words.NOTHING_TO_FIT, [])
     date, at_ms = _when(found.at)
@@ -1548,7 +1581,7 @@ def _claude(
         title = words.WINDOW_TITLE.format(size=_size(window)) if window else words.UNKNOWN_WINDOW
         source = words.WORKED_OUT if worked_out else None
         models = " · ".join(p for p in (_model_name(found.model), found.surface, source) if p)
-    windows = [_window_card(title, models, _tag(date), then_budget, fact)]
+    windows = [_window_card(title, models, _tag(date, found.folder, folder), then_budget, fact)]
 
     # What the next chats get at each limit, in these states: by the rule, or by a count when the
     # rule does not rebuild the chat (or cannot run) but its limit is known.
@@ -1775,15 +1808,9 @@ def _claude(
         words.HOW_CLAUDE_REST,
         *([limit_card["why"]] if limit_card["why"] else []),
     ]
-    parts = {}
-    if setting is not None:
-        limit_set = words.CONTEXT_LIMIT_SET[client].format(n=f"{setting:,}")
-        parts["lede"] = words.CONTEXT_LEDE + limit_set
-    elif by_fraction:
-        parts["lede"] = words.CONTEXT_LEDE + words.CLAUDE_SHARE_SET.format(share=_percent(share))
     return _card(
         client,
-        **parts,
+        lede=_claude_lede(files),
         # Grey: Kitden cannot judge that chat (the limit may have dropped a skill set now).
         lamp="warn" if misfit else "none" if now else "ok",
         # An estimate that cannot be checked is explained under "How this is counted".
@@ -2306,7 +2333,8 @@ def _codex(
     if then_found:  # the chat was sent under another limit than today's
         title = words.WINDOW_TITLE.format(size=_size(window or 0))
         models = sent_list.model or ""
-    windows = [_window_card(title, models, _tag(date), then_budget, fact)]
+    tag = _tag(date, sent_list.folder, folder)
+    windows = [_window_card(title, models, tag, then_budget, fact)]
     lengths = {r.name: len(r.full or "") for r in rows_est}
     # The limit line counts what the preview's changes leave (as for Claude Code).
     changes = _changes(draft, states, SWITCHES[client])
@@ -2471,19 +2499,23 @@ def _codex(
     groups = _grouped(
         client, skills, [*members, *extras], plugins, [*by_file, *[None] * len(extras)]
     )
-    # A plugin that is off and that the last list did not hold: Codex does not list its skills, so
-    # Kitden does not guess them. Its group stands with no skills, off, with its switch (or why
-    # there is none), and says that its skills come back with the next chat after it is on.
+    # A plugin that the last list did not hold: Codex does not list the skills of one that is off,
+    # nor of one turned on since, so Kitden does not guess them. Its group stands with no skills,
+    # with its switch (or why there is none), and says when its skills come.
     shown = {g["key"] for g in groups}
     for plugin_id in dict.fromkeys(p.name for p in plugins):
         entries = [p for p in plugins if p.name == plugin_id]
         # The entry that decides here: the project's own when it has one, else the user's.
         deciding = next((p for p in entries if p.scope is not Scope.USER), entries[0])
-        if deciding.enabled is not Enabled.OFF or f"plugin:{plugin_id}" in shown:
+        if f"plugin:{plugin_id}" in shown:
             continue
+        off = deciding.enabled is Enabled.OFF
         name, _, market = plugin_id.partition("@")
         offer = _codex_switch(_codex_plugin(plugins, plugin_id))
-        why = words.CODEX_OFF_PLUGIN if offer else words.GROUP_WHY_PROJECT
+        if offer is None and deciding.project:
+            why = words.why_project(deciding.project)
+        else:
+            why = words.CODEX_OFF_PLUGIN if off else words.CODEX_ON_PLUGIN
         groups.append(
             {
                 "key": f"plugin:{plugin_id}",
@@ -2494,7 +2526,7 @@ def _codex(
                 "why": why,
                 "switch": offer,
                 "skills": [],
-                "off": True,
+                "off": off,
             }
         )
 
@@ -2556,4 +2588,12 @@ def _cursor(inventory, folder: str | None) -> dict:
             _skill(client, item.name, item, len(text or ""), int(asked), note, description=text)
         )
     message = words.CURSOR_CANNOT_SEE if items else words.NOTHING_TO_FIT
+    plugins = [
+        i
+        for i in effective_view(inventory, client, folder).items
+        if i.kind is ItemKind.PLUGIN and i.enabled is not Enabled.OFF
+    ]
+    if plugins:
+        n = len(plugins)
+        message += " " + words.CURSOR_PLUGINS[n != 1].format(n=n)
     return _card(client, message=message, skills=skills, how=list(words.HOW_CURSOR))

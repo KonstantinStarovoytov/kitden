@@ -942,3 +942,18 @@ test('a control shows In preview only once the preview took its row, or the row 
     tray.rows = saved;
   }
 });
+
+test('every row and card marks a waiting change the same way: by its items, or its gateway server', async () => {
+  const { markedRows, rowsAbout } = await import('../../src/kitden/web/static/js/tray.js');
+  const off = { key: 'switch:p1', part: {}, body: { action: 'plugin.disable', targets: [{ item: 'p1' }], params: {} } };
+  const rule = { key: 'rule:files/x@', part: {}, body: { action: 'gateway.rule', targets: [], params: { server: 'files', tool: 'x' } } };
+  const direct = { key: 'd', part: {}, body: { action: 'mcp.remove', targets: [{ item: 'd1' }], params: { server: 'files' } } };
+  const asked = { key: 'a', part: null, body: { action: 'plugin.enable', targets: [{ item: 'p2' }], params: {} } };
+  const rows = [off, rule, direct, asked];
+  assert.deepEqual(rowsAbout(rows, { items: ['p1', 'zz'] }), [off]);
+  // By server name, only a change to the gateway's server: not one to a server outside it.
+  assert.deepEqual(rowsAbout(rows, { server: 'files' }), [rule]);
+  // A row the preview has not taken yet marks nothing; once applied, none do.
+  assert.deepEqual(markedRows({ phase: 'idle', rows }).map((r) => r.key), ['switch:p1', 'rule:files/x@', 'd']);
+  assert.deepEqual(markedRows({ phase: 'applied', rows }), []);
+});

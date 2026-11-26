@@ -446,6 +446,9 @@ export async function reload() {
   freshness.reloadStartedAt = performance.now();
   await loadShared();
   const library = state.view === "library";
+  // Context is read again only while it shows; elsewhere its old read goes, so the Library's
+  // Details, which read it too, ask for a fresh one and never say what an Apply changed.
+  if (state.view !== "context") data.context = null;
   if (!library) Object.assign(libraryMapRead, { fresh: false, turn: libraryMapRead.turn + 1, running: null });
   const early = drawWhenRead();
   const reads = projectGone() ? [] : [loadOverview().then(early), loadMap(), loadGateway().then(early), ...(library ? [loadLibraryMap()] : []), ...(state.view === "context" ? [loadContext()] : [])];

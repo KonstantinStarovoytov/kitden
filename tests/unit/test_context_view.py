@@ -89,7 +89,7 @@ def test_claude_everything_fits_is_a_fact_and_the_room_is_an_estimate(home):
     assert (fact["title"], fact["models"], fact["tag"], fact["budget"]) == (
         "1M window",
         "Opus 5.5 · in the Claude app",
-        "Last chat · Nov 6",
+        "Last chat · Nov 6 · in a",
         30_000,
     )
     assert fact["result"]["say"] == (
@@ -314,7 +314,7 @@ def test_one_skill_and_a_bad_timestamp_read_plainly(home):
     assert fact["result"]["say"] == (
         "In your last chat, your one skill was sent with its description."
     )
-    assert fact["tag"] == "Last chat"
+    assert fact["tag"] == "Last chat · in a"
     assert cc["how"][0] == (
         "Last chat: the list Claude Code 2.1.311 sent in the Claude app, read from its chat log."
     )
@@ -366,7 +366,7 @@ def test_a_rule_that_does_not_rebuild_the_list_shows_no_estimate(home):
     cc = view(home)["claude_code"]
     assert cc["checked"] is False
     assert cc["message"] is None  # the reason is under "How this is counted"
-    assert [w["tag"] for w in cc["windows"]] == ["Last chat · Nov 6"]
+    assert [w["tag"] for w in cc["windows"]] == ["Last chat · Nov 6 · in a"]
     assert cc["windows"][0]["result"]["say"].startswith("In your last chat on Nov 6, 1 of 2")
     assert cc["after"] is None
 
@@ -972,7 +972,7 @@ def test_codex_cut_short(home):
     assert cx["lede"].endswith("Codex lets this list use 2% of the context window.")
     assert (cx["lamp"], cx["unit"], cx["checked"], cx["message"]) == ("warn", "tokens", True, None)
     fact = cx["windows"][0]
-    assert fact["tag"] == "Last chat · Oct 30"
+    assert fact["tag"] == "Last chat · Oct 30 · in a"
     assert fact["result"]["say"] == (
         f"In your last chat on Oct 30, 2 of 3 descriptions were cut to {cap - 1}–{cap} "
         "characters. The agent saw only their start."
@@ -1048,7 +1048,7 @@ def test_codex_one_skill_and_a_bad_timestamp_read_plainly(home):
     assert fact["result"]["say"] == (
         "In your last chat, your one skill was sent with its full description."
     )
-    assert fact["tag"] == "Last chat"
+    assert fact["tag"] == "Last chat · in a"
     assert cx["how"][0] == (
         "Last chat: the list Codex 0.163.0-alpha.11 sent, read from its chat log."
     )
@@ -1371,7 +1371,7 @@ def test_codex_limit_from_config_toml(home):
     assert (fact["title"], fact["models"], fact["tag"], fact["budget"]) == (
         "900 tokens",
         "Set in config.toml",
-        "Last chat · Oct 30",
+        "Last chat · Oct 30 · in a",
         900,
     )
     assert (default["title"], default["models"], default["tag"], default["budget"]) == (

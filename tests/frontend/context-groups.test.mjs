@@ -71,19 +71,38 @@ test('more than a few groups start closed', () => {
   assert.equal(FOLD_ABOVE, 3);
 });
 
-test("the Library's line says what a plugin or a skill takes now, and which group it opens", () => {
-  assert.deepEqual(takesLine(CARD, { plugin: 'p@m' }), { group: 'plugin:p@m', client: 'claude_code', say: "Takes 600 characters of Claude Code's skill list." });
-  assert.deepEqual(takesLine(CARD, { plugin: 'q@m' }), { group: 'plugin:q@m', client: 'claude_code', say: "Off now. Took 400 characters of Claude Code's skill list in your last chat." });
+test("the Library's line says what Context says of a plugin or a skill, and which group it opens", () => {
+  // A plugin: its group's line on Context.
+  assert.deepEqual(takesLine(CARD, { plugin: 'p@m' }), { group: 'plugin:p@m', client: 'claude_code', say: "In Claude Code's skill list: 2 skills · 600 characters · 1 showed only a name." });
+  assert.deepEqual(takesLine(CARD, { plugin: 'q@m' }), { group: 'plugin:q@m', client: 'claude_code', say: "In Claude Code's skill list: Off · was 1 skill, 400 characters in your last chat." });
   assert.equal(takesLine(CARD, { plugin: 'r@m' }), null);
-  assert.equal(takesLine(CARD, { items: ['i-a'] }).say, "Takes 300 characters of Claude Code's skill list.");
+  // A skill: its look in its group, with the size its pill and Details give.
+  assert.equal(takesLine(CARD, { items: ['i-a'] }).say, "Sends its description (100 characters) in Claude Code's skill list.");
   assert.equal(takesLine(CARD, { items: ['i-c'] }).say, "Shows only its name in Claude Code's skill list.");
+  assert.equal(takesLine(CARD, { items: ['i-q:z'] }).say, "Off now: not in Claude Code's next skill list.");
   // A skill inside a plugin, by its plugin and its own name.
-  assert.deepEqual(takesLine(CARD, { plugin: 'p@m', skill: 'x' }), { group: 'plugin:p@m', client: 'claude_code', say: "Takes 600 characters of Claude Code's skill list." });
+  assert.deepEqual(takesLine(CARD, { plugin: 'p@m', skill: 'x' }), { group: 'plugin:p@m', client: 'claude_code', say: "Sends its description (100 characters) in Claude Code's skill list." });
   assert.equal(takesLine(CARD, { plugin: 'p@m', skill: 'y' }).say, "Shows only its name in Claude Code's skill list.");
   assert.equal(takesLine(CARD, { plugin: 'p@m', skill: 'zz' }), null);
   // The estimate for the setup now wins over the last chat.
   const now = { sent: { a: 310, 'p:x': 520 }, over: {} };
-  assert.equal(takesLine({ ...CARD, now }, { plugin: 'p@m' }).say, "Takes 520 characters of Claude Code's skill list.");
+  assert.equal(takesLine({ ...CARD, now }, { plugin: 'p@m' }).say, "In Claude Code's skill list: 1 skill · 520 characters.");
+  // Codex: cut short.
+  assert.equal(takesLine({ ...CARD, client: 'codex', unit: 'tokens' }, { items: ['i-c'] }).say, "Cut short in Codex's skill list.");
+});
+
+test("the Library says nothing of a list Context cannot read: no chat, or Cursor", () => {
+  const none = { ...CARD, windows: [], now: null };
+  assert.equal(takesLine(none, { plugin: 'p@m' }), null);
+  assert.equal(takesLine(none, { items: ['i-a'] }), null);
+  assert.equal(takesLine({ ...none, client: 'cursor', groups: [] }, { items: ['i-a'] }), null);
+});
+
+test('a Codex plugin that is on and in no list says On, and the Library says nothing of it', () => {
+  const card = { ...CARD, client: 'codex', unit: 'tokens', groups: [...CARD.groups, { key: 'plugin:r@m', kind: 'plugin', name: 'r', skills: [], lookup: 'r@m', off: false }] };
+  const r = factsOf(card, card.groups.at(-1), factView());
+  assert.deepEqual(groupLine(card, r, false), ['On']);
+  assert.equal(takesLine(card, { plugin: 'r@m' }), null);
 });
 
 test('a Codex plugin that is off and in no list is an off group with no skills', () => {

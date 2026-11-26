@@ -12,6 +12,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Safer changes:** moving a server into the gateway no longer replaces a different server of
   the same name, the review says when a client keeps its own server of that name, Undo out of
   order is refused instead of ending wrong, and a failed **Apply all** names the change and why (#227).
+- **One state on every tab:** the Library's Details say of the skill list only what Context says
+  (nothing for Cursor or a project with no chat), and follow an Apply. Context names the folder of
+  the last chat with **All projects**, keeps a Codex plugin you turned on, says why Cursor's plugin
+  skills are not listed, and shows a project's own share. The Library names a project that turns a
+  plugin off, and says why it has no switch there. A change waiting in the preview is marked
+  **in preview** on the Library's and the Gateway's rows and cards too.
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,
