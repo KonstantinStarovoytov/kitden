@@ -1,8 +1,9 @@
 """Flow 19: a plugin turned off from Context, as a person does it; and the Codex limit line where
 Kitden can only count. Its switch waiting in the preview counts in the verdict and on the limit
 line, as a skill's own switch does; once applied, its group is off at once, also where Kitden
-cannot replay the last chat's list and the page shows that chat's list. The medium sample's last Claude Code chat: 4 of 20 skills showed only a
-name at 1% of a 200K window; superpowers brings two of them, brainstorming (sent) and planning."""
+cannot replay the last chat's list and the page shows that chat's list. The medium sample's last
+Claude Code chat: 4 of 20 skills showed only a name at 1% of a 200K window; superpowers brings two
+of them, brainstorming (sent) and planning."""
 
 import json
 import re
