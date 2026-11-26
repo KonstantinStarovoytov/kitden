@@ -816,7 +816,7 @@ def test_the_map_says_the_link_is_the_state():
         '"One place for servers, rules and logins."',
         '"Set up…"',
         "more: ${first}`",
-        '"Off in" : "In"} ${',
+        "`In ${names(onIn)} · Off in ${names(offIn)}`",
     ):
         assert words in text, words
     assert "ResizeObserver" in script("gateway.js") and "unfoldDelays(" in script("map.js")

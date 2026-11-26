@@ -176,6 +176,16 @@ test('the tree joins linked clients to the gateway and each outside row to its c
   assert.equal(block(tree, 'outside:local:docs').meta, 'In Codex');
 });
 
+test('a server off in one client and on in another says both', () => {
+  const sqlite = { name: 'sqlite', clients: ['codex', 'cursor'], columns: ['codex', 'cursor'], items: ['s', 't'], client_items: { codex: ['s'], cursor: ['t'] }, off: ['codex'], stays: null };
+  const view = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, local: [...MEDIUM_VIEW.groups.local, sqlite] } };
+  const shown = block(gatewayTree(view, OPTS), 'outside:local:sqlite');
+  assert.deepEqual([shown.meta, shown.state], ['In Cursor · Off in Codex', 'on']);
+  const off = { ...sqlite, off: ['codex', 'cursor'] };
+  const all = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, local: [off] } };
+  assert.equal(block(gatewayTree(all, OPTS), 'outside:local:sqlite').meta, 'Off in Codex and Cursor');
+});
+
 test("every held server's tools are in the model; a folded server shows none", () => {
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);
   assert.deepEqual(tree.blocks.filter((b) => b.parent === 'held:kitden:files').map((b) => [b.id, b.column, b.state]), [
