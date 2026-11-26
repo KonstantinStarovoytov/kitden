@@ -1386,6 +1386,40 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-pill.back { border-color: var(--preview-line); background: var(--preview-fill); color: var(--ink); }
 .ctx-pill.lost { border-color: var(--lamp-warn); color: var(--ink); }
 .ctx-pill.sel { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); color: var(--ink); }
+/* The skills by where they come from: a group per source with its header and its pills. */
+.ctx-groups { display: grid; gap: 6px; max-width: 900px; }
+.ctx-group { border: 1px solid var(--wire); border-radius: 10px; background: var(--panel); }
+.ctx-group.off { background: var(--dim); }
+.ctx-group.going, .ctx-group.back { border-style: dashed; border-color: var(--preview-line); }
+.ctx-group.arrive { animation: arrive 1200ms var(--ease-out) both; }
+.ctx-ghead { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-height: 40px; padding: 5px 10px 5px 6px; cursor: pointer; }
+.ctx-gtoggle { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-3); cursor: pointer; }
+.ctx-gtoggle:hover { background: var(--dim); color: var(--ink); }
+.ctx-gtoggle .ic { transition: transform var(--t-fast) var(--calm); }
+.ctx-group.open .ctx-gtoggle .ic { transform: rotate(90deg); }
+.ctx-gname { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; }
+.ctx-gname.act { cursor: pointer; text-decoration: underline dotted var(--ink-3); text-underline-offset: 3px; }
+.ctx-gname.act:hover { color: var(--route); text-decoration-color: var(--route); }
+.ctx-group.off .ctx-gname { color: var(--ink-3); }
+.ctx-gfrom { font-size: 11px; color: var(--ink-4); }
+.ctx-gmeta { display: inline-flex; flex-wrap: wrap; gap: 0 6px; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ctx-gmeta > span + span::before { content: "·"; margin-right: 6px; color: var(--ink-4); }
+.ctx-gstate { font-weight: 600; color: var(--ink-2); }
+.ctx-group.going .ctx-gstate, .ctx-group.back .ctx-gstate { color: var(--ink); }
+.ctx-gshort { color: var(--ink-2); }
+.ctx-gshort::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: var(--lamp-warn); vertical-align: 1px; }
+.ctx-gswitch { margin-left: auto; }
+.ctx-gswitch.pending { border-color: var(--preview-line); background: var(--preview-fill); }
+.ctx-gbody > .fold-in { padding: 0 10px 0 40px; visibility: hidden; transition: opacity 200ms ease, transform 280ms var(--calm), visibility 0s linear 280ms; }
+.ctx-gbody.open > .fold-in { visibility: visible; transition-delay: 40ms, 40ms, 0s; }
+.ctx-gbody.open > .fold-in { padding-bottom: 10px; }
+.ctx-gwhy { margin: 0; font-size: 11.5px; color: var(--ink-3); }
+.ctx-pill.lo, .ctx-pill.apart { background: transparent; color: var(--ink-3); }
+.ctx-pill.apart { border-style: dotted; }
+.ctx-pill.off { background: transparent; color: var(--ink-4); text-decoration: line-through var(--ink-4); }
+.ctx-pill.off .ctx-tag, .ctx-pill.going .ctx-tag { text-decoration: none; }
+.ctx-pill.going { border-style: dashed; border-color: var(--preview-line); background: transparent; color: var(--ink-3); }
+.ctx-seg.gone { opacity: 0.32; }
 /* A skill's switch in Details: the pressed state rests raised; dashed while its row waits in the tray. */
 .ctx-switch { justify-self: start; }
 .ctx-desc { display: grid; gap: 6px; }

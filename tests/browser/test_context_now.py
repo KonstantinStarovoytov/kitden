@@ -29,9 +29,10 @@ ADDED = ("changelog", "api-review")
 
 
 def boxes(page) -> list[int]:
-    """How many pills each of the two boxes holds."""
-    sides = page.locator(".ctx-side")
-    return [sides.nth(i).locator(".ctx-pill").count() for i in range(2)]
+    """How many pills of the groups show a description, and how many only a name (or cut): the
+    two sides of the list as the bar draws it. Off ones, and those in no list, are on neither."""
+    sent = page.locator(".ctx-group .ctx-pill:not(.lo):not(.apart):not(.off):not(.going)")
+    return [sent.count(), page.locator(".ctx-group .ctx-pill.lo").count()]
 
 
 def pick(page, name: str):
@@ -80,7 +81,7 @@ class TestAdded:
         expect(picture_name(page)).to_have_text("Skill list now, estimate")
         assert boxes(page) == [16, 6]
         expect(page.locator(".ctx-seg.over")).to_have_count(6)
-        names = page.locator(".ctx-side.lo .ctx-pill")
+        names = page.locator(".ctx-pill.lo")
         for name in ADDED:
             expect(names.filter(has_text=name)).to_have_count(1)
         expect(handle).to_have_attribute("aria-valuetext", "1% now · 6 of 22 show only a name")
@@ -112,7 +113,7 @@ def test_a_skill_turned_off_after_the_chat_is_said_at_rest_until_undo(page, demo
     expect(picture_name(page)).to_have_text("Skill list now, estimate")
     assert boxes(page) == [19, 0]
     expect(page.locator(".ctx-seg.over")).to_have_count(0)
-    expect(page.locator('.ctx-off .ctx-pill[data-skill="dataviz"]')).to_be_visible()
+    expect(page.locator('.ctx-pill.off[data-skill="dataviz"]')).to_be_visible()
     undo.click()
     wait_until(lambda: SETTINGS(demo).read_bytes() == before, seconds=10)
     expect(main).not_to_contain_text(CHANGED)
@@ -211,7 +212,7 @@ class TestCodexAdded:
         assert boxes(page) == [1, 4]
         expect(page.locator(".ctx-seg.over")).to_have_count(4)
         for name in ("later1", "later2"):
-            pill = page.locator(".ctx-side.lo .ctx-pill").filter(has_text=name)
+            pill = page.locator(".ctx-pill.lo").filter(has_text=name)
             expect(pill).to_have_text(re.compile(rf"^{name}\d+ of \d+$"))
         expect(handle).to_have_attribute("aria-valuetext", re.compile(r"now · 4 of 5 cut short"))
         # Another window's estimate holds them too, and says nothing of the last chat.
@@ -263,7 +264,7 @@ class TestCodexOff:
         expect(picture_name(page)).to_have_text("Skill list now, estimate")
         wait_until(lambda: boxes(page) == [2, 0])
         expect(page.locator(".ctx-seg.over")).to_have_count(0)
-        expect(page.locator('.ctx-off .ctx-pill[data-skill="gamma"]')).to_be_visible()
+        expect(page.locator('.ctx-pill.off[data-skill="gamma"]')).to_be_visible()
         undo.click()
         wait_until(lambda: config.read_bytes() == before, seconds=10)
         expect(main).not_to_contain_text(CHANGED)

@@ -50,9 +50,9 @@ def test_a_codex_skill_inside_another_one_has_a_switch_on_context(page, demo):
     undo = page.get_by_role("button", name="Undo")
     expect(undo).to_be_visible()
     assert str(inner_file(demo.home).resolve()) in config.read_text()
-    expect(page.locator(f'.ctx-off .ctx-pill[data-skill="{INNER}"]')).to_be_visible()
+    expect(page.locator(f'.ctx-pill.off[data-skill="{INNER}"]')).to_be_visible()
     # The outer skill stays on the list.
-    expect(page.locator(f'.ctx-side .ctx-pill[data-skill="{OUTER}"]')).to_be_visible()
+    expect(page.locator(f'.ctx-group .ctx-pill:not(.off)[data-skill="{OUTER}"]')).to_be_visible()
     undo.click()
     wait_until(lambda: (config.read_bytes() if config.exists() else None) == before, seconds=10)
 

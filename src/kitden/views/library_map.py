@@ -24,16 +24,16 @@ from kitden.views.catalog import catalog, installed_inside, plugin_folders
 from kitden.views.effective import in_project
 from kitden.views.load_map import Row, load_map, row_key
 from kitden.views.skills import skill_catalog
-from kitden.views.words import ACCOUNT_GROUP, ORIGIN_WORDS, STATE_WORDS
+from kitden.views.words import GROUP_WORDS, ORIGIN_WORDS, STATE_WORDS
 
 # A found client that loads nothing in the view shown.
 NOTHING_LOADED = "Nothing loaded"
 STORE = "store"
 # Plugins whose id names no marketplace (a Cursor plugin whose name is not stored locally).
-OTHER = {"key": "other", "name": "Other plugins", "icon": "puzzle", "kind": "other"}
+OTHER = {"key": "other", "name": GROUP_WORDS["other"], "icon": "puzzle", "kind": "other"}
 # The plugins the Claude app gives Claude Code from the user's Claude account.
-ACCOUNT = {"key": "account", "name": ACCOUNT_GROUP, "icon": "cloud", "kind": "account"}
-SKILLS = {"key": "skills", "name": "Your skills", "icon": "user-round", "kind": "skills"}
+ACCOUNT = {"key": "account", "name": GROUP_WORDS["account"], "icon": "cloud", "kind": "account"}
+SKILLS = {"key": "skills", "name": GROUP_WORDS["own"], "icon": "user-round", "kind": "skills"}
 SETTINGS = {"key": "settings", "name": "Your settings", "icon": "settings", "kind": "settings"}
 PROJECT = {
     "key": "project",

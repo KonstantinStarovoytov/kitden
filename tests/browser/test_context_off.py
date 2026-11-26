@@ -1,11 +1,12 @@
 """Flow 19: a plugin turned off from Context, as a person does it; and the Codex limit line where
-Kitden can only count. Its switch waiting in the preview
-counts in the verdict and on the limit line, as a skill's own switch does; once applied, its skills
-stand under Turned off at once, also where Kitden cannot replay the last chat's list and the page
-shows that chat's list. The medium sample's last Claude Code chat: 4 of 20 skills showed only a
-name at 1% of a 200K window; superpowers brings two of them, brainstorming (sent) and planning."""
+Kitden can only count. Its switch waiting in the preview counts in the verdict and on the limit
+line, as a skill's own switch does; once applied, its group is off at once, also where Kitden
+cannot replay the last chat's list and the page shows that chat's list. The medium sample's last
+Claude Code chat: 4 of 20 skills showed only a name at 1% of a 200K window; superpowers brings two
+of them, brainstorming (sent) and planning."""
 
 import json
+import re
 
 import pytest
 from playwright.sync_api import expect
@@ -31,12 +32,13 @@ def turn_off_from_context(page) -> None:
 
 
 def going(page) -> list[str]:
-    """The skills under Off after Apply, with the line of their plugin."""
-    return page.locator(".ctx-going .ctx-pill").evaluate_all("(n) => n.map((p) => p.dataset.skill)")
+    """The skills of the groups that go off after Apply."""
+    pills = page.locator(".ctx-group.going .ctx-pill")
+    return pills.evaluate_all("(n) => n.map((p) => p.dataset.skill)")
 
 
 def off_now(page) -> list[str]:
-    return page.locator(".ctx-off .ctx-pill").evaluate_all("(n) => n.map((p) => p.dataset.skill)")
+    return page.locator(".ctx-pill.off").evaluate_all("(n) => n.map((p) => p.dataset.skill)")
 
 
 def test_a_plugins_switch_waiting_in_the_preview_counts_in_the_verdict_and_on_the_line(page, demo):
@@ -47,7 +49,9 @@ def test_a_plugins_switch_waiting_in_the_preview_counts_in_the_verdict_and_on_th
     expect(verdict).to_contain_text("After Apply, estimate: On a 200K window, 1 of 18 skills")
     # The whole plugin goes, together, and its row in the preview says what goes with it.
     wait_until(lambda: going(page) == list(SKILLS))
-    expect(page.locator(".ctx-going .ctx-offline")).to_have_text("superpowers · 2 skills")
+    expect(page.locator(".ctx-group.going .ctx-gmeta")).to_have_text(
+        re.compile(r"^Off after Apply")
+    )
     expect(page.locator("#dock")).to_contain_text("Turns off all of superpowers: 2 skills.")
     expect(handle).to_have_attribute("aria-valuetext", "1% now · 1 of 18 show only a name")
     # Taken out of the preview, everything counts as before.
@@ -95,9 +99,9 @@ class TestCounted:
         expect(main).to_contain_text("4 of 20 skills showed only a name")
         wait_until(lambda: off_now(page) == list(SKILLS))
         # In one place, with one way back.
-        shelf = page.locator(".ctx-off:not(.ctx-going) .ctx-offplug")
-        expect(shelf).to_have_count(1)
-        expect(shelf.get_by_role("button", name="Turn on superpowers")).to_be_visible()
+        group = page.locator(".ctx-group.off")
+        expect(group).to_have_count(1)
+        expect(group.get_by_role("button", name="Turn on superpowers")).to_be_visible()
         expect(main).to_contain_text(f"Estimate: On a 200K window, {about}")
         undo.click()
         wait_until(lambda: SETTINGS(demo).read_bytes() == before, seconds=10)

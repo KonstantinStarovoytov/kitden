@@ -192,6 +192,8 @@ def _card(client: str, **parts) -> dict:
         "how": [],
         "limit": None,
         "changed": [],
+        # Claude Code and Codex: the skills by where they come from (`_grouped`).
+        "groups": [],
     }
     return card | parts
 
@@ -611,19 +613,136 @@ def _held(row: _Row, rules: dict[str, tuple[str, bool]]) -> bool:
     )
 
 
-def _claude_plugins(inventory, home: Path, claude: ClaudeFolder, folder: str | None) -> _Plugins:
-    """Those Claude Code installed, for all projects or in `folder`; not an account's."""
-    items = [
+def _plugin_items(inventory, client: str, folder: str | None) -> list[Item]:
+    """The plugins the client installed, for all projects or in `folder`; not an account's."""
+    return [
         i
         for i in inventory.items
-        if i.client == "claude_code"
+        if i.client == client
         and i.kind is ItemKind.PLUGIN
         and i.scope is not Scope.ACCOUNT
         and i.project in (None, folder)
     ]
+
+
+def _claude_plugins(inventory, home: Path, claude: ClaudeFolder, folder: str | None) -> _Plugins:
+    """Those Claude Code installed, for all projects or in `folder`; not an account's."""
     return _Plugins(
-        items, installed_inside({"claude_code": ClaudeCodeAdapter(home, folder=claude)})
+        _plugin_items(inventory, "claude_code", folder),
+        installed_inside({"claude_code": ClaudeCodeAdapter(home, folder=claude)}),
     )
+
+
+def _codex_plugin(plugins: list[Item], plugin_id: str | None) -> Item | None:
+    """The Codex plugin whose switch Kitden offers here: the user's entry, unless the project's
+    own settings set that plugin too (Codex has no switch for one project, and the user's would
+    change all projects and leave this one as its settings say)."""
+    found = [p for p in plugins if p.name == plugin_id]
+    if any(p.scope is not Scope.USER for p in found):
+        return None
+    return found[0] if found else None
+
+
+def _codex_switch(item: Item | None) -> dict | None:
+    """A Codex plugin's own switch, for all projects: the Library's row for it."""
+    if item is None or item.scope is not Scope.USER:
+        return None
+    action = next((a for a in (PLUGIN_DISABLE, PLUGIN_ENABLE) if a in item.actions), None)
+    if action is None:
+        return None
+    label = words.PLUGIN_TURN_OFF if action == PLUGIN_DISABLE else words.PLUGIN_TURN_ON
+    name = item.name.split("@")[0]
+    return {"item": item.id, "action": action, "label": label.format(name), "say": None}
+
+
+def _group(
+    client: str, skill: dict, item: Item | None, plugins: list[Item], plugin_id: str | None = None
+) -> dict:
+    """The group a skill of the page is in, by where it comes from, with the Library's words: its
+    plugin (named after it, with its marketplace), your skills, a project's, a plugin of the
+    Claude account, the skills built into Claude Code, or those Kitden cannot place. `plugin_id`:
+    the plugin a listed skill with no item follows. `lookup` names the Library item whose
+    Details the group's name opens; `why` says why a group has no switch of its own."""
+    prefix = skill["plugin"] or ""
+    if plugin_id is None and item is not None and from_plugin(item):
+        plugin_id = plugin_of(item)
+    if plugin_id:
+        name, _, market = plugin_id.partition("@")
+        account = plugin_id.endswith(FROM_APP)
+        known = next((p for p in plugins if p.name == plugin_id), None)
+        why = None
+        if not skill["plugin_switch"]:
+            why = known.change_hint if known is not None and known.change_hint else None
+            here = any(p.name == plugin_id and p.scope is not Scope.USER for p in plugins)
+            why = why or (words.GROUP_WHY_PROJECT if here else words.GROUP_WHY_PLUGIN)
+        return {
+            "key": f"plugin:{plugin_id}",
+            "kind": "account" if account else "plugin",
+            "name": name,
+            "from": words.GROUP_WORDS["account"] if account else market or None,
+            "lookup": plugin_id if known is not None else None,
+            "why": why,
+        }
+    if skill["built_in"]:
+        kind, name, why = "built_in", words.GROUP_WORDS["built_in"], words.GROUP_WHY_BUILT_IN
+        return {"key": kind, "kind": kind, "name": name, "from": None, "lookup": None, "why": why}
+    if item is None and prefix == "anthropic-skills":
+        name, why = words.GROUP_WORDS["app"], words.NOTE_APP
+        return {"key": "app", "kind": "app", "name": name, "from": None, "lookup": None, "why": why}
+    if item is None and prefix:
+        # Claude Code's words name its own plugins and the Claude app's.
+        why = words.NOTE_OTHER_PLUGIN.format(prefix) if client == "claude_code" else None
+        why = why or words.GROUP_WHY_PLUGIN
+        key, kind = f"other:{prefix}", "other"
+        return {"key": key, "kind": kind, "name": prefix, "from": None, "lookup": None, "why": why}
+    if item is None:
+        name, why = words.GROUP_WORDS["unknown"], words.NOTE_NO_ITEM
+        key = "unknown"
+        return {"key": key, "kind": key, "name": name, "from": None, "lookup": None, "why": why}
+    if item.project:
+        folder = Path(item.project).name
+        name = words.SOURCE_PROJECT.format(folder)
+        key = f"project:{item.project}"
+        return {"key": key, "kind": "project", "name": name, "from": None, "lookup": None}
+    name = words.GROUP_WORDS["own"]
+    return {"key": "own", "kind": "own", "name": name, "from": None, "lookup": None}
+
+
+def _grouped(
+    client: str,
+    skills: list[dict],
+    items: list[Item | None],
+    plugins: list[Item],
+    plugin_ids: list[str | None] | None = None,
+) -> list[dict]:
+    """Each skill's group (`skill["group"]`), and the groups in the order they first come: their
+    key, kind, name, marketplace (`from`), Library item, switch (the plugin's own, as a member's
+    Details offer it) and why there is none, and their skills by name."""
+    groups: dict[str, dict] = {}
+    ids = plugin_ids or [None] * len(skills)
+    for skill, item, known_id in zip(skills, items, ids, strict=True):
+        # The plugin a skill with no item follows: by its file (Codex says where), else by its
+        # prefix when only one plugin has that name (two marketplaces may both have one).
+        plugin_id = known_id
+        if plugin_id is None and item is None and skill["plugin"]:
+            named = [p.name for p in plugins if p.name.split("@")[0] == skill["plugin"]]
+            plugin_id = named[0] if len(set(named)) == 1 else None
+        found = _group(client, skill, item, plugins, plugin_id)
+        if client == "codex" and found["kind"] == "plugin" and not skill["plugin_switch"]:
+            # Codex: a skill of a plugin Kitden knows, with no item of its own (or one that is off),
+            # takes the plugin's switch too, so its group and the estimate have it.
+            known = _codex_plugin(plugins, found["key"].removeprefix("plugin:"))
+            skill["plugin_switch"] = _codex_switch(known)
+            if skill["plugin_switch"] and skill["note"] == words.NOTE_PLUGIN:
+                skill["note"] = words.NOTE_PLUGIN_SWITCH
+        group = groups.setdefault(found["key"], found | {"switch": None, "skills": []})
+        group.setdefault("why", None)
+        group["skills"].append(skill["name"])
+        if skill["plugin_switch"] and group["switch"] is None:
+            group["switch"] = skill["plugin_switch"]
+            group["why"] = None
+        skill["group"] = found["key"]
+    return list(groups.values())
 
 
 def _plugin_words(plugin_id: str) -> str:
@@ -1633,6 +1752,8 @@ def _claude(
             )
         )
 
+    members = [r.item for r in (*rows, *extras, *waiting)]
+    groups = _grouped(client, skills, members, plugins.items)
     version = f" {found.version}" if found.version else ""
     surface = f" {found.surface}" if found.surface else ""
     if checked:
@@ -1676,6 +1797,7 @@ def _claude(
         checked=checked,
         windows=windows,
         skills=skills,
+        groups=groups,
         after=after,
         how=how,
         limit=limit_card,
@@ -2276,6 +2398,14 @@ def _codex(
         after = {"say": say, "gets": gets, "loses": loses, "result": result}
         after["budget"] = budget_after
 
+    plugins = _plugin_items(inventory, client, sent_list.folder)
+
+    def switch_of(item: Item | None) -> dict | None:
+        """The Codex plugin's own switch, for a skill of a plugin."""
+        if item is None or not from_plugin(item):
+            return None
+        return _codex_switch(_codex_plugin(plugins, plugin_of(item)))
+
     skills = []
     for r in rows:
         logged = None if r.sent is None else len(r.sent)
@@ -2286,7 +2416,7 @@ def _codex(
             if len(r.full) > CODEX_DESCRIPTION_CAP:
                 note = f"{words.NOTE_CODEX_LONG} {note}"
         if r.item is not None and from_plugin(r.item):
-            note = words.NOTE_PLUGIN
+            note = words.NOTE_PLUGIN_SWITCH if switch_of(r.item) else words.NOTE_PLUGIN
         if r.changed:
             note = words.NOTE_CHANGED
         elif r.moved:  # first, whatever the other note: the size read may not be the chat's
@@ -2311,13 +2441,61 @@ def _codex(
                 description=text,
                 seen=seen,
                 state=states[r.name],
+                plugin_switch=switch_of(r.item),
             )
         )
     for item in extras:
         text = _description(item.source.path)
         note = words.NOTE_NOT_LISTED
+        offer = switch_of(item)
         skills.append(
-            _skill(client, item.name, item, len(text or ""), None, note, description=text)
+            _skill(
+                client,
+                item.name,
+                item,
+                len(text or ""),
+                None,
+                note,
+                description=text,
+                plugin_switch=offer,
+            )
+        )
+    # A skill that is off is in no loaded item: its group goes by the item that is off.
+    turned_off = _off_skills(inventory, client, sent_list.folder)
+    off_items = {os.path.realpath(i.source.path): i for i in turned_off.values() if i.source.path}
+    members = [
+        r.item or off_items.get(os.path.realpath(r.file)) if r.file else r.item for r in rows
+    ]
+    # A listed skill's plugin by its file, which names its marketplace.
+    by_file = [plugin_at(r.file) if r.file else None for r in rows]
+    groups = _grouped(
+        client, skills, [*members, *extras], plugins, [*by_file, *[None] * len(extras)]
+    )
+    # A plugin that is off and that the last list did not hold: Codex does not list its skills, so
+    # Kitden does not guess them. Its group stands with no skills, off, with its switch (or why
+    # there is none), and says that its skills come back with the next chat after it is on.
+    shown = {g["key"] for g in groups}
+    for plugin_id in dict.fromkeys(p.name for p in plugins):
+        entries = [p for p in plugins if p.name == plugin_id]
+        # The entry that decides here: the project's own when it has one, else the user's.
+        deciding = next((p for p in entries if p.scope is not Scope.USER), entries[0])
+        if deciding.enabled is not Enabled.OFF or f"plugin:{plugin_id}" in shown:
+            continue
+        name, _, market = plugin_id.partition("@")
+        offer = _codex_switch(_codex_plugin(plugins, plugin_id))
+        why = words.CODEX_OFF_PLUGIN if offer else words.GROUP_WHY_PROJECT
+        groups.append(
+            {
+                "key": f"plugin:{plugin_id}",
+                "kind": "plugin",
+                "name": name,
+                "from": market or None,
+                "lookup": plugin_id,
+                "why": why,
+                "switch": offer,
+                "skills": [],
+                "off": True,
+            }
         )
 
     version = f" {sent_list.version}" if sent_list.version else ""
@@ -2353,6 +2531,7 @@ def _codex(
         checked=checked,
         windows=windows,
         skills=skills,
+        groups=groups,
         after=after,
         how=how,
         limit=limit_card,
