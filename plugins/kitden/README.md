@@ -57,6 +57,8 @@ the skill files of a plugin's newest version, when an update removed the version
 and whether a skill's `agents/openai.yaml` keeps it off the list.
 For a skill built into Claude Code, which has no file, it reads the description an earlier chat
 sent, from the newest chat files.
+In a project that is a git worktree, it reads the `.git` file in the project's folder, which
+names the main checkout, and runs no git command.
 It uses them to size the skill list and keeps none of it. It also reads each skill's description
 from its `SKILL.md`, and its `when_to_use` only for its size, and
 `kitden show context` prints it, together with the names of the skills that did not fit in your
