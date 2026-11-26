@@ -1385,6 +1385,10 @@ def add_server_steps(
     return steps
 
 
+# The states `skill.rule` writes for a skill, per client: the one answer the Library and Context
+# read for a skill's switch (spec "Switches per client"). Cursor has none.
+SKILL_SWITCHES = {"claude_code": ("on", "name-only", "off"), "codex": ("on", "off")}
+
 # "On" is a rule taken out: in a project, or for all projects where the user's file has one.
 ON_NEEDS_PROJECT = "Pick a project to use the shared rule there."
 
@@ -1454,7 +1458,8 @@ def skill_rule_steps(
     own key out (Claude Code only, and only when that file has one).
 
     Claude Code writes `skillOverrides` (a plugin: `enabledPlugins` in one project's local
-    settings), Codex a `[[skills.config]]` entry, for all projects only. Cursor has no switch.
+    settings), Codex a `[[skills.config]]` entry, for all projects only (On sets its `enabled`
+    back to true). Cursor has no switch. `SKILL_SWITCHES` are the states each client takes.
     """
     scope = params.get("scope")
     state = params.get("state") or ("on" if params.get("off", True) is False else "off")
@@ -1493,9 +1498,7 @@ def skill_rule_steps(
             raise ValueError(CODEX_NO_NAME_ONLY)
         if project is not None:
             raise ValueError(CODEX_NO_PROJECT)
-        if state == "on":
-            raise ValueError(ON_NEEDS_PROJECT)  # Codex writes only `enabled = false`
-        steps.append(adapter.skill_rule_step(item))
+        steps.append(adapter.skill_rule_step(item, on=state == "on"))
     if not steps:
         raise ValueError("Choose a skill.")
     return steps

@@ -408,8 +408,9 @@ export function readLibraryMap() {
 
 // Context opens: the chat logs are read again, and the page is drawn again with the answer while
 // Context still shows.
+// The Library's map is read with it: a plugin's group offers the Library's own switches.
 function openContext() {
-  afterShared(loadContext).then(() => { if (state.view === "context") renderPlace(); }).catch((error) => console.error(error));
+  afterShared(() => Promise.all([loadContext(), readLibraryMap()])).then(() => { if (state.view === "context") renderPlace(); }).catch((error) => console.error(error));
 }
 
 // The Library opens: a map that may be out of date is read, and the page is drawn again with the
@@ -446,12 +447,14 @@ export async function reload() {
   freshness.reloadStartedAt = performance.now();
   await loadShared();
   const library = state.view === "library";
+  // Context draws a plugin's switches from the Library's map, so it reads that map too.
+  const maps = library || state.view === "context";
   // Context is read again only while it shows; elsewhere its old read goes, so the Library's
   // Details, which read it too, ask for a fresh one and never say what an Apply changed.
   if (state.view !== "context") data.context = null;
-  if (!library) Object.assign(libraryMapRead, { fresh: false, turn: libraryMapRead.turn + 1, running: null });
+  if (!maps) Object.assign(libraryMapRead, { fresh: false, turn: libraryMapRead.turn + 1, running: null });
   const early = drawWhenRead();
-  const reads = projectGone() ? [] : [loadOverview().then(early), loadMap(), loadGateway().then(early), ...(library ? [loadLibraryMap()] : []), ...(state.view === "context" ? [loadContext()] : [])];
+  const reads = projectGone() ? [] : [loadOverview().then(early), loadMap(), loadGateway().then(early), ...(maps ? [loadLibraryMap()] : []), ...(state.view === "context" ? [loadContext()] : [])];
   await Promise.all([...reads, loadSetupServer().then(early)]);
   firstLoad = false;
   // The Library's maps count only while the Library shows: they are not read elsewhere.

@@ -10,7 +10,7 @@ from kitden.views.effective import DESKTOP, column_of, effective_view, overrides
 from kitden.views.explain import summary_line
 from kitden.views.findings import group_of
 from kitden.views.setup_server import is_own_entry
-from kitden.views.words import KEPT_UNREAD
+from kitden.views.words import KEPT_UNREAD, OFF_STAYS
 
 # The gateway inside `kitden mcp`. It runs on this computer, so it also takes local servers.
 KITDEN = {
@@ -22,25 +22,32 @@ KITDEN = {
 }
 
 
-def loaded_mcp(inventory, project: str | None) -> tuple[list[Item], set[str]]:
+def loaded_mcp(inventory, project: str | None) -> tuple[list[Item], set[str], list[Item]]:
     """MCP servers that load in the project, across the three clients and the Desktop Code tab,
-    and the ids of those that are the project's own definition and replace an all-projects one.
+    the ids of those that are the project's own definition and replace an all-projects one, and
+    the servers that would load there but are off.
 
     Kitden's own read-only server is left out: it is not a tool server to route anywhere.
     """
     found = found_clients(inventory)
     items: list[Item] = []
+    off: list[Item] = []
     replacing: set[str] = set()
+
+    def servers(found: list[Item], client: str) -> list[Item]:
+        return [
+            i
+            for i in found
+            if i.client == client and i.kind is ItemKind.MCP_SERVER and not is_own_entry(i)
+        ]
+
     for client in [*CLIENTS, DESKTOP]:
         if client in found:
             view = effective_view(inventory, client, project)
-            items += [
-                i
-                for i in view.items
-                if i.client == client and i.kind is ItemKind.MCP_SERVER and not is_own_entry(i)
-            ]
+            items += servers(view.items, client)
+            off += servers(view.off, client)
             replacing |= overrides(view)
-    return items, replacing
+    return items, replacing, off
 
 
 def stays(item: Item, group: str) -> str | None:
@@ -88,7 +95,7 @@ def gateway_view(
         "local": kitden is not None,
         "plugin": False,
     }
-    loaded, replacing = loaded_mcp(inventory, project)
+    loaded, replacing, off = loaded_mcp(inventory, project)
     # The servers the Kitden gateway holds: an entry of one's name that sets up another server
     # cannot move in (local_move_steps refuses it), so its row says so.
     held_keys = setups or {}
@@ -96,7 +103,7 @@ def gateway_view(
     firsts: dict[tuple[str, str], Item] = {}
     # Per row, the first client whose entry sets up another server than the gateway holds.
     apart: dict[tuple[str, str], str] = {}
-    for item in loaded:
+    for item in [*loaded, *off]:
         if item.via_gateway:
             names = connections.get(item.via_gateway, {}).get(column_of(item.client))
             if names is not None and item.name not in names:
@@ -115,12 +122,18 @@ def gateway_view(
                 "override": False,
                 "stays": None,
                 "unknown": True,
+                "off": [],
             },
         )
         if item.client not in row["clients"]:
             row["clients"].append(item.client)
         row["override"] = row["override"] or item.id in replacing
-        row["unknown"] = row["unknown"] and item.enabled is not Enabled.ON
+        if item.enabled is Enabled.OFF:
+            # Off in that client: its Details turn it on, or say why they cannot.
+            row["off"].append(column_of(item.client))
+            if item.change_hint:
+                row["off_why"] = item.change_hint
+        row["unknown"] = row["unknown"] and item.enabled is Enabled.UNKNOWN
         row["stays"] = row["stays"] or stays(item, group)
         if REMOVE_DIRECT in item.actions:
             row["items"].append(item.id)
@@ -141,6 +154,10 @@ def gateway_view(
         for row in rows.values():
             loads = {column_of(c) for c in row["clients"]}
             row["columns"] = [c for c in CLIENTS if c in loads]
+            row["off"] = [c for c in row["columns"] if c in row["off"]]
+            if row["off"] == row["columns"]:
+                # A move would turn it on: it stays off until it is turned on where it is.
+                row["stays"] = row["stays"] or OFF_STAYS.format(row["name"])
     return {
         "gateways": (
             [{**KITDEN, "servers": kitden, **({"problem": problem} if problem else {})}]

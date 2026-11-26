@@ -1456,9 +1456,9 @@ def test_a_skill_says_its_source_and_a_project_skill_names_its_project(home, tmp
     assert rows["dataviz"] == (None, "Built into Claude Code")
 
 
-def test_a_codex_skill_that_is_off_has_no_on_to_offer(home):
-    # Codex only writes `enabled = false`; turning it back on stays an Undo in Changes. A skill
-    # that is off is not loaded, so it has no item here, and so no switch (no On to press).
+def test_a_codex_skill_that_is_off_offers_on(home):
+    # A skill that is off is not loaded: its item is the one that is off, so it keeps its switch
+    # and On sets its `[[skills.config]]` entry back to `enabled = true`.
     paths = codex_home(home, window=272_000)
     with (home / ".codex/config.toml").open("a") as config:
         config.write(f'\n[[skills.config]]\npath = "{paths["beta"]}"\nenabled = false\n')
@@ -1470,7 +1470,8 @@ def test_a_codex_skill_that_is_off_has_no_on_to_offer(home):
         ],
     )
     rows = {s["name"]: s for s in view(home)["codex"]["skills"]}
-    assert (rows["beta"]["item"], rows["beta"]["switch"]) == (None, [])
+    assert rows["beta"]["item"] is not None
+    assert (rows["beta"]["state"], rows["beta"]["switch"]) == ("off", ["on", "off"])
     assert rows["alpha"]["switch"] == ["on", "off"]
 
 

@@ -216,7 +216,9 @@ def test_on_the_gateway_a_client_lights_only_its_own_servers_on_the_outside_stac
         expect(shown).to_have_count(5)
         held = shown.evaluate_all(OUTSIDE)
         stack(page, "outside", "after").click()
-        expect(shown).to_have_count(2)
+        # 9 outside servers: 7 that load and 2 that are off (Codex's sqlite, and pr-index,
+        # whose plugin is off).
+        expect(shown).to_have_count(4)
         held += shown.evaluate_all(OUTSIDE)
         assert {own for _, own in held} == {True, False}
         page.locator('[data-focus="block:collapse:group:outside"]').click()

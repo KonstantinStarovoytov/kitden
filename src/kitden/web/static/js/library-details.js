@@ -18,10 +18,13 @@ import { takesLine } from "./context-groups.js";
 import { current, data, loadContext, projectPath, state } from "./store.js";
 import { say } from "./toast.js";
 import { inTray, keyFor, ruleState, trayRow } from "./tray.js";
+import { skillSwitch } from "./skill-switch.js";
 
-const OFF_ALL = "Turn off for all projects…";
+export const OFF_ALL = "Turn off for all projects…";
 const OFF_SOME = "Turn off in some projects…";
 const OFF_HERE = "Turn off in this project…";
+export const ON_ALL = "Turn on for all projects…";
+const ON_HERE = "Turn on in this project…";
 // Takes the project's own key out of its local settings, so the shared rule applies there.
 const USE_SHARED = "Use the shared rule…";
 // A Codex skill only one project has: a rule for all projects that names this copy's path.
@@ -34,7 +37,7 @@ const NO_PROJECT_SWITCH = "Codex has no switch for one project.";
 const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";
 const SOME_WHY = "This turns it off in Claude Code. Codex and Cursor have no switch for one project.";
 // Why a project cannot take a one-project skill rule (library_map.py `skill_rules`).
-const PROJECT_LINES = { new: "No Claude Code settings yet" };
+const PROJECT_LINES = { new: "No .claude folder yet; Kitden makes none" };
 // A project whose rule file sits where Kitden does not write (`skill_rules.outside`: the folder,
 // the engine's own test): no rule there, and one quiet line says why.
 const outsideWords = (folder) => `Claude Code keeps this project's local settings in ${folder}, where Kitden does not write.`;
@@ -101,11 +104,16 @@ function loadsSay(item, { folder = "", noun = "it" } = {}) {
 }
 
 // The facts every item shares.
+// On in one client and off in another, it names both ("On in Cursor · Off in Claude Code"), so the
+// header never says On for a skill a client has off.
 function stateFact(item) {
   const look = lampOf(item);
+  const on = clientsBy(item, "on");
+  const off = clientsBy(item, "off");
+  const words = on.length && off.length ? `On in ${names(inOrder(on)).join(", ")} · Off in ${names(inOrder(off)).join(", ")}` : LAMP_WORDS[look];
   const value = el("span", "fact-mark");
-  value.append(lamp(look), el("span", null, LAMP_WORDS[look]));
-  return { label: "State", value, text: LAMP_WORDS[look] };
+  value.append(lamp(look), el("span", null, words));
+  return { label: "State", value, text: words };
 }
 
 // The clients that load it, by their tiles and names ("Claude Code, Cursor"), or by how many.
@@ -201,12 +209,9 @@ export function queued(body) {
 
 // The cards ---------------------------------------------------------------------------------------
 
-// "Turn on in Claude Code…" for each client that has a plugin off, and "Remove from Codex…" for each
-// client whose own entry Kitden can remove, under More: the same rows as the old Details' buttons
-// and a link's ×.
-const onLabel = (client) => `Turn on in ${CLIENT_NAMES[client]}…`;
+// "Remove from Codex…" for each client whose own entry Kitden can remove, under More: the same rows
+// as a link's ×.
 const removeLabel = (client) => `Remove from ${CLIENT_NAMES[client]}…`;
-const onActions = (item) => onBodies(item).map(({ client, body }) => ({ label: onLabel(client), body, goes: goesWords(item, "on") }));
 
 // What goes with a plugin's switch, as Context's own switch says it: "Turns off all of plug: 2
 // skills, 1 command and 3 agents." Null for a skill, or when Kitden read nothing inside.
@@ -298,16 +303,48 @@ export function pluginCard(item, c, { addStep = () => {}, commandsStep = () => {
   const actions = [];
   const adds = (item.can && item.can.add) || [];
   if (adds.length) actions.push({ label: addLabel(adds), run: addStep, primary: true });
-  const off = offBodies(item);
-  if (off.length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, off, "btn", goesWords(item, "off")) });
-  const here = hereBody(item, c);
-  if (here) actions.push({ label: OFF_HERE, node: rowsButton(OFF_HERE, [here]) });
-  const back = sharedBody(item, c);
-  if (back) actions.push({ label: USE_SHARED, node: rowsButton(USE_SHARED, [back]) });
-  actions.push(...onActions(item));
+  for (const one of pluginSwitches(item, c)) actions.push({ label: one.label, node: rowsButton(one.label, one.bodies, "btn", one.goes) });
   const tech = item.technical || {};
   const more = [...removeActions(item), ...commandsAction(pluginEntries(item), commandsStep)];
-  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: [loadsSay(item, c), item.note, item.no_switch].filter(Boolean).join(" "), actions, more, after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
+  // Cursor's own plugin has no switch or Remove here: its Details say where it is changed.
+  const cursorOnly = (item.by || {}).cursor && !(item.through || {}).cursor && !Object.keys(item.by).some((client) => client !== "cursor");
+  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: [loadsSay(item, c), item.note, item.no_switch, cursorOnly ? CURSOR_REMOVES : null].filter(Boolean).join(" "), actions, more, after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
+}
+
+// A plugin's switches, the one answer Library Details and Context's group header read (`only`: one
+// client's): "Turn off for all projects…" and "Turn on for all projects…" (its own entry, every
+// client at once), in a project "Turn off in this project…" and "Use the shared rule…" (Claude
+// Code's rule there) and Codex's own table there ("Turn off in this project…", "Turn on in this
+// project…", `can.project_switch`). Each is `{ label, bodies, goes }`.
+export function pluginSwitches(item, c, only = null) {
+  const mine = (client) => !only || client === only;
+  const out = [];
+  const add = (label, bodies, goes = null) => { if (bodies.length) out.push({ label, bodies, goes }); };
+  add(OFF_ALL, offBodies(item).filter((b) => mine(clientOf(item, b))), goesWords(item, "off"));
+  if (mine("claude_code")) {
+    const here = hereBody(item, c);
+    if (here) add(OFF_HERE, [here]);
+    const back = sharedBody(item, c);
+    if (back) add(USE_SHARED, [back]);
+  }
+  const own = projectSwitchBodies(item, c).filter((one) => mine(one.client));
+  add(OFF_HERE, own.filter((one) => one.body.action === "plugin.disable").map((one) => one.body));
+  add(ON_HERE, own.filter((one) => one.body.action === "plugin.enable").map((one) => one.body));
+  add(ON_ALL, onBodies(item).filter((one) => mine(one.client)).map((one) => one.body), goesWords(item, "on"));
+  return out;
+}
+
+// The client a plugin row is for, by its item.
+const clientOf = (item, body) => Object.keys(item.items || {}).find((client) => item.items[client].includes((body.targets[0] || {}).item));
+
+// Codex's own table in the picked project turns the plugin on or off there (`can.project_switch`,
+// its deciding item first): Kitden writes that project's `.codex/config.toml`.
+function projectSwitchBodies(item, c) {
+  if (!c.project) return [];
+  return ((item.can && item.can.project_switch) || []).map((client) => {
+    const action = (item.by || {})[client] === "on" ? "plugin.disable" : "plugin.enable";
+    return { client, body: { action, targets: [{ item: item.items[client][0] }], params: {} } };
+  });
 }
 
 // A thing a plugin holds: Plugin, Kind, Source and Clients, and "Follows its plugin." It has no
@@ -317,37 +354,69 @@ export function partCard(block, c) {
   const tile = el("span", "fact-mark");
   tile.append(icon("puzzle", 13), el("span", null, plugin.name));
   const facts = [{ label: "Plugin", value: tile, text: plugin.name }, { label: "Kind", value: block.label.words }, { label: "Source", value: plugin.source }, clientsFact(plugin, { count: true })];
-  const here = block.label.words === "Skill" ? hereBody(plugin, c) : null;
-  let after = null;
-  if (here) after = rowsButton(`Turn off ${plugin.name} in this project…`, [here], "btn ghost small");
-  return { kind: block.label.words, title: block.name, id: plugin.name, tile: iconTile(block.label.icon), facts, why: FOLLOWS, after };
+  // Its plugin's own switches, as on the plugin's Details and on Context (the switch is the plugin's).
+  const actions = pluginSwitches(plugin, c).map((one) => ({ label: one.label, node: rowsButton(one.label, one.bodies, "btn", one.goes) }));
+  return { kind: block.label.words, title: block.name, id: plugin.name, tile: iconTile(block.label.icon), facts, why: actions.length ? `${FOLLOWS} Its switch is ${plugin.name}'s, for the whole plugin.` : FOLLOWS, actions };
 }
 
 // A skill on its own: Plugin ("None, a skill on its own"), State, Comes from, Source and Clients;
 // where it loads, and which clients have no switch; "Turn off for all projects…", "Turn off in
 // this project…" where the project decides, and "Turn off in some projects…" (the project
 // checklist, `someStep`); its file under Technical details.
-export function skillCard(item, c, { someStep = () => {} } = {}) {
+export function skillCard(item, c, { someStep = () => {}, addStep = () => {} } = {}) {
   const source = el("span", "fact-mark");
   source.append(icon(item.source === ORIGIN_WORDS.project ? "folder" : "user-round", 13), el("span", null, item.source));
   const facts = [{ label: "Plugin", value: NO_PLUGIN, quiet: true }, stateFact(item), comesFrom(item, c), { label: "Source", value: source, text: item.source }, clientsFact(item, { count: true })];
   const own = SKILL_STATE_WORDS[item.skill_state];
   if (own) facts.splice(2, 0, { label: "Loads", value: own, text: own });
   const actions = [];
-  if (offBodies(item).length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, offBodies(item)) });
-  const here = skillHereBody(item, c);
-  if (here) actions.push({ label: OFF_HERE, node: rowsButton(OFF_HERE, [here]) });
-  const back = sharedBody(item, c);
-  if (back) actions.push({ label: USE_SHARED, node: rowsButton(USE_SHARED, [back]) });
-  const copy = copyBodies(item);
-  if (copy.length) actions.push({ label: OFF_COPY, node: rowsButton(OFF_COPY, copy) });
+  // Add to a client: the same step as a plugin's, for a skill the skill catalog can copy (the List's
+  // "+ Add" and a drag do the same).
+  const adds = item.skill ? (item.can && item.can.add) || [] : [];
+  if (adds.length) actions.push({ label: addLabel(adds), run: addStep, primary: true });
+  // Its own switch for all projects, per client: the same one Context's Details draw.
+  const switches = skillSwitches(item);
+  for (const one of skillProjectSwitches(item, c)) actions.push({ label: one.label, node: rowsButton(one.label, one.bodies) });
   if (offersSome(item, c)) actions.push({ label: OFF_SOME, run: someStep });
   const notes = [];
   if (shared(item) && (item.by || {}).codex === "on") notes.push(NO_PROJECT_SWITCH);
   if ((item.by || {}).cursor === "on") notes.push(NO_CURSOR_SWITCH);
   const why = [loadsSay(item, { folder: c.project ? c.folder : "", noun: "this skill" }), ...notes].join(" ");
   const after = afterOf(projectLine(item, c), outsideLine(item, c));
-  return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
+  return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, list: switches, actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
+}
+
+// A skill's switches for one project, the one answer the Library's and Context's Details read
+// (`only`: one client's): "Turn off in this project…" and "Use the shared rule…" (Claude Code's
+// rule there), and "Turn off this copy in Codex…". Each is `{ label, bodies }`.
+export function skillProjectSwitches(item, c, only = null) {
+  const out = [];
+  if (!only || only === "claude_code") {
+    const here = skillHereBody(item, c);
+    if (here) out.push({ label: OFF_HERE, bodies: [here] });
+    const back = sharedBody(item, c);
+    if (back) out.push({ label: USE_SHARED, bodies: [back] });
+  }
+  const copy = copyBodies(item).filter((body) => !only || body.targets[0].client === only);
+  if (copy.length) out.push({ label: OFF_COPY, bodies: copy });
+  return out;
+}
+
+// Remove from one client (`only`), or from each: the rows under More.
+export const removeRows = (item, only = null) => removeActions(item).filter((one) => !only || one.label === removeLabel(only));
+
+// A skill's switch for all projects in each client that has one (`can.rule`, the states it takes;
+// `can.now`, the state it has): skill-switch.js, the same control as Context's. Null with none.
+export function skillSwitches(item, only = null) {
+  const can = item.can || {};
+  const clients = Object.keys(can.rule || {}).sort(byClientOrder).filter((client) => !only || client === only);
+  if (!clients.length) return null;
+  const box = el("div", "skill-switches");
+  for (const client of clients) {
+    const target = { item: item.items[client][0] };
+    box.append(skillSwitch({ client, target, states: can.rule[client], now: (can.now || {})[client] || "on" }));
+  }
+  return box;
 }
 
 // What Claude Code keeps in the account (the List's "Claude account plugins and connectors"): its
@@ -356,10 +425,13 @@ export function accountCard(block) {
   return { kind: KIND_WORDS.plugin, title: block.name, tile: kindTile("plugin"), facts: [stateFact(block.item)], why: block.reason || null };
 }
 
-// A hook: its facts and Technical details only; hooks have no switch yet.
+// A hook: its facts, why it has no action, and Technical details. Kitden has no switch for hooks.
+// The twin of views/words.py HOOKS_ONLY_SHOWN.
+export const HOOKS_ONLY_SHOWN = "Kitden only shows hooks; it does not add or turn them off.";
+const EDIT_HOOK = "Edit it in the settings file under Technical details.";
 export function hookCard(item, c) {
   const facts = [stateFact(item), comesFrom(item, c), { label: "Source", value: item.source }, clientsFact(item, { count: true })];
-  return { kind: KIND_WORDS.hook, title: item.name, id: item.source, tile: kindTile("hook"), facts, technical: techOf([{ title: "Settings file", path: (item.technical || {}).path }]) };
+  return { kind: KIND_WORDS.hook, title: item.name, id: item.source, tile: kindTile("hook"), facts, why: `${HOOKS_ONLY_SHOWN} ${EDIT_HOOK}`, technical: techOf([{ title: "Settings file", path: (item.technical || {}).path }]) };
 }
 
 // One framed list of items (tools.js's look): a tile, the name over a quiet line.
@@ -542,7 +614,7 @@ function cardOf(thing, c, id) {
   if (block.kind === "group") return marketplaceCard(block.group, { commandsStep: () => commandsStep(id) });
   if (block.kind === "part") return partCard(block, c);
   if (block.kind === "plugin") return pluginCard(block.item, c, { addStep: () => addStep(id), commandsStep: () => commandsStep(id) });
-  if (block.kind === "skill") return skillCard(block.item, c, { someStep: () => someStep(id) });
+  if (block.kind === "skill") return skillCard(block.item, c, { someStep: () => someStep(id), addStep: () => addStep(id) });
   return hookCard(block.item, c);
 }
 
@@ -579,7 +651,9 @@ function backFrom(id, label) {
 // tick is one plugin.install row; a ticked row says "In preview".
 export function addNodes(item, back) {
   const has = (client) => Boolean((item.items || {})[client]);
-  const clients = ["claude_code", "codex"].filter((client) => item.can.add.includes(client) || has(client));
+  // A skill can go to Cursor too (its own skills folder); a plugin cannot.
+  const choices = item.kind === "skill" ? ["claude_code", "codex", "cursor"] : ["claude_code", "codex"];
+  const clients = choices.filter((client) => item.can.add.includes(client) || has(client));
   const picks = el("div", "picks");
   picks.setAttribute("role", "group");
   picks.setAttribute("aria-label", "Clients");
@@ -591,7 +665,7 @@ export function addNodes(item, back) {
   body.append(el("p", "why", "Each client you tick waits in preview until Apply."), picks);
   const done = el("footer", "stack");
   done.append(button("Done", back, "btn"));
-  return [stepHead(`Plugin · ${item.name}`, `Add ${item.name} to the clients you pick`, back), body, done];
+  return [stepHead(`${KIND_WORDS[item.kind] || "Plugin"} · ${item.name}`, `Add ${item.name} to the clients you pick`, back), body, done];
 }
 
 // A step in the panel: its nodes come in as the next step (`dir`), or drawn again in place (null);

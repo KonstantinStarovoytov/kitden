@@ -816,7 +816,7 @@ def test_the_map_says_the_link_is_the_state():
         '"One place for servers, rules and logins."',
         '"Set up…"',
         "more: ${first}`",
-        "In ${",
+        '"Off in" : "In"} ${',
     ):
         assert words in text, words
     assert "ResizeObserver" in script("gateway.js") and "unfoldDelays(" in script("map.js")
@@ -2713,11 +2713,10 @@ def test_the_library_map_details_words():
         'const NO_PROJECT_SWITCH = "Codex has no switch for one project.";',
         'const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";',
         '"This turns it off in Claude Code. Codex and Cursor have no switch for one project."',
-        'new: "No Claude Code settings yet"',
+        'new: "No .claude folder yet; Kitden makes none"',
         '["skills", "skill", "skills"], ["commands", "command", "commands"]',
         '["mcp_servers", "MCP server", "MCP servers"]',
         '`Add to ${names(clients).join(" or ")}…`',
-        "`Turn off ${plugin.name} in this project…`",
         '"in every project"',
         '`${joinWords(names(readers))} ${verb(readers, "gets", "get")} it through '
         "${CLIENT_NAMES[owner]}.`",
@@ -2749,7 +2748,8 @@ def test_the_library_map_details_words():
     ):
         assert words in text, words
     # Cursor is never a choice for a plugin (D26), and a plugin's parts have no switch (D25).
-    assert '["claude_code", "codex"].filter((client) => item.can.add.includes(client)' in text
+    plugin_choices = '["claude_code", "codex", "cursor"] : ["claude_code", "codex"]'
+    assert f'item.kind === "skill" ? {plugin_choices}' in text
     # The project checklist is the Gateway's own (D13), shared, not a copy.
     assert "export function projectChecklist(" in gw() and "projectChecklist({" in text
     assert "export function tickRow(" in gw()
@@ -3010,7 +3010,7 @@ def test_the_library_list_words_and_looks():
     assert "min-width: 0; overflow: hidden; padding-left: calc(8px" in rule(".tg-row > .tg-name")
     # Library Details turn a plugin on again and remove an entry, as the old Details did.
     details = script("library-details.js")
-    assert "`Turn on in ${CLIENT_NAMES[client]}…`" in details
+    assert 'const ON_ALL = "Turn on for all projects…";' in details
     assert "`Remove from ${CLIENT_NAMES[client]}…`" in details
     assert "more: removeActions(item)" in details
     # They act only on a client's own entry for all projects; where the project decides, one quiet

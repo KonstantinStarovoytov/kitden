@@ -111,10 +111,11 @@ def test_all_projects_on_context_names_the_last_chats_folder(page, demo):
     expect(details).to_contain_text("It is off in atlas: atlas's own settings set this plugin")
 
 
-def test_a_project_view_says_why_a_codex_plugin_has_no_switch(page, demo):
+def test_a_project_view_offers_codexs_own_switch_for_a_plugin_its_settings_set(page, demo):
     atlas = project_id(page, demo, "atlas")
     details = library(page, "plugin:browser@openai-bundled", atlas)
-    expect(details).to_contain_text("atlas's own settings set this plugin, so it has no switch")
+    expect(details.get_by_role("button", name="Turn on in this project…")).to_be_visible()
+    expect(details).to_contain_text("Codex's setting for this comes from atlas's shared settings.")
     expect(details).not_to_contain_text("None yet")
 
 

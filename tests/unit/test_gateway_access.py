@@ -107,7 +107,9 @@ def test_outside_rows_name_their_columns_and_why_they_stay(tmp_path):
         # Cursor's files has no token, unlike the gateway's files: another setup, so it stays.
         stays = {r["name"]: r["stays"] for r in groups["move"] + groups["local"] if r["stays"]}
         apart = "files is set up differently in the Kitden gateway and Cursor; keep one first."
-        assert stays == {"files": apart}
+        # Codex's sqlite is off: a move would turn it on, so it is turned on first.
+        off = "sqlite is off. Turn it on first to move it into the gateway."
+        assert stays == {"files": apart, "sqlite": off}
         # An entry that reads a header from the shell stays.
         claude = page.home / ".claude.json"
         data = json.loads(claude.read_text())

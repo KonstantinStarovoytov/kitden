@@ -510,7 +510,7 @@ class ClientAdapter(ABC):
         """The edits that turn one skill off or on, in all projects or in one."""
         raise ValueError(f"{self.id} has no skill switch of this kind")
 
-    def skill_rule_step(self, item: Item) -> Step:
+    def skill_rule_step(self, item: Item, on: bool = False) -> Step:
         """The edit that turns one skill off or on, in all projects."""
         raise ValueError(f"{self.id} has no skill switch of this kind")
 

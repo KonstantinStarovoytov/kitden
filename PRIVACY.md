@@ -13,7 +13,9 @@ nothing from it.
   When you set the skill list limit on the Context page and press Apply, Kitden writes
   `skillListingBudgetFraction` in Claude Code's user settings (`~/.claude/settings.json`, or
   `settings.json` in the folder `CLAUDE_CONFIG_DIR` names), or for Codex
-  `[skills] max_context_tokens` in its `config.toml`, with a backup you can undo.
+  `[skills] max_context_tokens` in its `config.toml`, with a backup you can undo. When you turn a
+  Codex skill, plugin or MCP server on or off and press Apply, Kitden writes its `enabled` key in
+  `config.toml`, or in a trusted project's `.codex/config.toml`, with a backup you can undo.
 - For the context check, what the client sent in your last chats, from the client's own chat
   files, and the skills the Claude app gives Claude Code, from the app's own folder. For Codex, also
   its model list (`models_cache.json`), for the size of its context window, and the skill files of a

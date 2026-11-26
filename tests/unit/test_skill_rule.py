@@ -633,9 +633,13 @@ def test_on_for_all_projects_takes_the_users_key_out_and_undo_puts_it_back(tmp_p
 def test_on_for_all_projects_with_no_key_in_the_users_file_is_refused(tmp_path):
     home, _, _ = _home(tmp_path)
     with _page(home) as page:
-        for client, name in (("claude_code", "deploy"), ("codex", "lint-fix")):
-            answer = _preview(page, _rule(client, _item(page, client, name), state="on"))
-            assert answer.json()["detail"] == "Pick a project to use the shared rule there."
+        answer = _preview(
+            page, _rule("claude_code", _item(page, "claude_code", "deploy"), state="on")
+        )
+        assert answer.json()["detail"] == "Pick a project to use the shared rule there."
+        # Codex turns a skill on again only where its own entry turned it off.
+        answer = _preview(page, _rule("codex", _item(page, "codex", "lint-fix"), state="on"))
+        assert answer.json()["detail"] == "lint-fix is on already."
 
 
 def test_codex_refuses_name_only(tmp_path):

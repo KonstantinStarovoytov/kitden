@@ -1116,13 +1116,15 @@ test('on an estimate window the pills follow that estimate, not the last chat', 
   await fire(cards()[0], 'click');
 });
 
-test('a Codex skill that is off shows Off and offers no On', async () => {
+test('a Codex skill that is off shows Off and offers On, and says it has no Name only', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'codex' };
   show(answer(CLAUDE, { ...CODEX, skills: [skill('lint', 300, 0, { state: 'off', switch: ['on', 'off'] }), skill('fmt', 200, 0, { switch: ['on', 'off'] })] }, CURSOR));
   await fire(pillOf('lint'), 'click');
   let switches = walk(drawer).filter((n) => n.dataset && n.dataset.state);
-  assert.deepEqual(switches.map((n) => [text(n), n.getAttribute('aria-pressed')]), [['Off', 'true']]);
+  assert.deepEqual(switches.map((n) => [text(n), n.getAttribute('aria-pressed')]), [['On', 'false'], ['Off', 'true']]);
+  assert.ok(text(drawer).includes('Codex · all projects'));
+  assert.ok(text(drawer).includes('Codex has no Name only setting.'));
   await fire(pillOf('fmt'), 'click');
   switches = walk(drawer).filter((n) => n.dataset && n.dataset.state);
   assert.deepEqual(switches.map(text), ['On', 'Off']);
@@ -1615,7 +1617,8 @@ test("a group's switch is its plugin's own: the same tray row as its skill's Det
   show(answer(GROUPED, CODEX, CURSOR));
   const press = () => byClass(headOf('plugin:plug@m'), 'ctx-gswitch')[0];
   assert.equal(press().getAttribute('aria-label'), 'Turn off plug');
-  assert.equal(text(press()), 'Turn off');
+  // The Library's words: the switch says its scope.
+  assert.equal(text(press()), 'Turn off for all projects…');
   queue(PREVIEW, previewed('c1'));
   queue(draftUrl({ 'plug:tool': 'off', 'plug:start': 'off' }), { status: 200, json: answer({ ...GROUPED, after: AFTER }, CODEX, CURSOR) });
   await fire(press(), 'click');

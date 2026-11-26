@@ -150,7 +150,7 @@ const MEDIUM = {
       SUPERPOWERS,
     ] },
     { key: 'skills', name: 'Your skills', icon: 'user-round', kind: 'skills', items: [
-      own('s1', 'release-notes', 'skill', { by: { claude_code: 'on', codex: 'on', cursor: 'on' }, through: { cursor: 'claude_code' }, items: { claude_code: ['cc-rn'], codex: ['cx-rn'], cursor: ['cu-rn'] }, can: { off: ['claude_code', 'codex'] }, technical: { path: '/home/u/.claude/skills/release-notes/SKILL.md' } }),
+      own('s1', 'release-notes', 'skill', { by: { claude_code: 'on', codex: 'on', cursor: 'on' }, through: { cursor: 'claude_code' }, items: { claude_code: ['cc-rn'], codex: ['cx-rn'], cursor: ['cu-rn'] }, can: { off: ['claude_code', 'codex'], rule: { claude_code: ['on', 'name-only', 'off'], codex: ['on', 'off'] }, now: { claude_code: 'on', codex: 'on' } }, technical: { path: '/home/u/.claude/skills/release-notes/SKILL.md' } }),
     ] },
     { key: 'settings', name: 'Your settings', icon: 'settings', kind: 'settings', items: [own('h1', 'PreToolUse: Bash', 'hook', { source: 'Your settings', by: { claude_code: 'on' }, items: { claude_code: ['cc-h'] }, can: {} })] },
   ],
@@ -313,20 +313,17 @@ test('Cursor is never a choice for a plugin', async () => {
   assert.ok(!labels(card).some(([label]) => label.startsWith('Add to')));
 });
 
-test('an inside item says Follows its plugin and has no switch', async () => {
+test("an inside item follows its plugin and offers the plugin's own switches, as Context does", async () => {
   await reset();
   const model = libraryTree(MEDIUM);
   const part = model.blocks.find((b) => b.id === 'part:p2:skills:brainstorm');
   const card = details.partCard(part, c());
-  assert.deepEqual([card.kind, card.title, card.why], ['Skill', 'brainstorm', 'Follows its plugin.']);
+  assert.deepEqual([card.kind, card.title, card.why], ['Skill', 'brainstorm', "Follows its plugin. Its switch is superpowers's, for the whole plugin."]);
   assert.deepEqual(facts(card), [['Plugin', 'superpowers'], ['Kind', 'Skill'], ['Source', 'demo-market'], ['Clients', '2 clients']]);
-  assert.equal((card.actions || []).length, 0);
-  assert.equal(card.after, null);
-  // In a project Claude Code can take a rule in: one quiet line that turns its plugin off there.
+  assert.deepEqual(card.actions.map((a) => a.label), ['Turn off for all projects…']);
+  // In a project Claude Code can take a rule in: the plugin's switch there too.
   const here = details.partCard(part, details.context(MEDIUM, 'atlas', 'atlas'));
-  assert.equal(here.after.textContent, '');
-  assert.equal(here.after.title, 'Turn off superpowers in this project…');
-  assert.match(here.after.className, /ghost/);
+  assert.deepEqual(here.actions.map((a) => a.label), ['Turn off for all projects…', 'Turn off in this project…']);
 });
 
 test("a skill with its own state says it as a fact after State", async () => {
@@ -340,13 +337,15 @@ test("a skill with its own state says it as a fact after State", async () => {
   assert.deepEqual(facts(details.skillCard({ ...skill, skill_state: 'name-only' }, c())).map(([label]) => label).slice(0, 3), ['Plugin', 'State', 'Loads']);
 });
 
-test("a skill's Turn off for all projects adds one skill.rule row per client that can", async () => {
+test("a skill's switch for all projects is Context's: one per client that can, a press adds one skill.rule row", async () => {
   await reset();
   const skill = MEDIUM.groups[1].items[0];
   const card = details.skillCard(skill, c());
   assert.deepEqual(facts(card), [['Plugin', 'None, a skill on its own'], ['State', 'On'], ['Comes from', 'All projects'], ['Source', 'Your skills'], ['Clients', '3 clients']]);
-  assert.deepEqual(labels(card), [['Turn off for all projects…', false], ['Turn off in some projects…', false]]);
+  assert.deepEqual(labels(card), [['Turn off in some projects…', false]]);
   assert.match(card.why, /Codex has no switch for one project\. Cursor has no switch to turn off one skill\.$/);
+  assert.match(texts(card.list).join(' '), /Claude Code · all projects On Name only Off Codex · all projects On Off Codex has no Name only setting\./);
+  // The map × still turns it off with the same row.
   assert.deepEqual(offBodies(skill), [
     { action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-rn' }], params: { scope: 'all', off: true } },
     { action: 'skill.rule', targets: [{ client: 'codex', item: 'cx-rn' }], params: { scope: 'all', off: true } },
@@ -354,14 +353,24 @@ test("a skill's Turn off for all projects adds one skill.rule row per client tha
   const box = await showMap();
   press(node(box, 'block:item:s1'));
   await flush();
-  const off = node(drawer, 'action:Turn off for all projects…');
-  press(off);
+  press(node(drawer, 'state:claude_code:off'));
+  await flush();
+  press(node(drawer, 'state:codex:off'));
   await flush();
   assert.deepEqual(tray.rows.map((r) => r.key), ['skill:claude_code:cc-rn@', 'skill:codex:cx-rn@']);
-  assert.equal(off.getAttribute('aria-disabled'), 'true');
-  assert.ok(texts(off).includes('In preview'));
+  assert.equal(node(drawer, 'state:claude_code:off').getAttribute('aria-pressed'), 'true');
+  await cancelTray();
   // A plugin turns off with its own switch, one row per client that has it on.
   assert.deepEqual(offBodies(SUPERPOWERS), [{ action: 'plugin.disable', targets: [{ item: 'cc-sp' }], params: {} }]);
+});
+
+test('a skill that is off can be turned on and set to Name only in the Library, as on Context', async () => {
+  await reset();
+  const off = { ...MEDIUM.groups[1].items[0], by: { claude_code: 'off', cursor: 'on' }, can: { rule: { claude_code: ['on', 'name-only', 'off'] }, now: { claude_code: 'off' } } };
+  const card = details.skillCard(off, c());
+  const pressed = walk(card.list).filter((n) => n.dataset && n.dataset.state).map((n) => [[n, ...walk(n)].map((m) => m.textContent).join(''), n.getAttribute('aria-pressed')]);
+  assert.deepEqual(pressed, [['On', 'false'], ['Name only', 'false'], ['Off', 'true']]);
+  assert.deepEqual(facts(card)[1], ['State', 'On in Cursor · Off in Claude Code']);
 });
 
 test("a plugin's row from the Library says what goes with it, as Context's does", async () => {
@@ -388,7 +397,7 @@ test('Turn off in some projects… uses the project checklist', async () => {
   assert.equal(document.activeElement, node(drawer, 'find'));
   const rows = ['atlas', 'site', 'web'].map((id) => node(drawer, `tick:${id}`));
   assert.deepEqual(rows.map((n) => n.disabled), [false, true, false]);
-  assert.ok(texts(rows[1]).includes('No Claude Code settings yet'));
+  assert.ok(texts(rows[1]).includes('No .claude folder yet; Kitden makes none'));
   press(rows[0]);
   await flush();
   assert.deepEqual(tray.rows.map((r) => r.body), [{ action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-rn' }], params: { scope: 'project', project: 'atlas', off: true } }]);
@@ -402,6 +411,8 @@ test('a hook, a client, a link and a marketplace have their own Details', async 
   await reset();
   const hook = details.hookCard(MEDIUM.groups[2].items[0], c());
   assert.deepEqual([hook.kind, facts(hook), hook.actions], ['Hook', [['State', 'On'], ['Comes from', 'All projects'], ['Source', 'Your settings'], ['Clients', '1 client']], undefined]);
+  // It has no action, and says so.
+  assert.equal(hook.why, 'Kitden only shows hooks; it does not add or turn them off. Edit it in the settings file under Technical details.');
   const client = details.clientCard('claude_code', c());
   assert.deepEqual([client.kind, client.title, client.id], ['Client', 'Claude Code', '1 plugin · 3 skills']);
   assert.deepEqual(texts(client.list).filter((t) => !t.includes('<')), ['Loads in every project', 'superpowers', 'Plugin · 4 items', 'release-notes', 'Skill', 'PreToolUse: Bash', 'Hook']);
@@ -517,7 +528,9 @@ test('the tray takes a skill rule for all projects and one for a project in Clau
   const box = await showMap();
   press(node(box, 'block:item:s1'));
   await flush();
-  press(node(drawer, 'action:Turn off for all projects…'));
+  press(node(drawer, 'state:claude_code:off'));
+  await flush();
+  press(node(drawer, 'state:codex:off'));
   await flush();
   press(node(drawer, 'action:Turn off in some projects…'));
   await flush();
@@ -697,11 +710,13 @@ test('an outside import says Claude Code may ask before it reads this', () => {
 
 test('a plugin turns on again and a plugin or skill is removed, as the old Details and the × did', async () => {
   const { linkRemoval } = await import('../../src/kitden/web/static/js/library-rules.js');
-  // pr-review is off in Claude Code: "Turn on in Claude Code…" is one plugin.enable row.
+  // pr-review is off in Claude Code: "Turn on for all projects…" is one plugin.enable row, the
+  // switch that says its scope as "Turn off for all projects…" does.
   const off = { ...MEDIUM.groups[0].items[0], can: { add: ['codex'], off: [], on: ['claude_code'], remove: ['claude_code'] } };
   const card = details.pluginCard(off, c());
-  const on = card.actions.find((a) => a.label === 'Turn on in Claude Code…');
-  assert.deepEqual(on.body, { action: 'plugin.enable', targets: [{ item: 'cc-pr' }], params: {} });
+  assert.ok(card.actions.some((a) => a.label === 'Turn on for all projects…'));
+  const on = details.pluginSwitches(off, c()).find((a) => a.label === 'Turn on for all projects…');
+  assert.deepEqual(on.bodies, [{ action: 'plugin.enable', targets: [{ item: 'cc-pr' }], params: {} }]);
   // Under More: "Remove from Claude Code…", the same tray row as the link's ×, then "Commands…".
   assert.deepEqual(card.more.map((a) => a.label), ['Remove from Claude Code…', 'Commands…']);
   const remove = card.more[0].body;
@@ -823,7 +838,7 @@ test("the part card's button and the checklist's tick tell a rule's on and off a
   // "Use the shared rule…" for superpowers waits: the same key, but off is false.
   await addToTray({ ...details.projectBody(SUPERPOWERS, 'atlas'), params: { scope: 'project', project: 'atlas', off: false } });
   const part = libraryTree(MEDIUM).blocks.find((b) => b.id === 'part:p2:skills:brainstorm');
-  const button = details.partCard(part, atlas).after;
+  const button = details.partCard(part, atlas).actions.find((a) => a.label === 'Turn off in this project…').node;
   drawer.replaceChildren(button);
   await flush();
   assert.ok(!texts(button).includes('In preview'));
@@ -956,3 +971,16 @@ for (const outcome of ['copied', 'rejected', 'unavailable']) {
     }
   });
 }
+
+test('a skill offers Add to the clients that lack it, Cursor too, as a drag and the List do', () => {
+  const skill = own('s5', 'brandkit', 'skill', { skill: 'brandkit@skills', by: { claude_code: 'on' }, items: { claude_code: ['cc-bk'] }, can: { add: ['codex', 'cursor'], off: ['claude_code'], rule: { claude_code: ['on', 'name-only', 'off'] }, now: { claude_code: 'on' } } });
+  const card = details.skillCard(skill, c());
+  assert.deepEqual(card.actions[0].label, 'Add to Codex or Cursor…');
+  const nodes = details.addNodes(skill, () => {});
+  assert.deepEqual(walk(nodes[1]).filter((n) => n.dataset && n.dataset.focus && n.dataset.focus.startsWith('tick:')).map((n) => n.dataset.focus), ['tick:claude_code', 'tick:codex', 'tick:cursor']);
+});
+
+test("Cursor's own plugin says where it is turned off or removed, on its own Details", () => {
+  const ui = plugin('p9', 'ui-kit', { by: { cursor: 'on' }, items: { cursor: ['cu-ui'] }, can: { add: [], off: [], remove: [] } });
+  assert.match(details.pluginCard(ui, c()).why, /Remove it in Cursor: Customize → Plugins\.$/);
+});

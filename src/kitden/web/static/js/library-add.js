@@ -10,11 +10,14 @@ import { button, plural, reportError } from "./dom.js";
 import { addsOf, learnOffers, letGoLibraryMap, onLibraryAdd, pressRow } from "./library-map.js";
 import { marketplaceForm } from "./offer.js";
 import { byClientOrder, INSTALLERS } from "./parts.js";
-import { busy, onBusy } from "./store.js";
+import { busy, data, onBusy } from "./store.js";
 import { addToTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
 export const LIBRARY_ADD_TITLE = "Add a plugin or skill";
 const FOOT = "Click to preview · drag onto a client";
+// Cursor takes no plugin from here (library-map.js): the foot says so while Cursor is found.
+const CURSOR_FOOT = "Cursor gets plugins through Claude Code";
+const footWords = () => ((data.clients || []).some((c) => c.id === "cursor" && c.status === "found") ? `${FOOT} · ${CURSOR_FOOT}` : FOOT);
 const NO_MATCH = "No plugins or skills match.";
 const NONE = "No marketplace on this computer offers a plugin or skill.";
 const ADD_MARKETPLACE = "Add a marketplace…";
@@ -91,7 +94,7 @@ const LIBRARY = {
   type: "library-add",
   kicker: "Library",
   title: LIBRARY_ADD_TITLE,
-  foot: FOOT,
+  foot: footWords,
   noMatch: NO_MATCH,
   none: NONE,
   pill: PILL,

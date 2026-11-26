@@ -413,8 +413,14 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
     more.push({ label: "Remove direct entry…", body: { action: "mcp.remove_direct", targets: row.items.map((item) => ({ item })), params: {} } });
   }
   const source = own.find((d) => d.scope === "user" && d.actions.includes("mcp.remove_direct"));
-  // A client that cannot take it (Claude Code has no start folder setting) gets no Add, only why.
+  // A client that cannot take it (Claude Code has no start folder setting) gets no Add, only why;
+  // so does a server no Add can copy: a project's own, or one the Kitden gateway holds too.
   const cannot = [];
+  const missing = WRITABLE.filter((c) => clients.includes(c) && !definitions.some((d) => d.client === c));
+  if (missing.length && group !== "plugin") {
+    if (!source && own.length) cannot.push(NO_ADD_PROJECT);
+    else if (source && definitions.some((d) => d.via_gateway)) cannot.push(NO_ADD_HELD);
+  }
   if (source && !definitions.some((d) => d.via_gateway)) {
     for (const client of WRITABLE.filter((c) => clients.includes(c) && !definitions.some((d) => d.client === c))) {
       const reason = source.cannot_add?.[client];
@@ -427,11 +433,20 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
       more.push({ label: `+ Add to ${CLIENT_NAMES[client]}…`, body, note: projectNote(state.project) });
     }
   }
+  // Its own switch where the client file has one (Codex's `enabled`), for the entry's own scope.
+  for (const def of own) {
+    const action = ["plugin.enable", "plugin.disable"].find((a) => def.actions.includes(a));
+    if (action) actions.push({ label: switchLabel(action, def), body: { action, targets: [{ item: def.id }], params: {} }, primary: !moves.length && action === "plugin.enable" });
+  }
   const offers = own.filter((d) => d.actions.includes("mcp.remove_direct")).map((def) => ({ def, action: "mcp.remove_direct" }));
   for (const offer of offers) {
     more.push({ label: offerLabel(offer, offers), body: { action: offer.action, targets: [{ item: offer.def.id }], params: {} } });
   }
-  const note = [row.stays || (group === "move" && row.items.length && !targets.length ? GATEWAY_NOTE : null), ...cannot].filter(Boolean).join(" ") || null;
+  // Off in every client that has it: the stays line says to turn it on first, so the Adds'
+  // reasons would only repeat it. Each sentence once.
+  const offAll = columns.length > 0 && columns.every((c) => (row.off || []).includes(c));
+  const lines = [row.stays || (group === "move" && row.items.length && !targets.length ? GATEWAY_NOTE : null), ...(offAll ? [] : cannot), ...(group === "plugin" ? [] : noSwitch(row, columns, own))];
+  const note = [...new Set(lines.filter(Boolean))].join(" ") || null;
   const evidence = techRows(own.length ? own : definitions.filter((d) => !d.via_gateway && columns.includes(d.client)));
   const route = el("span", "fact-mark");
   route.append(lamp("out"), el("span", null, "Direct, on its own"));
@@ -442,6 +457,7 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
     tile: iconTile(OUTSIDE_ICONS[group]),
     facts: [
       { label: "Set up in", value: tiles(columns, names), text: names },
+      ...offFact(row),
       { label: "Route", value: route, text: "Direct, on its own" },
       { label: "Kitden's rules", value: "Don't reach it", warn: true },
     ],
@@ -453,13 +469,48 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
   };
 }
 
+// Why the outside card offers no "+ Add to …".
+export const NO_ADD_PROJECT = "Kitden copies only servers set for all projects to other clients.";
+export const NO_ADD_HELD = "The Kitden gateway holds it too: clients connected to the gateway get it there.";
+
+// "Turn off in Codex for all projects…", or "…in atlas…" for a project's own entry: the switch
+// names its scope, as the Library's do.
+function switchLabel(action, def) {
+  const way = action === "plugin.enable" ? "on" : "off";
+  const where = def.project ? `in ${folderName(def.project)}` : "for all projects";
+  return `Turn ${way} in ${CLIENT_NAMES[def.client] || def.client} ${where}…`;
+}
+
+// "Off in Codex" (`row.off`, the clients whose entry is off), while one is.
+function offFact(row) {
+  const off = row.off || [];
+  if (!off.length) return [];
+  const text = `Off in ${joinWords(off.map((c) => CLIENT_NAMES[c] || c))}`;
+  const value = el("span", "fact-mark");
+  value.append(lamp("off"), el("span", null, text));
+  return [{ label: "State", value, text }];
+}
+
+// Why a client that has it set up gets no switch here, in one sentence (docs/clients.md): Kitden
+// writes no on or off for Claude Code or Cursor, and Claude Code keeps its own per project in its
+// /mcp panel; an untrusted Codex project is not read at all (`off_why`).
+export const noSwitchLine = (names, claude) => `Kitden has no switch to turn it off in ${names}${claude ? "; Claude Code has one per project in its /mcp panel" : ""}.`;
+function noSwitch(row, columns, own) {
+  const switched = new Set(own.filter((d) => d.actions.some((a) => a === "plugin.enable" || a === "plugin.disable")).map((d) => d.client));
+  const without = columns.filter((c) => c !== "codex" && !switched.has(c));
+  const lines = row.off_why ? [row.off_why] : [];
+  if (without.length) lines.push(noSwitchLine(joinWords(without.map((c) => CLIENT_NAMES[c] || c)), without.includes("claude_code")));
+  return lines;
+}
+
 // What the outside panel says: who calls it on their own (who has it set up, when Kitden does not
 // know that any client loads it), so Kitden's switches do not reach its tools; that a move brings
 // them here, where one can take it; and that its clients keep it either way, only where every one
 // of them uses the Kitden gateway (a move takes their own entries).
 function outsideSay(row, columns, names, moves, linked) {
   const many = columns.length > 1;
-  const who = row.unknown ? `${names} ${many ? "have" : "has"} ${row.name} set up` : `${names} ${many ? "call" : "calls"} ${row.name}`;
+  const off = columns.length > 0 && columns.every((c) => (row.off || []).includes(c));
+  const who = row.unknown || off ? `${names} ${many ? "have" : "has"} ${row.name} set up` : `${names} ${many ? "call" : "calls"} ${row.name}`;
   const own = many ? "their own" : "its own";
   const words = [`${who} on ${own}, so Kitden can't turn its tools on or off.`];
   if (moves.length) words.push("Move it into the gateway to manage them here.");
