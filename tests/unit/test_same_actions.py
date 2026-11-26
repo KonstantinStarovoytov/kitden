@@ -2,15 +2,17 @@
 Codex skill and server turned on again, off servers on the Gateway, and the reasons where a client
 has no switch."""
 
+import os
 import tomllib
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from kitden.changes.actions import SKILL_SWITCHES
-from kitden.clients.codex import CodexAdapter
+from kitden.clients.codex import CodexAdapter, skills_off
 from kitden.demo import build_demo_home, demo_adapters
-from kitden.model import ItemKind
+from kitden.model import Enabled, ItemKind
 from kitden.views import words
 from kitden.views.context_view import context_view
 from kitden.views.gateway_view import gateway_view
@@ -90,3 +92,27 @@ def test_cursor_skills_and_hooks_say_why_they_have_no_switch(tmp_path):
     assert words.CURSOR_NO_SWITCH_NOTE in notes
     assert _hook_why(None, "codex") == words.HOOKS_NOT_READ  # pyright: ignore[reportArgumentType]
     assert _hook_why(None, "claude_code") == words.HOOKS_ONLY_SHOWN  # pyright: ignore[reportArgumentType]
+
+
+def test_a_codex_skill_is_off_by_the_last_entry_for_its_path(tmp_path):
+    path = os.path.realpath(tmp_path / "SKILL.md")
+    twice = [{"path": path, "enabled": False}, {"path": path, "enabled": True}]
+    assert skills_off({"skills": {"config": twice}}) == set()
+    assert skills_off({"skills": {"config": twice[::-1]}}) == {path}
+
+
+def test_a_client_entry_that_is_off_does_not_connect_it_to_the_gateway(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    inventory, _ = _read(home)
+    docs = next(
+        i
+        for i in inventory.items
+        if i.client == "codex" and i.name == "docs" and i.kind is ItemKind.MCP_SERVER
+    )
+    at = inventory.items.index(docs)
+    inventory.items[at] = replace(docs, via_gateway="kitden", enabled=Enabled.OFF)
+    view = gateway_view(inventory, None, kitden=[])
+    assert view["connections"]["kitden"]["codex"] == []
+    assert view["used"] == []
+    inventory.items[at] = replace(docs, via_gateway="kitden")
+    assert gateway_view(inventory, None, kitden=[])["connections"]["kitden"]["codex"] == ["docs"]
