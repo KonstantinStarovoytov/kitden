@@ -1,4 +1,5 @@
-"""Flow 19: a plugin turned off from Context, as a person does it. Its switch waiting in the preview
+"""Flow 19: a plugin turned off from Context, as a person does it; and the Codex limit line where
+Kitden can only count. Its switch waiting in the preview
 counts in the verdict and on the limit line, as a skill's own switch does; once applied, its skills
 stand under Turned off at once, also where Kitden cannot replay the last chat's list and the page
 shows that chat's list. The medium sample's last Claude Code chat: 4 of 20 skills showed only a
@@ -101,3 +102,32 @@ class TestCounted:
         undo.click()
         wait_until(lambda: SETTINGS(demo).read_bytes() == before, seconds=10)
         wait_until(lambda: off_now(page) == [])
+
+
+class TestCodexCounted:
+    """A Codex chat Kitden cannot rebuild: the cut-short chat of tests/unit/test_codex_limit.py,
+    with one of its skill files gone since. Kitden counts the next chat with the skills as they are
+    now, says so, and the limit line is there, as on Claude Code."""
+
+    @pytest.fixture
+    def before_start(self):
+        from tests.browser.test_limit_line import codex_chat_alone
+        from tests.unit.test_codex_limit import cut_chat
+
+        def write(home):
+            codex_chat_alone(home, cut_chat)
+            (home / ".agents/skills/gamma/SKILL.md").unlink()
+
+        return write
+
+    def test_the_codex_line_is_there_and_said_as_a_count(self, page, demo):
+        from tests.browser.test_limit_line import open_codex
+
+        handle = open_codex(page)
+        main = page.get_by_role("main")
+        expect(main).to_contain_text("Kitden could not rebuild your last Codex list")
+        expect(handle).to_be_visible()
+        expect(page.locator(".ctx-zl").last).to_have_text("Skill list now, estimate")
+        page.locator(".ctx-flag").click()
+        details = page.get_by_role("complementary", name="Details")
+        expect(details).to_contain_text("Kitden could not rebuild this chat's list")

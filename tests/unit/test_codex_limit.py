@@ -286,3 +286,31 @@ def test_a_limit_below_the_default_has_no_places_between():
     few = [CodexSkill(f"s{i}", "Does a thing.", f"/s{i}/SKILL.md") for i in range(3)]
     card = _card(3_000, few)
     assert [s["value"] for s in card["steps"]] == [3_000, "default"]
+
+
+def test_with_a_file_gone_the_codex_line_counts_with_todays_skills(home):
+    # The chat's gamma file is gone: the rule cannot rebuild the chat, so Kitden counts, gamma as
+    # the chat sent it, and the limit line gets its places all the same.
+    budget = cut_chat(home)
+    gone = home / ".agents/skills/gamma/SKILL.md"
+    gone.unlink()
+    cx = view(home)["codex"]
+    assert cx["checked"] is False
+    assert words.CODEX_COUNTED in cx["changed"]
+    assert cx["now"]["budget"] == budget
+    limit = cx["limit"]
+    assert limit["now"] == f"2% of the context window: {budget} tokens"
+    assert limit["counted"] == [words.CODEX_LIMIT_COUNTED]
+    assert limit["steps"] and any(step.get("now") for step in limit["steps"])
+    assert limit["offer"]["label"].startswith("Set to ")
+    # A limit in the preview gets its estimate after Apply, from the same count.
+    after = view(home, draft={"limits": {"codex": limit["offer"]["tokens"]}})["codex"]["after"]
+    assert after["say"].startswith("After Apply, estimate:")
+
+
+def test_with_no_window_and_no_limit_the_page_says_why_there_is_no_line(home):
+    paths = codex_home(home)  # no models cache: the window is not known
+    codex_chat(home, [f"- alpha: {CODEX_A[:20]} (file: {paths['alpha']})"])
+    cx = view(home)["codex"]
+    assert cx["message"] == words.CODEX_NO_WINDOW
+    assert cx["limit"]["steps"] == []
