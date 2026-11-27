@@ -1267,9 +1267,16 @@ def _used(usage: dict[str, tuple[int, int]], name: str) -> str:
     if name not in usage:
         return words.USED_NONE
     count, last = usage[name]
-    day = datetime.fromtimestamp(last / 1000).astimezone()
+    try:
+        n = int(count)
+    except (ValueError, OverflowError):  # NaN or infinity in the file
+        return words.USED_NONE
+    try:
+        day = datetime.fromtimestamp(last / 1000).astimezone()
+    except (ValueError, OverflowError, OSError):  # a time Kitden cannot read: the count only
+        return _many(n, words.USED_ONE_NO_DATE, words.USED_MANY_NO_DATE).format(n=f"{n:,}")
     date = f"{MONTHS[day.month - 1]} {day.day}"
-    return _many(count, words.USED_ONE, words.USED_MANY).format(n=f"{count:,}", date=date)
+    return _many(n, words.USED_ONE, words.USED_MANY).format(n=f"{n:,}", date=date)
 
 
 def _claude_run(

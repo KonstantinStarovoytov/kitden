@@ -52,3 +52,12 @@ def test_the_estimate_before_apply_shows_only_when_it_differs_from_the_chat():
     assert _before(differs, chat) == differs["say"]
     assert _before({"say": "x", "misfit": {"n": 57}}, chat) is None
     assert _before(differs, []) is None
+
+
+def test_a_use_time_kitden_cannot_read_keeps_the_card_and_the_count():
+    # Lantern on #231: a lastUsedAt far out of range broke the whole Claude Code card.
+    from kitden.views.context_view import _used
+
+    assert _used({"alpha": (6, 1e18)}, "alpha") == "6 times"
+    assert _used({"alpha": (1, -1e300)}, "alpha") == "Once"
+    assert _used({"alpha": (float("nan"), 0)}, "alpha") == words.USED_NONE
