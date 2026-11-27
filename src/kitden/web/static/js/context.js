@@ -180,6 +180,8 @@ export function renderContext(main, { again = false } = {}) {
   // is none (the same words leave "How this is counted").
   const fix = index === 0 ? fixFor(card) : null;
   if (fix) main.append(fix);
+  // Why no share fits everything, when the built-in skills fill most of the list.
+  if (index === 0 && card.limit && card.limit.cause) main.append(sentence(card.limit.cause, "ctx-room"));
   const now = index === 0 && !after && shown ? card.now || null : null;
   const room = shown && !after ? (now || shown.result).room : null;
   if (room) main.append(sentence(room, "ctx-room"));
@@ -1058,7 +1060,7 @@ function openLimit(client) {
   keepFrom(() => openLimit(client), content);
 }
 
-// The fix under the verdict: the suggested limit ("1.1%: all 20 skills get their description.
+// The fix under the verdict: the suggested limit ("1.1%: all 20 skills fit.
 // About 650 more characters in every chat (about 160 tokens).") with its Set button, the one the
 // limit's Details have; or, when the list did not fit and there is none, why. Null when nothing
 // needs fixing.

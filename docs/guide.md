@@ -24,6 +24,8 @@ open the page where you fix it. When Context suggests a limit, the skill list ca
 that limit, and its line says what it costs. **Keep one…** on a copies card opens the item in the
 Library with its **Details**, which list each copy with its folder; **Keep this one…** beside a
 copy removes the others. A card leaves once its change is applied, and comes back if you undo it.
+The skill list card moves to **Can improve** instead: it says the limit is set and that a new chat
+shows the new list. With no limit to suggest, its line gives the reason Context gives.
 Four or more cards of one kind fold into one row ("35 skills load more than once"); **Show…**
 opens them.
 
@@ -99,14 +101,18 @@ none of the log and sends nothing. Cursor gets no verdict, because Kitden cannot
 sends.
 
 **The fix is under the verdict:** the suggested limit, what it costs in every chat, and its **Set
-to …** button. When Kitden offers no new limit, the same place says why, for example when even 4%
-of the window would not fit every description: then set some skills to **Name only** or **Off**.
+to …** button. When even 4% of the window would not fit every description, Kitden suggests 4% and
+says how many skills would still show only a name; when Claude Code's built-in skills take most of
+the list, the line under it says how much. When Kitden offers no new limit, the same place says why:
+then set some skills to **Name only** or **Off**. A skill's **Details** name the same fix, and so
+does the last line of `kitden scan`.
 The strip at the top is the whole context window. Kitden measures only the skill list in it, not
 the system prompt, MCP tools, instruction files, hooks or the chat.
 
 **The groups** sort the skills by where they come from, with the Library's names: each plugin,
 **Your skills**, a project's skills, the plugins from your Claude account, and **Built into Claude
-Code**. Each header says how many skills the group has, how much of the list they take, and how
+Code** or **Built into Codex**. A skill removed since the last chat is not on the page and no longer
+counts. Each header says how many skills the group has, how much of the list they take, and how
 many showed only a name. The groups you can turn off come first. A plugin's header has its **Turn
 off** switch; the bar and the estimate count it at once, before you apply it. A group without a
 switch says why when you open it.
@@ -115,11 +121,13 @@ switch says why when you open it.
 Claude Code they also say how often you used the skill and when you last did, so you can tell which
 ones you do not use. The switch there is the Library's: **On**, **Name only** (Claude Code) or
 **Off**. A skill of a plugin follows its plugin. A skill you turned off stays in its group, struck
-through, so you can turn it on again.
+through, so you can turn it on again, in Claude Code and in Codex.
 
 **The limit line.** When skills showed only a name, the line on the bar has a handle. Drag it to
 the right, from 1% up to 4% of the window; a note says what each step gives ("1.4% · all 20 fit ·
-about 650 more characters per chat"), and it snaps to the step where every description fits. Let
+about 650 more characters per chat"), and it snaps to the step where every description fits.
+Claude Code's rule can leave more skills with only a name at a larger share (long descriptions in,
+short ones out); the line skips such a step. Let
 go to add the change to the preview, or press Esc. With the keyboard: Tab to the handle, then the
 arrow keys, Home or End, and Enter. Click the line's label for the details and **Set to …**;
 **Back to 1%** takes a higher share out again. For Codex the line moves in steps of 500 tokens, up

@@ -57,7 +57,7 @@ def test_context_shows_the_fix_under_the_problem(page, demo):
     # 05-P3: the fix showed only after a press on the small limit label.
     page.evaluate("location.hash = '#context'")
     fix = page.locator(".ctx-fix")
-    expect(fix).to_contain_text("1.1%: all 24 skills get their description")
+    expect(fix).to_contain_text("1.1%: all 24 skills fit")
     expect(fix).to_contain_text("more characters in every chat")
     fix.get_by_role("button", name="Set to 1.1%").click()
     expect(fix.get_by_role("button", name="Set to 1.1%")).to_have_attribute("aria-pressed", "true")

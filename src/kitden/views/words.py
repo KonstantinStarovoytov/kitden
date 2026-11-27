@@ -108,6 +108,9 @@ BACK_BY_OTHER = "Something else on this computer wrote it again."
 # The Overview card for a client whose last chat did not fit its skill list: its name and its
 # line, by what happened ("name": descriptions showed only a name, "cut", "out": left out).
 SKILL_LIST_IN = "Skill list in {client}"
+# After the card's line, before the suggested limit's cost.
+OFFER_FITS = "fits them"
+OFFER_LEAVES = "leaves {n} with only a name"
 CONTEXT_CARD_LINES = {
     "name": "{skills} showed only a name in your last {client} chat",
     "cut": "{skills} {were} cut short in your last {client} chat",
@@ -388,6 +391,16 @@ CODEX_ON_PLUGIN = "Codex lists its skills after your next Codex chat."
 NOTE_BUILT_IN = (
     "Kitden has not checked that Claude Code can turn this skill off, so it has no switch here."
 )
+# Codex's own skills, under its `skills/.system` folder: Kitden reads them, and has not checked
+# that `[[skills.config]]` turns them off.
+SOURCE_BUILT_IN_CODEX = "Built into Codex"
+NOTE_BUILT_IN_CODEX = (
+    "Kitden has not checked that Codex can turn this skill off, so it has no switch here."
+)
+GROUP_WHY_BUILT_IN_CODEX = (
+    "Built into Codex: Kitden has not checked that Codex can turn these skills off, so they have "
+    "no switch here."
+)
 # A skill of Claude Code's list that is no item here.
 SOURCE_APP = GROUP_WORDS["app"]
 NOTE_APP = "The Claude app or your Claude account adds this skill. Kitden has no switch for it."
@@ -419,6 +432,9 @@ NOTE_FREES = "Name only frees {n} characters. The agent no longer sees when to u
 NOTE_NO_ROOM = "No room for its description."
 # After NOTE_NO_ROOM, when a skill with a description has a switch.
 NOTE_FREE_ROOM = "Set a skill with a description to Name only or Off to free room."
+# After NOTE_NO_ROOM, when Context suggests a limit: the same fix, by its button's words.
+NOTE_ROOM_ALL = "{label} gives it room."
+NOTE_ROOM_MORE = "{label} gives more skills room."
 # The limit does not explain the list, so Kitden does not blame it.
 NOTE_NOT_SENT = "Its description was not sent in your last chat."
 NOTE_NAME_ONLY = "The agent sees the name, not when to use it."
@@ -474,7 +490,14 @@ HOW_CLAUDE_SURFACE = "The list in the terminal can differ from the Claude app."
 # Details' "Skill list limit" on the Context page (spec skill-list-limit, 2026-11-23): Claude
 # Code's skillListingBudgetFraction, written in the user settings only.
 LIMIT_NOW = "{share} of the context window: {n} characters"
-LIMIT_FITS_ALL = "{share}: all {n} skills get their description"
+LIMIT_FITS_ALL = "{share}: all {n} skills fit"
+# The largest share when none fits everything: what it still leaves with only a name.
+LIMIT_FITS_SOME = "{share}: {short} of {n} skills still show only a name"
+# Under the verdict, when no share fits everything and the built-in skills fill most of the list.
+LIMIT_BUILT_IN_CAUSE = (
+    "Claude Code's built-in skills always keep their description: they take {used} of the "
+    "{limit} characters."
+)
 LIMIT_FITS_ONE = "{share}: the skill gets its description"
 LIMIT_COST = "About {chars} more characters in every chat (about {tokens} tokens)"
 LIMIT_SET = "Set to {share}"
@@ -697,7 +720,11 @@ SCAN_FINDINGS = "kitden show findings"
 SCAN_READ_ONLY = "Your agents' settings were not changed: scan only reads them."
 # The last line: skills that did not fit; else a warning or a file that could not be read; else
 # nothing wrong.
-SCAN_FIX_SKILLS = "To make the skills fit, turn off the ones you do not use: kitden open"
+# The fix Context names: its suggested limit ("Set to 1.1% for Claude Code"); else what its
+# reason says.
+SCAN_FIX_LIMIT = "To make the skills fit, press {fixes}: kitden open"
+SCAN_FIX_ONE = "{label} for {client}"
+SCAN_FIX_SKILLS = "To make the skills fit, set some skills to Name only or Off: kitden open"
 SCAN_FIX = "To fix the warnings: kitden open"
 SCAN_FIX_UNREAD = (
     "To fix the file Kitden could not read: kitden open",

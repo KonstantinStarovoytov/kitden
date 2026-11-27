@@ -3,6 +3,7 @@ under: the sentence under the last chat's verdict, the estimate the picture foll
 line's places with the preview's changes in them. The chats are those of test_skill_limit."""
 
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -269,7 +270,7 @@ def test_the_places_count_the_skills_turned_off_in_the_preview(home):
     assert more["gets"] == ["g", "later1"] and "g and later1 get descriptions." in more["say"]
     assert places(cc)[0.015].startswith("1.5% · all 9 fit")
     assert cc["limit"]["offer"]["fraction"] == 0.014  # 10,868 characters; 1.3% is 10,400
-    assert cc["limit"]["offer"]["say"] == "1.4%: all 9 skills get their description"
+    assert cc["limit"]["offer"]["say"] == "1.4%: all 9 skills fit"
     # Each place is what the preview says of it.
     for value, said in places(cc).items():
         if value == 0.01:
@@ -351,7 +352,7 @@ def test_by_a_count_the_places_count_the_preview(home):
     assert places(cc)[0.01] == "1% now · about 3 of 9 show only a name"
     assert places(cc)[0.013] == "1.3% · about 1 of 9 show only a name"
     assert places(cc)[0.014].startswith("1.4% · all 9 fit")
-    assert cc["limit"]["offer"]["say"] == "1.4%: all 9 skills get their description"
+    assert cc["limit"]["offer"]["say"] == "1.4%: all 9 skills fit"
     assert cc["after"]["say"] == about(3, 9).replace("Estimate:", "After Apply, estimate:")
     off = dict.fromkeys("abcd", "off")
     cc = claude(home, off)
@@ -369,7 +370,7 @@ def test_by_a_count_a_skill_turned_back_on_counts(home):
     assert claude(home)["limit"]["offer"]["fraction"] == 0.015
     cc = claude(home, {"away": "on"})
     assert cc["limit"]["offer"]["fraction"] == 0.017
-    assert cc["limit"]["offer"]["say"] == "1.7%: all 11 skills get their description"
+    assert cc["limit"]["offer"]["say"] == "1.7%: all 11 skills fit"
 
 
 def test_a_built_in_skill_of_unknown_size_turned_on_counts_at_the_longest(home):
@@ -378,7 +379,7 @@ def test_a_built_in_skill_of_unknown_size_turned_on_counts_at_the_longest(home):
     cc = claude(home, {"init": "on"})
     # No file and no earlier chat: 8,446 + 4 + 4 + 1,536 + 1 = 9,991 characters.
     assert cc["limit"]["offer"]["fraction"] == 0.013
-    assert cc["limit"]["offer"]["say"] == "1.3%: all 8 skills get their description"
+    assert cc["limit"]["offer"]["say"] == "1.3%: all 8 skills fit"
     assert cc["limit"]["counted"] == [
         "1 skill has no description Kitden can find; it is counted at the longest, 1,536 "
         "characters.",
@@ -888,3 +889,67 @@ def test_a_codex_chat_the_rule_does_not_rebuild_gets_kitdens_count_said_as_a_cou
     assert cx["now"]["say"] == keeps
     assert cx["limit"]["counted"] == [words.CODEX_LIMIT_COUNTED]
     assert words.HOW_CODEX_COUNTED in " ".join(cx["how"])
+
+
+# A skill gone from disk, and a skill named like a built-in one (round 3, row 1)
+
+
+@pytest.mark.parametrize("name", ["g", "a"])
+def test_a_skill_removed_after_the_chat_is_gone_like_one_turned_off(home, name):
+    # g showed only a name, a was sent: either way it leaves the next chats.
+    cut_chat(home)
+    shutil.rmtree(home / ".claude/skills" / name)
+    cc = claude(home)
+    assert cc["checked"] is True
+    assert cc["changed"] == [CHANGED, KEEPS]
+    assert len(cc["now"]["sent"]) == 6 and cc["now"]["over"] == {}
+    assert cc["limit"]["why"] == words.LIMIT_NOT_NEEDED
+    # Not on the page, and not a skill Kitden cannot place.
+    assert name not in {s["name"] for s in cc["skills"]}
+    assert "unknown" not in {g["key"] for g in cc["groups"]}
+
+
+def test_a_skill_of_yours_named_like_a_built_in_one_does_not_take_its_entry(home):
+    skill(home / ".claude/skills", "alpha", "Does alpha.")
+    claude_chat(home, {"dataviz": "Charts for the built-in.", "alpha": "Does alpha."})
+    skill(home / ".claude/skills", "dataviz", "My own charts.")
+    cc = claude(home)
+    rows = [s for s in cc["skills"] if s["name"] == "dataviz"]
+    assert [(r["built_in"], r["item"] is None) for r in rows] == [(True, True), (False, False)]
+    groups = {g["key"]: g["skills"] for g in cc["groups"]}
+    assert groups["built_in"] == ["dataviz"] and groups["own"] == ["alpha", "dataviz"]
+    assert cc["changed"][0] == CHANGED
+
+
+def test_a_codex_skill_turned_off_that_was_not_in_the_chat_stays_with_its_switch(home):
+    # Round 3, row 3 (03-A2): as a Claude Code skill does, struck through with its switch.
+    roomy_chat(home)
+    add_later(home)
+    later = own(home, "later1").resolve()
+    codex_off(home, later)
+    cx = codex(home)
+    rows = {s["name"]: s for s in cx["skills"]}
+    assert (rows["later1"]["state"], rows["later1"]["note"]) == ("off", words.NOTE_OFF)
+    assert rows["later1"]["switch"] == ["on", "off"] and rows["later1"]["item"] is not None
+    assert "later1" in {n for g in cx["groups"] for n in g["skills"]}
+    # Off, it is not counted; turned on in the preview, it is.
+    assert "later1" not in cx["now"]["sent"]
+    assert "later1" in codex(home, {"later1": "on"})["after"]["result"]["sent"]
+
+
+def test_a_cut_skills_details_name_the_fix_context_names(home):
+    # Round 3, row 7 (05-P5).
+    cut_chat(home)
+    notes = {s["name"]: s["note"] for s in claude(home)["skills"]}
+    assert notes["g"] == f"{words.NOTE_NO_ROOM} Set to 1.1% gives it room."
+
+
+def test_a_listed_codex_skill_turned_off_is_counted_once_when_turned_on_again(home):
+    # Lantern on #235: a listed skill turned off must not also come back as a new one.
+    roomy_chat(home)
+    codex_off(home, own(home, "alpha").resolve())
+    cx = codex(home)
+    assert [s["name"] for s in cx["skills"]].count("alpha") == 1
+    after = codex(home, {"alpha": "on"})["after"]["result"]
+    assert list(after["sent"]).count("alpha") == 1
+    assert after["size"] == codex(home)["windows"][0]["result"]["size"]
