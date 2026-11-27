@@ -28,7 +28,7 @@ from kitden.views.catalog import catalog, installed_inside, plugin_folders
 from kitden.views.effective import effective_view, in_project
 from kitden.views.findings import duplicate_copies
 from kitden.views.load_map import Row, load_map, row_key
-from kitden.views.skills import skill_catalog
+from kitden.views.skills import lost_inside, skill_catalog
 from kitden.views.words import (
     CURSOR_READS_OTHERS,
     GROUP_WORDS,
@@ -348,9 +348,9 @@ def copy_choices(
 def _costs(inventory, gone: list[Item], rows: list[dict], project: str | None) -> set[str]:
     """The clients that would have none of the item once the copies `gone` are removed: they
     lose a copy (`also`) and load no other one there (a project's own copy counts only in that
-    project)."""
+    project), or lose another skill that sits inside a removed folder."""
     lose = {c for row in rows for c in row["also"]}
-    if not lose or not gone or gone[0].kind is not ItemKind.SKILL:
+    if not gone or gone[0].kind is not ItemKind.SKILL:
         return lose
     paths = {os.path.realpath(str(i.source.path)) for i in gone if i.source.path}
     name = gone[0].name
@@ -364,7 +364,14 @@ def _costs(inventory, gone: list[Item], rows: list[dict], project: str | None) -
         and os.path.realpath(i.source.path) not in paths
         and (i.scope in (Scope.USER, Scope.PLUGIN) or (project and i.project == project))
     }
-    return lose - kept
+    # A skill folder can hold other skills (Codex and Cursor read sub-folders): they go with it.
+    inside = {
+        c
+        for item in gone
+        for c in CLIENTS
+        if lost_inside(inventory, os.path.dirname(str(item.source.path)), c, item.name)
+    }
+    return (lose - kept) | inside
 
 
 def _copy(inventory, item: Item, client: str, home: Path | None) -> dict:

@@ -91,3 +91,18 @@ def test_a_copy_in_another_project_does_not_count_as_kept(home):
     duo = _copies(home, "duo")
     by_where = {copy["where"]: copy for copy in duo["list"]}
     assert by_where["~/.cursor/skills"]["keep"] is None
+
+
+def test_a_copy_whose_folder_holds_another_skill_is_not_removed_for_keep(home):
+    """Codex loads solo from its own folder and from ~/.agents/skills; its own folder holds the
+    skill inner too (Codex reads sub-folders). Keeping the shared copy would remove Codex's
+    folder and inner with it: not offered. Keeping Codex's own copy costs nothing."""
+    for folder in (".codex/skills", ".agents/skills"):
+        _skill(home, folder, "solo")
+    _skill(home, ".codex/skills/solo", "inner")
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library_map(build_inventory(home), adapters, None)
+    item = next(i for g in answer["groups"] for i in g["items"] if i["name"] == "solo")
+    by_where = {copy["where"]: copy for copy in item["copies"]["codex"]["list"]}
+    assert by_where["~/.agents/skills"]["keep"] is None
+    assert by_where["~/.codex/skills"]["keep"] is not None

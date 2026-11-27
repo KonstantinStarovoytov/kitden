@@ -164,8 +164,9 @@ CURSOR_READS_OTHERS = (
     "Include Third-Party Plugins, Skills, and Other Configs in Cursor Settings → Agents → "
     "Third-Party Imports."
 )
-# Why Keep this one… is not offered elsewhere: each removal would take it from another client.
-KEEP_COSTS = "Keeping one copy would take it from {clients}."
+# Why Keep this one… is not offered elsewhere: each removal would take a skill from a client (the
+# skill itself, or one inside its folder).
+KEEP_COSTS = "Keeping one copy would take a skill from {clients}."
 # docs/clients.md (Cursor, 2026-11-09): `disable-model-invocation` keeps the description out.
 CURSOR_NO_SWITCH_NOTE = (
     f"{CURSOR_NO_SKILL_SWITCH} To keep its description out of the list, add "
