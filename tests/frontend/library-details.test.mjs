@@ -743,7 +743,7 @@ test("where a project's own settings decide, Details say so and offer no Turn on
   assert.deepEqual(card.more.map((a) => a.label), ['Commands…']);
   // A skill too; with All projects there is no such line.
   const skill = own('s9', 'api-style', 'skill', { by: { codex: 'on', cursor: 'on' }, items: { codex: ['cx'], cursor: ['cu'] }, can: { add: [], off: [], remove: [], project: ['codex', 'cursor'] } });
-  assert.equal(details.skillCard(skill, details.context(MEDIUM, 'a', 'atlas')).after.textContent, "Codex's setting for this comes from atlas' own settings. Cursor loads this from atlas.");
+  assert.equal(details.skillCard(skill, details.context(MEDIUM, 'a', 'atlas')).after.textContent, "Codex's setting for this comes from atlas's own settings. Cursor loads this from atlas.");
   assert.equal(details.pluginCard({ ...decided, can: { ...decided.can, project: [] } }, c()).after, null);
 });
 
@@ -762,11 +762,11 @@ test("Follow all projects… takes the project's local key out, for a skill and 
   const plugin = { ...SUPERPOWERS, by: { claude_code: 'off', cursor: 'off' }, here: { claude_code: true }, can: { add: [], off: [], on: [], remove: [], project: ['claude_code'], local: ['claude_code'], shared: [] } };
   const card = details.pluginCard(plugin, atlas);
   assert.deepEqual(labels(card), [['Follow all projects…', false]]);
-  assert.equal(card.after.textContent, "Claude Code's setting for this comes from atlas' local settings.");
+  assert.equal(card.after.textContent, "Claude Code's setting for this comes from atlas's local settings.");
   // Final fix wave: a rule in the repository root's file names the root's folder, not the project.
   const web = details.context(MEDIUM, 'web', 'web');
   const rooted = { ...plugin, can: { ...plugin.can, local_in: { claude_code: 'atlas' } } };
-  assert.equal(details.pluginCard(rooted, web).after.textContent, "Claude Code's setting for this comes from atlas' local settings.");
+  assert.equal(details.pluginCard(rooted, web).after.textContent, "Claude Code's setting for this comes from atlas's local settings.");
   assert.deepEqual(details.sharedBody(plugin, atlas), { action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-sp' }], params: { scope: 'project', project: 'atlas', off: false } });
   // Drawn: its press adds the one row and it says "In preview"; "Turn off in this project…" for
   // the same key (on and off share it) is another row, so it does not.
@@ -869,11 +869,11 @@ test("a project whose rule file Kitden does not write says so and offers no rule
   const mine = own('s9', 'site-notes', 'skill', { source: 'Only this project', by: { claude_code: 'on' }, items: { claude_code: ['cc-sn'] }, can: { off: [], project: ['claude_code'], local: [], shared: [] } });
   const skill = details.skillCard(mine, atlas);
   assert.deepEqual(labels(skill), []);
-  // Final fix wave: the outside line only, not also "… comes from atlas' own settings.".
+  // Final fix wave: the outside line only, not also "… comes from atlas's own settings.".
   assert.equal(skill.after.textContent, words);
   // Another client whose setting the project decides keeps its own line.
   const both = { ...mine, by: { claude_code: 'on', codex: 'on' }, items: { claude_code: ['cc-sn'], codex: ['cx-sn'] }, can: { ...mine.can, project: ['claude_code', 'codex'] } };
-  assert.deepEqual(details.skillCard(both, atlas).after.children.map((n) => n.textContent), ["Codex's setting for this comes from atlas' own settings.", words]);
+  assert.deepEqual(details.skillCard(both, atlas).after.children.map((n) => n.textContent), ["Codex's setting for this comes from atlas's own settings.", words]);
   // Not in another project.
   assert.equal(details.pluginCard(SUPERPOWERS, details.context(answer, 'web', 'web')).after, null);
   // The checklist row cannot be ticked and says why.

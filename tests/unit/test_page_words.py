@@ -3065,8 +3065,8 @@ def test_the_library_list_words_and_looks():
     # They act only on a client's own entry for all projects; where the project decides, one quiet
     # line says so (`can.project`, views/library_map.py).
     assert (
-        "`${CLIENT_NAMES[client]}'s setting for this comes from "
-        "${possessive(folder)} own settings.`" in details
+        "`${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s own settings.`"
+        in details
     )
     assert '"project": project_decides,' in (STATIC.parents[1] / "views/library_map.py").read_text()
     # A part the map does not draw opens its plugin; the account row opens its own small card.
@@ -3096,12 +3096,12 @@ def test_the_last_skill_rule_notes_say_what_they_do():
     )
     # The quiet line tells the project's local file from its shared, committed one.
     assert (
-        "`${CLIENT_NAMES[client]}'s setting for this comes from "
-        "${possessive(folder)} local settings.`" in details
+        "`${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s local settings.`"
+        in details
     )
     assert (
-        "`${CLIENT_NAMES[client]}'s setting for this comes from "
-        "${possessive(folder)} shared settings.`" in details
+        "`${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s shared settings.`"
+        in details
     )
     assert 'params: { scope: "project", project: c.project, off: false }' in details
     assert 'params: { scope: "all", off: true } }));' in rules

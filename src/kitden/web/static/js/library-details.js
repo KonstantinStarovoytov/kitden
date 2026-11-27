@@ -12,7 +12,7 @@ import { initLibraryAdd } from "./library-add.js";
 import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
 import { copyBodies, offBodies, onBodies, removeBodies } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, review, stepTo, swapContent, technical } from "./panel.js";
-import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, possessive, SKILL_STATE_WORDS, STATE_WORDS } from "./parts.js";
+import { ALL_PROJECTS, byClientOrder, CLIENT_NAMES, folderName, mark, menuItems, ORIGIN_WORDS, SKILL_STATE_WORDS, STATE_WORDS } from "./parts.js";
 import { openContextGroup } from "./context.js";
 import { takesLine } from "./context-groups.js";
 import { current, data, loadContext, projectPath, state } from "./store.js";
@@ -264,9 +264,9 @@ const removeActions = (item) => removeBodies(item).map(({ client, body }) => ({ 
 // They act only on a client's own entry for all projects. Where the picked project's own settings
 // decide (`can.project`), one quiet line says so instead: its local settings (`can.local`), its
 // shared, committed settings (`can.shared`), or its own copy.
-const fromProject = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${possessive(folder)} own settings.`;
-const fromLocal = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${possessive(folder)} local settings.`;
-const fromShared = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${possessive(folder)} shared settings.`;
+const fromProject = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s own settings.`;
+const fromLocal = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s local settings.`;
+const fromShared = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s shared settings.`;
 function projectLine(item, c) {
   const can = item.can || {};
   // In a project whose rule file Kitden does not write, the outside line says it for Claude Code.
