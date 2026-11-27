@@ -182,7 +182,8 @@ test('a server off in one client and on in another says both', () => {
   const shown = block(gatewayTree(view, OPTS), 'outside:local:sqlite');
   assert.deepEqual([shown.meta, shown.state], ['In Cursor · Off in Codex', 'on']);
   // The List says it too, not only the map.
-  assert.equal(listRows(gatewayTree(view, OPTS), new Set()).find((r) => r.id === 'outside:local:sqlite').meta, 'In Cursor · Off in Codex');
+  const listed = listRows(gatewayTree(view, OPTS), new Set()).find((r) => r.id === 'outside:local:sqlite');
+  assert.equal(listed.meta, 'In Cursor · Off in Codex');
   const off = { ...sqlite, off: ['codex', 'cursor'] };
   const all = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, local: [off] } };
   assert.equal(block(gatewayTree(all, OPTS), 'outside:local:sqlite').meta, 'Off in Codex and Cursor');
@@ -365,8 +366,7 @@ test('a first run shows the gateway as a slot to set up and no grips', () => {
   assert.equal(gatewayTree(FIRST_RUN_VIEW, { ...OPTS, setup: null, clients: FOUND }).blocks.find((b) => b.column === 'gateway').kind, 'gateway');
   // The List keeps a row for it, with the same words.
   const row = listRows(m, new Set()).find((r) => r.id === slot.id);
-  // No line that the row cuts short ("No gatewa… One place for…", 02-N21c).
-  assert.deepEqual([row.depth, row.name, row.meta], [0, 'No gateway yet', null]);
+  assert.deepEqual([row.depth, row.name, row.meta], [0, 'No gateway yet', 'One place for servers, rules and logins.']);
 });
 
 test('the map columns, and the Kitden gateway says its clients and servers', () => {
@@ -1240,7 +1240,7 @@ test('a drop adds a move to the tray', async (t) => {
     heard.pointermove[0]({ clientX: home.x + 16, clientY: home.y + 10 });
     heard.pointermove[0]({ clientX: files.x + 10, clientY: files.y + 10 });
     heard.pointerup[0]({ type: 'pointerup', clientX: files.x + 10, clientY: files.y + 10 });
-    // The same move as "Move in…", in the tray at once, with the move's arrow.
+    // The same move as "Move into the gateway…", in the tray at once, with the move's arrow.
     const body = dropBody(GITHUB, MEDIUM_VIEW);
     assert.deepEqual(tray.rows.map((r) => [r.key, r.body, r.part, r.icon]), [[keyFor(body), body, null, 'arrow-right']]);
     // Until it answers the slot shows, and the block waits on it.

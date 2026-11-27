@@ -10,7 +10,7 @@ description fits a limit, for Claude Code's skill list limit (`_claude_count`).
 import glob
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from itertools import pairwise
@@ -264,6 +264,23 @@ def _claude_row(name: str, sent: str | None, item: Item | None, path: str | None
     shows."""
     plain, full = _texts(path)
     return _Row(name, sent, item, full, plain=plain, **kw)
+
+
+def _own_entries(
+    sent: Sequence[tuple[str, str | None]], by_name: dict[str, Item]
+) -> dict[str, int]:
+    """A user skill named like a built-in one: the list sends both. Per such name, the place of the
+    entry that is the user's: the one whose text is the user's file's, else the last one (the
+    built-in skills come first in the lists Kitden has seen; not checked for every version)."""
+    out = {}
+    for name in {n for n, _ in sent if n in CLAUDE_BUILT_IN and n in by_name}:
+        places = [at for at, (n, _) in enumerate(sent) if n == name]
+        if len(places) < 2:
+            continue
+        full = _texts(by_name[name].source.path)[1]
+        same = [at for at in places if full and (text := sent[at][1]) and full.startswith(text)]
+        out[name] = same[0] if same else places[-1]
+    return out
 
 
 def _app_path(home: Path, claude: ClaudeFolder, name: str) -> str | None:
@@ -1273,9 +1290,16 @@ def _used(usage: dict[str, tuple[int, int]], name: str) -> str:
     if name not in usage:
         return words.USED_NONE
     count, last = usage[name]
-    day = datetime.fromtimestamp(last / 1000).astimezone()
+    try:
+        n = int(count)
+    except (ValueError, OverflowError):  # NaN or infinity in the file
+        return words.USED_NONE
+    try:
+        day = datetime.fromtimestamp(last / 1000).astimezone()
+    except (ValueError, OverflowError, OSError):  # a time Kitden cannot read: the count only
+        return _many(n, words.USED_ONE_NO_DATE, words.USED_MANY_NO_DATE).format(n=f"{n:,}")
     date = f"{MONTHS[day.month - 1]} {day.day}"
-    return _many(count, words.USED_ONE, words.USED_MANY).format(n=f"{count:,}", date=date)
+    return _many(n, words.USED_ONE, words.USED_MANY).format(n=f"{n:,}", date=date)
 
 
 def _claude_run(
@@ -1498,12 +1522,10 @@ def _claude(
     turned_off = _off_skills(inventory, client, found.folder)
     by_name = turned_off | loaded
     plugins = _claude_plugins(inventory, home, claude, found.folder)
+    mine = _own_entries(found.skills, by_name)
     rows = []
-    sent_names: set[str] = set()
-    for name, text in found.skills:
-        # A user skill named like a built-in one: the list sends both; the second is the other.
-        item = None if name in sent_names and name in CLAUDE_BUILT_IN else by_name.get(name)
-        sent_names.add(name)
+    for at, (name, text) in enumerate(found.skills):
+        item = by_name.get(name) if mine.get(name, at) == at else None
         path = item.source.path if item else _app_path(home, claude, name)
         rows.append(
             _claude_row(

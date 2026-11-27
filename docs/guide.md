@@ -10,6 +10,9 @@ they can run code with your permissions. Undo does not reverse actions a tool al
 
 Open **Library** and choose **All projects** or one project. **List → Differences** shows
 what differs between Claude Code, Codex and Cursor. Click an item for its **Details**.
+The search box at the top says what it finds from the tab you are on: on the **Gateway**,
+"Search servers and tools…" finds on that page; on every other tab, "Search skills, plugins and
+marketplaces…" opens the Library with the matches.
 On the map, a group of two or more starts folded as a stack of cards. Press a stack to open it;
 a big group shows five at a time, with the rest in the stack below. **Collapse** folds it again.
 When you select a client or point at it, a stack that holds some of its items shows those in
@@ -288,6 +291,9 @@ See [online sources](discovery.md) for formats and limits.
 ## Share a server between your agents
 
 Open **Gateway** to share MCP servers and turn individual tools on or off for each project.
+The Overview offers up to three servers outside the gateway as **Move in…** cards ("In the
+gateway you can turn each of its tools on or off."), and one card for the rest; a server outside
+the gateway is a normal setup, not a fault.
 Pick several with a band or Shift-click and drag them in together. Library works on its own.
 An agent that calls a tool that is off, by a switch, a project rule or strict mode, is told
 "<name> is turned off in Kitden."

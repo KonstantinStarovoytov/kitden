@@ -753,3 +753,29 @@ def test_sibling_projects_in_one_repository_each_have_their_own_copy_of_a_root_r
     # In atlas itself the file is its own: no other folder to name.
     own = _items(library_map(inventory, adapters, str(atlas)))["superpowers"]
     assert "local_in" not in own["can"]
+
+
+def test_a_plugin_copy_removes_only_itself_though_plugins_share_one_settings_file():
+    """Claude Code keeps every plugin in settings.json: Keep this one… must not pick another."""
+    from kitden.model import Item, ItemKind, Source, SourceKind
+    from kitden.views.inventory import Inventory
+    from kitden.views.library_map import _copy
+
+    def plugin(name):
+        source = Source(
+            kind=SourceKind.FILE, path="/h/.claude/settings.json", owner_client="claude_code"
+        )
+        return Item(
+            client="claude_code",
+            kind=ItemKind.PLUGIN,
+            name=name,
+            source=source,
+            scope=Scope.USER,
+            actions=("plugin.remove",),
+        )
+
+    other, first, second = plugin("aaa@m"), plugin("x@a"), plugin("x@b")
+    inventory = Inventory(clients=[], items=[other, first, second])
+    for copy in (first, second):
+        said = _copy(inventory, copy, "claude_code", None)
+        assert (said["remove"], said["also"], said["where"]) == (copy.id, [], copy.name[2:])
