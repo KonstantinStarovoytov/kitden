@@ -350,7 +350,8 @@ function hits(place, words) {
   if (place === "library") {
     const map = readHere("libraryMap") ? data.libraryMap : null;
     if (!map) return null;
-    return (map.groups || []).some((g) => has(g.name) || (g.items || []).some((i) => has(i.name) || (i.parts || []).some((p) => has(p.name))));
+    // A plugin's own skills, commands and agents are in `inside`, by kind.
+    return (map.groups || []).some((g) => has(g.name) || (g.items || []).some((i) => has(i.name) || Object.values(i.inside || {}).flat().some(has)));
   }
   const view = readHere("gateway") ? data.gateway : null;
   if (!view) return null;

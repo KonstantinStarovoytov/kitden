@@ -365,7 +365,7 @@ test('one search box: a search goes where something of that name is, the Gateway
   // 02-R03: from the Overview, "filesystem" (a server) went to the Library and found nothing.
   const was = { libraryMap: data.libraryMap, gateway: data.gateway };
   try {
-    data.libraryMap = { groups: [{ name: 'demo-market', items: [{ kind: 'plugin', name: 'superpowers', parts: [{ name: 'brainstorming' }] }, { kind: 'skill', name: 'playwright' }] }] };
+    data.libraryMap = { groups: [{ name: 'demo-market', items: [{ kind: 'plugin', name: 'superpowers', inside: { skills: ['brainstorming'] } }, { kind: 'skill', name: 'playwright' }] }] };
     data.gateway = { groups: { move: [{ name: 'filesystem' }], local: [{ name: 'playwright' }] }, gateways: [{ servers: [{ name: 'files', tool_list: [{ name: 'read_file' }] }] }] };
     Object.assign(data.scope, { libraryMap: state.project, gateway: state.project });
     // From a page with no search of its own: where the name is, the Library first.
