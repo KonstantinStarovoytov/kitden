@@ -703,9 +703,10 @@ export function listRows(model, open = new Set(), folded = new Set()) {
     }
   }
   const outside = model.blocks.find((b) => b.id === "group:outside");
-  // An outside server no client is known to load says so, one that is off says where; the others
-  // are on.
-  const outsideRow = (b) => row(b, outside.id, 1, { usedBy: b.columns, action: b.move ? "move" : "open", meta: b.state === "unk" ? NOT_KNOWN : b.state === "off" ? b.meta : null });
+  // An outside server no client is known to load says so, one that is off in a client says where
+  // (as the map does); the others are on.
+  const offSome = (b) => b.columns.some((c) => (b.row.off || []).includes(c));
+  const outsideRow = (b) => row(b, outside.id, 1, { usedBy: b.columns, action: b.move ? "move" : "open", meta: b.state === "unk" ? NOT_KNOWN : offSome(b) ? b.meta : null });
   if (outside) group(outside.id, OUTSIDE, null, 0, children.get(outside.id) || [], outsideRow, outside.icon);
   return rows;
 }
