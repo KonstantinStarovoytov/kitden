@@ -82,3 +82,12 @@ def test_the_preview_counts_the_copies_that_stay(home):
         change = c.post("/api/changes/preview", json=body, headers=POST).json()
         cursor = next(e for e in change["after"] if e["client"] == "cursor")
         assert cursor["word"] == "Loads twice"
+
+
+def test_a_copy_in_another_project_does_not_count_as_kept(home):
+    """Claude Code has duo in its user folder and in the project `website` only: keeping Cursor's
+    own copy would still take duo from Claude Code everywhere but `website`."""
+    _skill(home, "work/website/.claude/skills", "duo")
+    duo = _copies(home, "duo")
+    by_where = {copy["where"]: copy for copy in duo["list"]}
+    assert by_where["~/.cursor/skills"]["keep"] is None

@@ -296,23 +296,28 @@ def _can(
     return {}
 
 
-def _copies(inventory, copies: dict[str, list[Item]], ids: dict, home: Path | None) -> dict:
+def _copies(
+    inventory, copies: dict[str, list[Item]], ids: dict, home: Path | None, project: str | None
+) -> dict:
     """Per client that loads the item more than once, `say` ("Cursor loads it 3 times:") and in
     `list` each copy it loads (`copy_choices`); `why` when no copy can be kept."""
     out = {}
     for client, held in ids.items():
         same = next((copies[i] for i in held if i in copies), None)
         if same:
-            out[client] = copy_choices(inventory, same, client, home)
+            out[client] = copy_choices(inventory, same, client, home, project)
     return out
 
 
-def copy_choices(inventory, same: list[Item], client: str, home: Path | None = None) -> dict:
+def copy_choices(
+    inventory, same: list[Item], client: str, home: Path | None = None, project: str | None = None
+) -> dict:
     """The copies `client` loads of one item: `where` (a skill's folder, a plugin's marketplace),
     `owner` (the client whose folder or entry it is: "shared" for ~/.agents/skills), `remove`
     (the item whose removal takes this copy away, or None), `also` (the other clients that lose
     it with it) and `keep` (the removals that keep only this copy, or None). Keep is offered
-    only where every client still has the item after it. The copies are the duplicate finding's
+    only where every client still has the item after it, in the picked `project` or in every
+    project. The copies are the duplicate finding's
     items, the same the Overview and the terminal count. With no copy to keep, `why` says so."""
     rows = [_copy(inventory, i, client, home) for i in same]
     lost: set[str] = set()
@@ -323,7 +328,8 @@ def copy_choices(inventory, same: list[Item], client: str, home: Path | None = N
             if at != index
         ]
         if all(other["remove"] for _, other in others):
-            costs = _costs(inventory, [item for item, _ in others], [o for _, o in others])
+            gone = [item for item, _ in others]
+            costs = _costs(inventory, gone, [o for _, o in others], project)
             lost |= costs
             row["keep"] = None if costs else [other["remove"] for _, other in others]
         else:
@@ -339,9 +345,10 @@ def copy_choices(inventory, same: list[Item], client: str, home: Path | None = N
     return out
 
 
-def _costs(inventory, gone: list[Item], rows: list[dict]) -> set[str]:
+def _costs(inventory, gone: list[Item], rows: list[dict], project: str | None) -> set[str]:
     """The clients that would have none of the item once the copies `gone` are removed: they
-    lose a copy (`also`) and load no other one."""
+    lose a copy (`also`) and load no other one there (a project's own copy counts only in that
+    project)."""
     lose = {c for row in rows for c in row["also"]}
     if not lose or not gone or gone[0].kind is not ItemKind.SKILL:
         return lose
@@ -355,6 +362,7 @@ def _costs(inventory, gone: list[Item], rows: list[dict]) -> set[str]:
         and i.enabled is not Enabled.OFF
         and i.source.path is not None
         and os.path.realpath(i.source.path) not in paths
+        and (i.scope in (Scope.USER, Scope.PLUGIN) or (project and i.project == project))
     }
     return lose - kept
 
@@ -604,7 +612,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
                 entry["can"]["local_in"] = {"claude_code": folder}
         if skill:
             entry["skill"] = skill["id"]
-        if loads_twice := _copies(inventory, copies, ids, home):
+        if loads_twice := _copies(inventory, copies, ids, home, project):
             entry["copies"] = loads_twice
         if row.kind is ItemKind.SKILL:
             entry["off_in"] = _off_in(inventory, own)
