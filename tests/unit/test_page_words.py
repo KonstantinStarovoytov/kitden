@@ -2723,8 +2723,9 @@ def test_the_library_map_words_and_looks():
     text = script("library-map.js")
     for words in (
         '"The plugins, skills and instruction files your agents load, and where each comes from."',
-        '"Point at a link: its × removes a plugin from that client, or turns a skill off there · drag a plugin onto a client to add it there '
-        '· + adds it for all projects · click anything for its Details"',
+        '"Point at a link: its × removes a plugin from that client, or turns a skill off there · '
+        "drag a plugin onto a client to add it there · + adds it for all projects · "
+        'click anything for its Details"',
         '[["plugins", "Plugins and skills"], ["instructions", "Instructions"]]',
         'caption: "Clients"',
         'caption: "Plugins and skills"',
@@ -2760,7 +2761,9 @@ def test_the_library_map_details_words():
         'const NO_PLUGIN = "None, a skill on its own";',
         'const NO_PROJECT_SWITCH = "Codex has no switch for one project; turn it off for all '
         'projects.";',
-        'const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";',
+        'const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill. To keep its '
+        "description out of the list, add disable-model-invocation: true to its SKILL.md; then "
+        'the agent uses it only when you ask.";',
         '"This turns it off in Claude Code. Codex and Cursor have no switch for one project."',
         'new: "No .claude folder yet; Kitden makes none"',
         '["skills", "skill", "skills"], ["commands", "command", "commands"]',

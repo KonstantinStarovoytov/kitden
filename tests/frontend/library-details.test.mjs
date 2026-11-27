@@ -352,7 +352,7 @@ test("a skill's switch for all projects is Context's: one per client that can, a
   const card = details.skillCard(skill, c());
   assert.deepEqual(facts(card), [['Plugin', 'None, a skill on its own'], ['State', 'On'], ['Comes from', 'All projects'], ['Source', 'Your skills'], ['Clients', '3 clients']]);
   assert.deepEqual(labels(card), [['Turn off in some projects…', false]]);
-  assert.match(card.why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\.$/);
+  assert.match(card.why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\. To keep its description out of the list, add disable-model-invocation: true to its SKILL\.md; then the agent uses it only when you ask\.$/);
   assert.match(texts(card.list).join(' '), /Claude Code · all projects On Name only Off Codex · all projects On Off Codex has no Name only setting\./);
   // The map × still turns it off with the same row.
   assert.deepEqual(offBodies(skill), [
@@ -568,7 +568,7 @@ test('a skill rule is queued for its own state only', async () => {
 test('the no-switch notes say only what applies', () => {
   const skill = MEDIUM.groups[1].items[0];
   // Codex has it (a skill of all projects): its note; Cursor only through Claude Code but on: its note.
-  assert.match(details.skillCard(skill, c()).why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\.$/);
+  assert.match(details.skillCard(skill, c()).why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\. To keep its description out of the list, add disable-model-invocation: true to its SKILL\.md; then the agent uses it only when you ask\.$/);
   // Even when no project can take the rule, Codex still has no switch for one.
   const closed = details.context({ ...MEDIUM, skill_rules: { projects: {} } });
   assert.match(details.skillCard(skill, closed).why, /Codex has no switch for one project; turn it off for all projects\./);

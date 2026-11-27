@@ -35,7 +35,8 @@ const FOLLOWS = "Follows its plugin.";
 const NO_PLUGIN = "None, a skill on its own";
 // The twin of views/words.py CODEX_NO_PROJECT, with the way that is left.
 const NO_PROJECT_SWITCH = "Codex has no switch for one project; turn it off for all projects.";
-const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";
+// The twin of views/words.py CURSOR_NO_SWITCH_NOTE, with the way that is left.
+const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill. To keep its description out of the list, add disable-model-invocation: true to its SKILL.md; then the agent uses it only when you ask.";
 const SOME_WHY = "This turns it off in Claude Code. Codex and Cursor have no switch for one project.";
 // Why a project cannot take a one-project skill rule (library_map.py `skill_rules`).
 const PROJECT_LINES = { new: "No .claude folder yet; Kitden makes none" };
