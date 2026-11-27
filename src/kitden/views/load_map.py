@@ -221,7 +221,9 @@ def _cross_client_fix(client: str, copies: list[Item], kind: ItemKind, readers: 
         if owner == client:
             names.append("its own")
             continue
-        also = [c for c in CLIENTS if c != client and c in readers.get(copy.source.path, ())]
+        # Only a skill's file is its own; a plugin's settings file holds every plugin.
+        shared = readers.get(copy.source.path, ()) if copy.kind is ItemKind.SKILL else ()
+        also = [c for c in CLIENTS if c != client and c in shared]
         if owner in CLIENTS and owner not in also:
             also.insert(0, owner)
         if owner == "shared":

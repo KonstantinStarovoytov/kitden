@@ -311,7 +311,9 @@ def _copies(inventory, copies: dict[str, list[Item]], ids: dict, home: Path | No
 
 def _copy(inventory, item: Item, client: str, home: Path | None) -> dict:
     action = PLUGIN_REMOVE if item.kind is ItemKind.PLUGIN else SKILL_REMOVE
-    path = item.source.path
+    # A skill's file is its own, so another client's item of that file is the same copy; a
+    # plugin's file holds every plugin (Claude Code's settings.json), so a plugin is only itself.
+    path = item.source.path if item.kind is ItemKind.SKILL else None
     holders = [
         i
         for i in inventory.items
