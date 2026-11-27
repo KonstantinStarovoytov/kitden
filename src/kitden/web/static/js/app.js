@@ -56,6 +56,9 @@ function renderPlace() {
   const place = PLACES[state.view] || PLACES.overview;
   // A redraw of the same place notes where its rows were, so they can move from there.
   const before = samePlace && place.snapshot ? place.snapshot() : null;
+  // A redraw of the same place keeps its scroll: an empty page in between would set it to the top.
+  const content = document.getElementById("content");
+  const scrolled = samePlace && content ? content.scrollTop : 0;
   main.replaceChildren();
   // A page sets its own hint line while it draws; none inherits the last page's.
   setHint("");
@@ -63,6 +66,7 @@ function renderPlace() {
   // `again`: the same place draws again, so a page may keep what it drew (the Gateway's map).
   if (PROJECT_PLACES.includes(state.view) && projectGone()) main.append(el("h1", null, place.title), callout(GONE_PROJECT));
   else found = place.render(main, { again: samePlace });
+  if (scrolled && content.scrollTop !== scrolled) content.scrollTop = scrolled;
   if (place.settle) place.settle(before);
   if (key) {
     const same = $$(FOCUSABLE, main).find((node) => focusKey(node) === key);
