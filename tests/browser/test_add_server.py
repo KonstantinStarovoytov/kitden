@@ -1,4 +1,4 @@
-"""Flow 10: "+ Add to Cursor…" and "+ Add to Codex…" copy a Claude Code server whose header
+"""Flow 10: "Add to Cursor…" and "Add to Codex…" copy a Claude Code server whose header
 names a variable; each client's file keeps the variable, never a value."""
 
 import json
@@ -39,7 +39,7 @@ def before_start(monkeypatch):
 def add_to(page, client: str) -> None:
     details = open_outside(page, SERVER, "Claude Code")
     details.get_by_role("button", name="More").click()
-    details.get_by_role("button", name=f"+ Add to {client}…").click()
+    details.get_by_role("button", name=f"Add to {client}…").click()
     page.locator("#dock").get_by_role("button", name="Apply").click()
     expect(page.get_by_role("button", name="Undo")).to_be_visible()
 

@@ -5,8 +5,10 @@
 // group that is off now says so whatever the page can estimate. Pure: context.js draws, and the
 // Library's Details say what a plugin or a skill takes (takesLine).
 
+import { waitsAs } from "./words.js";
+
 export const fmt = (n) => n.toLocaleString("en-US");
-const CLIENT_WORDS = { claude_code: "Claude Code", codex: "Codex" };
+const CLIENT_WORDS = { claude_code: "Claude Code", codex: "Codex", cursor: "Cursor" };
 // What a skill on the second side did, or would do: [in the last chat, in an estimate].
 const SHORT = { claude_code: ["showed only a name", "would show only a name"], codex: ["cut short", "would be cut short"] };
 // More than this many groups start closed.
@@ -89,8 +91,8 @@ export function groupsOf(card, view) {
 }
 
 // The header's line after the name: "12 skills · 6,450 characters · 3 showed only a name · 1 off";
-// "Off · was 9 skills, 3,435 characters in your last chat"; "Off after Apply · frees about 2,291
-// characters"; "On after Apply · …". In an estimate, "would show only a name".
+// "Off · was 9 skills, 3,435 characters in your last chat"; "Off · in preview · frees about 2,291
+// characters"; "On · in preview · …". In an estimate, "would show only a name".
 export function groupLine(card, facts, estimate) {
   const unit = card.unit || "characters";
   if (facts.state === "off") {
@@ -101,8 +103,8 @@ export function groupLine(card, facts, estimate) {
   }
   // A Codex plugin that is on and that the last list did not hold: no skills to count yet.
   if (!facts.members.length) return ["On"];
-  if (facts.state === "going") return ["Off after Apply", ...(facts.base ? [`frees about ${fmt(facts.base)} ${unit}`] : [])];
-  const parts = facts.state === "back" ? ["On after Apply"] : [];
+  if (facts.state === "going") return [waitsAs("off"), ...(facts.base ? [`frees about ${fmt(facts.base)} ${unit}`] : [])];
+  const parts = facts.state === "back" ? [waitsAs("on")] : [];
   parts.push(many(facts.n, "skill", "skills"));
   if (facts.size) parts.push(`${fmt(facts.size)} ${unit}`);
   if (facts.short) parts.push(`${facts.short} ${SHORT[card.client][estimate ? 1 : 0]}`);

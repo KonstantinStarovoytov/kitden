@@ -213,7 +213,7 @@ def _can(
     `off`, `on` and `remove` act on the user's own entry for all projects, the client's first
     item: a client in `project` is left out of all three (Details say where its setting comes
     from, and offer "Turn off in this project…" where they can). Of those, `local` are the
-    clients whose deciding item comes from the project's local settings ("Use the shared rule…"
+    clients whose deciding item comes from the project's local settings ("Follow all projects…"
     takes that key out) and `shared` those set by its committed settings, which Kitden leaves.
     A skill's `copy`: Codex, when it loads a project's own copy (a rule for all projects turns
     off that copy only). A hook has no switch."""

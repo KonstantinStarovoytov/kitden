@@ -115,7 +115,7 @@ test('an add into one project names the project', () => {
   assert.deepEqual(changeWords(change, { params: { skill: 'x', project: 'p1' } }), { title: 'Add tidy to Codex in website', done: 'Added tidy to Codex in website' });
   assert.deepEqual(changeWords(change, { params: { skill: 'x' } }), { title: 'Add tidy to Codex for all projects', done: 'Added tidy to Codex for all projects' });
   const plugin = { action: 'plugin.install', steps: [{ client: 'claude_code', name: 'linter@official' }] };
-  assert.equal(changeWords(plugin, { params: { plugin: 'linter@official', project: 'p1' } }).title, 'Add linter@official to Claude Code in website');
+  assert.equal(changeWords(plugin, { params: { plugin: 'linter@official', project: 'p1' } }).title, 'Add linter to Claude Code in website');
   data.projects = null;
 });
 
@@ -134,7 +134,7 @@ test('an add names its scope in the title and, with All projects, in the lede', 
   const market = { action: 'marketplace.add', steps: [{ client: 'codex', name: 'acme' }] };
   assert.deepEqual(changeWords(market), { title: 'Add the acme marketplace to Codex for all projects', done: 'Added the marketplace acme to Codex for all projects' });
   const setup = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }] };
-  assert.deepEqual(changeWords(setup), { title: 'Connect Cursor to Kitden', done: 'Connected Cursor to Kitden' });
+  assert.deepEqual(changeWords(setup), { title: 'Connect Cursor to the gateway', done: 'Connected Cursor to the gateway' });
   assert.equal(reviewLede({ action: 'marketplace.add' }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
   assert.equal(reviewLede({ action: 'setup_server.register' }, ''), 'Nothing is written until you press Apply. A backup is kept.');
   // Putting a server back writes each client's own entry: for all projects. The page and the
@@ -404,9 +404,13 @@ test('the align review groups what each client lacks and keeps the choice', () =
     { key: 'skill:brandkit:cursor', kind: 'skill', name: 'brandkit', from: 'claude_code', to: 'cursor', place: 'project', chosen: false, note: 'Cursor already has Brandkit; this adds brandkit beside it.' },
   ], not_same: [], left_out: [] };
   assert.deepEqual(alignGroups(align), [
-    { client: 'codex', name: 'Codex', items: [{ key: 'mcp_server:github:codex', label: 'github · MCP server · from Claude Code · all projects', note: null, chosen: true }] },
-    { client: 'cursor', name: 'Cursor', items: [{ key: 'skill:brandkit:cursor', label: 'brandkit · Skill · from Claude Code · this project', note: 'Cursor already has Brandkit; this adds brandkit beside it.', chosen: false }] },
+    { client: 'codex', name: 'Codex', note: null, items: [{ key: 'mcp_server:github:codex', label: 'github · MCP server · from Claude Code · all projects', note: null, chosen: true }] },
+    { client: 'cursor', name: 'Cursor', note: null, items: [{ key: 'skill:brandkit:cursor', label: 'brandkit · Skill · from Claude Code · this project', note: 'Cursor already has Brandkit; this adds brandkit beside it.', chosen: false }] },
   ]);
+  // A note every item of a group has is said once, for the group (03-A22d: 57 times before).
+  const twice = (name) => ({ key: `skill:${name}:codex`, kind: 'skill', name, from: 'claude_code', to: 'codex', place: 'all', chosen: false, note: 'Cursor would load it twice.' });
+  const [group] = alignGroups({ candidates: [twice('a'), twice('b')], not_same: [], left_out: [] });
+  assert.deepEqual([group.note, group.items.map((i) => i.note)], ['Cursor would load it twice.', [null, null]]);
   assert.deepEqual(chosenKeys(align, 'skill:brandkit:cursor', true), ['mcp_server:github:codex', 'skill:brandkit:cursor']);
   assert.deepEqual(chosenKeys(align, 'mcp_server:github:codex', false), []);
   data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];

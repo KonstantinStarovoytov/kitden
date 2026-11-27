@@ -117,13 +117,17 @@ function waitWords(t, words) {
 
 // The toast after a verified Apply: `done` is { change, rows }, kept before the tray emptied. One
 // change says its own words and offers Undo; many say how many and offer Undo all, which undoes
-// the one combined change. Rows all added on the Context page say the next chat shows the real list.
+// the one combined change. Rows all added on the Context page say what to do next: the restart a
+// step needs (its own note, as Changes says it), else to start a new chat.
 export function appliedToast({ change, rows }) {
   if (!rows.length) return;
   const many = rows.length > 1;
   const count = `Applied ${rows.length} ${many ? "changes" : "change"}`;
   const context = rows.every((row) => row.note === CONTEXT_NOTE);
-  const text = context ? `${count}. The backup is in Changes. ${CONTEXT_NOTE}` : many ? count : changeWords(rows[0].part, rows[0].body).done;
+  const restarts = [...new Set(rows.flatMap((row) => ((row.part && row.part.steps) || []).map((s) => s.restart_note)).filter(Boolean))]
+    .map((note) => `${note.replace(/,? for this to take effect\.?$/, "")}.`);
+  const next = restarts.length ? restarts.join(" ") : CONTEXT_NOTE;
+  const text = context ? `${count}. The backup is in Changes. ${next}` : many ? count : changeWords(rows[0].part, rows[0].body).done;
   toast(text, () => undoChange(change), { ok: true, label: many ? "Undo all" : "Undo" });
 }
 

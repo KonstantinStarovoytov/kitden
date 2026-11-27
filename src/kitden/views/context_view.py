@@ -27,7 +27,7 @@ from kitden.clients.base import (
 from kitden.clients.claude_account import FROM_APP, is_account_plugin
 from kitden.clients.claude_code import LIMIT_KEY, SKILL_STATES, ClaudeCodeAdapter, local_files
 from kitden.clients.claude_folder import ClaudeFolder, claude_folder
-from kitden.clients.codex import skills_off
+from kitden.clients.codex import CodexAdapter, skills_off
 from kitden.clients.versions import highest_version
 from kitden.context.claude_log import (
     INTERACTIVE,
@@ -489,8 +489,17 @@ def _names(names: list[str]) -> str:
     return words.join_words(shown) if len(shown) < 3 else f"{len(shown)} skills"
 
 
-def _swap(client: str, gets: list[str], loses: list[str]) -> str:
-    """ "xlsx gets a description. skill-creator loses its description." """
+# A verdict that ends so already says every skill gains: no list of who gains follows it.
+_ALL_KEEP = tuple(
+    keep.split("{on}")[1] for keep in (words.CLAUDE_WOULD_KEEP, words.CODEX_WOULD_KEEP)
+)
+
+
+def _swap(client: str, gets: list[str], loses: list[str], verdict: str = "") -> str:
+    """ "xlsx gets a description. skill-creator loses its description." Nothing on who gains
+    after a `verdict` that every skill keeps its description."""
+    if not loses and verdict.endswith(_ALL_KEEP):
+        gets = []
     said = []
     for names, (one, many) in ((gets, words.GAINS[client]), (loses, words.LOSES[client])):
         if names:
@@ -611,16 +620,9 @@ class _Plugins:
             return None
         name = item.name.split("@")[0]
         offer: dict[str, str | None] = {"item": item.id, "action": action}
-        held = self.inside.get(item.name, {})
-        parts = [
-            f"{len(held[key])} {_many(len(held[key]), one, many)}"
-            for key, one, many in words.PLUGIN_PARTS
-            if held.get(key)
-        ]
         # What goes, or comes back, with the plugin, for its tray row too: the switch is the
         # plugin's, not one skill's.
-        whole = words.PLUGIN_GOES if action == PLUGIN_DISABLE else words.PLUGIN_COMES
-        goes = whole.format(plugin=name, parts=words.join_words(parts)) if parts else None
+        goes = _goes(name, self.inside.get(item.name, {}), action)
         offer["goes"] = goes
         if action == PLUGIN_ENABLE:
             return offer | {"label": words.PLUGIN_TURN_ON.format(name), "say": goes}
@@ -689,8 +691,21 @@ def _codex_plugin(plugins: list[Item], plugin_id: str | None) -> Item | None:
     return found[0] if found else None
 
 
-def _codex_switch(item: Item | None) -> dict | None:
-    """A Codex plugin's own switch, for all projects: the Library's row for it."""
+def _goes(name: str, held: dict, action: str) -> str | None:
+    """What goes, or comes back, with a plugin's switch ("Turns off all of plug: 2 skills."), from
+    what its folder holds; None when Kitden read nothing inside. The Library says the same."""
+    parts = [
+        f"{len(held[key])} {_many(len(held[key]), one, many)}"
+        for key, one, many in words.PLUGIN_PARTS
+        if held.get(key)
+    ]
+    whole = words.PLUGIN_GOES if action == PLUGIN_DISABLE else words.PLUGIN_COMES
+    return whole.format(plugin=name, parts=words.join_words(parts)) if parts else None
+
+
+def _codex_switch(item: Item | None, inside: dict | None = None) -> dict | None:
+    """A Codex plugin's own switch, for all projects: the Library's row for it, with what goes
+    with it (`inside`: what each installed plugin holds, by id)."""
     if item is None or item.scope is not Scope.USER:
         return None
     action = next((a for a in (PLUGIN_DISABLE, PLUGIN_ENABLE) if a in item.actions), None)
@@ -698,7 +713,14 @@ def _codex_switch(item: Item | None) -> dict | None:
         return None
     label = words.PLUGIN_TURN_OFF if action == PLUGIN_DISABLE else words.PLUGIN_TURN_ON
     name = item.name.split("@")[0]
-    return {"item": item.id, "action": action, "label": label.format(name), "say": None}
+    goes = _goes(name, (inside or {}).get(item.name, {}), action)
+    return {
+        "item": item.id,
+        "action": action,
+        "label": label.format(name),
+        "say": None,
+        "goes": goes,
+    }
 
 
 def _group(
@@ -771,6 +793,7 @@ def _grouped(
     items: list[Item | None],
     plugins: list[Item],
     plugin_ids: list[str | None] | None = None,
+    inside: dict | None = None,
 ) -> list[dict]:
     """Each skill's group (`skill["group"]`), and the groups in the order they first come: their
     key, kind, name, marketplace (`from`), Library item, switch (the plugin's own, as a member's
@@ -789,7 +812,7 @@ def _grouped(
             # Codex: a skill of a plugin Kitden knows, with no item of its own (or one that is off),
             # takes the plugin's switch too, so its group and the estimate have it.
             known = _codex_plugin(plugins, found["key"].removeprefix("plugin:"))
-            skill["plugin_switch"] = _codex_switch(known)
+            skill["plugin_switch"] = _codex_switch(known, inside)
             if skill["plugin_switch"] and skill["note"] == words.NOTE_PLUGIN:
                 skill["note"] = words.NOTE_PLUGIN_SWITCH
         group = groups.setdefault(found["key"], found | {"switch": None, "skills": []})
@@ -1767,7 +1790,7 @@ def _claude(
                 r.name for r in rows_now if r.name not in changes and r.name in full - fit.full
             ]
             result = _claude_estimate(skills, fit, with_limit, words.AFTER_APPLY, cap)
-            say = f"{result['say']} {_swap(client, gets, loses)}".strip()
+            say = f"{result['say']} {_swap(client, gets, loses, result['say'])}".strip()
             after = {"say": say, "gets": gets, "loses": loses, "result": result}
             after["budget"] = budget_after
             before = _claude_estimate(base[0], base[1], with_limit, words.BEFORE_APPLY, cap)
@@ -1779,7 +1802,7 @@ def _claude(
             gets = [
                 r.name for r in rows if r.name not in changes and r.sent is None and r.name in full
             ]
-            say = f"{expect['say']} {_swap(client, gets, [])}".strip()
+            say = f"{expect['say']} {_swap(client, gets, [], expect['say'])}".strip()
             after = {"say": say, "gets": gets, "loses": [], "result": expect["result"]}
             after["budget"] = budget_after
 
@@ -2490,18 +2513,20 @@ def _codex(
         loses = [r.name for r in rows_now if r.name not in changes and r.name in was - now]
         on = words.WITH_LIMIT if limit is not None or new_budget is not None else _on(window)
         result = _codex_estimate(skills, fit, on, words.AFTER_APPLY)
-        say = f"{result['say']} {_swap(client, gets, loses)}".strip()
+        say = f"{result['say']} {_swap(client, gets, loses, result['say'])}".strip()
         after = {"say": say, "gets": gets, "loses": loses, "result": result}
         after["budget"] = budget_after
         after["before"] = _before(_codex_estimate(est[0], est[1], on, words.BEFORE_APPLY), windows)
 
     plugins = _plugin_items(inventory, client, sent_list.folder)
+    adapter = CodexAdapter(codex_home.parent, codex_home=codex_home, list_plugins=dict)
+    inside = installed_inside({"codex": adapter})
 
     def switch_of(item: Item | None) -> dict | None:
         """The Codex plugin's own switch, for a skill of a plugin."""
         if item is None or not from_plugin(item):
             return None
-        return _codex_switch(_codex_plugin(plugins, plugin_of(item)))
+        return _codex_switch(_codex_plugin(plugins, plugin_of(item)), inside)
 
     # A skill that is off is in no loaded item: its switch and its group go by the item that is
     # off, so it can be turned on again here.
@@ -2567,7 +2592,7 @@ def _codex(
     # A listed skill's plugin by its file, which names its marketplace.
     by_file = [plugin_at(r.file) if r.file else None for r in rows]
     groups = _grouped(
-        client, skills, [*members, *extras], plugins, [*by_file, *[None] * len(extras)]
+        client, skills, [*members, *extras], plugins, [*by_file, *[None] * len(extras)], inside
     )
     # A plugin that the last list did not hold: Codex does not list the skills of one that is off,
     # nor of one turned on since, so Kitden does not guess them. Its group stands with no skills,
@@ -2581,7 +2606,7 @@ def _codex(
             continue
         off = deciding.enabled is Enabled.OFF
         name, _, market = plugin_id.partition("@")
-        offer = _codex_switch(_codex_plugin(plugins, plugin_id))
+        offer = _codex_switch(_codex_plugin(plugins, plugin_id), inside)
         if offer is None and deciding.project:
             why = words.why_project(deciding.project)
         else:
@@ -2646,7 +2671,7 @@ def _codex(
 
 
 def _cursor(inventory, folder: str | None) -> dict:
-    """No limit and no log to read (checked 2026-11-06): the skills, split by Only when asked."""
+    """No limit and no log to read (checked 2026-11-06): the skills, split by Only when you ask."""
     client = "cursor"
     items = _skills(inventory, client, folder)
     skills = []

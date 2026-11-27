@@ -1380,7 +1380,7 @@ def test_codex_limit_from_config_toml(home):
         "Estimate",
         5_440,
     )
-    assert cx["lede"].endswith("Your config.toml limits this list to 900 tokens.")
+    assert cx["lede"].endswith("Your Codex settings limit this list to 900 tokens.")
 
 
 def test_codex_draft_off_shows_after_apply(home):
@@ -1399,7 +1399,8 @@ def test_codex_draft_off_shows_after_apply(home):
     after = view(home, draft={"codex": {"beta": "off"}})["codex"]["after"]
     assert after["say"].startswith("After Apply, estimate:")
     assert after["gets"] == ["alpha"]
-    assert after["say"].endswith("alpha gets its full description.")
+    # Every skill keeps its description: the verdict says the gain, once (04-F19c).
+    assert after["say"].endswith("every skill would keep its full description.")
 
 
 # Cursor
@@ -1614,9 +1615,7 @@ def test_a_missing_description_the_limit_does_not_explain_is_not_blamed_on_room(
     cc = view(home)["claude_code"]
     assert cc["checked"] is False
     notes = {s["name"]: s["note"] for s in cc["skills"]}
-    assert notes["beta"] == (
-        "Its description was not sent in your last chat. Kitden cannot tell why."
-    )
+    assert notes["beta"] == ("Its description was not sent in your last chat.")
 
 
 def test_no_room_gives_advice_only_when_a_skill_can_be_switched(home):

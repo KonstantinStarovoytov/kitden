@@ -24,7 +24,7 @@ from tests.browser.test_limit_line import (
 pytestmark = pytest.mark.browser
 
 FACT = "4 of 20 skills showed only a name."
-CHANGED = "Your skills changed after this list was sent. Your next chat will show the real list."
+CHANGED = "Your skills changed after this list was sent. Start a new chat to see the new list."
 ADDED = ("changelog", "api-review")
 
 

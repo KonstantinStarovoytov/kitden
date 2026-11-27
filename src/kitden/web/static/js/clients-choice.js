@@ -5,7 +5,7 @@ import { postJson } from "./api.js";
 import { detailsCard, keepFrom, switchNode } from "./details.js";
 import { button, el, joinWords, reportError } from "./dom.js";
 import { openPanel, panelState, toast } from "./panel.js";
-import { CLIENT_NAMES, kitdenClients, mark, versionWords, WRITABLE } from "./parts.js";
+import { CLIENT_NAMES, kitdenClients, mark, STATE_WORDS, versionWords, WRITABLE } from "./parts.js";
 import { detailsAgain, reloadAll, showEffect } from "./review.js";
 import { data } from "./store.js";
 
@@ -14,9 +14,9 @@ export const CHOICE_TITLE = "Which clients Kitden reads";
 export const CHOICE_NOTE = "Kitden stops reading a client that is off. Nothing in the client's own settings changes.";
 export const LAST_ON = "Keep at least one client on.";
 
-const STATUS_WORDS = { not_found: "Not found on this computer", unreadable: "Could not be read", off: "Off" };
+const STATUS_WORDS = { not_found: STATE_WORDS.missing, unreadable: "Could not be read", off: "Off" };
 
-// One row per client in client order: its words (the version, "Not found on this computer" or
+// One row per client in client order: its words (the version, "Not installed" or
 // "Off"), whether its switch is on, whether it is the last one on (then the switch cannot turn
 // off), and a quiet line when it uses the Kitden gateway. `progress`: the first scan's.
 export function choiceRows(clients, setup, progress = null) {

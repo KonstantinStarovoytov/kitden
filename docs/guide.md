@@ -71,7 +71,7 @@ A thing has the same switch wherever it shows. A skill's **Details** in the Libr
 names the client and where it holds ("Claude Code · all projects"), so a skill you turned off can
 be turned on again in the same place. A plugin's switch says where it holds too: **Turn off for all
 projects…**, **Turn on for all projects…**, and with a project picked **Turn off in this
-project…** or **Use the shared rule…**; Context's group header offers the same. A trusted Codex
+project…** or **Follow all projects…**; Context's group header offers the same. A trusted Codex
 project whose own `.codex/config.toml` names a plugin gets **Turn off in this project…** or **Turn
 on in this project…**, which change that file. Where a client has no switch, the place where it
 would be says why: Codex has no **Name only**, Cursor has no switch for one skill (add
@@ -83,8 +83,9 @@ shows hooks. In the Library's List an empty cell with a reason shows a small **?
 If you use only some of Claude Code, Codex and Cursor, tell Kitden. Press
 **Choose clients…** at the top right of the **Overview**, the **Library**, the **Gateway** or
 the **Context** page. Each of these pages says which clients are turned off. **Details** lists the three clients, each with a
-switch. Turn a client off and Kitden stops reading it: it runs none of the client's commands,
-and the client leaves the Overview, the Library, the Gateway, **Agents** and `kitden scan`. Turn
+switch. A client that is not on this computer says **Not installed**, on every page and in
+`kitden scan`. Turn a client off and Kitden stops reading it: it runs none of the client's commands,
+and the client leaves the Overview, the Library, the Gateway, **Let agents read this setup** and `kitden scan`. Turn
 it on and it comes back. A toast with **Undo** follows each switch. Kitden keeps at least one
 client on, so the last switch stays disabled.
 
@@ -134,7 +135,7 @@ adds the same change as the Library's, and the estimate, the bar and the limit l
 once, before you apply it. Its name opens the plugin's Details in the Library. A group without a
 switch says why when you open it, and where to turn it off. Press a header to open the group to its
 skills; with more than three groups they start closed. A group that is off says **Off** and what it
-took in your last chat (a Codex plugin that was not in that chat shows no skills, as Codex does not list them: off, with its **Turn on**, or on, until your next Codex chat lists them), and a group you are turning off says **Off after Apply** and about how much
+took in your last chat (a Codex plugin that was not in that chat shows no skills, as Codex does not list them: off, with its **Turn on**, or on, until your next Codex chat lists them), and a group you are turning off says **Off · in preview** and about how much
 it frees. A plugin's Details in the Library repeat its group's line here, and a skill's say what
 its pill says (its description sent, only its name, cut short or off), with **Show in Context**,
 which opens its group here. Where Context has no list to read (Cursor, or a project with no chat)
@@ -156,7 +157,7 @@ for all projects. A skill of a plugin that Claude Code installed follows its plu
 name the plugin first, say that the switch is the plugin's and what it holds, and offer **Turn
 off for all projects…** for the whole plugin, the same switch as on its group's header and in the
 Library. While it waits in the
-preview, the plugin's group says **Off after Apply** and all of its skills go together, and the
+preview, the plugin's group says **Off · in preview** and all of its skills go together, and the
 preview's row says what goes ("Turns off all of plugin-dev: 7 skills, 1 command and 3 agents.").
 It counts in the estimate and on the limit line as a skill's own switch does, whether you pressed
 it here or in the Library. After Apply the whole group says **Off**, with one **Turn on for all
@@ -223,7 +224,7 @@ The last chat is a fact, so its sentence and its window card stay. When you adde
 turned on skills after it (in Claude Code, also when the chat itself got more skills on the way),
 or changed the limit, two lines under it say so and what Kitden expects now:
 
-> Your skills changed after this list was sent. Your next chat will show the real list.
+> Your skills changed after this list was sent. Start a new chat to see the new list.
 >
 > **Estimate:** On a 1M window, 23 of 96 skills would show only a name. The agent may not use them.
 
@@ -254,8 +255,8 @@ smallest limit at which no description is cut and no skill is left out. Kitden w
 `[skills] max_context_tokens` in your Codex `config.toml` (for all projects), with a backup and
 Undo; **Back to the default** takes it out, so Codex uses 2% of the window again. Restart Codex
 for it to take effect. Kitden writes `skillListingBudgetFraction` in your user
-settings (`~/.claude/settings.json`, or the folder `CLAUDE_CONFIG_DIR` names), for all projects, with a backup and Undo. Your next chat
-shows the real list. Kitden does not offer it when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when
+settings (`~/.claude/settings.json`, or the folder `CLAUDE_CONFIG_DIR` names), for all projects, with a backup and Undo. Start a new chat
+to see the new list. Kitden does not offer it when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when
 a project's own settings file sets the share, when the limit of the last chat is not known, when
 everything fits, when by its count everything fits although the chat left descriptions out, or
 when even 4% would not fit every description. When the list did not fit, the sentence under the
@@ -320,7 +321,8 @@ still applied, undo the newer one first. When **Apply all** fails, the tray name
 did not go through, and why; Kitden puts every file back. Changes also offers **Redo…** and
 **See it on the map**.
 If an app such as Pen writes a removed server back, the review warns you first and Changes
-says it is back.
+says it is back. Reloading or closing the page drops what waits in the preview, so the browser
+asks first.
 
 ## Look first, from the terminal
 

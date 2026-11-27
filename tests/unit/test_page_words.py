@@ -115,7 +115,7 @@ def test_overview_says_your_setup_connected():
         '"Your setup"',
         '"Kitden gateway"',
         '"Library"',
-        '"Not found"',
+        "STATE_WORDS.missing",
         '"Could not read its settings"',
         '"All projects"',
         "`Project ${folder}`",
@@ -523,15 +523,64 @@ def test_the_projects_step_has_the_menus_rows():
 
 
 def test_python_and_page_state_words_agree():
-    parts = script("parts.js")
+    parts = script("words.js")
     for state, word in STATE_WORDS.items():
         assert f'{state}: "{word}"' in parts, state
+
+
+# One word for one state or action, on every tab, in the terminal and in the MCP answers (UX audit
+# 2026-11-26, 02-N07 and 01-W1…W8). Each word comes from views/words.py or words.js; the spellings
+# the page used before must not come back anywhere in the page's scripts or the Python that writes
+# its words. A new spelling of one of these states belongs in this table too.
+ONE_WORD = {
+    # A client that is not on this computer.
+    "Not installed": ('"Not found"', "Not found on this computer", '"not found"'),
+    # A change that waits in the tray.
+    "in preview": ("Off after Apply", "On after Apply"),
+    # A skill or a group that is off now.
+    "Off": ('head: "Turned off"',),
+    # Moving a server into the Kitden gateway.
+    "Move in…": ("Move into the gateway…",),
+    # Removing a client's own entry of a server.
+    "Remove from <clients>…": ("Remove direct entry…",),
+    # Adding to a client from Details.
+    "Add to <client>…": ("+ Add to ",),
+    # The connection to the gateway.
+    "Connect … to the gateway": (
+        "to Kitden`",
+        "from Kitden`",
+        "Connected to Kitden",
+        "Disconnected from Kitden",
+    ),
+    # A skill set to show only when asked for.
+    "Only when you ask": ("Only when asked",),
+    # A project's own rule taken out.
+    "Follow all projects…": ("Use the shared rule", "'s rule…"),
+    # What to do after a change to the skill list.
+    "Start a new chat to see the new list.": ("show the real list", "real list."),
+}
+
+
+def test_one_word_for_each_state_everywhere():
+    sources = [*(STATIC / "js").glob("*.js"), *(STATIC.parents[1] / "views").glob("*.py")]
+    sources += [STATIC.parents[1] / "cli.py", STATIC.parents[1] / "mcp_server.py"]
+    for word, others in ONE_WORD.items():
+        for path in sources:
+            text = path.read_text()
+            for other in others:
+                assert other not in text, f"{path.name} says {other!r}; the word is {word!r}"
+    # The words themselves live in one place each.
+    assert 'missing: "Not installed"' in script("words.js") and said.STATE_WORDS["missing"] == (
+        "Not installed"
+    )
+    assert 'export const WAITING = "in preview";' in script("words.js")
+    assert 'CONTEXT_NOTE = "Start a new chat to see the new list."' in script("tray.js")
 
 
 def test_python_and_page_skill_state_words_agree():
     from kitden.views.words import SKILL_STATE_WORDS
 
-    parts = script("parts.js")
+    parts = script("words.js")
     for state, word in SKILL_STATE_WORDS.items():
         assert f'"{state}": "{word}"' in parts, state
 
@@ -583,7 +632,7 @@ def test_after_words_come_from_the_one_table():
 
 def test_gateway_names_the_remove_action_and_draws_no_idle_wire():
     text = gw()
-    assert "Remove direct entry…" in text
+    assert "`Remove from ${names}…`" in text
     assert "wire idle" not in text
     assert "goes around" not in text
 
@@ -808,8 +857,7 @@ def test_the_map_says_the_link_is_the_state():
         '"Gateway"',
         '"Servers"',
         '"Tools"',
-        '"Connected"',
-        '"Not connected"',
+        "gatewayWords(on, missing)",
         "Found · ${",
         '"Found"',
         '"No gateway yet"',
@@ -949,7 +997,7 @@ def test_scope_switch_marks_the_project_picker_and_the_lede():
     # Kitden counts only the gateway's rules: it never claims a project follows the shared setup.
     assert "follows the shared setup" not in parts
     for words in (
-        '"Shared setup · project overrides stay separate"',
+        '"All projects"',
         '"rule differs", "rules differ"',
         "· no rules of its own`",
         "· rules not known`",
@@ -996,7 +1044,7 @@ def test_overview_notes_are_sentences_with_an_info_icon():
 
 def test_gateway_offers_move_and_move_all():
     text = gw()
-    assert "Move into the gateway…" in text
+    assert 'label: "Move in…"' in text
     assert "Move all ${" in text
     # The gateway that takes a server comes from one rule (details.js moveTargets).
     assert "moveTargets(model, key)" in text and "model.gateways.find((g) => g.movable)" not in text
@@ -1027,7 +1075,7 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
         "stale: Boolean(cell.stale_at) })" in text
     )
     assert "button(cell.add.label" in text and '"btn small add"' in text
-    assert 'via: "Via Claude Code", done: "Has its skills"' in script("parts.js")
+    assert 'via: "Via Claude Code", done: "Has its skills"' in script("words.js")
     # The List is a tree grid; the category filter went with New and All (the add panel).
     assert 'el("div", "treegrid library-list")' in text
     assert '"All categories"' not in text and "answer.categories" not in text
@@ -1548,15 +1596,15 @@ def test_a_skill_limit_says_the_share_everywhere_it_shows():
     assert (said.LIMIT_SET, said.LIMIT_BACK) == ("Set to {share}", "Back to {share}")
     assert said.LIMIT_KEEPS_CHOSEN == "Skills set to Name only stay as they are."
     assert said.LIMIT_CHANGED == (
-        "The limit was changed after this chat: it is {share} now. Your next chat will show the "
-        "real list."
+        "The limit was changed after this chat: it is {share} now. Start a new chat to see the "
+        "new list."
     )
     assert said.SKILLS_CHANGED == (
-        "Your skills changed after this list was sent. Your next chat will show the real list."
+        "Your skills changed after this list was sent. Start a new chat to see the new list."
     )
     assert said.LIMIT_AND_SKILLS_CHANGED == (
         "The limit and your skills changed after this list was sent: the limit is {share} now. "
-        "Your next chat will show the real list."
+        "Start a new chat to see the new list."
     )
     assert 'now: "Skill list now, estimate"' in context
     assert said.CLAUDE_SHARE_SET == (
@@ -1590,8 +1638,8 @@ def test_a_skill_limit_says_the_share_everywhere_it_shows():
 
 def test_a_skill_rule_says_what_it_turns_off_and_where():
     review, parts, tray = reviews(), script("parts.js"), script("tray.js")
-    assert '"skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`' in review
-    assert "`${short} uses the shared rule`" in review
+    assert '"skill.rule": off ? `Turn off ${short}` : `Make ${short} follow all projects`' in review
+    assert "`${short} follows all projects`" in review
     assert '"skill.rule": "Turned off"' in review and '"skill.rule": "Changed how"' in parts
     assert '`${verb} ${names.join(", ")} loads${place} · ${clients.join(", ")}`' in parts
     key = '`skill:${one.client}:${one.built_in || one.item}@${params.project || ""}`;'
@@ -1743,8 +1791,8 @@ def test_an_add_in_a_project_offers_two_choices():
 
 def test_the_kitden_card_says_what_the_gateway_governs():
     text = gw()
-    words = "The gateway controls only the servers in it. "
-    assert words + "Direct entries and terminal tools are outside it." in text
+    words = "The gateway controls only the servers in it, "
+    assert words + "not a server a client starts on its own." in text
 
 
 def test_agents_lede_says_held_servers_add_their_tools():
@@ -1755,8 +1803,8 @@ def test_agents_lede_says_held_servers_add_their_tools():
 def test_tool_and_server_details_use_the_owner_words():
     text = gw() + script("parts.js")
     for words in (
-        '"Use the shared rule…"',
-        "'s rule…",
+        '"Follow all projects…"',
+        "`Follow ${detail.follows}…`",
         '"Turn on for all projects…"',
         '"Turn off in some projects…"',
         '"On in this project"',
@@ -1943,7 +1991,6 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
         " it either way.`",
         '"Update the Kitden entry…"',
         '"Update…"',
-        '"not on this computer"',
         '"its entry is off"',
         '"settings not readable"',
         "`Remove ${to.name} from ${from.name}`",
@@ -1969,16 +2016,16 @@ def test_connect_and_disconnect_say_kitden():
     # The `kitden` entry is how a client reaches Kitden: Gateway and Agents say it the same way.
     review, parts = script("review.js"), script("parts.js")
     for words in (
-        "`Connect ${clients} to Kitden`",
-        "`Disconnect ${clients} from Kitden`",
-        "`${verb} ${clients} to Kitden`",
-        "`${verb} ${clients} from Kitden`",
+        "`Connect ${clients} to the gateway`",
+        "`Disconnect ${clients} from the gateway`",
+        "`${verb} ${clients} to the gateway`",
+        "`${verb} ${clients} from the gateway`",
         '"setup_server.register": "Connected"',
         '"client.disconnect": "Disconnected"',
     ):
         assert words in review, words
-    assert '"setup_server.register": "Connected to Kitden"' in parts
-    assert '"client.disconnect": "Disconnected from Kitden"' in parts
+    assert '"setup_server.register": "Connected to the gateway"' in parts
+    assert '"client.disconnect": "Disconnected from the gateway"' in parts
     place = parts.split("export const PLACE_IN_TITLE")[1].split("\n")[0]
     assert '"setup_server.register"' in place and '"client.disconnect"' in place
     # The old words are gone; the update of an old entry keeps its own.
@@ -2083,7 +2130,7 @@ def test_the_clients_card_hears_when_versions_arrive():
 
 
 def test_a_change_whose_backup_holds_a_secret_says_so():
-    assert "This change's backup or record holds a secret." in script("parts.js")
+    assert "Its backup holds a secret. The backup stays on this computer." in script("parts.js")
     assert "backupNote(entry)" in script("changes.js")
 
 
@@ -2163,13 +2210,12 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
     for words in (
         '"Outside the gateway · calls skip Kitden\'s rules"',
         '"Move in…"',
-        '"Move into the gateway…"',
-        '"Remove direct entry…"',
+        '"Move in…"',
+        "`Remove from ${names}…`",
         "Move all ${",
         "Set up in",
         '"One place for your MCP servers. Turn a server or a tool on or off for every agent."',
-        "The gateway controls only the servers in it. "
-        "Direct entries and terminal tools are outside it.",
+        "The gateway controls only the servers in it, not a server a client starts on its own.",
     ):
         assert words in text, words
     assert '"/api/map"' not in text and "loadMap(" not in text
@@ -2425,7 +2471,7 @@ def test_every_change_waits_in_the_tray():
     # Add missing's chooser adds its row with the ticks; a row's review can take it out again.
     assert '"Add to preview"' in review and '"Take it out"' in review
     # A Details button whose change waits in the tray says so and takes no press.
-    assert 'const IN_PREVIEW = "In preview";' in details
+    assert "export const IN_PREVIEW = WAITING[0].toUpperCase() + WAITING.slice(1);" in details
     assert "export function previewButton(label, body," in details
     # Details have no Apply of their own: the tray's bar writes everything, and the key presses it.
     for name in PANEL:
@@ -2712,7 +2758,8 @@ def test_the_library_map_details_words():
         'const OFF_HERE = "Turn off in this project…";',
         'const FOLLOWS = "Follows its plugin.";',
         'const NO_PLUGIN = "None, a skill on its own";',
-        'const NO_PROJECT_SWITCH = "Codex has no switch for one project.";',
+        'const NO_PROJECT_SWITCH = "Codex has no switch for one project; turn it off for all '
+        'projects.";',
         'const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";',
         '"This turns it off in Claude Code. Codex and Cursor have no switch for one project."',
         'new: "No .claude folder yet; Kitden makes none"',
@@ -3035,7 +3082,7 @@ def test_the_library_list_words_and_looks():
 
 def test_the_last_skill_rule_notes_say_what_they_do():
     details, rules = script("library-details.js"), script("library-rules.js")
-    assert 'const USE_SHARED = "Use the shared rule…";' in details
+    assert 'const USE_SHARED = "Follow all projects…";' in details
     assert 'const OFF_COPY = "Turn off this copy in Codex…";' in details
     assert 'const ALREADY_OFF = "Already off there";' in details
     assert (

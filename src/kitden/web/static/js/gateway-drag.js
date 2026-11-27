@@ -72,7 +72,7 @@ export function placeMoved({ view, model, layout, redraw = () => {} }) {
   else if (onMap.home) goHome(onMap);
 }
 
-// The preview request of a server dragged into the gateway: the same as "Move into the gateway…"
+// The preview request of a server dragged into the gateway: the same as "Move in…"
 // with the Kitden gateway chosen, for the entries of its own row only. Null without a Kitden
 // gateway.
 export function dropBody(row, view) {
@@ -211,7 +211,7 @@ function overIn(drag) {
   if (lightGateway(drag, open)) onMap.redraw();
 }
 
-// A drop while the slot is open adds the same move as "Move into the gateway…" to the tray, and the
+// A drop while the slot is open adds the same move as "Move in…" to the tray, and the
 // block flies onto the slot (200 ms OUT3) and waits there while the move is asked.
 function dropIn(drag, at) {
   if (!drag.open || !at) return false;

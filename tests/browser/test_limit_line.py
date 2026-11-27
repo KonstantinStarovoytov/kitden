@@ -448,7 +448,7 @@ class TestCounted:
         details = page.get_by_role("complementary", name="Details")
         expect(details).to_contain_text("Suggested1.1%: all 20 skills get their description")
         expect(details).to_contain_text(
-            "Kitden could not replay this chat's list exactly, so it counts what all "
+            "Kitden could not rebuild this chat's list exactly, so it counts what all "
             "descriptions need."
         )
         details.get_by_role("button", name="Close").click()

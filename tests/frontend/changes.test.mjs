@@ -230,6 +230,9 @@ test('the head says Changes, the lede, the scope with this week\'s count and the
   assert.match(text(scope), /^All projects · \d+ changes? this week$/);
   assert.equal(hintLine.hidden, false);
   assert.equal(hintLine.children.at(-1).textContent, 'Click a row · Undo · See it on the map');
+  // With no change yet there is no row to click: no hint (02-N20j).
+  show([]);
+  assert.equal(hintLine.hidden, true);
 });
 
 test('the timeline groups by Today, Yesterday and a date, with a rail and a dot per row', async () => {
@@ -520,7 +523,7 @@ test('a change whose server is back says who wrote it again', async () => {
   const back = [{ name: 'pencil', client: 'codex', app: 'Pen' }, { name: 'n8n', client: 'cursor', app: null }];
   show([change('b1', TODAY, { came_back: back, holds_secret: true })]);
   assert.deepEqual(byClass(drawer, 'why').map(text), [
-    "This change's backup or record holds a secret.",
+    "Its backup holds a secret. The backup stays on this computer.",
     'pencil is back in Codex. The Pen app wrote it again; change it there.',
     'n8n is back in Cursor. Something else on this computer wrote it again.',
   ]);

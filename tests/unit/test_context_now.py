@@ -29,7 +29,7 @@ from tests.unit.test_context_view import (
 )
 from tests.unit.test_skill_limit import NAMES, TEXT, counted_chat, cut_chat, near_chat
 
-CHANGED = "Your skills changed after this list was sent. Your next chat will show the real list."
+CHANGED = "Your skills changed after this list was sent. Start a new chat to see the new list."
 KEEPS = "Estimate: On a 200K window, every skill would keep its description."
 NO_RULE = words.NOW_NO_RULE.format(client="{}")
 
@@ -165,8 +165,8 @@ def test_the_limit_and_the_skills_changed(home):
     cc = claude(home)
     # 8,446 + 1,211 = 9,657 characters, over 9,600 (1.2%).
     assert cc["changed"] == [
-        "The limit and your skills changed after this list was sent: the limit is 1.2% now. Your "
-        "next chat will show the real list.",
+        "The limit and your skills changed after this list was sent: the limit is 1.2% now. Start "
+        "a new chat to see the new list.",
         "Estimate: On a 200K window, 1 of 8 skills would show only a name. The agent may not use "
         "it.",
     ]
@@ -804,7 +804,7 @@ def test_codex_skills_and_the_limit_changed(home):
     cx = codex(home)
     assert cx["changed"] == [
         "The limit and your skills changed after this list was sent: the limit is 500 tokens now. "
-        "Your next chat will show the real list.",
+        "Start a new chat to see the new list.",
         f"Estimate: On a {_size(budget * 50)} window, every skill would keep its full description.",
     ]
     assert set(cx["now"]["sent"]) == {"alpha", "beta"} and cx["now"]["budget"] == 500

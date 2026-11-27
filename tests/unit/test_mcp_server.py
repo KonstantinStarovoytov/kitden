@@ -215,7 +215,7 @@ async def test_a_same_name_note_names_the_client_with_another_source(home):
     data = await call(server_for(home), "list_findings")
     (note,) = [f for f in data["findings"] if f["type"] == "same_name_other_source"]
     assert note["clients"] == ["claude_code", "codex"]
-    assert note["explanation"].endswith("but codex's neon comes from another source")
+    assert note["explanation"].endswith("but Codex's neon comes from another source")
 
 
 async def test_explain_item_sees_a_skill_turned_off_in_one_project(tmp_path):

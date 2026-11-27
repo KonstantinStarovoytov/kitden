@@ -957,3 +957,10 @@ test('every row and card marks a waiting change the same way: by its items, or i
   assert.deepEqual(markedRows({ phase: 'idle', rows }).map((r) => r.key), ['switch:p1', 'rule:files/x@', 'd']);
   assert.deepEqual(markedRows({ phase: 'applied', rows }), []);
 });
+
+test('leaving the page with changes in preview asks first; an empty or applied tray does not (02-N15)', async () => {
+  const { leaveWarns } = await import('../../src/kitden/web/static/js/tray.js');
+  assert.equal(leaveWarns({ phase: 'preview', rows: [] }), false);
+  assert.equal(leaveWarns({ phase: 'preview', rows: [{ key: 'k', part: {} }] }), true);
+  assert.equal(leaveWarns({ phase: 'applied', rows: [{ key: 'k', part: {} }] }), false);
+});

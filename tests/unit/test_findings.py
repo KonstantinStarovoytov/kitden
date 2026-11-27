@@ -88,7 +88,9 @@ def test_item_read_from_another_clients_folder_is_cross_loaded():
     (finding,) = find_findings(Inventory(items=[skill]))
     assert summary([finding]) == {("cross_loaded", "info", ("brandkit",))}
     assert "/h/.claude/skills/brandkit/SKILL.md" in finding.explanation
-    assert "claude_code" in finding.explanation
+    # The page's names, not the ids (05-P10): an agent repeats these words to the person.
+    assert finding.explanation.startswith("Cursor loads 'brandkit' from Claude Code's folder: ")
+    assert "claude_code" not in finding.explanation and "cursor" not in finding.explanation
 
 
 def test_shared_agents_folder_is_not_cross_loading():
@@ -127,8 +129,8 @@ def test_a_same_name_from_another_source_is_its_own_note():
     )
     assert finding_dict(finding)["clients"] == ["claude_code", "codex"]
     assert finding.explanation == (
-        "mcp server 'docs' has the same name in claude_code, codex, "
-        "but codex's docs comes from another source"
+        "mcp server 'docs' has the same name in Claude Code, Codex, "
+        "but Codex's docs comes from another source"
     )
 
 
@@ -156,9 +158,9 @@ def test_project_definition_overriding_user_definition_is_reported():
 def test_unknown_states_are_grouped_per_client():
     a = item("cursor", ItemKind.PLUGIN, "a@m", "/db", enabled=Enabled.UNKNOWN)
     b = item("cursor", ItemKind.PLUGIN, "b@m", "/db", enabled=Enabled.UNKNOWN)
-    assert summary(find_findings(Inventory(items=[a, b]))) == {
-        ("unknown_state", "info", ("a@m", "b@m"))
-    }
+    (finding,) = find_findings(Inventory(items=[a, b]))
+    assert summary([finding]) == {("unknown_state", "info", ("a@m", "b@m"))}
+    assert finding.explanation == "Cursor: Kitden cannot read whether 2 items are on or off."
 
 
 def test_unsupported_client_version_is_a_warning():

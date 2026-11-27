@@ -210,7 +210,7 @@ test('the List has the two tabs and one column per client', async () => {
   assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
   assert.equal(tabs.className, 'seg sm map-tabs');
   assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Plugins and skills', 'true'], ['Instructions', 'false']]);
-  assert.ok(texts(scope).includes('Shared setup · project overrides stay separate'));
+  assert.ok(texts(scope).includes('All projects'));
   // Name, then one column per client, each with its tile and a quiet "−".
   const columns = box.children[0];
   assert.equal(columns.getAttribute('role'), 'row');

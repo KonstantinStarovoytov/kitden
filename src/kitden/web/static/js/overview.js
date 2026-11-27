@@ -14,7 +14,7 @@ import { mapView } from "./map-view.js";
 import { headActions } from "./map-page.js";
 import { animateTo, countUp, D, rise, riseHead, rollTo } from "./motion.js";
 import { toast } from "./panel.js";
-import { banner, folderName, mark, setHint, skeleton, staleNote, versionWords } from "./parts.js";
+import { banner, folderName, mark, setHint, skeleton, STATE_WORDS, staleNote, versionWords } from "./parts.js";
 import { current, currentError, data, go, goTo, libraryChoice, loadMap, parseSel, projectPath, retry, state } from "./store.js";
 import { CONTEXT_NOTE, keyFor, onTray } from "./tray.js";
 
@@ -392,7 +392,7 @@ const NOTE_WORDS = {
   same_in_other_clients: { one: "is set up in more than one client", many: "are set up in more than one client" },
   same_name_other_source: { one: "has the same name as an entry from another source", many: "have the same name as an entry from another source" },
   scope_override: { one: "has one definition that replaces another", many: "have one definition that replaces another" },
-  unknown_state: { one: "has an on/off state Kitden cannot read", many: "have an on/off state Kitden cannot read" },
+  unknown_state: { one: "may be on or off; Kitden cannot read which", many: "may be on or off; Kitden cannot read which" },
   bypasses_gateway: { one: "is not connected to the gateway", many: "are not connected to the gateway" },
 };
 const noteWords = (type) => NOTE_WORDS[type] || { one: `has a note: ${type.replaceAll("_", " ")}`, many: `have a note: ${type.replaceAll("_", " ")}` };
@@ -585,7 +585,7 @@ const SETUP_COLUMNS = [
 // gateway and the Library with their counts, and a link from each client to what it reaches.
 export function setupTree(map, progress) {
   const blocks = map.clients.map((c) => ({
-    id: `client:${c.id}`, column: "clients", kind: "client", name: c.name, meta: c.on ? versionWords(c.version, progress, true) : "Not found",
+    id: `client:${c.id}`, column: "clients", kind: "client", name: c.name, meta: c.on ? versionWords(c.version, progress, true) : STATE_WORDS.missing,
     lamp: c.on ? "on" : "off", state: c.on ? "on" : "off", stateInMeta: true, client: c.id, ports: { right: true },
   }));
   const { gateway, library } = map;

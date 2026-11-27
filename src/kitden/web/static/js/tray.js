@@ -3,7 +3,7 @@
 // the server; the dock draws it.
 import { getJson, notPrepared, postJson } from "./api.js";
 import { WAITS } from "./dom.js";
-import { CLIENT_ORDER } from "./parts.js";
+import { CLIENT_ORDER, WAITING } from "./parts.js";
 import { busy, setBusy, state } from "./store.js";
 
 // The states a change can end in after each verb. Read back in any other state it has not
@@ -126,8 +126,8 @@ export function keyFor(body) {
 }
 
 // The note of each row the Context page adds: Apply's toast then says the next chat shows the
-// real list (dock.js appliedToast).
-export const CONTEXT_NOTE = "Your next chat will show the real list.";
+// new list (dock.js appliedToast).
+export const CONTEXT_NOTE = "Start a new chat to see the new list.";
 
 // The state a skill rule asks for: `state` when it has one, else "off" or, with `off: false`, "on".
 export function ruleState(params = {}) {
@@ -178,7 +178,7 @@ export function rowsAbout(rows, { items = [], server = null } = {}) {
     return (body.targets || []).some((t) => ids.has(t.item)) || (server !== null && gateway && (body.params || {}).server === server);
   });
 }
-export const IN_PREVIEW_MARK = "\u00a0· in preview";
+export const IN_PREVIEW_MARK = `\u00a0· ${WAITING}`;
 // A removal: a map says Leaving for it, not "in preview".
 export const LEAVES = /\.remove$/;
 // The tray's rows a row or a card marks: those the preview took (or that wait for access), none
@@ -186,6 +186,9 @@ export const LEAVES = /\.remove$/;
 export function markedRows(t = tray) {
   return t.phase === "applied" ? [] : t.rows.filter((row) => row.part || row.waits);
 }
+
+// Whether leaving the page would drop changes that wait in the tray: the browser asks first then.
+export const leaveWarns = (t = tray) => t.phase !== "applied" && t.rows.length > 0;
 
 // The row with this key, if it is in the tray. Keys are unique there.
 export const trayRow = (key) => tray.rows.find((row) => row.key === key);

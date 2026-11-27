@@ -26,14 +26,15 @@ const OFF_HERE = "Turn off in this project…";
 export const ON_ALL = "Turn on for all projects…";
 const ON_HERE = "Turn on in this project…";
 // Takes the project's own key out of its local settings, so the shared rule applies there.
-const USE_SHARED = "Use the shared rule…";
+const USE_SHARED = "Follow all projects…";
 // A Codex skill only one project has: a rule for all projects that names this copy's path.
 const OFF_COPY = "Turn off this copy in Codex…";
 // A project row of the checklist whose own settings turn the skill off already.
 const ALREADY_OFF = "Already off there";
 const FOLLOWS = "Follows its plugin.";
 const NO_PLUGIN = "None, a skill on its own";
-const NO_PROJECT_SWITCH = "Codex has no switch for one project.";
+// The twin of views/words.py CODEX_NO_PROJECT, with the way that is left.
+const NO_PROJECT_SWITCH = "Codex has no switch for one project; turn it off for all projects.";
 const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";
 const SOME_WHY = "This turns it off in Claude Code. Codex and Cursor have no switch for one project.";
 // Why a project cannot take a one-project skill rule (library_map.py `skill_rules`).
@@ -168,7 +169,7 @@ export function skillHereBody(item, c) {
   return c.project && on && decides && c.rules.projects[c.project] === "ok" ? projectBody(item, c.project) : null;
 }
 
-// "Use the shared rule…": in a project whose local settings decide for Claude Code (`can.local`),
+// "Follow all projects…": in a project whose local settings decide for Claude Code (`can.local`),
 // one skill.rule row that takes that key out; else null. The committed file is never changed here.
 export function sharedBody(item, c) {
   const target = ((item.items || {}).claude_code || [])[0];
@@ -272,7 +273,8 @@ function projectLine(item, c) {
   const clients = (can.project || []).filter((client) => client !== "claude_code" || !outsideFolder(item, c));
   if (!clients.length || !c.folder) return null;
   // A rule in the repository root's local file names the root's folder (`can.local_in`).
-  const line = (client) => ((can.local || []).includes(client) ? fromLocal(client, (can.local_in || {})[client] || c.folder) : ((can.shared || []).includes(client) ? fromShared : fromProject)(client, c.folder));
+  // Cursor has no setting for one skill or plugin (docs/clients.md): it loads what the project has.
+  const line = (client) => (client === "cursor" ? `Cursor loads this from ${c.folder}.` : (can.local || []).includes(client) ? fromLocal(client, (can.local_in || {})[client] || c.folder) : ((can.shared || []).includes(client) ? fromShared : fromProject)(client, c.folder));
   return el("p", "muted", inOrder(clients).map(line).join(" "));
 }
 // In a project whose rule file Kitden does not write, for an item Claude Code has: one quiet line.
@@ -351,7 +353,7 @@ export function pluginCard(item, c, { addStep = () => {}, commandsStep = () => {
 
 // A plugin's switches, the one answer Library Details and Context's group header read (`only`: one
 // client's): "Turn off for all projects…" and "Turn on for all projects…" (its own entry, every
-// client at once), in a project "Turn off in this project…" and "Use the shared rule…" (Claude
+// client at once), in a project "Turn off in this project…" and "Follow all projects…" (Claude
 // Code's rule there) and Codex's own table there ("Turn off in this project…", "Turn on in this
 // project…", `can.project_switch`). Each is `{ label, bodies, goes }`.
 export function pluginSwitches(item, c, only = null) {
@@ -425,7 +427,7 @@ export function skillCard(item, c, { someStep = () => {}, addStep = () => {} } =
 }
 
 // A skill's switches for one project, the one answer the Library's and Context's Details read
-// (`only`: one client's): "Turn off in this project…" and "Use the shared rule…" (Claude Code's
+// (`only`: one client's): "Turn off in this project…" and "Follow all projects…" (Claude Code's
 // rule there), and "Turn off this copy in Codex…". Each is `{ label, bodies }`.
 export function skillProjectSwitches(item, c, only = null) {
   const out = [];

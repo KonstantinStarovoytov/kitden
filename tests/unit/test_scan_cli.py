@@ -299,7 +299,7 @@ def test_scan_names_the_warnings_and_points_to_the_findings(bare, capsys):
         "2 warnings: Codex loads skill 'docker-expert' twice; Cursor loads skill",
         "  'docker-expert' twice. 2 notes (nothing to fix): kitden show findings",
         "Your agents' settings were not changed: scan only reads them.",
-        "To fix this: kitden open",
+        "To fix the warnings: kitden open",
     ]
 
 
@@ -348,8 +348,8 @@ def test_scan_counts_an_item_reached_twice_once(home, capsys, monkeypatch):
 
 def test_scan_says_a_client_is_not_found_in_plain_words(tmp_path, capsys):
     lines = _summary(make_home(tmp_path, "claude_code/2.1.283"), capsys)
-    assert lines[lines.index("Codex: not found") - 1] == ""
-    assert "Cursor: not found" in lines
+    assert lines[lines.index("Codex: not installed") - 1] == ""
+    assert "Cursor: not installed" in lines
     assert not [line for line in lines if "not_found" in line]
 
 
@@ -387,7 +387,7 @@ def test_scan_separates_the_blocks_and_the_closing_lines_by_one_blank_line(bare,
 def test_scan_blocks_of_clients_that_are_not_found_are_one_line(tmp_path, capsys):
     lines = _summary(make_home(tmp_path, "claude_code/2.1.283"), capsys)
     assert lines[0] == "Claude Code (version unknown)"
-    assert lines[lines.index("Codex: not found") + 1 :][:2] == ["", "Cursor: not found"]
+    assert lines[lines.index("Codex: not installed") + 1 :][:2] == ["", "Cursor: not installed"]
 
 
 def test_scan_names_a_client_and_its_version_on_one_line(home, tmp_path, monkeypatch, capsys):
@@ -410,7 +410,8 @@ def test_scan_last_line_for_a_warning_or_a_file_that_cannot_be_read(bare, capsys
     (bare / ".claude.json").write_text("{ broken")
     assert main(["scan", "--home", str(bare)]) == 3
     lines = capsys.readouterr().out.splitlines()
-    assert lines[-1] == "To fix this: kitden open"
+    # It names what to fix: "this" pointed at a line three lines up (05-P14).
+    assert lines[-1] == "To fix the file Kitden could not read: kitden open"
     # The reason is in words, not the id `scan --json` has.
     assert lines[-4].endswith(": the file has a syntax error")
     assert lines[-4].startswith("Could not read ")

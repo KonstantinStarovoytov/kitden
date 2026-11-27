@@ -532,7 +532,7 @@ test('the setup map draws clients, Kitden gateway and Library with their counts 
   assert.deepEqual([unread.meta, unread.lamp], ['Could not read its settings', 'unk']);
   // A client not on this computer is off and says so.
   const off = setupTree({ ...MAP, clients: [{ id: 'codex', name: 'Codex', version: null, tested: true, on: false }] }, null);
-  assert.deepEqual([off.blocks[0].meta, off.blocks[0].lamp], ['Not found', 'off']);
+  assert.deepEqual([off.blocks[0].meta, off.blocks[0].lamp], ['Not installed', 'off']);
 });
 
 test('the Kitden gateway and Library blocks open their pages; a client block focuses its links', async () => {
@@ -560,7 +560,7 @@ test('a note opens its item, as before', () => {
   assert.equal(noteItemRow(second, rows).key, 'rb');
   assert.equal(noteItemRow(second, rows.slice(0, 1)), null);
   assert.deepEqual(targetSel({ view: 'map', kind: 'skill', name: 'tidy' }), { kind: 'skill', name: 'tidy' });
-  assert.equal(noteSentence(first), 'a has an on/off state Kitden cannot read.');
+  assert.equal(noteSentence(first), 'a may be on or off; Kitden cannot read which.');
 });
 
 test('notes are grouped by item, each with its clients', () => {
@@ -595,9 +595,9 @@ test('items with the same words fold into one row from four on', () => {
   assert.equal(rows.length, 5);
   assert.deepEqual(rows.map(rowSentence), [
     '5 items load from another client.',
-    'u1 has an on/off state Kitden cannot read.',
-    'u2 has an on/off state Kitden cannot read.',
-    'u3 has an on/off state Kitden cannot read.',
+    'u1 may be on or off; Kitden cannot read which.',
+    'u2 may be on or off; Kitden cannot read which.',
+    'u3 may be on or off; Kitden cannot read which.',
     'docs has the same name as an entry from another source and is not connected to the gateway.',
   ]);
   // Exactly four fold; three stay single.
@@ -612,7 +612,7 @@ test('items with the same words fold into one row from four on', () => {
     '4 items are set up in more than one client.',
     '4 items have the same name as an entry from another source.',
     '4 items have one definition that replaces another.',
-    '4 items have an on/off state Kitden cannot read.',
+    '4 items may be on or off; Kitden cannot read which.',
     '4 items are not connected to the gateway.',
   ]);
 });

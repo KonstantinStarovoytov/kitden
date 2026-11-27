@@ -242,7 +242,7 @@ def test_a_client_with_no_instruction_file_in_the_scope_says_why(home):
     reading = {c for g in answer["groups"] for f in g["files"] for c in f["by"]}
     assert "cursor" not in reading
     assert answer["note"] == (
-        "Cursor loads no instruction file in every project. Pick a project to see its own files."
+        "Cursor loads no instruction file for all projects. Pick a project to see its own files."
     )
     words = {c["id"]: c["words"] for c in answer["clients"]}
     # Claude Code's two commands are not instruction files: the block counts what the note counts.
@@ -263,7 +263,7 @@ def test_the_no_file_sentence_names_every_client_without_one(home):
     inventory.items[:] = [i for i in inventory.items if i.client == "codex"]
     answer = instructions_map(inventory, adapters, None)
     assert answer["note"] == (
-        "Claude Code and Cursor load no instruction file in every project. "
+        "Claude Code and Cursor load no instruction file for all projects. "
         "Pick a project to see its own files."
     )
     # With a project picked there is no second sentence.
