@@ -15,9 +15,10 @@ which clients. Under it stand cards in two groups:
   that did not fit in the last chat, then a change that came undone, then other problems such as
   a file Kitden could not read (its **Copy path** gives the file's path), and last a plugin or
   skill a client loads more than once.
-- **Can improve:** something you may want. Up to three servers outside the gateway get a **Move
-  in…** card ("In the gateway you can turn each of its tools on or off."), and one card stands for
-  the rest; a server outside the gateway is a normal setup, not a fault.
+- **Can improve:** something you may want. One card says how many servers can move into the
+  gateway, and its **Open in Gateway** opens the Gateway's List; a server outside the gateway is
+  a normal setup, not a fault. A client the gateway does not reach yet has a card with
+  **Connect**, which adds that change to the preview.
 
 Each card has one button. Most add a change to the preview, which you review and **Apply**; some
 open the page where you fix it. When Context suggests a limit, the skill list card's button adds
@@ -30,7 +31,7 @@ Code's and Codex's skill folders; turn off **Include Third-Party Plugins, Skills
 Configs** in Cursor Settings → Agents → Third-Party Imports to load each skill once. A card leaves once its change is applied, and comes back if you undo it.
 The skill list card moves to **Can improve** instead: it says the limit is set and that a new chat
 shows the new list. With no limit to suggest, its line gives the reason Context gives.
-Four or more cards of one kind fold into one row ("35 skills load more than once"); **Show…**
+Four or more cards of one kind fold into one row ("35 skills load more than once"); **Show**
 opens them.
 
 **Show 5 notes (nothing to fix)** under the cards opens the notes: facts worth knowing that need
@@ -41,9 +42,10 @@ gateway; point at a card to see on it what the card is about.
 
 Open **Library** and choose **All projects** or one project. **List → Differences** shows
 what differs between Claude Code, Codex and Cursor. Click an item for its **Details**.
-The search box at the top says what it finds from the tab you are on: on the **Gateway**,
-"Search servers and tools…" finds on that page; on every other tab, "Search skills, plugins and
-marketplaces…" opens the Library with the matches.
+The search box at the top, "Search skills, plugins, servers and tools…", searches your whole
+setup from any tab: a server or a tool opens the Gateway with the matches, anything else the
+Library. In the List, **+** in a client's column adds the item there (point at it for what it
+adds); **Add missing plugins and skills…** shows only when one client lacks something another has.
 On the map, a group of two or more starts folded as a stack of cards. Press a stack to open it;
 a big group shows five at a time, with the rest in the stack below. **Collapse** folds it again.
 When you select a client, a stack that holds some of its items shows those in front and says how
@@ -52,7 +54,7 @@ many are that client's ("3 of 55"). The Gateway's groups work the same way.
 | What | How to manage it |
 | --- | --- |
 | **Plugins and skills** | Use **+ Add**, or drag an item onto another client. Turn it on or off, choose its scope, or remove a copy in **Details**, where the client supports it. A Claude Code skill can also be off in one project only. A plugin that a project turns on, but that is not installed on this computer, shows as unknown. **Add missing plugins and skills…** fills gaps across clients. |
-| **Marketplaces** | Browse their plugins and skills. **+ Add plugins → On this computer → Add a marketplace…** adds one from a GitHub repository or a folder. **Details → More → Commands…** has update and remove commands to copy. |
+| **Marketplaces** | Browse their plugins and skills. **+ Add → On this computer → Add a marketplace…** adds one from a GitHub repository or a folder. **Details → More → Commands…** has update and remove commands to copy. |
 | **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents; pick a project to see its own files. Kitden only reads these; edit them in your editor. |
 
 A thing has the same switch wherever it shows, with a line that says where it holds ("Claude
@@ -93,8 +95,8 @@ session to load a change.
 
 ## Choose your clients
 
-If you use only some of Claude Code, Codex and Cursor, press **Choose clients…** at the top right
-of the **Overview**, the **Library**, the **Gateway** or **Context**. A client that is not on this
+If you use only some of Claude Code, Codex and Cursor, press **Clients** at the bottom of the left
+bar (while a client is not installed, **Choose clients…** also stands at the top right of each page). A client that is not on this
 computer says **Not installed**. Turn a client off and Kitden stops reading it: it runs none of
 the client's commands, and the client leaves the Overview, the Library, the Gateway, **Let agents
 read this setup** and `kitden scan`. Turn it on and it comes back. Kitden keeps at least one client on.
@@ -142,7 +144,7 @@ through, so you can turn it on again, in Claude Code and in Codex. When the last
 another project than the one picked, its pill says where: **Off in atlas**.
 
 **The limit line.** When skills showed only a name, the line on the bar has a handle. Drag it to
-the right, from 1% up to 4% of the window; a note says what each step gives ("1.4% · all 20 fit ·
+the right, from 1% up to 4% of the window; a note says what each step gives ("1.1% · all 20 fit ·
 about 650 more characters per chat"), and it snaps to the step where every description fits.
 Claude Code's rule can leave more skills with only a name at a larger share (long descriptions in,
 short ones out); the line skips such a step. Let
@@ -175,7 +177,7 @@ skill's description, so your agent sees it too.
 
 ## Add from the catalogs
 
-**+ Add plugins** in Library and **+ Add servers** in Gateway open one catalog: **skills.sh**,
+**+ Add** in Library and **+ Add servers** in Gateway open one catalog: **skills.sh**,
 the **official MCP Registry**, the Claude plugins marketplace, any public GitHub repository you
 add, and what is already **On this computer**. Click a result to preview it, or drag it onto a client
 or the gateway. Skills come from a pinned GitHub commit, plugins use the client's own installer,
@@ -256,7 +258,7 @@ in Terminal. Your settings and secrets are not read or changed, even when you pr
 The demo starts no real clients or MCP servers. The first run downloads Kitden; the demo
 itself stays offline.
 
-1. In **Library → List**, find **superpowers** and press **+ Add** under **Codex**.
+1. In **Library → List**, find **superpowers** and press **+** under **Codex**.
 2. Review and **Apply**. Codex now has a copy in the sample setup.
 3. Open **Changes → Undo** to remove that copy again.
 4. Open **Context**: in the sample's last Claude Code chat, four skills showed only a name.
@@ -364,10 +366,10 @@ these change only in a new major version:
   backups. Secrets are Keychain or keyring items of the service `kitden`.
 - **What Kitden writes in a client:** only that client's own settings, in its own format. The
   gateway entry is named `kitden` and runs `kitden mcp`.
-- **Undo after an update:** `clients.json` and each change record say their format
-  (`"version": 1`), and files from an earlier Kitden, which have none, read the same. A change
-  made by one 1.x version can be undone by a later 1.x while its backup is kept: 30 days, and
-  the newest 100 changes always. `gateway.json` has no format version yet.
+- **Undo after an update:** `gateway.json`, `clients.json` and each change record say their
+  format (`"version": 1`), and files from an earlier Kitden, which have none, read the same. A
+  change made by one 1.x version can be undone by a later 1.x while its backup is kept: 30 days,
+  and the newest 100 changes always.
 
 What may still change in 1.x: the page, its tabs and words; the text `kitden scan` prints; the
 JSON of `kitden scan --json` and `kitden show`, which can get new fields; the other files in

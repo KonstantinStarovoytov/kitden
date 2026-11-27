@@ -154,7 +154,7 @@ def test_codex_own_skills_say_the_true_reason(page, demo):
 def test_after_apply_the_overview_card_says_a_new_chat_shows_it(page, demo):
     # Row 5 (05-P3): the card stayed and still counted as needing attention.
     card = page.locator("[data-card]").filter(has_text="Skill list in Claude Code")
-    card.get_by_role("button", name="Set to 1.1%…").click()
+    card.get_by_role("button", name="Set to 1.1%", exact=True).click()
     page.locator("#dock").get_by_role("button", name="Apply").click()
     expect(page.get_by_role("button", name="Undo")).to_be_visible()
     page.evaluate("location.hash = '#overview'")
