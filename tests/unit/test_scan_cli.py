@@ -7,6 +7,7 @@ import pytest
 from kitden import cli
 from kitden.cli import main
 from kitden.clients import version_cache
+from kitden.clients.claude_code import ACCOUNT_ROW
 from kitden.clients.version_cache import VERSIONS_FILE, cached_version
 from kitden.context.rules import codex_rule
 from kitden.gateways import data_dir
@@ -129,7 +130,7 @@ def test_scan_says_which_skills_the_last_chat_cut(bare, capsys):
         "  not have used them.",
         "    gamma, delta",
         ELSEWHERE,
-        "  On this computer: 1 plugin, 4 skills",
+        "  On this computer: 4 skills",
         "  A chat lists only one project's skills, and Claude Code's own too.",
         "",
     ]
@@ -254,7 +255,7 @@ def test_scan_with_no_chat_anywhere_says_there_is_none(bare, capsys):
     assert lines[1:4] == [
         "  No Claude Code chat yet. Open one chat, and Kitden will show what Claude Code",
         "  sent.",
-        "  On this computer: 1 plugin, 1 skill",
+        "  On this computer: 1 skill",
     ]
     # No chat's number beside it, so nothing to explain.
     assert not [line for line in lines if "its count differs" in line]
@@ -323,8 +324,10 @@ def test_scan_reads_the_servers_kitden_holds_as_show_does(bare, capsys):
 def test_scan_counts_each_kind_in_one_line(home, capsys):
     lines = _summary(home, capsys)
     claude = lines.index("Claude Code (version unknown)")
+    # "plugins" are the ones installed, as the Library and the Overview count them: the row
+    # "Claude account plugins and connectors" stands for the account, not for a plugin (04-C5).
     on = lines.index(
-        "  On this computer: 2 plugins, 3 skills, 4 MCP servers, 1 hook, 5 instruction", claude
+        "  On this computer: 1 plugin, 3 skills, 4 MCP servers, 1 hook, 5 instruction", claude
     )
     assert lines[on + 1] == "  files, 1 marketplace"
     assert set(words.SCAN_KINDS) == {str(kind) for kind in ItemKind}
@@ -434,7 +437,8 @@ def test_scan_explains_the_two_skill_counts_only_beside_a_chat_and_skills(bare, 
 
 def test_scan_words_are_singular_for_one(bare, capsys):
     skill(bare / ".claude/skills", "alpha", "Does alpha.")
-    assert "  On this computer: 1 plugin, 1 skill" in _summary(bare, capsys)
+    # The Claude account row is no plugin: the bare home has none.
+    assert "  On this computer: 1 skill" in _summary(bare, capsys)
 
 
 # The findings line, from the answer `kitden show findings` gives
@@ -516,7 +520,11 @@ def test_scan_counts_a_plugin_once_however_many_projects_set_it(tmp_path):
     inventory = demo_build(home)()
     counts = cli._have_counts(inventory)
     names = {
-        client: {i.name for i in inventory.items if i.client == client and i.kind == "plugin"}
+        client: {
+            i.name
+            for i in inventory.items
+            if i.client == client and i.kind == "plugin" and i.name != ACCOUNT_ROW
+        }
         for client in ("claude_code", "codex")
     }
     assert counts[("codex", "plugin")] == len(names["codex"])

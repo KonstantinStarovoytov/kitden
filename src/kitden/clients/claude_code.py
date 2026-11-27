@@ -72,6 +72,8 @@ NEW_SESSION = "Start a new Claude Code session (or a new Code tab chat) for this
 LIMIT_KEY = "skillListingBudgetFraction"
 RELOAD = "Run /reload-plugins in Claude Code, or start a new session, for this to take effect."
 ACCOUNT_HINT = "Stored in your Claude account. Change it in the Claude app or on claude.ai."
+# The row that stands for what the account keeps; not a plugin of its own.
+ACCOUNT_ROW = "Claude account plugins and connectors"
 # A plugin of the Claude account that the Claude app gives Claude Code (claude_account.py).
 ACCOUNT_PLUGIN_HINT = (
     "The Claude app adds it from your Claude account. Turned off here, it stays in your account: "
@@ -819,7 +821,7 @@ class ClaudeCodeAdapter(ClientAdapter):
             Item(
                 client=CLIENT,
                 kind=ItemKind.PLUGIN,
-                name="Claude account plugins and connectors",
+                name=ACCOUNT_ROW,
                 source=account,
                 scope=Scope.ACCOUNT,
                 enabled=Enabled.UNKNOWN,

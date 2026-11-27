@@ -384,13 +384,16 @@ def _have_counts(inventory: Inventory) -> Counter:
     a skill counts once by name, as the Library lists it: a project's own entry for it, or another
     copy, is the same one (copies get a warning of their own). A plugin's skills count with their
     plugin. Any other item counts once, also when reached twice (a project listed by its path and
-    by a symlink to it)."""
+    by a symlink to it). The row that stands for the Claude account is not a plugin: "plugins"
+    are the ones installed, as the Library and the Overview count them."""
     from kitden.clients.base import from_plugin
+    from kitden.clients.claude_code import ACCOUNT_ROW
 
     seen = {
         (i.client, str(i.kind), i.name if i.kind in (ItemKind.PLUGIN, ItemKind.SKILL) else i.id)
         for i in inventory.items
         if not (i.kind is ItemKind.SKILL and from_plugin(i))
+        and not (i.kind is ItemKind.PLUGIN and i.name == ACCOUNT_ROW)
     }
     return Counter((client, kind) for client, kind, _ in seen)
 

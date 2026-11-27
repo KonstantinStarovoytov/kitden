@@ -96,10 +96,11 @@ def map_clients(inventory, cursor_imports: bool, loads: dict[str, str | None]) -
 
 
 def plugin_skill_words(groups: list[dict]) -> dict[str, str | None]:
-    """Per client, what it loads of the items in `groups`: its plugins and skills ("5 plugins ·
-    62 skills"); with none of those, its hooks ("1 hook"), so a client whose only item is a hook
-    never says it loads nothing; None where it loads none. An item another client's folder brings
-    in counts, since the client loads it."""
+    """Per client, what it loads of the items in `groups`: its plugins and skills that are on
+    ("On: 5 plugins · 62 skills"); with none of those, its hooks ("On: 1 hook"), so a client whose
+    only item is a hook never says it loads nothing; None where it loads none. An item another
+    client's folder brings in counts, since the client loads it. "On" says the set: "plugins"
+    alone means every one installed, on or off (the Overview's Library box, the scan)."""
     kinds = ("plugin", "skill", "hook")
     found: dict[str, dict[str, int]] = {c: dict.fromkeys(kinds, 0) for c in CLIENTS}
     for group in groups:
@@ -113,10 +114,8 @@ def plugin_skill_words(groups: list[dict]) -> dict[str, str | None]:
     def words(n: dict[str, int], shown: tuple[str, ...]) -> str:
         return " · ".join(f"{n[k]} {k}{'' if n[k] == 1 else 's'}" for k in shown if n[k])
 
-    return {
-        client: words(n, ("plugin", "skill")) or words(n, ("hook",)) or None
-        for client, n in found.items()
-    }
+    said = {c: words(n, ("plugin", "skill")) or words(n, ("hook",)) for c, n in found.items()}
+    return {client: f"On: {text}" if text else None for client, text in said.items()}
 
 
 def _present(inventory, project: str | None) -> dict[str, list[Item]]:

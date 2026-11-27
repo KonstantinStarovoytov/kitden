@@ -87,16 +87,18 @@ def test_library_map_clients_say_what_they_load_not_connected(tmp_path):
     answer = _map(build_demo_home(tmp_path, "medium"))
     clients = {c["id"]: (c["name"], c["state"], c["words"]) for c in answer["clients"]}
     assert clients == {
-        "claude_code": ("Claude Code", "on", "1 plugin · 3 skills"),
-        "codex": ("Codex", "on", "1 plugin · 3 skills"),
-        "cursor": ("Cursor", "on", "2 plugins · 7 skills"),
+        "claude_code": ("Claude Code", "on", "On: 1 plugin · 3 skills"),
+        "codex": ("Codex", "on", "On: 1 plugin · 3 skills"),
+        "cursor": ("Cursor", "on", "On: 2 plugins · 7 skills"),
     }
     # The counts are the items drawn with that client on.
     items = [i for g in answer["groups"] for i in g["items"]]
     for client, words in ((c["id"], c["words"]) for c in answer["clients"]):
         loaded = [i["kind"] for i in items if i["by"].get(client) == "on"]
         n = {k: loaded.count(k) for k in ("plugin", "skill")}
-        assert words.startswith(f"{n['plugin']} plugin"), (client, words, n)
+        # Only what is on counts, and the words say so (04-C5): "plugins" alone means every one
+        # installed, as the Overview's Library box and the scan count them.
+        assert words.startswith(f"On: {n['plugin']} plugin"), (client, words, n)
     assert not any("Connected" in c["words"] for c in answer["clients"])
     small = _map(build_demo_home(tmp_path / "small", "small"))
     assert {c["id"]: c["state"] for c in small["clients"]} == {
@@ -105,7 +107,7 @@ def test_library_map_clients_say_what_they_load_not_connected(tmp_path):
         "cursor": "missing",
     }
     assert {c["id"]: c["words"] for c in small["clients"]}["codex"] == "Not installed"
-    assert small["clients"][0]["words"] == "1 plugin · 2 skills"
+    assert small["clients"][0]["words"] == "On: 1 plugin · 2 skills"
 
 
 def test_a_client_that_loads_nothing_says_so_and_cursor_may_go_via_claude_code(tmp_path):
@@ -129,7 +131,7 @@ def test_one_plugin_or_skill_says_it_in_the_singular(tmp_path):
     ]
     assert plugin_skill_words(groups) == {
         "claude_code": None,
-        "codex": "1 plugin · 1 skill",
+        "codex": "On: 1 plugin · 1 skill",
         "cursor": None,
     }
 
@@ -141,8 +143,8 @@ def test_a_client_whose_only_item_is_a_hook_does_not_say_nothing_is_loaded():
         {"items": [{"kind": "hook", "by": {"claude_code": "on", "cursor": "off"}}]},
     ]
     assert plugin_skill_words(groups) == {
-        "claude_code": "2 hooks",
-        "codex": "1 skill",
+        "claude_code": "On: 2 hooks",
+        "codex": "On: 1 skill",
         "cursor": None,
     }
 
