@@ -44,7 +44,7 @@ globalThis.window = { addEventListener: (type, fn) => { heard[type] = fn; } };
 // or a key sets it itself.
 beforeEach(() => { media.matches = false; heard.pointerdown?.({}); });
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
-const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, menuItems, morphSocket, opens, optionAfter, originText, pastTitle, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, foldShownHints, menuItems, morphSocket, opens, optionAfter, originText, pastTitle, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 // details.js builds the switch and loads with the same stand-in.
 const { switchNode } = await import('../../src/kitden/web/static/js/details.js');
@@ -531,9 +531,16 @@ test('a hint seen on an earlier visit folds behind its "i": the words show on ho
     setHint('New words.');
     assert.equal(line.classList.contains('folded'), false);
     assert.ok(JSON.parse(stored['kitden-hints-seen']).includes('New words.'));
-    // During this visit it stays open, even drawn again.
+    // Drawn again on the same place it stays open; after another place, coming back shows only
+    // the "i" (Lantern on #239).
     setHint('New words.');
     assert.equal(line.classList.contains('folded'), false);
+    setHint('');
+    setHint('New words.');
+    assert.equal(line.classList.contains('folded'), false);
+    foldShownHints();
+    setHint('New words.');
+    assert.equal(line.classList.contains('folded'), true);
     // One seen on an earlier visit folds: the "i" is a button that names the words.
     setHint('Seen before.');
     assert.equal(line.classList.contains('folded'), true);

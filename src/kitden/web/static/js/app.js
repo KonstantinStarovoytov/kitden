@@ -16,7 +16,7 @@ import { startTips } from "./tips.js";
 import { drawChip } from "./map-page.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, holdPanel, initPanel, isPanelOpen } from "./panel.js";
-import { callout, demoTag, GONE_PROJECT, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
+import { callout, demoTag, foldShownHints, GONE_PROJECT, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
 import {
   arrival, busy, current, data, followHash, freshness, go, isOldAddress, loadShared, onIdle, parseHash, projectGone, readForSearch, readLibraryMap, reload, searchPlace, setRenderer, setState,
   setSwitcher, state, switchProject,
@@ -61,7 +61,9 @@ function renderPlace() {
   const content = document.getElementById("content");
   const scrolled = samePlace && content ? content.scrollTop : 0;
   main.replaceChildren();
-  // A page sets its own hint line while it draws; none inherits the last page's.
+  // A page sets its own hint line while it draws; none inherits the last page's. A hint shown on
+  // the place left folds behind its "i" from now on.
+  if (!samePlace) foldShownHints();
   setHint("");
   let found = null;
   // `again`: the same place draws again, so a page may keep what it drew (the Gateway's map).

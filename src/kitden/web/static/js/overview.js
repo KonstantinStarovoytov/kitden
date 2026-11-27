@@ -563,11 +563,12 @@ function noteNode(group) {
   return node;
 }
 
-// The Library row a note names: the row that holds one of its note's items of that name. A note
-// about several names (unknown on/off state) opens each name's own row.
+// The Library row a note names: the row that holds one of its note's items of that name and kind.
+// A note about several names (unknown on/off state) opens each name's own row.
 export function noteItemRow(group, rows) {
   const { items, names } = group.first;
-  const mine = items.filter((_, i) => names[i] === group.name);
+  const kinds = group.first.kinds || [];
+  const mine = items.filter((_, i) => names[i] === group.name && (kinds[i] || "") === (group.kind || ""));
   return rows.find((r) => Object.values(r.cells).some((cell) => (cell.items || []).some((id) => mine.includes(id)))) || null;
 }
 

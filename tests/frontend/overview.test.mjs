@@ -556,6 +556,15 @@ test('a note opens its item, as before', () => {
   assert.equal(noteItemRow(second, rows.slice(0, 1)), null);
   assert.deepEqual(targetSel({ view: 'map', kind: 'skill', name: 'tidy' }), { kind: 'skill', name: 'tidy' });
   assert.equal(noteSentence(first), 'a may be on or off; Kitden cannot read which.');
+  // Lantern on #239: one note about a skill and a server of one name opens each one's own row.
+  const both = { type: 'unknown_state', names: ['sentry', 'sentry'], kinds: ['skill', 'mcp_server'], items: ['s', 'm'], clients: ['codex'], severity: 'info' };
+  const twins = [
+    { key: 'server', kind: 'mcp_server', name: 'sentry', lookup: 'sentry', cells: { codex: { items: ['m'] } } },
+    { key: 'skill', kind: 'skill', name: 'sentry', lookup: 'sentry', cells: { codex: { items: ['s'] } } },
+  ];
+  const [skillNote, serverNote] = noteGroups([both]);
+  assert.equal(noteItemRow(skillNote, twins).key, 'skill');
+  assert.equal(noteItemRow(serverNote, twins).key, 'server');
 });
 
 test('notes are grouped by item, each with its clients', () => {

@@ -263,9 +263,10 @@ export function scopeBar(folder, count) {
 }
 
 // The line at the bottom of the page (`.hint-line`, found by its id): an info icon and a few
-// words. The words change at once; empty words hide the line. A hint shows its words on the first
-// visit that draws it, then stays behind its "i" (`folded`): a button whose hover and focus show
-// the words, and whose name is the words for a screen reader. This browser keeps the hints seen.
+// words. The words change at once; empty words hide the line. A hint shows its words the first
+// time a place draws it (drawn again there it stays open), then stays behind its "i"
+// (`folded`): a button whose hover and focus show the words, and whose name is the words for a
+// screen reader. This browser keeps the hints seen.
 const SEEN_HINTS = "kitden-hints-seen";
 const openNow = new Set();
 function seenHints() {
@@ -283,6 +284,10 @@ function foldsNow(text) {
   openNow.add(text);
   try { localStorage.setItem(SEEN_HINTS, JSON.stringify([...seen, text].slice(-40))); } catch { /* private window */ }
   return false;
+}
+// Another place opens: the hints shown open so far fold from now on (app.js, on a place change).
+export function foldShownHints() {
+  openNow.clear();
 }
 export function setHint(text, actions = []) {
   const line = document.getElementById("hint");
