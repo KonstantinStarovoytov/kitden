@@ -330,6 +330,9 @@ def copy_choices(
         if all(other["remove"] for _, other in others):
             gone = [item for item, _ in others]
             costs = _costs(inventory, gone, [o for _, o in others], project)
+            # A copy inside a removed folder (a nested skill of the same name) would go with it.
+            if same[index].kind is ItemKind.SKILL and _inside(same[index], gone):
+                costs.add(client)
             lost |= costs
             row["keep"] = None if costs else [other["remove"] for _, other in others]
         else:
@@ -352,7 +355,6 @@ def _costs(inventory, gone: list[Item], rows: list[dict], project: str | None) -
     lose = {c for row in rows for c in row["also"]}
     if not gone or gone[0].kind is not ItemKind.SKILL:
         return lose
-    paths = {os.path.realpath(str(i.source.path)) for i in gone if i.source.path}
     name = gone[0].name
     kept = {
         i.client
@@ -361,7 +363,8 @@ def _costs(inventory, gone: list[Item], rows: list[dict], project: str | None) -
         and i.name == name
         and i.enabled is not Enabled.OFF
         and i.source.path is not None
-        and os.path.realpath(i.source.path) not in paths
+        # A copy inside a removed folder (a nested skill of the same name) goes too.
+        and not _inside(i, gone)
         and (i.scope in (Scope.USER, Scope.PLUGIN) or (project and i.project == project))
     }
     # A skill folder can hold other skills (Codex and Cursor read sub-folders): they go with it.
@@ -372,6 +375,13 @@ def _costs(inventory, gone: list[Item], rows: list[dict], project: str | None) -
         if lost_inside(inventory, os.path.dirname(str(item.source.path)), c, item.name)
     }
     return (lose - kept) | inside
+
+
+def _inside(item: Item, gone: list[Item]) -> bool:
+    """The skill's file sits inside the folder of one of the skills `gone`."""
+    path = os.path.realpath(str(item.source.path))
+    folders = {os.path.dirname(os.path.realpath(str(i.source.path))) for i in gone}
+    return any(path.startswith(f"{folder}/") for folder in folders)
 
 
 def _copy(inventory, item: Item, client: str, home: Path | None) -> dict:

@@ -106,3 +106,20 @@ def test_a_copy_whose_folder_holds_another_skill_is_not_removed_for_keep(home):
     by_where = {copy["where"]: copy for copy in item["copies"]["codex"]["list"]}
     assert by_where["~/.agents/skills"]["keep"] is None
     assert by_where["~/.codex/skills"]["keep"] is not None
+
+
+def test_a_copy_inside_another_copys_folder_is_never_the_one_kept(tmp_path):
+    """Codex finds solo and, inside its folder, another solo (Codex reads sub-folders). Keeping
+    the inner one would remove the outer folder, and the inner with it: not offered."""
+    from kitden.clients.cursor import REACTIVE_KEY
+
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
+    write_cursor_fixture_state(home, {REACTIVE_KEY: {"thirdPartyExtensibilityEnabled": False}})
+    _skill(home, ".codex/skills", "solo")
+    _skill(home, ".codex/skills/solo/nested", "solo")
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library_map(build_inventory(home), adapters, None)
+    item = next(i for g in answer["groups"] for i in g["items"] if i["name"] == "solo")
+    by_where = {copy["where"]: copy for copy in item["copies"]["codex"]["list"]}
+    assert by_where["~/.codex/skills/solo/nested"]["keep"] is None
+    assert by_where["~/.codex/skills"]["keep"] is not None
