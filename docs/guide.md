@@ -12,9 +12,9 @@ The page opens on **Overview**. Its first line says how many things need your at
 which clients. Under it stand cards in two groups:
 
 - **Needs attention:** something that costs you now. The most costly comes first: a skill list
-  that did not fit in the last chat, then a change that came undone, then a file Kitden could
-  not read (its **Copy path** gives the file's path), then a plugin or skill a client loads more
-  than once.
+  that did not fit in the last chat, then a change that came undone, then other problems such as
+  a file Kitden could not read (its **Copy path** gives the file's path), and last a plugin or
+  skill a client loads more than once.
 - **Can improve:** something you may want. Up to three servers outside the gateway get a **Move
   in…** card ("In the gateway you can turn each of its tools on or off."), and one card stands for
   the rest; a server outside the gateway is a normal setup, not a fault.
