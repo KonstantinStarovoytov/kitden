@@ -206,35 +206,46 @@ def _warning(text: str, client: str, fix: str, fix_action: str | None) -> dict:
     }
 
 
-def _cross_client_fix(client: str, owners: list[str], kind: ItemKind, n: int) -> str:
-    """Some copies are the client's own, others load from another client's folder: name each."""
+def _cross_client_fix(client: str, copies: list[Item], kind: ItemKind, readers: dict) -> str:
+    """Some copies are the client's own, others load from another client's folder or a folder
+    clients share: name each, and the clients that lose a copy when it is removed (`readers`: the
+    clients that load each file)."""
     own = CLIENT_WORDS.get(client, client)
-    names = ["its own"] if client in owners else []
-    names += [
-        "the shared folder's" if o == "shared" else f"{CLIENT_WORDS.get(o, o)}'s"
-        for o in owners
-        if o != client
-    ]
-    count = "Two" if n == 2 else str(n)
-    said = f"{count} copies load in {own}: {join_words(names)}."
+
+    def words(clients: list[str]) -> str:
+        return join_words([CLIENT_WORDS.get(c, c) for c in clients])
+
+    names, losing = [], []
+    for copy in copies:
+        owner = copy.source.owner_client
+        if owner == client:
+            names.append("its own")
+            continue
+        also = [c for c in CLIENTS if c != client and c in readers.get(copy.source.path, ())]
+        if owner in CLIENTS and owner not in also:
+            also.insert(0, owner)
+        if owner == "shared":
+            names.append(f"the one shared with {words(also)}" if also else "the shared folder's")
+        else:
+            names.append(f"{CLIENT_WORDS.get(owner, owner)}'s")
+        losing += [c for c in also if c not in losing]
+    names = list(dict.fromkeys(names))
+    n = len(copies)
+    said = f"{'Two' if n == 2 else n} copies load in {own}: {join_words(names)}."
     if client == "cursor" and kind is ItemKind.PLUGIN:
-        via = next(o for o in owners if o != client)
+        via = next(c.source.owner_client for c in copies if c.source.owner_client != client)
         other = CLIENT_WORDS.get(via, via)
         return (
             f"{said} To keep one: remove it in Cursor "
             "(Customize → Plugins), or turn off Include Third-Party Plugins in Cursor Settings. "
             f"Turning it off in {other} also turns it off for {other}."
         )
-    if n == 2 and len(names) == 2:
-        other = names[1].removesuffix("'s")
-        return f"{said} Keep one; removing {other}'s copy also removes it for {other}."
-    return (
-        f"{said} Keep one; removing a copy in another client's folder also removes it for that "
-        "client."
-    )
+    if not losing:
+        return f"{said} Keep one."
+    return f"{said} Keep one; removing another client's copy also removes it for {words(losing)}."
 
 
-def _flag(finding, item: Item, copies: list[Item]) -> dict | None:
+def _flag(finding, item: Item, copies: list[Item], readers: dict) -> dict | None:
     """A short flag for the row; warnings also carry the fix in words and the action."""
     if finding.type is FindingType.DUPLICATE_IN_CLIENT:
         n = len(copies)
@@ -242,7 +253,7 @@ def _flag(finding, item: Item, copies: list[Item]) -> dict | None:
         owners = list(dict.fromkeys(c.source.owner_client for c in copies))
         others = [o for o in owners if o != finding.client]
         if others:
-            fix = _cross_client_fix(finding.client, owners, item.kind, n)
+            fix = _cross_client_fix(finding.client, copies, item.kind, readers)
             flag = _warning(text, finding.client, fix, None)
             return {**flag, "via": others[0]}
         fix, action = DUPLICATE_FIXES.get(item.kind, ("Remove one copy to keep the other.", None))
@@ -334,11 +345,16 @@ def load_map(inventory, project: str | None) -> list[Row]:
     item_rows = {
         item_id: row for row in rows.values() for c in row.cells.values() for item_id in c.items
     }
+    # The clients that load each file, so a copy's removal names who else loses it.
+    readers: dict[str, set[str]] = {}
+    for i in inventory.items:
+        if i.source.path:
+            readers.setdefault(i.source.path, set()).add(i.client)
     for finding in find_findings(inventory, project) + find_bypasses(inventory, project):
         for item_id in finding.items:
             row, item = item_rows.get(item_id), items_by_id.get(item_id)
             copies = [items_by_id[i] for i in finding.items if i in items_by_id]
-            flag = _flag(finding, item, copies) if row and item else None
+            flag = _flag(finding, item, copies, readers) if row and item else None
             if flag and row and flag not in row.flags:
                 row.flags.append(flag)
     order = {ItemKind.MCP_SERVER: 0, ItemKind.PLUGIN: 1, ItemKind.SKILL: 2, ItemKind.HOOK: 3}
