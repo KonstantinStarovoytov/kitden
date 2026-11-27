@@ -22,6 +22,7 @@ from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, found_columns, is_dir
 from kitden.clients.claude_account import FROM_APP
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
+from kitden.views.effective import effective_view
 from kitden.views.findings import group_of
 from kitden.views.instructions_map import instructions_map
 from kitden.views.library_map import ACCOUNT, cursor_imports, library_map
@@ -41,6 +42,7 @@ from kitden.views.words import (
     ORIGIN_WORDS,
     PROJECT_TRUST,
     ROUTE_WORDS,
+    SKILL_STATE_WORDS,
     STATE_WORDS,
 )
 
@@ -562,6 +564,7 @@ def _skill_rows(
     no_place: dict[str, str] | None = None,
     in_project: bool = False,
     project_rows: list[dict] | tuple = (),
+    name_only: set[str] | frozenset = frozenset(),
 ) -> Built:
     """Every skill in the skill catalog, then the picked project's own skills the catalog has
     no row of that name for (`project_rows`), plus skills the load map has that neither has.
@@ -591,6 +594,10 @@ def _skill_rows(
             for c in found
         }
         _not_this_skill(cells, skill, items, copies)
+        # A skill set to Name only says so, as its Details do (`name_only`: those items).
+        for cell in cells.values():
+            if cell["state"] == "on" and name_only & set(cell["items"]):
+                cell["word"] = SKILL_STATE_WORDS["name-only"]
         built = _row(
             key,
             "skill",
@@ -861,6 +868,12 @@ def _tables(inventory, adapters, project: str | None, *, hidden: frozenset[str])
             _no_skill_place(adapters, project),
             in_project=project is not None,
             project_rows=project_skills(inventory, adapters, project) if project else [],
+            name_only={
+                i.id
+                for c in found
+                for i in effective_view(inventory, c, project).items
+                if i.kind is ItemKind.SKILL and i.skill_state == "name-only"
+            },
         ),
         # Kitden adds no hooks, and reads none of Codex's: a hook's dash says which.
         "hook": _map_rows(map_rows, "hook", found, _hook_why),

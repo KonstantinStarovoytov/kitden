@@ -178,6 +178,27 @@ export function rowsAbout(rows, { items = [], server = null } = {}) {
     return (body.targets || []).some((t) => ids.has(t.item)) || (server !== null && gateway && (body.params || {}).server === server);
   });
 }
+// Whether a change in `rows` touches one client's cell of a thing (the List's cells, the one rule):
+// a change to one of the thing's items (`items`, every client's) that reaches `client` (it targets
+// that client or the cell's own items, `own`, or one of its steps or its review reaches the client),
+// or an add of the
+// thing (`add`: `{ skill }` or `{ plugin }`) to that client.
+export function cellWaits(rows, { items = [], own = [], add = null, client }) {
+  const ids = new Set([...items, ...own]);
+  return rows.some((row) => {
+    const body = row.body || {};
+    const targets = body.targets || [];
+    if (add && /\.install$/.test(body.action || "")) {
+      const params = body.params || {};
+      const same = add.skill ? params.skill === add.skill : params.plugin === add.plugin;
+      return same && targets.some((t) => t.client === client);
+    }
+    if (!targets.some((t) => ids.has(t.item))) return false;
+    const part = row.part || {};
+    const reaches = (part.steps || []).some((step) => (step.reaches || []).includes(client)) || (part.after || []).some((one) => one.client === client);
+    return targets.some((t) => t.client === client || own.includes(t.item)) || reaches;
+  });
+}
 export const IN_PREVIEW_MARK = `\u00a0· ${WAITING}`;
 // A removal: a map says Leaving for it, not "in preview".
 export const LEAVES = /\.remove$/;

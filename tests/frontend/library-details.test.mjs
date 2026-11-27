@@ -326,15 +326,24 @@ test("an inside item follows its plugin and offers the plugin's own switches, as
   assert.deepEqual(here.actions.map((a) => a.label), ['Turn off for all projects…', 'Turn off in this project…']);
 });
 
-test("a skill with its own state says it as a fact after State", async () => {
+test("a skill with its own state says it as its State, not On", async () => {
   await reset();
   const skill = MEDIUM.groups[1].items[0];
-  const said = (state) => facts(details.skillCard({ ...skill, skill_state: state }, c())).filter(([label]) => label === 'Loads');
-  assert.deepEqual(said('name-only'), [['Loads', 'Name only']]);
-  assert.deepEqual(said('user-invocable-only'), [['Loads', 'Only when you ask']]);
-  assert.deepEqual(said('only-asked'), [['Loads', 'Only when you ask']]);
-  assert.deepEqual(said(undefined), []);
-  assert.deepEqual(facts(details.skillCard({ ...skill, skill_state: 'name-only' }, c())).map(([label]) => label).slice(0, 3), ['Plugin', 'State', 'Loads']);
+  const said = (now) => facts(details.skillCard({ ...skill, can: { ...skill.can, now } }, c()))[1];
+  assert.deepEqual(said({ claude_code: 'name-only', codex: 'on' }), ['State', 'On in Codex, Cursor · Name only in Claude Code']);
+  assert.deepEqual(said({ claude_code: 'name-only' }), ['State', 'On in Codex, Cursor · Name only in Claude Code']);
+  const alone = { ...skill, by: { claude_code: 'on' }, can: { ...skill.can, now: { claude_code: 'name-only' } } };
+  assert.deepEqual(facts(details.skillCard(alone, c()))[1], ['State', 'Name only']);
+  assert.ok(!facts(details.skillCard(alone, c())).some(([label]) => label === 'Loads'));
+});
+
+test("with All projects, a project whose own settings turn it off is named in State and in one sentence", async () => {
+  await reset();
+  const skill = { ...MEDIUM.groups[1].items[0], by: { claude_code: 'on' }, through: {}, off_folders: { claude_code: ['atlas'] } };
+  const card = details.skillCard(skill, c());
+  assert.deepEqual(facts(card)[1], ['State', 'On · Off in atlas']);
+  assert.match(card.why, /^Claude Code loads this skill in every project except atlas: atlas's own settings turn it off there\./);
+  assert.doesNotMatch(card.why, /in every project\./);
 });
 
 test("a skill's switch for all projects is Context's: one per client that can, a press adds one skill.rule row", async () => {
@@ -343,7 +352,7 @@ test("a skill's switch for all projects is Context's: one per client that can, a
   const card = details.skillCard(skill, c());
   assert.deepEqual(facts(card), [['Plugin', 'None, a skill on its own'], ['State', 'On'], ['Comes from', 'All projects'], ['Source', 'Your skills'], ['Clients', '3 clients']]);
   assert.deepEqual(labels(card), [['Turn off in some projects…', false]]);
-  assert.match(card.why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\.$/);
+  assert.match(card.why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\. To keep its description out of the list, add disable-model-invocation: true to its SKILL\.md; then the agent uses it only when you ask\.$/);
   assert.match(texts(card.list).join(' '), /Claude Code · all projects On Name only Off Codex · all projects On Off Codex has no Name only setting\./);
   // The map × still turns it off with the same row.
   assert.deepEqual(offBodies(skill), [
@@ -559,7 +568,7 @@ test('a skill rule is queued for its own state only', async () => {
 test('the no-switch notes say only what applies', () => {
   const skill = MEDIUM.groups[1].items[0];
   // Codex has it (a skill of all projects): its note; Cursor only through Claude Code but on: its note.
-  assert.match(details.skillCard(skill, c()).why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\.$/);
+  assert.match(details.skillCard(skill, c()).why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\. To keep its description out of the list, add disable-model-invocation: true to its SKILL\.md; then the agent uses it only when you ask\.$/);
   // Even when no project can take the rule, Codex still has no switch for one.
   const closed = details.context({ ...MEDIUM, skill_rules: { projects: {} } });
   assert.match(details.skillCard(skill, closed).why, /Codex has no switch for one project; turn it off for all projects\./);
@@ -983,4 +992,18 @@ test('a skill offers Add to the clients that lack it, Cursor too, as a drag and 
 test("Cursor's own plugin says where it is turned off or removed, on its own Details", () => {
   const ui = plugin('p9', 'ui-kit', { by: { cursor: 'on' }, items: { cursor: ['cu-ui'] }, can: { add: [], off: [], remove: [] } });
   assert.match(details.pluginCard(ui, c()).why, /Remove it in Cursor: Customize → Plugins\.$/);
+});
+
+test('Keep this one… shows only where the server offers it, and a copy with none says why', () => {
+  const copies = { cursor: { say: 'Cursor loads it twice:', list: [
+    { where: '~/.cursor/skills', owner: 'cursor', remove: 'cu-duo', also: [], keep: null },
+    { where: '~/.claude/skills', owner: 'claude_code', remove: 'cc-duo', also: ['claude_code'], keep: ['cu-duo'] },
+  ] } };
+  const duo = own('s6', 'duo', 'skill', { by: { claude_code: 'on', cursor: 'on' }, items: { claude_code: ['cc-duo'], cursor: ['cu-duo'] }, copies });
+  const list = details.skillCard(duo, c()).list;
+  assert.deepEqual(walk(list).filter((n) => /^keep:/.test(n.dataset.focus || '')).map((n) => n.dataset.focus), ['keep:cursor:1']);
+  const trio = own('s7', 'trio', 'skill', { by: { cursor: 'on' }, items: { cursor: ['cu-trio'] }, copies: { cursor: { ...copies.cursor, list: copies.cursor.list.map((one) => ({ ...one, keep: null })), why: 'Cursor also reads them.' } } });
+  const box = details.skillCard(trio, c()).list;
+  assert.equal(walk(box).filter((n) => /^keep:/.test(n.dataset.focus || '')).length, 0);
+  assert.ok(texts(box).includes('Cursor also reads them.'));
 });

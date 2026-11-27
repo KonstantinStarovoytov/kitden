@@ -1935,3 +1935,15 @@ def test_codex_own_skills_say_they_are_built_into_codex(home):
         words.GROUP_WHY_BUILT_IN_CODEX,
     )
     assert "Kitden did not find" not in str(cx)
+
+
+def test_a_codex_copy_only_one_project_has_names_its_folder(tmp_path):
+    from kitden.demo import build_demo_home, demo_build
+
+    home = build_demo_home(tmp_path, "medium")
+    answer = context_view(demo_build(home)(), home, home / ".codex", None, {})
+    codex = next(c for c in answer["clients"] if c["client"] == "codex")
+    api = next(s for s in codex["skills"] if s["name"] == "api-style")
+    assert api["copy_in"] == "atlas"
+    review = next(s for s in codex["skills"] if s["name"] == "code-review")
+    assert review["copy_in"] is None

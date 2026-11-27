@@ -214,7 +214,8 @@ def test_duplicate_cards_are_in_name_order_then_client_order():
     from kitden.views.overview import _duplicates
 
     def item(id, kind, name):
-        return SimpleNamespace(id=id, kind=kind, name=name)
+        source = SimpleNamespace(path=None, owner_client=None)
+        return SimpleNamespace(id=id, kind=kind, name=name, source=source, actions=(), client="")
 
     items = [
         item("z", ItemKind.SKILL, "zeta"),

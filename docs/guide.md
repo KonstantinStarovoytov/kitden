@@ -23,7 +23,11 @@ Each card has one button. Most add a change to the preview, which you review and
 open the page where you fix it. When Context suggests a limit, the skill list card's button adds
 that limit, and its line says what it costs. **Keep one…** on a copies card opens the item in the
 Library with its **Details**, which list each copy with its folder; **Keep this one…** beside a
-copy removes the others. A card leaves once its change is applied, and comes back if you undo it.
+copy removes the others. It shows only where every client still has the item afterwards: keeping
+Cursor's own copy would delete Claude Code's folder, so only Claude Code's copy has the button.
+Where no copy can stay alone, the card has no button and says why: Cursor also reads Claude
+Code's and Codex's skill folders; turn off **Include Third-Party Plugins, Skills, and Other
+Configs** in Cursor Settings → Agents → Third-Party Imports to load each skill once. A card leaves once its change is applied, and comes back if you undo it.
 The skill list card moves to **Can improve** instead: it says the limit is set and that a new chat
 shows the new list. With no limit to suggest, its line gives the reason Context gives.
 Four or more cards of one kind fold into one row ("35 skills load more than once"); **Show…**
@@ -58,9 +62,18 @@ off in this project…** or **Follow all projects…**. Where a client has no sw
 it would be says why: Codex has no **Name only**, Cursor has no switch for one skill (add
 `disable-model-invocation: true` to its `SKILL.md` to keep its description out), and hooks are
 only shown. In the Library's List, an empty cell with a reason shows a small **?**; point at it.
+A skill set to **Name only** says **Name only** in the List and in its **Details**, not **On**.
+With **All projects** picked, a state that a project's own settings change names that project:
+**On · Off in atlas**, and "Claude Code loads this skill in every project except atlas". A Codex
+skill that only one project has has one control, for that copy: **Turn off this copy in Codex…**
+in the Library, and "Codex · this copy in atlas" on Context.
+
+On the Library map, point at a link: its **×** removes a plugin from that client, or turns a skill
+off there, and its hover says which.
 
 When a client loads one plugin or skill more than once, its row counts the copies ("Cursor loads
-it 3 times"), the same number as the Overview's card.
+it 3 times"), the same number as the Overview's card. Removing one copy says how many stay ("Cursor:
+Loads twice").
 
 **From your Claude account** holds the plugins you or your organization turned on for your Claude
 account, which the Claude app gives to Claude Code. **Turn off** changes Claude Code's own
@@ -72,7 +85,10 @@ A Codex server with `enabled = false` shows on the **Gateway** as **Off in Codex
 in Codex for all projects…** in its **Details**.
 
 The preview names the clients and projects affected. While a change waits in the preview, every
-row and card that shows the thing says **in preview** with a dashed ring. Start a new client
+row and card that shows the thing says **in preview** with a dashed ring: a switch, a removal, an
+add or a move into the gateway, in each client's cell the change reaches (Cursor's too, when it
+gets a plugin through Claude Code). On **Context**, what the preview adds to a client waits under
+**Added · in preview**. Start a new client
 session to load a change.
 
 ## Choose your clients
@@ -117,11 +133,13 @@ many showed only a name. The groups you can turn off come first. A plugin's head
 off** switch; the bar and the estimate count it at once, before you apply it. A group without a
 switch says why when you open it.
 
-**A skill's Details** show its description, with the part the agent did not get in grey. For
-Claude Code they also say how often you used the skill and when you last did, so you can tell which
-ones you do not use. The switch there is the Library's: **On**, **Name only** (Claude Code) or
+**A skill's Details** are the Library's own, with the same actions in the same order, and Context
+adds its facts: the size, the description, with the part the agent did not get in grey, and for
+Claude Code how often you used the skill and when you last did, so you can tell which ones you do
+not use. The switch there is the Library's: **On**, **Name only** (Claude Code) or
 **Off**. A skill of a plugin follows its plugin. A skill you turned off stays in its group, struck
-through, so you can turn it on again, in Claude Code and in Codex.
+through, so you can turn it on again, in Claude Code and in Codex. When the last chat was in
+another project than the one picked, its pill says where: **Off in atlas**.
 
 **The limit line.** When skills showed only a name, the line on the bar has a handle. Drag it to
 the right, from 1% up to 4% of the window; a note says what each step gives ("1.4% · all 20 fit ·

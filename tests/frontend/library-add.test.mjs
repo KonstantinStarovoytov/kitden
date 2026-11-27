@@ -233,7 +233,7 @@ async function done() {
 
 test('the map hint says the decided words', () => {
   showMap();
-  assert.equal(hintLine.children.at(-1).textContent, 'Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details');
+  assert.equal(hintLine.children.at(-1).textContent, 'Point at a link: its × removes a plugin from that client, or turns a skill off there · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details');
 });
 
 test('+ Add opens Add a plugin or skill; the pill filters Plugins and Skills', async () => {

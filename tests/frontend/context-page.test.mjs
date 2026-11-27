@@ -1133,6 +1133,12 @@ test('a Codex skill that is off shows Off and offers On, and says it has no Name
   assert.deepEqual(switches.map((n) => [text(n), n.getAttribute('aria-pressed')]), [['On', 'false'], ['Off', 'true']]);
   assert.ok(text(drawer).includes('Codex · all projects'));
   assert.ok(text(drawer).includes('Codex has no Name only setting.'));
+  // A copy only one project has: its switch names that copy, never all projects.
+  show(answer(CLAUDE, { ...CODEX, skills: [skill('api', 300, 0, { copy_in: 'atlas', switch: ['on', 'off'] })] }, CURSOR));
+  await fire(pillOf('api'), 'click');
+  assert.ok(text(drawer).includes('Codex · this copy in atlas'));
+  assert.ok(!text(drawer).includes('Codex · all projects'));
+  show(answer(CLAUDE, { ...CODEX, skills: [skill('lint', 300, 0, { state: 'off', switch: ['on', 'off'] }), skill('fmt', 200, 0, { switch: ['on', 'off'] })] }, CURSOR));
   await fire(pillOf('fmt'), 'click');
   switches = walk(drawer).filter((n) => n.dataset && n.dataset.state);
   assert.deepEqual(switches.map(text), ['On', 'Off']);
@@ -1230,7 +1236,8 @@ test('a skill that is off stands under Turned off, and its Details turn it on ag
   const late = skill('beta', 1990, 0, { state: 'off' });
   show(answer({ ...TIGHT, skills: [TIGHT.skills[0], late, TIGHT.skills[2], gone] }, CODEX, CURSOR));
   const [off] = byClass(main, 'ctx-off');
-  assert.equal(text(byClass(off, 'ctx-off-head')[0]), 'Off');
+  // The last chat was in a, not the picked scope: the state is a's.
+  assert.equal(text(byClass(off, 'ctx-off-head')[0]), 'Off in a');
   // Off now goes there also where the page shows the last chat's list, which still held beta.
   assert.deepEqual(pills(off).map((p) => p.dataset.skill), ['beta', 'dataviz']);
   assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha'], ['gamma']]);
@@ -1556,7 +1563,7 @@ test('while the plugin\'s switch waits, all of its skills go off together, and i
   syncTray();
   assert.equal(buttonIn(row, 'Turn off plug').getAttribute('aria-pressed'), 'true');
   // An off plugin waits in one place too, with one way back.
-  const off = byClass(shelf('Off'), 'ctx-offplug')[0];
+  const off = byClass(shelf('Off in a'), 'ctx-offplug')[0];
   assert.equal(text(byClass(off, 'ctx-offline')[0]), 'plug2 · 1 skill');
   assert.ok(buttonIn(off, 'Turn on plug2'));
 });
@@ -1680,4 +1687,35 @@ test("the Library's link opens Context on the group, opened and focused", async 
   assert.equal(toggleOf('own').getAttribute('aria-expanded'), 'false');
   assert.equal(headOf('plugin:plug@m').classList.contains('arrive'), true);
   assert.equal(globalThis.document.activeElement, toggleOf('plugin:plug@m'));
+});
+
+test('a plugin the preview adds to a client shows its skills under Added · in preview', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'codex' };
+  const plugin = { kind: 'plugin', name: 'kit', plugin: 'kit@m', items: {}, inside: { skills: ['draw', 'plan'] } };
+  Object.assign(data, { libraryMap: { groups: [{ items: [plugin] }] } });
+  data.scope.libraryMap = state.project;
+  tray.rows = [{ key: 'add-kit', body: { action: 'plugin.install', targets: [{ client: 'codex' }], params: { plugin: 'kit@m' } }, part: {} }];
+  try {
+    show(answer(CLAUDE, CODEX, CURSOR));
+    const added = byClass(main, 'ctx-off').find((n) => n.getAttribute('aria-label') === 'Added · in preview');
+    assert.deepEqual(byClass(added, 'ctx-pill').map(text), ['kit:draw', 'kit:plan']);
+  } finally {
+    tray.rows = [];
+    data.libraryMap = null;
+  }
+});
+
+test("a skill added to a folder another client reads shows under that client's Added too", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'cursor' };
+  const steps = [{ client: 'codex', reaches: ['codex', 'cursor'] }];
+  tray.rows = [{ key: 'add-tidy', body: { action: 'skill.install', targets: [{ client: 'codex' }], params: { skill: 'tidy@m' } }, part: { steps } }];
+  try {
+    show(answer(CLAUDE, CODEX, CURSOR));
+    const added = byClass(main, 'ctx-off').find((n) => n.getAttribute('aria-label') === 'Added · in preview');
+    assert.deepEqual(byClass(added, 'ctx-pill').map(text), ['tidy']);
+  } finally {
+    tray.rows = [];
+  }
 });

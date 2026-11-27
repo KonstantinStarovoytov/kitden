@@ -1588,11 +1588,13 @@ function selectedRow(rows, byId) {
 
 const cell = (className, text) => gridCell("gridcell", className, text);
 
-// A change to a server in the gateway, or to one of its tools, waits in the tray: the List's row
-// marks it as the map's card does, with the dashed dot and "in preview" (tray.js rowsAbout). The
-// List shows no tray rows, so it is marked in place when the tray changes.
+// A change to a server in the gateway, or to one of its tools, or a move of a server outside it
+// (`data-items`, its entries), waits in the tray: the List's row marks it as the map's card does,
+// with the dashed dot and "in preview" (tray.js rowsAbout). The List shows no tray rows, so it is
+// marked in place when the tray changes.
 function markServer(name) {
-  const waits = rowsAbout(markedRows(), { server: name.dataset.server }).length > 0;
+  const items = (name.dataset.items || "").split(" ").filter(Boolean);
+  const waits = rowsAbout(markedRows(), { server: name.dataset.server || null, items }).length > 0;
   const dot = name.querySelector(":scope > .tg-dot");
   if (dot) dot.classList.toggle("pv", waits);
   const tag = name.querySelector(":scope > .row-wait");
@@ -1600,7 +1602,7 @@ function markServer(name) {
   if (!waits && tag) tag.remove();
 }
 onTray(() => {
-  for (const name of document.querySelectorAll("#main .tg-row [data-server]")) markServer(name);
+  for (const name of document.querySelectorAll("#main .tg-row [data-server], #main .tg-row [data-items]")) markServer(name);
 });
 
 // One row: a fold mark where it folds, what it is (a client's tile, a gateway's mark, the dot of a
@@ -1626,10 +1628,9 @@ function listRow(row, block, { current, selected, view, press }) {
   if (accent) name.append(el("span", "tag", accent));
   if (row.kind === "tool" && row.tag) name.append(el("span", "hint", row.tag));
   if (row.meta) name.append(el("span", "meta", row.meta));
-  if (row.kind === "held") {
-    name.dataset.server = row.name;
-    markServer(name);
-  }
+  if (row.kind === "held") name.dataset.server = row.name;
+  else if (row.kind === "outside" && block.row && (block.row.items || []).length) name.dataset.items = block.row.items.join(" ");
+  if (name.dataset.server || name.dataset.items) markServer(name);
   if (row.group) {
     name.setAttribute("aria-colspan", "4");
     node.append(name);

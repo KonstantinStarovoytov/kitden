@@ -107,8 +107,12 @@ def test_all_projects_on_context_names_the_last_chats_folder(page, demo):
     expect(group).to_contain_text("atlas's own settings set this plugin")
     # The Library says the same for all projects: on, and off in atlas by its own settings.
     details = library(page, "plugin:browser@openai-bundled")
-    expect(details).to_contain_text("Codex loads it in every project.")
-    expect(details).to_contain_text("It is off in atlas: atlas's own settings set this plugin")
+    # One sentence, no "in every project" beside an off: the state names the project.
+    expect(details).to_contain_text(
+        "Codex loads it in every project except atlas: atlas's own settings turn it off there."
+    )
+    expect(details).to_contain_text("On · Off in atlas")
+    expect(details).not_to_contain_text("Codex loads it in every project.")
 
 
 def test_a_project_view_offers_codexs_own_switch_for_a_plugin_its_settings_set(page, demo):
@@ -122,7 +126,10 @@ def test_a_project_view_offers_codexs_own_switch_for_a_plugin_its_settings_set(p
 def test_a_skill_set_to_name_only_in_a_projects_local_file_says_so_in_the_library(page, demo):
     atlas = project_id(page, demo, "atlas")
     details = library(page, "skill:release-notes", atlas, kind="skill")
-    expect(details).to_contain_text("Name only")
+    # The state is Name only, in Details and in the List's Claude Code cell, not On.
+    expect(details).to_contain_text("Name only in Claude Code")
+    cell = list_row(page, "release-notes").get_by_role("gridcell").nth(1)
+    expect(cell).to_contain_text("Name only")
 
 
 def list_row(page, name: str):
@@ -186,3 +193,28 @@ class TestPluginOn:
         expect(group).to_contain_text("after your next Codex chat")
         expect(group.get_by_role("button", name="Turn off browser")).to_be_visible()
         wait_until(lambda: True)
+
+
+def test_adds_moves_and_every_client_a_change_reaches_are_marked(page, demo):
+    turn_off(page, "superpowers@demo-market")
+    expect(page.locator("#dock")).to_contain_text("superpowers")
+    page.evaluate("location.hash = '#library?kind=plugin&view=list'")
+    # Cursor gets the plugin through Claude Code: both cells say the change waits.
+    expect(list_row(page, "superpowers").locator(".row-wait")).to_have_count(2)
+    # The skills tab's row of the plugin's skills is marked too, in both cells.
+    page.evaluate("location.hash = '#library?kind=skill&view=list'")
+    expect(list_row(page, "superpowers").locator(".row-wait")).to_have_count(2)
+    page.locator("#dock").get_by_role("button", name="Cancel").click()
+    # An add: the client's cell, and Context's card of that client.
+    page.get_by_role("button", name="Add brandkit to Codex").click()
+    expect(page.locator("#dock")).to_contain_text("brandkit")
+    marked(list_row(page, "brandkit"))
+    open_codex(page)
+    expect(page.get_by_role("main")).to_contain_text("Added · in preview")
+    page.locator("#dock").get_by_role("button", name="Cancel").click()
+    # A move into the gateway: the server's row in the Gateway List.
+    page.evaluate("location.hash = '#gateway?view=list'")
+    list_row(page, "analytics").get_by_role("button", name="Move in…").click()
+    expect(page.locator("#dock")).to_contain_text("analytics")
+    page.keyboard.press("Escape")
+    marked(list_row(page, "analytics"))

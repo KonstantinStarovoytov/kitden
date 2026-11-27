@@ -1,13 +1,13 @@
 """Step 5 of the UX audit: the page leads to what hurts most and to the simplest fix. The medium
-sample, with four skills that Cursor loads three times each (`~/.claude/skills`,
-`~/.agents/skills` and `~/.cursor/skills`)."""
+sample, with four skills that Cursor loads twice each (`~/.claude/skills` and `~/.cursor/skills`,
+so keeping Claude Code's copy costs no client the skill)."""
 
 import pytest
 from playwright.sync_api import expect
 
 pytestmark = pytest.mark.browser
 
-FOLDERS = (".claude/skills", ".agents/skills", ".cursor/skills")
+FOLDERS = (".claude/skills", ".cursor/skills")
 COPIED = ("dup-a", "dup-b", "dup-c", "dup-d")
 
 
