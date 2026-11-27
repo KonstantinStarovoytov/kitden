@@ -29,7 +29,7 @@ def test_the_first_card_is_the_skill_list_with_its_fix(page, demo):
     first = page.locator(".ov-group[data-group=attention] .ov-cards > *").first
     expect(first).to_contain_text("Skill list in Claude Code")
     expect(first).to_contain_text("Set to 1.1% fits them: about")
-    first.get_by_role("button", name="Set to 1.1%…").click()
+    first.get_by_role("button", name="Set to 1.1%", exact=True).click()
     expect(first.get_by_role("button", name="In preview")).to_be_visible()
 
 
@@ -39,9 +39,11 @@ def test_many_copy_cards_fold_into_one_row(page, demo):
     expect(row).to_contain_text("4 skills load more than once")
     cards = row.locator(".ov-fold-cards")
     expect(cards).to_be_hidden()
-    row.get_by_role("button", name="Show…").click()
+    row.get_by_role("button", name="Show", exact=True).click()
     expect(cards.locator("[data-card]")).to_have_count(4)
     expect(cards.get_by_role("button", name="Keep one…")).to_have_count(4)
+    # Plain buttons inside the fold: only the row's own button is primary.
+    expect(cards.locator(".btn.primary")).to_have_count(0)
     row.get_by_role("button", name="Hide").click()
     expect(cards).to_be_hidden()
 

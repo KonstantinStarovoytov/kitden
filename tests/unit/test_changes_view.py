@@ -400,6 +400,6 @@ def test_changes_and_overview_say_when_a_server_is_back(tmp_path):
     assert n8n_card["line"] == "Something else on this computer wrote it again."
     assert (n8n_card["group"], n8n_card["clients"]) == ("attention", ["cursor"])
     assert n8n_card["action"] == {
-        "label": "Show…",
+        "label": "Open in Gateway",
         "go": {"view": "gateway", "sel": "direct:n8n"},
     }

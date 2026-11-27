@@ -6,7 +6,7 @@
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
 import { offLine } from "./clients-choice.js";
-import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, withFocusKey } from "./dom.js";
+import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError } from "./dom.js";
 import { findIn, focusAfter, foldStep, groupsWith, layoutTree, linkKey, litFor, litFrom, newCards, pagesNow, pagesWith, shownFound } from "./map.js";
 import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
 import { drawChip, glidePill, revealMatch } from "./map-page.js";
@@ -32,7 +32,6 @@ export const LIBRARY_COLUMNS = [
 const ROW_H = 34; // a skill or hook row in the Plugins and skills column
 const GROUP_BEFORE = 15; // the space before a group caption, after the group above it
 // The card at the end of Plugins and skills that opens the add panel: a place, so no lamp or links.
-const ADD_CARD = { id: "addslot:plugins", column: "plugins", kind: "addslot", name: "Add a plugin", meta: "From the catalog", icon: "plus", before: GROUP_BEFORE };
 const INSIDE_PAGE = 8; // an open plugin's Inside column shows this many a page
 // Its caption names the plugin cut to this many letters, so "<plugin> · 17–20 of 20" ends inside
 // the map.
@@ -464,7 +463,7 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   const tabs = mapTabs(tab);
   // The project goes by its folder name, as in the project picker.
   const scope = scopeBar(folderName(projectPath()));
-  main.append(lede, tabs, scope);
+  main.append(...[lede, tabs, scope].filter(Boolean));
   riseHead(head, lede, scope, { again });
   glidePill(tabs, tabs.querySelector('[aria-pressed="true"]'), "library-tabs-map");
   const answer = current(TAB_READS[tab]);
@@ -528,8 +527,7 @@ function keepWhatShows(answer, { opens = true } = {}) {
 // The tab's tree, with what waits in the tray on Plugins and skills. Instructions has none.
 function treeOf(answer, rows) {
   if (onMap.tab === "instructions") return instructionsTree(answer);
-  const tree = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows);
-  return { ...tree, blocks: [...tree.blocks, { ...ADD_CARD }] };
+  return withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows);
 }
 
 // What the map lights for a search: its matches, and a folded plugin that holds one (it stays
@@ -732,11 +730,6 @@ function foldPlugin(id) {
 // a plugin, or a second press on the selected block, lets go. Any other block is selected: its
 // path lights.
 function pressBlock(id) {
-  // The Add a plugin card opens the add panel; focus comes back to the card.
-  if (id === ADD_CARD.id) {
-    pressLibraryAdd(withFocusKey($("#main"), `block:${id}`));
-    return;
-  }
   if (id.startsWith("stack:") || id.startsWith("collapse:")) {
     foldOnMap(id);
     return;

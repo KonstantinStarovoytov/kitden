@@ -23,7 +23,7 @@ def enabled(demo) -> dict:
 def test_a_plugin_added_from_this_computer_is_on_after_apply_and_gone_after_undo(page, demo):
     assert ADDED not in enabled(demo)
     page.get_by_role("link", name="Library", exact=True).click()
-    page.get_by_role("button", name="+ Add plugins").click()
+    page.get_by_role("button", name="Add plugins, skills or servers from the catalogs").click()
     panel = page.get_by_role("complementary", name="Details")
     panel.get_by_role("button", name="On this computer").click()
     panel.get_by_role("button", name=re.compile(r"^db-tools Plugin")).click()

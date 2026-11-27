@@ -314,9 +314,14 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .hint-dock { z-index: 22; }
 .hint-line { position: absolute; left: 0; right: 0; bottom: 14px; margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; }
 .hint-line svg { flex: none; }
+/* A hint seen before folds behind its "i": the words show while the "i" is pointed at or focused. */
+.hint-line .hint-i { pointer-events: auto; display: inline-flex; padding: 2px; margin: -2px; border: 0; border-radius: 4px; background: none; color: inherit; cursor: help; }
+.hint-line.folded .hint-words { visibility: hidden; }
+.hint-line.folded:has(.hint-i:hover, .hint-i:focus-visible) .hint-words { visibility: visible; }
 /* A strip under the hint's words that fades from clear to the page colour, so page text that scrolls
    under the hint never shows through them. It takes no room and no clicks. */
 .hint-band:has(> #hint:not([hidden]))::before { content: ""; position: absolute; left: -22px; right: -22px; bottom: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--canvas) 40%); pointer-events: none; }
+.hint-band:has(> #hint.folded)::before { content: none; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }
 
 /* Controls */

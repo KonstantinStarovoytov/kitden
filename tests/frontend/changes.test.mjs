@@ -229,7 +229,7 @@ test('the head says Changes, the lede, the scope with this week\'s count and the
   assert.equal(scope.children[0].dataset.icon, 'layers');
   assert.match(text(scope), /^All projects · \d+ changes? this week$/);
   assert.equal(hintLine.hidden, false);
-  assert.equal(hintLine.children.at(-1).textContent, 'Click a row · Undo · See it on the map');
+  assert.equal(hintLine.children.at(-1).textContent, 'Click a row for its steps · Undo puts a change back');
   // With no change yet there is no row to click: no hint (02-N20j).
   show([]);
   assert.equal(hintLine.hidden, true);

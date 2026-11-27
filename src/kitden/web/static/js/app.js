@@ -4,6 +4,7 @@ import { $, $$, busyWhile, el, focusKey, icon, reportError, setSecretsWord } fro
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
+import { showChoice } from "./clients-choice.js";
 import { renderContext } from "./context.js";
 import { drawTray, initDock } from "./dock.js";
 import { renderGateway } from "./gateway.js";
@@ -169,6 +170,7 @@ function drawIcons() {
   $('.nav [data-view="context"]').prepend(icon("gauge"));
   $('.nav [data-view="gateway"]').prepend(icon("network"));
   $('.nav [data-view="changes"]').prepend(icon("history"));
+  $("#clients").prepend(icon("monitor", 14));
   $("#theme").prepend(icon("sun-moon", 14));
   $(".search").prepend(icon("search", 14));
   // Until the project list is read, the button is switched off; projectMenu draws its own after.
@@ -426,6 +428,7 @@ function start() {
       $("#q").focus();
     }
   });
+  $("#clients").addEventListener("click", showChoice);
   $("#theme").addEventListener("click", switchTheme);
   $("#rescan").addEventListener("click", () => rescan().catch(reportError));
   initPanel();

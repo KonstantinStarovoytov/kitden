@@ -473,16 +473,15 @@ test('the scope bar says what the page shows', () => {
   assert.equal(scopeText('api', null), 'Project api · rules not known');
   assert.equal(scopeText('', 4), 'All projects');
   assert.equal(scopeText('', null), 'All projects');
-  const shared = scopeBar('', 0);
-  assert.equal(shared.querySelector('span').textContent, 'All projects');
-  assert.equal(shared.classList.contains('project'), false);
+  // Under All projects there is no line: the top bar's project button says it already.
+  assert.equal(scopeBar('', 0), null);
   const project = scopeBar('api', 2);
   assert.equal(project.querySelector('span').textContent, 'Project api · 2 rules differ from the shared setup');
   assert.equal(project.classList.contains('project'), true);
 });
 
-test('the scope bar leads with the layers icon, or folder in a project', () => {
-  assert.equal(scopeBar(null).querySelector('svg').dataset.icon, 'layers');
+test('the scope bar leads with the folder icon, and is not there under All projects', () => {
+  assert.equal(scopeBar(null), null);
   assert.equal(scopeBar('website').querySelector('svg').dataset.icon, 'folder');
   assert.equal(Number(scopeBar('website').querySelector('svg').attributes.width), 14);
 });
@@ -517,6 +516,33 @@ test('the hint line shows its words with an info icon, and an empty text hides i
     assert.equal(line.children.length, 0);
   } finally {
     globalThis.document.getElementById = find;
+  }
+});
+
+test('a hint seen on an earlier visit folds behind its "i": the words show on hover, on focus and to a screen reader', () => {
+  const line = globalThis.document.createElement('p');
+  const find = globalThis.document.getElementById;
+  const had = globalThis.localStorage;
+  const stored = { 'kitden-hints-seen': JSON.stringify(['Seen before.']) };
+  globalThis.localStorage = { getItem: (key) => stored[key] ?? null, setItem: (key, value) => { stored[key] = value; } };
+  globalThis.document.getElementById = (id) => (id === 'hint' ? line : null);
+  try {
+    // A new hint shows its words, and is kept as seen.
+    setHint('New words.');
+    assert.equal(line.classList.contains('folded'), false);
+    assert.ok(JSON.parse(stored['kitden-hints-seen']).includes('New words.'));
+    // During this visit it stays open, even drawn again.
+    setHint('New words.');
+    assert.equal(line.classList.contains('folded'), false);
+    // One seen on an earlier visit folds: the "i" is a button that names the words.
+    setHint('Seen before.');
+    assert.equal(line.classList.contains('folded'), true);
+    const info = line.children[0];
+    assert.deepEqual([info.tag, info.getAttribute('aria-label')], ['button', 'Seen before.']);
+    assert.equal(line.children.at(-1).textContent, 'Seen before.');
+  } finally {
+    globalThis.document.getElementById = find;
+    globalThis.localStorage = had;
   }
 });
 

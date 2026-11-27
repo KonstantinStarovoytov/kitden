@@ -137,7 +137,10 @@ test('the off line is text only, and the head button has its own look and focus 
   assert.equal(offLine(ALL), null);
   const line = offLine([ALL[0], client('codex', 'off'), ALL[2]]);
   assert.deepEqual([line.className, line.textContent, line.children.length], ['muted scope-note', 'Codex is turned off in Kitden.', 0]);
-  const choose = chooseButton();
+  // The head's button shows only while a client is not installed; else the rail's quiet
+  // "Clients" opens the same panel.
+  assert.equal(chooseButton([ALL[0], ALL[1], client('cursor', 'found', '3.21.16')]), null);
+  const choose = chooseButton(ALL);
   assert.deepEqual([choose.textContent, choose.className, choose.dataset.focus], ['Choose clients…', 'btn', 'choose:clients']);
 });
 

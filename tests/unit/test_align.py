@@ -384,3 +384,14 @@ def test_under_all_projects_a_client_with_it_in_one_project_starts_unchecked(hom
     assert "Codex has it in api; this adds a second copy there." in brandkit["note"]
     # Another add, which Codex has in no project, does not say it.
     assert "has it in" not in (keys["skill:docker-expert:claude_code"]["note"] or "")
+
+
+def test_the_list_says_whether_add_missing_has_anything_to_add(home, tmp_path):
+    """The List shows "Add missing…" only when its review would list something: not with one
+    client, not when nothing is missing (the review would say "Nothing is missing." with a 422)."""
+    with page_for(home, run=runner(home)) as page:
+        assert page.get("/api/library-list?kind=plugin").json()["missing"] is True
+    one = make_home(tmp_path / "one", "claude_code/2.1.283")
+    with page_for(one, run=runner(one)) as page:
+        assert page.get("/api/library-list?kind=plugin").json()["missing"] is False
+        assert _align(page, None).status_code == 422

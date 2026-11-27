@@ -117,8 +117,7 @@ def test_overview_says_your_setup_connected():
         '"Library"',
         "STATE_WORDS.missing",
         '"Could not read its settings"',
-        '"All projects"',
-        "`Project ${folder}`",
+        "scopeBar(folderName(projectPath()))",
         '"has its own rules" : "have their own rules"',
     ):
         assert words in overview, words
@@ -1074,7 +1073,8 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
         "socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason, "
         "stale: Boolean(cell.stale_at) })" in text
     )
-    assert "button(cell.add.label" in text and '"btn small add"' in text
+    assert 'button(state.show === "diff" ? cell.add.label : "+"' in text
+    assert '"btn small add"' in text
     assert 'via: "Via Claude Code", done: "Has its skills"' in script("words.js")
     # The List is a tree grid; the category filter went with New and All (the add panel).
     assert 'el("div", "treegrid library-list")' in text
@@ -2875,11 +2875,12 @@ def test_the_library_add_panel_says_the_decided_words():
         for w in ("LIBRARY_STATUS.added, off", "LIBRARY_STATUS.every", "line: row.refusal")
     ]
     assert order == sorted(order)
-    # The page header carries "+ Add plugins", the map ends with an "Add a plugin" card, and a row
-    # of the panel drags onto a client.
+    # The page header carries "+ Add" (the one door: the map has no "Add a plugin" card), and a
+    # row of the panel drags onto a client.
     lib_map = script("library-map.js")
-    assert 'addHeadButton("+ Add plugins", "add:plugins", pressLibraryAdd)' in script("library.js")
-    assert 'name: "Add a plugin", meta: "From the catalog"' in lib_map
+    assert 'addHeadButton("+ Add", "add:plugins", pressLibraryAdd)' in script("library.js")
+    assert '"Add plugins, skills or servers from the catalogs"' in script("library.js")
+    assert 'name: "Add a plugin"' not in lib_map
     assert "row: { still: true, begin: beginRow, over: overRow, drop: dropRow }," in lib_map
     assert "liftGhost" in script("gateway-drag.js") and "export function liftGhost(" in script(
         "map-drag.js"
@@ -3132,7 +3133,7 @@ def test_the_changes_page_says_the_mockups_words():
     )
     assert f'"{lede}"' in text
     assert 'plural(weekCount(entries), "change", "changes")} this week`' in text
-    assert 'HINT = "Click a row · Undo · See it on the map"' in text
+    assert 'HINT = "Click a row for its steps · Undo puts a change back"' in text
     # Day groups: Today, Yesterday, then a short date in the person's language.
     assert '"Today"' in text and '"Yesterday"' in text
     assert '{ weekday: "short", day: "numeric", month: "short" }' in text

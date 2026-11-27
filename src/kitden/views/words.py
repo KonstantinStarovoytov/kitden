@@ -580,7 +580,6 @@ LIMIT_NOT_WHY = (
     "Kitden does not offer a new skill list limit: by its count every description fits, so a "
     "higher limit may not help."
 )
-LIMIT_NOT_NEEDED = "Kitden does not offer a new skill list limit: every description fits."
 LIMIT_NOT_ENOUGH = (
     "Kitden does not offer a new skill list limit: even {share} of the window would not fit "
     "every description. Set some skills to Name only or Off."

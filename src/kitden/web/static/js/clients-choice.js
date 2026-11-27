@@ -70,9 +70,12 @@ export function offLine(clients = data.clients) {
   return words ? el("p", "muted scope-note", words) : null;
 }
 
-// The page head's button that opens the panel, the same on every page that lists clients. It has a
-// focus key, so a page drawn again while the panel is open still gives focus back to it.
-export function chooseButton() {
+// The page head's button that opens the panel, the same on every page that lists clients, only
+// while a client is not installed (or none is found): then the choice matters. Otherwise the
+// rail's quiet "Clients" opens it (null here). It has a focus key, so a page drawn again while the
+// panel is open still gives focus back to it.
+export function chooseButton(clients = data.clients) {
+  if (!(Array.isArray(clients) && clients.some((c) => c.status === "not_found"))) return null;
   const choose = button("Choose clients…", showChoice, "btn");
   choose.dataset.focus = "choose:clients";
   return choose;

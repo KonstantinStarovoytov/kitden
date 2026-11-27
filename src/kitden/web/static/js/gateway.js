@@ -110,7 +110,7 @@ export function renderGateway(main, { again = false } = {}) {
   pageRead(view).catch(reportError);
   // Under the head: what the page shows, the shared setup or a project's rules that differ from it.
   const scope = scopeBar(folderName(projectPath()), view.own_rules);
-  main.append(scope);
+  if (scope) main.append(scope);
   const off = offLine(data.clients);
   if (off) main.append(off);
   riseHead(head, lede, scope, { again });
@@ -155,7 +155,7 @@ function switchInPlace(again, scope) {
   const switched = again && drawnFor !== null && drawnFor !== state.project;
   drawnFor = state.project;
   if (!switched) return;
-  rise([scope], { y: 4, dur: 320 });
+  if (scope) rise([scope], { y: 4, dur: 320 });
   followProject().catch(reportError);
 }
 

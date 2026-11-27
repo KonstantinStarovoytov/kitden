@@ -30,7 +30,7 @@ export function addHeadButton(label, key, onPress) {
 // The add button and Map | List together at the head's end, so a narrow head wraps them as one.
 export function headActions(...nodes) {
   const actions = el("div", "head-actions");
-  actions.append(...nodes);
+  actions.append(...nodes.filter(Boolean));
   return actions;
 }
 

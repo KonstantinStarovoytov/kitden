@@ -13,7 +13,7 @@ import { data, goTo, libraryChoice, parseSel, retry } from "./store.js";
 import { keyFor } from "./tray.js";
 
 const LEDE = "Every change made from this page. Each one has a backup; Undo puts the previous file back.";
-const HINT = "Click a row · Undo · See it on the map";
+const HINT = "Click a row for its steps · Undo puts a change back";
 const GONE = "This item is no longer there.";
 const NOTHING_TO_DO = "Nothing to do";
 const KITDEN = "Kitden gateway";

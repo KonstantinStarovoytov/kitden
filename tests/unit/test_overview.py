@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.clients import version_cache
 from kitden.context.rules import codex_rule
 from kitden.demo import build_demo_home
@@ -18,7 +17,7 @@ from kitden.views.findings import find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.views.load_map import load_map
-from kitden.views.overview import FOLD_FROM, note_count, overview
+from kitden.views.overview import FOLD_FROM, GATEWAY_IS, note_count, overview
 from kitden.views.setup_server import kitden_on, setup_server_state
 from tests.conftest import cursor_db, make_home, write_cursor_fixture_state
 from tests.unit.test_context_view import (
@@ -142,18 +141,79 @@ def test_servers_outside_the_gateway_can_improve_and_need_no_attention(home):
     assert data["counts"]["attention"] == 2  # the two duplicates only
 
 
-def test_a_server_in_two_clients_is_one_card(home):
-    # The cards are the Gateway page's rows: a row holds every client's entry.
+def _gateway_card(data):
+    [card] = [c for c in data["cards"] if c["name"].endswith("can move into the gateway")]
+    return card
+
+
+def test_the_servers_that_can_move_in_fold_into_one_card(home):
+    """One card for every server a move can take (02-R05): it says what the gateway is, counts
+    each server once (a server in two clients, or remote and local of one name) and opens the
+    Gateway's List at the outside group. No Move in… card per server."""
     inventory = build_inventory(home)
     held = [{"name": "kept", "kind": "local", "tools": 0}]
     data = overview(inventory, None, held=held)
     rows = gateway_view(inventory, None, kitden=held)["groups"]
-    moves = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Move in…"]
-    names = [c["name"] for c in moves]
-    assert names and len(names) == len(set(names))
-    for card in moves:
-        row = next(r for g in ("move", "local") for r in rows[g] if r["name"] == card["name"])
-        assert card["clients"] == row["columns"]
+    movable = [r for g in ("move", "local") for r in rows[g] if r["items"] and not r["stays"]]
+    names = {r["name"] for r in movable}
+    card = _gateway_card(data)
+    assert card == {
+        "id": card["id"],
+        "group": "improve",
+        "icon": "server",
+        "name": f"{len(names)} servers can move into the gateway",
+        "line": GATEWAY_IS,
+        "clients": card["clients"],
+        "action": {
+            "label": "Open in Gateway",
+            "go": {"view": "gateway", "sel": "group:outside", "mode": "list"},
+        },
+        "focus": {"clients": card["clients"], "block": "gateway"},
+    }
+    assert set(card["clients"]) == {c for r in movable for c in r["columns"]}
+    assert not [c for c in data["cards"] if (c["action"] or {}).get("label") == "Move in…"]
+
+
+def test_a_remote_and_a_local_server_of_one_name_count_once():
+    from kitden.views.overview import _move_ins
+
+    def row(name, item):
+        return {"name": name, "items": [item], "stays": None, "columns": ["codex"]}
+
+    groups = {"move": [row("docs", "r1"), row("github", "g1")], "local": [row("docs", "l1")]}
+    [card] = _move_ins(groups)
+    assert card["name"] == "2 servers can move into the gateway"
+    one = {"move": [row("docs", "r1")], "local": []}
+    assert _move_ins(one)[0]["name"] == "1 server can move into the gateway"
+    assert _move_ins({"move": [], "local": []}) == []
+
+
+def test_a_server_a_move_would_refuse_is_not_counted(home):
+    inventory = build_inventory(home)
+    held = [{"name": "kept", "kind": "local", "tools": 0}]
+    before = _gateway_card(overview(inventory, None, held=held))["name"]
+    for index, item in enumerate(inventory.items):
+        if item.name == "github":
+            inventory.items[index] = replace(item, stays_direct="It stays direct.")
+    after = _gateway_card(overview(inventory, None, held=held))["name"]
+    assert int(after.split()[0]) == int(before.split()[0]) - 1
+
+
+def test_a_picked_project_counts_its_own_servers(tmp_path):
+    with demo_page(tmp_path) as page:
+        ids = {Path(p["path"]).name: p["id"] for p in page.get("/api/projects").json()}
+        shared = page.get("/api/overview").json()
+        here = page.get(f"/api/overview?project={ids['website']}").json()
+        view = page.get(f"/api/gateway-view?project={ids['website']}").json()
+    names = {
+        r["name"]
+        for g in ("move", "local")
+        for r in view["groups"][g]
+        if r["items"] and not r["stays"]
+    }
+    assert _gateway_card(here)["name"] == f"{len(names)} servers can move into the gateway"
+    # website has a server of its own that All projects does not count.
+    assert _gateway_card(shared)["name"] == f"{len(names) - 1} servers can move into the gateway"
 
 
 def test_old_kitden_entries_get_one_card(home):
@@ -285,132 +345,10 @@ def test_note_count_folds_repeats():
 # Cards with one action, and the "Your setup" map (Phase 7, Task 1) -------------------------
 
 
-def test_a_server_that_skips_the_gateway_is_a_move_in_card_with_its_body(home):
-    inventory = build_inventory(home)
-    held = [{"name": "kept", "kind": "local", "state": "on", "differs": False, "tools": 2}]
-    data = overview(inventory, None, held=held)
-    rows = gateway_view(inventory, None, kitden=held)["groups"]
-    row = next(r for r in rows["move"] if r["name"] == "github")
-    card = next(c for c in _cards(data, "improve") if c["name"] == "github")
-    assert card == {
-        "id": card["id"],
-        "group": "improve",
-        "icon": "globe",
-        "name": "github",
-        # What a move gives, not a fault (05-P5).
-        "line": "In the gateway you can turn each of its tools on or off.",
-        "clients": row["columns"],
-        "action": {
-            "label": "Move in…",
-            # The same body as the Gateway's "Move into the gateway…" (details.js moveBody).
-            "body": {
-                "action": "gateway.move",
-                "targets": [{"item": i} for i in row["items"]],
-                "params": {"gateway": KITDEN_GATEWAY},
-            },
-        },
-        "focus": {"clients": row["columns"], "block": "gateway"},
-    }
-    # A local server gets the local icon.
-    local = [r["name"] for r in rows["local"] if r["items"] and not r["stays"]]
-    shown = {c["name"]: c for c in _cards(data, "improve")}
-    for name in local:
-        if name in shown:
-            assert shown[name]["icon"] == "hard-drive"
-
-
-def test_a_server_a_move_would_refuse_gets_no_card(home):
-    inventory = build_inventory(home)
-    for index, item in enumerate(inventory.items):
-        if item.name == "github":
-            inventory.items[index] = replace(item, stays_direct="It stays direct.")
-    data = overview(inventory, None, held=[{"name": "kept", "kind": "local", "tools": 0}])
-    assert "github" not in [c["name"] for c in data["cards"]]
-
-
-def test_more_than_three_servers_give_one_more_card(tmp_path):
-    # Review Focus: the large sample has dozens of servers outside the gateway.
-    with demo_page(tmp_path, "large") as page:
-        data = page.get("/api/overview").json()
-        view = page.get("/api/gateway-view").json()
-    rows = [
-        r for g in ("move", "local") for r in view["groups"][g] if r["items"] and not r["stays"]
-    ]
-    assert len(rows) > 4
-    moves = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Move in…"]
-    assert len(moves) == 3
-    [more] = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Show…"]
-    assert more["name"] == f"{len(rows) - 3} more servers can move in"
-    assert more["line"] == "In the gateway you can turn each of their tools on or off."
-    assert more["group"] == "improve"
-    assert more["action"] == {
-        "label": "Show…",
-        "go": {"view": "gateway", "sel": "group:outside", "mode": "list"},
-    }
-    assert more["focus"]["block"] == "gateway"
-    assert set(more["clients"]) <= {"claude_code", "codex", "cursor"}
-
-
-def test_two_move_in_cards_of_one_name_say_remote_or_local():
-    from kitden.views.overview import SKIPS, _move_ins
-
-    def row(name, item):
-        return {"name": name, "items": [item], "stays": None, "columns": ["codex"]}
-
-    groups = {"move": [row("docs", "r1"), row("github", "g1")], "local": [row("docs", "l1")]}
-    lines = {(c["name"], c["icon"]): c["line"] for c in _move_ins(groups)}
-    assert lines == {
-        ("docs", "globe"): f"Remote · {SKIPS}",
-        ("docs", "hard-drive"): f"Local · {SKIPS}",
-        ("github", "globe"): SKIPS,
-    }
-
-
-def test_a_picked_project_gets_the_cards_of_its_own_servers(tmp_path):
-    with demo_page(tmp_path) as page:
-        ids = {Path(p["path"]).name: p["id"] for p in page.get("/api/projects").json()}
-        shared = page.get("/api/overview").json()["cards"]
-        here = page.get(f"/api/overview?project={ids['website']}").json()["cards"]
-        view = page.get(f"/api/gateway-view?project={ids['website']}").json()
-    rows = [
-        r for g in ("move", "local") for r in view["groups"][g] if r["items"] and not r["stays"]
-    ]
-    rows.sort(key=lambda r: r["name"].lower())
-    moves = [c for c in here if c["action"] and c["action"]["label"] == "Move in…"]
-    # The cards are the picked project's Gateway rows, each with that row's body.
-    assert [c["action"]["body"]["targets"] for c in moves] == [
-        [{"item": i} for i in r["items"]] for r in rows[:3]
-    ]
-    [more] = [c for c in here if c["action"] and c["action"]["label"] == "Show…"]
-    assert more["name"] == f"{len(rows) - 3} more servers can move in"
-    # website has a server of its own that All projects does not count. All projects has the
-    # sample's skill list card too, with the same button.
-    [shared_more] = [c for c in shared if c["name"].endswith("can move in")]
-    assert shared_more["name"] == f"{len(rows) - 4} more servers can move in"
-
-
-def test_four_servers_give_three_cards_and_one_more_server(home):
-    from kitden.changes import toml_edit
-
-    config = home / ".codex/config.toml"
-    text = config.read_text()
-    for name in ("one", "two", "three", "four"):
-        text = toml_edit.set_value(text, ("mcp_servers", name), {"url": f"https://{name}.test/"})
-    config.write_text(text)
-    inventory = build_inventory(home)
-    held = [{"name": "kept", "kind": "local", "tools": 0}]
-    rows = gateway_view(inventory, None, kitden=held)["groups"]
-    movable = [r for g in ("move", "local") for r in rows[g] if r["items"] and not r["stays"]]
-    data = overview(inventory, None, held=held)
-    names = [c["name"] for c in _cards(data, "improve")]
-    left = len(movable) - 3
-    assert f"{left} more {'server' if left == 1 else 'servers'} can move in" in names
-
-
 def test_a_client_not_connected_gets_a_connect_card(connected):
     held = [{"name": "github", "kind": "local", "state": "on", "differs": False, "tools": 3}]
     data = overview(build_inventory(connected), None, held=held)
-    connect = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]
+    connect = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect"]
     assert connect == [
         {
             "id": connect[0]["id"],
@@ -421,7 +359,7 @@ def test_a_client_not_connected_gets_a_connect_card(connected):
             "clients": ["codex"],
             # The Gateway's own Connect for this client (parts.js kitdenClients).
             "action": {
-                "label": "Connect…",
+                "label": "Connect",
                 "body": {
                     "action": "setup_server.register",
                     "targets": [{"client": "codex"}],
@@ -439,7 +377,7 @@ def test_a_turned_off_codex_entry_is_turned_on_by_its_connect_card(connected):
     codex.write_text(codex.read_text() + off)
     held = [{"name": "github", "kind": "local", "tools": 0}]
     data = overview(build_inventory(connected), None, held=held)
-    [card] = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]
+    [card] = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect"]
     assert card["action"]["body"] == {
         "action": "setup_server.enable",
         "targets": [{"client": "codex"}],
@@ -449,7 +387,7 @@ def test_a_turned_off_codex_entry_is_turned_on_by_its_connect_card(connected):
 
 def test_no_connect_card_while_the_gateway_holds_nothing(connected):
     data = overview(build_inventory(connected), None, held=[])
-    assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]
+    assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect"]
 
 
 def test_old_kitden_entries_card_adds_the_update_row(connected):
@@ -470,12 +408,12 @@ def test_old_kitden_entries_card_adds_the_update_row(connected):
     assert card["clients"] == ["codex"]
     # The Agents page's "Update to Kitden…" (agents.js update).
     assert card["action"] == {
-        "label": "Update…",
+        "label": "Update",
         "body": {"action": "setup_server.update", "targets": [{"item": item.id}], "params": {}},
     }
     assert card["focus"] == {"clients": ["codex"], "block": "gateway"}
     # An old entry is updated, not connected a second time.
-    assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]
+    assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect"]
 
 
 def test_a_duplicate_card_opens_the_item(home):
@@ -632,7 +570,7 @@ def test_no_card_or_map_field_holds_a_path(home, monkeypatch):
     held = [{"name": "kept", "kind": "local", "tools": 1}]
     data = overview(build_inventory(home), None, held=held)
     kinds = {c["action"]["label"] for c in data["cards"] if c["action"]}
-    assert {"Keep one…", "Update…", "Move in…", "Connect…"} <= kinds
+    assert {"Keep one…", "Update", "Open in Gateway", "Connect"} <= kinds
     # "Copy path" holds the path for the clipboard; nothing the card shows does.
     shown = [c | {"action": c["action"] and {**c["action"], "copy": None}} for c in data["cards"]]
     for text in _strings({"cards": shown, "map": data["map"]}):
@@ -708,7 +646,7 @@ def test_unreadable_gateway_settings_need_attention_and_claim_nothing(home):
     assert data["counts"]["attention"] >= 1
     assert data["map"]["gateway"] == {"servers": None, "tools": None, "unread": True}
     assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Move in…"]
-    assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]
+    assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect"]
 
 
 # Context: a card when the last chat's skill list did not fit
@@ -771,7 +709,7 @@ def test_a_claude_list_that_showed_only_names_gets_a_card(tmp_path):
     )
     assert card["clients"] == ["claude_code"]
     assert card["action"] == {
-        "label": "Show…",
+        "label": "Open in Context",
         "go": {"view": "context", "sel": "client:claude_code"},
     }
 
@@ -789,7 +727,7 @@ def test_a_codex_list_that_was_cut_gets_a_card(tmp_path):
     ), card["line"]
     assert card["clients"] == ["codex"]
     assert card["action"] == {
-        "label": "Set to 500 tokens…",
+        "label": "Set to 500 tokens",
         "body": {
             "action": "skill.limit",
             "targets": [{"client": "codex"}],
@@ -899,7 +837,7 @@ def test_four_cards_of_one_kind_fold_into_one_row(home, monkeypatch):
     [row] = [c for c in data["cards"] if c.get("cards")]
     assert row["name"] == "5 skills load more than once"
     assert row["line"] == "Open the list to keep one copy of each."
-    assert row["action"] == {"label": "Show…", "fold": True}
+    assert row["action"] == {"label": "Show", "fold": True}
     assert [c["name"] for c in row["cards"]] == [f"s{i}" for i in range(5)]
     assert data["counts"]["attention"] == 5
 
@@ -928,7 +866,7 @@ def test_after_apply_the_skill_list_card_says_a_new_chat_shows_it_and_needs_no_a
     home = _context_home(tmp_path)
     cut_chat(home)
     [card] = _context_cards(home)
-    assert card["group"] == "attention" and card["action"]["label"] == "Set to 1.1%…"
+    assert card["group"] == "attention" and card["action"]["label"] == "Set to 1.1%"
     write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.011})
     [card] = _context_cards(home)
     assert card["group"] == "improve"
@@ -936,7 +874,7 @@ def test_after_apply_the_skill_list_card_says_a_new_chat_shows_it_and_needs_no_a
         "The limit was changed after this chat: it is 1.1% now. Start a new chat to see the new "
         "list."
     )
-    assert card["action"]["label"] == "Show…"
+    assert card["action"]["label"] == "Open in Context"
     inventory = build_inventory(home)
     clients = context_view(inventory, home, home / ".codex", None, {})["clients"]
     assert overview(inventory, None, context_cards=clients)["counts"]["attention"] == 0

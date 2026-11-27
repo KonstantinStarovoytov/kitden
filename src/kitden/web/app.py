@@ -1178,7 +1178,14 @@ def create_app(
             show=show if show in LIST_SHOWS else "mine",
             **_list_query(params),
         )
-        return JSONResponse({"project": project, **answer})
+        # Whether "Add missing…" has anything to add: its review's own list (none with one client).
+        missing = tab != "instructions"
+        if missing:
+            try:
+                align_steps(state.inventory, adapters, path, _found_clients(), None)
+            except ValueError:  # "Nothing is missing."
+                missing = False
+        return JSONResponse({"project": project, **answer, "missing": missing})
 
     def _library_map(request, project, path):
         """The Library map: clients, plugins and skills by source, and what each plugin holds."""

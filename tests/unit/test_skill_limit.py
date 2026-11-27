@@ -154,7 +154,7 @@ def test_a_share_above_the_ceiling_that_fits_everything_offers_only_back(home):
         write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": share})
         limit = view(home)["claude_code"]["limit"]
         assert limit["now"].startswith(f"{now} of the context window")
-        assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+        assert limit["offer"] is None and limit["why"] is None
         assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
         assert [s["value"] for s in limit["steps"]] == ["default", *CLAUDE_SHARES[1:], share]
 
@@ -201,8 +201,8 @@ def test_not_offered_when_everything_fits(home):
     claude_chat(home, {name: f"Does {name}." for name in "abc"})
     cc = view(home)["claude_code"]
     assert cc["limit"]["offer"] is None
-    assert cc["limit"]["why"] == words.LIMIT_NOT_NEEDED
-    assert cc["how"][-1] == "Kitden does not offer a new skill list limit: every description fits."
+    assert cc["limit"]["why"] is None
+    assert not any("every description fits" in line for line in cc["how"])
 
 
 def test_not_offered_with_the_fixed_budget(home):
@@ -479,7 +479,7 @@ def test_after_a_raise_the_chat_keeps_its_own_limit_and_the_page_says_it_changed
     ]
     # Nothing to raise; Back to 1% stays reachable.
     limit = cc["limit"]
-    assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+    assert limit["offer"] is None and limit["why"] is None
     assert limit["now"] == "1.5% of the context window: 12,000 characters"
     assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
 
@@ -806,7 +806,7 @@ def test_skills_added_after_a_chat_that_fitted_can_call_for_a_higher_limit(home)
         skill(home / ".claude/skills", name, TEXT)
     claude_chat(home, dict.fromkeys(NAMES[:-1], TEXT), model="claude-sonnet-4-6")
     cc = view(home)["claude_code"]
-    assert cc["checked"] and cc["limit"]["why"] == words.LIMIT_NOT_NEEDED
+    assert cc["checked"] and cc["limit"]["why"] is None
     skill(home / ".claude/skills", "later", TEXT)
     cc = view(home)["claude_code"]
     assert cc["checked"] and cc["limit"]["offer"]["fraction"] == 0.011
@@ -893,7 +893,7 @@ def test_a_chat_that_sent_everything_needs_no_higher_limit_whatever_the_count_sa
     cc = view(home)["claude_code"]
     limit = cc["limit"]
     assert not cc["checked"] and cc["windows"][0]["result"]["misfit"] is None
-    assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+    assert limit["offer"] is None and limit["why"] is None
 
 
 def test_a_chat_that_sent_everything_does_not_show_that_a_longer_file_fits(home):
@@ -1001,7 +1001,7 @@ def test_after_the_limit_was_set_the_counted_chat_keeps_its_own_limit(home):
         "Estimate: On a 200K window, every skill would keep its description.",
     ]
     limit = cc["limit"]
-    assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+    assert limit["offer"] is None and limit["why"] is None
     assert limit["now"] == "2% of the context window: 16,000 characters"
     assert limit["back"] == {"fraction": "default", "label": "Back to 1%"}
     # A count says which fit only where everything fits: from 1.7% (13,600 of the 12,059
@@ -1263,7 +1263,7 @@ def test_a_chat_at_its_limit_by_built_in_skills_finds_its_share_after_a_change(h
     assert cc["changed"][0].startswith("The limit was changed after this chat: it is 1.5% now.")
     # 8,100 characters fit in 12,000: nothing to raise; the steps are measured from today's.
     limit = cc["limit"]
-    assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+    assert limit["offer"] is None and limit["why"] is None
     # The 8,100 characters fit from 1.1% (8,800) on.
     assert [s["say"] for s in limit["steps"]] == [
         "1%, the default · about 2 of 9 show only a name",
