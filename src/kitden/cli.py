@@ -576,7 +576,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kitden")
     parser.add_argument("--version", action="store_true", help="print the version and exit")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
-    parser.add_argument("--home", help="read clients under this home folder (for testing)")
+    # --home reads clients under another home folder. It is for tests, so help leaves it out.
+    parser.add_argument("--home", help=argparse.SUPPRESS)
     commands = parser.add_subparsers(dest="command")
     # SUPPRESS keeps an option given before the command (`kitden --home X open`).
     keep = argparse.SUPPRESS
@@ -610,9 +611,7 @@ def main(argv: list[str] | None = None) -> int:
             "--no-browser", action="store_true", default=keep, help="only print the link"
         )
     for sub in (opener, serve, scan, show, mcp):
-        sub.add_argument(
-            "--home", default=keep, help="read clients under this home folder (for testing)"
-        )
+        sub.add_argument("--home", default=keep, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     args.background = getattr(args, "background", False)
     args.take_over = getattr(args, "take_over", False)

@@ -28,7 +28,7 @@ from kitden.context.rules import (
 )
 from kitden.context.tables import CLAUDE_WINDOWS
 from kitden.gateways import data_dir
-from kitden.local_gateway.settings import CALLS_FILE, SETTINGS_FILE, TOOLS_FILE
+from kitden.local_gateway.settings import CALLS_FILE, FORMAT, SETTINGS_FILE, TOOLS_FILE
 from kitden.system import cursor_state_dir
 from kitden.views.skills import read_skill
 
@@ -590,13 +590,14 @@ def _gateway(home: Path, medium: bool) -> None:
     Keychain stand-in. The small sample keeps only its PATH."""
     folder = data_dir(home)
     if not medium:
-        _json(folder / SETTINGS_FILE, {"path": SAMPLE_PATH})
+        _json(folder / SETTINGS_FILE, {"version": FORMAT, "path": SAMPLE_PATH})
         _json(keychain_file(home), {})
         return
     atlas = str(home / "work/atlas")
     _json(
         folder / SETTINGS_FILE,
         {
+            "version": FORMAT,
             "path": SAMPLE_PATH,
             "servers": {
                 "files": {

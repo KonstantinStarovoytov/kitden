@@ -239,6 +239,8 @@ class FileEdit:
     after_hash: str | None = None
     backup_path: str | None = None
     masked_diff: str = ""
+    # The file's format version (JSON only). Apply adds it as "version" when the file has none.
+    version: int | None = None
 
 
 COPY_FOLDER = "copy_folder"  # the mechanism of a step that copies a skill folder

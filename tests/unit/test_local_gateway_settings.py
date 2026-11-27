@@ -314,7 +314,8 @@ def test_a_global_rule_is_written_into_a_file_that_is_not_there_yet(tmp_path):
 
     path = data_dir(tmp_path) / SETTINGS_FILE
     assert json.loads(path.read_text()) == {
-        "rules": {"global": {"github": {"tools": {"delete_repo": "off"}}}}
+        "version": 1,
+        "rules": {"global": {"github": {"tools": {"delete_repo": "off"}}}},
     }
     assert mode(path) == 0o600
     settings = load_settings(tmp_path)
@@ -445,3 +446,50 @@ def test_a_broken_calls_file_reads_as_empty(tmp_path):
     data_dir(tmp_path).mkdir(parents=True)
     (data_dir(tmp_path) / CALLS_FILE).write_text("[1")
     assert load_calls(tmp_path) == {}
+
+
+def test_a_file_kitden_writes_says_its_format(tmp_path):
+    engine = engine_for(tmp_path)
+    change = engine.preview("gateway.rule", [rule_step(tmp_path, None, "github", None, "off")])
+    engine.apply(change.id)
+    path = data_dir(tmp_path) / SETTINGS_FILE
+    assert json.loads(path.read_text()) == {
+        "version": 1,
+        "rules": {"global": {"github": {"server": "off"}}},
+    }
+
+
+def test_a_file_without_a_version_reads_the_same(tmp_path):
+    settings = {
+        "servers": SERVERS,
+        "rules": {"global": {"linear": {"server": "off"}}, "projects": {"/p": {}}},
+    }
+    old, new = tmp_path / "old", tmp_path / "new"
+    write_settings(old, settings)
+    write_settings(new, {"version": 1, **settings})
+    read_old, read_new = load_settings(old), load_settings(new)
+    assert read_old == settings
+    assert {k: v for k, v in read_new.items() if k != "version"} == read_old
+    assert allowed_tools(read_old, TOOLS, ["/p"]) == allowed_tools(read_new, TOOLS, ["/p"])
+
+
+@pytest.mark.parametrize("version", [None, 1, 2])
+def test_a_rule_change_adds_the_version_only_when_missing_and_undo_puts_the_file_back(
+    tmp_path, version
+):
+    settings = {"servers": SERVERS, "rules": {"global": {}, "projects": {}}}
+    path = write_settings(
+        tmp_path, settings if version is None else {"version": version, **settings}
+    )
+    before = path.read_bytes()
+    engine = engine_for(tmp_path)
+    change = engine.preview("gateway.rule", [rule_step(tmp_path, "/p", "github", None, "off")])
+    engine.apply(change.id)
+    assert str(change.state) == "verified", change.error
+    saved = json.loads(path.read_text())
+    assert saved["version"] == (version or 1)  # a newer format is left as it is
+    assert saved["rules"]["projects"] == {"/p": {"github": {"server": "off"}}}
+
+    engine.undo(change.id)
+    assert str(change.state) == "undone", change.error
+    assert path.read_bytes() == before

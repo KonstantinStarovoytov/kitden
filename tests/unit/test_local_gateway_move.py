@@ -264,6 +264,7 @@ def test_moving_adds_the_server_removes_the_entries_and_adds_kitden_where_missin
     # The gateway holds the server as the clients had it, without client-only keys.
     path = gateway_file(home)
     assert json.loads(path.read_text()) == {
+        "version": 1,
         "servers": {"files": HELD_FILES},
         "path": "/opt/tools/bin:/usr/bin:/bin",
     }
@@ -317,6 +318,23 @@ def test_apply_then_undo_puts_every_file_back(home):
     assert str(change.state) == "undone", change.error
     assert {path: path.read_bytes() for path in files} == before
     assert not gateway_file(home).exists()
+
+
+def test_a_move_into_an_old_gateway_file_adds_the_version_and_undo_puts_it_back(home):
+    """A gateway file from before the version: the move adds it; Undo restores every byte."""
+    write_json(gateway_file(home), {"servers": {"linear": {"url": "https://mcp.linear.app/mcp"}}})
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    files = [gateway_file(home), home / ".claude.json"]
+    before = {path: path.read_bytes() for path in files}
+
+    engine, change = apply(home, move(home, ("claude_code", "files")))
+    saved = json.loads(gateway_file(home).read_text())
+    assert saved["version"] == 1
+    assert set(saved["servers"]) == {"linear", "files"}
+
+    engine.undo(change.id)
+    assert str(change.state) == "undone", change.error
+    assert {path: path.read_bytes() for path in files} == before
 
 
 def refused(home, wanted, words):

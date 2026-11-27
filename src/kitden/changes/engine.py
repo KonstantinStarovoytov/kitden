@@ -248,6 +248,14 @@ def _edited(edit: FileEdit, text: str, value: Any) -> str:
     return editor.set_value(text, edit.key, value)
 
 
+def _with_version(edit: FileEdit, text: str) -> str:
+    """The text with the file's format version (FileEdit.version) added when it has none.
+    A version already there, newer ones too, is left as it is."""
+    if edit.version is None or json_splice.get_value(text, ("version",)) is not ABSENT:
+        return text
+    return json_splice.set_value(text, ("version",), edit.version)
+
+
 def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
     """Put back each entry of one file, last step first. None if any entry is no longer ours."""
     try:
@@ -690,7 +698,7 @@ class Engine:
                 raise _ClientRefusedError(step.client, f"`{shown}` failed: {result.output}")
             self.on_write(edit.path, _sha(_read(edit.path)))
             return None
-        new = _edited(edit, (data or b"").decode(), edit.after)
+        new = _edited(edit, _with_version(edit, (data or b"").decode()), edit.after)
         self._write(edit.path, new.encode())
         return new.encode()
 

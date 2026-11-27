@@ -137,6 +137,7 @@ def test_the_medium_sample_has_a_kitden_gateway_with_rules_and_tools(tmp_path):
 def test_the_small_sample_keeps_its_own_path_and_an_empty_keychain(tmp_path):
     home = build_demo_home(tmp_path, "small")
     assert load_settings(home) == {
+        "version": 1,
         "path": "/usr/local/bin:/usr/bin:/bin",
         "servers": {},
         "rules": {"global": {}, "projects": {}},
