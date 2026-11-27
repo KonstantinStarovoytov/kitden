@@ -1076,7 +1076,7 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
         "socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason, "
         "stale: Boolean(cell.stale_at) })" in text
     )
-    assert 'button(state.show === "diff" ? cell.add.label : "+"' in text
+    assert 'button(worded ? cell.add.label : "+"' in text
     assert '"btn small add"' in text
     assert 'via: "Via Claude Code", done: "Has its skills"' in script("words.js")
     # The List is a tree grid; the category filter went with New and All (the add panel).

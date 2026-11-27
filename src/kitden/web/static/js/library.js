@@ -139,7 +139,8 @@ export function cellNode(row, client) {
     // "+" alone; the sentence is its hover, its focus tip and its spoken name. Differences, where
     // the cells are what you read, keeps the words ("+ Add skills").
     const words = addName(row, client, cell.add, state.project);
-    const node = button(state.show === "diff" ? cell.add.label : "+", () => startAdd(cell.add, client, row), "btn small add");
+    const worded = state.show === "diff";
+    const node = button(worded ? cell.add.label : "+", () => startAdd(cell.add, client, row), worded ? "btn small add" : "btn small add plus");
     node.setAttribute("aria-label", words);
     node.title = words;
     node.dataset.focus = `add:${row.key}:${client}`;

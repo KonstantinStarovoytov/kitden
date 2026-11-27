@@ -335,6 +335,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .btn.ghost:hover:not(:disabled) { background: var(--wire-soft); border-color: transparent; color: var(--ink); }
 /* A small button has less padding and 11 px text, but stays 24 px tall to press. */
 .btn.small { min-height: 24px; padding: 4px 9px; font-size: 11px; }
+/* A List cell's add is "+" alone: a mark the size of the words beside it. */
+.btn.small.plus { min-width: 28px; justify-content: center; padding: 2px 8px; font-size: 15px; line-height: 1; }
 /* Busy: a small spinner takes the words' place after a short wait; the words keep the size. */
 .btn.busy { color: transparent; }
 .btn.busy > * { visibility: hidden; }
