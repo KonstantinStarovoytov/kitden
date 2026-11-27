@@ -338,6 +338,37 @@ export function afterShared(read) {
   return sharedRead ? sharedRead.then(run) : Promise.resolve(run());
 }
 
+// One search box for the setup (02-R03): where a search goes from the `view` shown. The Library
+// and the Gateway search themselves; while the page shown finds nothing of that name and the other
+// does (a server, a tool; a plugin, a skill, a marketplace), the search goes there. Any other
+// place sends it where the name is, the Library first. What Kitden has not read yet matches
+// nothing, so the search stays (readForSearch reads it).
+function hits(place, words) {
+  const has = (name) => String(name || "").toLowerCase().includes(words);
+  if (place === "library") {
+    const map = data.libraryMap;
+    if (!map) return null;
+    return (map.groups || []).some((g) => has(g.name) || (g.items || []).some((i) => has(i.name) || (i.parts || []).some((p) => has(p.name))));
+  }
+  const view = data.gateway;
+  if (!view) return null;
+  const outside = Object.values(view.groups || {}).flat();
+  const held = (view.gateways || []).flatMap((g) => g.servers || []);
+  return outside.some((row) => has(row.name)) || held.some((s) => has(s.name) || (s.tool_list || []).some((t) => has(t.name)));
+}
+export function searchPlace(view, q) {
+  const words = String(q || "").trim().toLowerCase();
+  const own = view === "library" || view === "gateway";
+  if (!words) return view;
+  if (!own) return hits("library", words) === false && hits("gateway", words) ? "gateway" : "library";
+  const other = view === "library" ? "gateway" : "library";
+  return hits(view, words) === false && hits(other, words) ? other : view;
+}
+// What a search looks in, read once if this visit has not read it. Resolves when both are read.
+export function readForSearch() {
+  return Promise.all([data.gateway || loadGateway(), data.libraryMap || loadLibraryMap()]).catch(() => {});
+}
+
 export async function loadOverview() {
   const { project } = state;
   await guarded("overview", `/api/overview${query({ project })}`, (v) => { data.overview = v; }, project);

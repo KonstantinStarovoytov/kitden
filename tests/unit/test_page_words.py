@@ -1221,9 +1221,10 @@ def test_rows_say_they_open_details_and_search_names_its_scope():
     # The search promises what it finds from the place (02-N02): the Gateway its servers and
     # tools, every other place the Library's. The placeholder trails off; the accessible name
     # does not repeat the dots.
-    assert 'placeholder="Search skills, plugins and marketplaces…"' in INDEX
-    assert 'aria-label="Search skills, plugins and marketplaces"' in INDEX
-    assert 'gateway: "Search servers and tools"' in script("app.js")
+    # One box searches the whole setup, with the same words on every place.
+    assert 'placeholder="Search skills, plugins, servers and tools…"' in INDEX
+    assert 'aria-label="Search skills, plugins, servers and tools"' in INDEX
+    assert 'SEARCH_WORDS = "Search skills, plugins, servers and tools"' in script("app.js")
     assert "Search plugins and skills to add" not in script("app.js")
     assert 'go("library", { q })' in script("app.js")
     assert "Find an item" not in INDEX

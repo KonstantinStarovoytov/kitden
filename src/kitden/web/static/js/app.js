@@ -18,8 +18,8 @@ import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, holdPanel, initPanel, isPanelOpen } from "./panel.js";
 import { callout, demoTag, GONE_PROJECT, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
 import {
-  arrival, busy, current, data, followHash, freshness, go, isOldAddress, loadShared, onIdle, parseHash, projectGone, readLibraryMap, reload, setRenderer, setState, setSwitcher, state,
-  switchProject,
+  arrival, busy, current, data, followHash, freshness, go, isOldAddress, loadShared, onIdle, parseHash, projectGone, readForSearch, readLibraryMap, reload, searchPlace, setRenderer, setState,
+  setSwitcher, state, switchProject,
 } from "./store.js";
 import { refreshRestarts, startRestarts } from "./restarts.js";
 import { checkTrayStale, leaveWarns, tray } from "./tray.js";
@@ -80,21 +80,15 @@ function renderPlace() {
   }
   glide($(".nav"), $('.nav a[aria-current="page"]'), "nav");
   renderShell();
-  searchWords();
   drawChip(MAP_PAGES.includes(state.view) ? found : null);
   // The tray's line depends on the place ("Click one on the map to take it out." only on the
   // Gateway's map). A redraw of the page never takes the dock from a toast.
   drawTray(tray, { toastStays: true });
 }
 
-// The search box promises what it finds from here: the Gateway finds its servers and tools; every
-// other place sends a search to the Library, which has no servers.
-export const SEARCH_WORDS = { gateway: "Search servers and tools", other: "Search skills, plugins and marketplaces" };
-function searchWords() {
-  const words = SEARCH_WORDS[state.view === "gateway" ? "gateway" : "other"];
-  $("#q").placeholder = `${words}…`;
-  $("#q").setAttribute("aria-label", words);
-}
+// One search box for the whole setup, the same words on every place (index.html has them): a
+// search goes where something of that name is (store.js searchPlace).
+export const SEARCH_WORDS = "Search skills, plugins, servers and tools";
 
 // The Overview's count in the rail and the Where list follow the data.
 function renderShell() {
@@ -405,11 +399,15 @@ function start() {
   // stays in the box (only the page is drawn again).
   $("#q").addEventListener("input", (event) => {
     const q = event.target.value.trim();
-    // A map page finds on itself and the Library searches what is set up and the marketplaces;
-    // other places send a search to the Library.
-    const here = state.view === "library" || MAP_PAGES.includes(state.view);
-    if (!here && q) go("library", { q });
-    else go(state.view, { q });
+    // The Library and the Gateway find on themselves; a search goes to the other when only the
+    // other has that name, and from any other place to where the name is.
+    go(searchPlace(state.view, q), { q });
+    // What was not read yet may hold the name: once read, the same search may go there.
+    readForSearch().then(() => {
+      if ($("#q").value.trim() !== q) return;
+      const place = searchPlace(state.view, q);
+      if (place !== state.view) go(place, { q });
+    });
   });
   // Escape clears a search on a map page. Details stay open: only the next Escape closes them.
   $("#q").addEventListener("keydown", (event) => {
