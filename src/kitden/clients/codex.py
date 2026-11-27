@@ -59,7 +59,7 @@ from kitden.model import (
     Step,
     UnknownReason,
 )
-from kitden.views.words import CHANGE_UNREAD, CODEX_SKILLS_NOT_TABLES
+from kitden.views.words import CHANGE_UNREAD, CODEX_SKILLS_NOT_TABLES, UNTRUSTED
 
 CLIENT = "codex"
 RESTART = "Restart Codex (the app and any open CLI sessions) for this to take effect."
@@ -168,15 +168,18 @@ def _skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
 
 
 def skills_off(config: dict) -> set[str]:
-    """The SKILL.md paths that config.toml's `[[skills.config]]` turns off."""
+    """The SKILL.md paths that config.toml's `[[skills.config]]` turns off. When several entries
+    name one path, the last one wins (checked 2026-11-26, Codex's config reference)."""
     rules = as_dict(config.get("skills")).get("config")
-    return {
-        os.path.realpath(rule["path"])
-        for rule in (rules if isinstance(rules, list) else [])
-        if isinstance(rule, dict)
-        and rule.get("enabled") is False
-        and isinstance(rule.get("path"), str)
-    }
+    last: dict[str, bool] = {}
+    for rule in rules if isinstance(rules, list) else []:
+        if (
+            isinstance(rule, dict)
+            and isinstance(rule.get("enabled"), bool)
+            and isinstance(rule.get("path"), str)
+        ):
+            last[os.path.realpath(rule["path"])] = rule["enabled"]
+    return {path for path, enabled in last.items() if not enabled}
 
 
 def _agents_md(folder: Path) -> list[tuple[Path, str]]:
@@ -340,7 +343,9 @@ class CodexAdapter(ClientAdapter):
 
     def item_actions(self, item: Item) -> tuple[str, ...]:
         if is_direct_entry(item, CLIENT, {Scope.USER, Scope.PROJECT}):
-            return (REMOVE_DIRECT,)
+            # Its own `enabled` key turns it on or off, as a plugin's does; not in a project
+            # Codex does not read (`change_hint` says so).
+            return (REMOVE_DIRECT, *(() if item.change_hint else toggle_action(item)))
         if (
             item.kind is ItemKind.PLUGIN
             and item.client == CLIENT
@@ -356,12 +361,16 @@ class CodexAdapter(ClientAdapter):
             return (SKILL_REMOVE,)
         return ()
 
+    # checked 2026-11-26 (learn.chatgpt.com/docs/extend/mcp): `enabled = false` in
+    # `[mcp_servers.<name>]` turns a server off without deleting it.
     def plugin_step(self, item: Item, enable: bool) -> Step:
+        """A plugin's or a direct MCP server's `enabled` key, in the file that holds it."""
         check_toggle(self, item, enable)
+        table = "mcp_servers" if item.kind is ItemKind.MCP_SERVER else "plugins"
         edit = FileEdit(
             path=str(item.source.path),
             fmt="toml",
-            key=("plugins", item.name, "enabled"),
+            key=(table, item.name, "enabled"),
             after=enable,
         )
         return Step(
@@ -377,10 +386,14 @@ class CodexAdapter(ClientAdapter):
     # skills"): a `[[skills.config]]` entry in ~/.codex/config.toml whose `path` is the skill's
     # SKILL.md, with `enabled = false`, turns the skill off without deleting it; restart Codex
     # after the change. The docs name no project file for it.
-    def skill_rule_step(self, item: Item) -> Step:
+    # checked 2026-11-26 (learn.chatgpt.com/docs/config-file/config-reference):
+    # `skills.config.<index>.enabled` enables or disables the skill; the last matching entry
+    # wins.
+    def skill_rule_step(self, item: Item, on: bool = False) -> Step:
         """Turn one skill off for all projects: its `[[skills.config]]` table gets
-        `enabled = false`, or a new table is added after the others. The step edits that one
-        table (toml_edit.pick), so a change to another skill is another entry."""
+        `enabled = false`, or a new table is added after the others; `on` sets it back to true
+        (with no table there, the skill is on already). The step edits that one table
+        (toml_edit.pick), so a change to another skill is another entry."""
         config = self.codex_home / "config.toml"
         try:
             text = config.read_text() if config.is_file() else ""
@@ -393,7 +406,9 @@ class CodexAdapter(ClientAdapter):
         path = str(item.source.path)
         # A table may spell the path another way (a link); the scan compares real paths.
         mine = [r for r in rules if os.path.realpath(str(r.get("path", ""))) == path]
-        after = {**mine[-1], "enabled": False} if mine else {"path": path, "enabled": False}
+        if on and not mine:
+            raise ValueError(f"{item.name} is on already.")
+        after = {**mine[-1], "enabled": on} if mine else {"path": path, "enabled": False}
         key = ("skills", "config", toml_edit.pick(str(after["path"])))
         try:
             # An inline list (`config = [ {...} ]`) reads as tables but cannot take the edit:
@@ -641,17 +656,18 @@ class CodexAdapter(ClientAdapter):
         layer = as_dict(read.toml(layer_path))
         for name, entry in as_dict(layer.get("mcp_servers")).items():
             state = _on(as_dict(entry).get("enabled")) if trusted else Enabled.OFF
-            items.append(
-                mcp_item(
-                    CLIENT,
-                    name,
-                    entry,
-                    file_source(layer_path, CLIENT, f"mcp_servers.{name}"),
-                    Scope.PROJECT,
-                    project=str(root),
-                    enabled=state,
-                )
+            item = mcp_item(
+                CLIENT,
+                name,
+                entry,
+                file_source(layer_path, CLIENT, f"mcp_servers.{name}"),
+                Scope.PROJECT,
+                project=str(root),
+                enabled=state,
             )
+            # Off because Codex does not read the file: its `enabled` key would change nothing.
+            hint = None if trusted else UNTRUSTED.format(root.name)
+            items.append(replace(item, change_hint=hint) if hint else item)
         # checked 2026-11-15 (developers.openai.com/plugins/build/plugins, and Codex 0.167.0 in a
         # sandbox home with `codex plugin list --json`): `[plugins."<id>"] enabled` in a trusted
         # project's `.codex/config.toml` turns an installed plugin on or off in that project

@@ -100,7 +100,7 @@ function addParts(config, rows, retry) {
   const head = header(config.kicker, config.title, null);
   const body = el("div", "body add-body");
   const foot = el("p", "step-foot");
-  foot.append(icon("info", 13), el("span", null, config.foot));
+  foot.append(icon("info", 13), el("span", null, typeof config.foot === "function" ? config.foot() : config.foot));
   if (!rows) {
     const again = button("Try again", retry, "btn ghost small");
     body.append(...(config.before ? config.before() : []), el("p", "muted", FAILED), again);

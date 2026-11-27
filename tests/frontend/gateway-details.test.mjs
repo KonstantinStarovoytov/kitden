@@ -88,7 +88,7 @@ test('a client that cannot take the server gets no Add, only the reason', () => 
   const cannot = { cannot_add: { codex: 'Codex cannot use an SSE connection from here.' } };
   const card = outsideCard(GITHUB, 'move', [def('g', 'claude_code', cannot)], { view: VIEW, clients: FOUND, linked: ['claude_code', 'codex'] });
   assert.deepEqual(moreLabels(card), ['+ Add to Cursor…', 'Remove from Claude Code…']);
-  assert.equal(textOf(card.after), 'Codex cannot use an SSE connection from here, so it cannot be added there.');
+  assert.equal(textOf(card.after), 'Codex cannot use an SSE connection from here, so it cannot be added there. Kitden has no switch to turn it off in Claude Code; Claude Code has one per project in its /mcp panel.');
 });
 
 test('the outside panel keeps every action, the rest under More', () => {
@@ -144,11 +144,11 @@ test('a server that stays says why instead of Move', () => {
   const stays = "docs is in the project's own files, so it cannot move into the Kitden gateway.";
   const kept = outsideCard({ ...DOCS, stays }, 'move', [def('a', 'claude_code')], { view: VIEW, clients: FOUND, linked: ['claude_code'] });
   assert.ok(!labels(kept).includes('Move into the gateway…'));
-  assert.equal(textOf(kept.after), stays);
+  assert.equal(textOf(kept.after), `${stays} Kitden has no switch to turn it off in Claude Code; Claude Code has one per project in its /mcp panel.`);
   // It cannot move: the sentence does not ask for it.
   assert.equal(kept.why, "Claude Code calls docs on its own, so Kitden can't turn its tools on or off.");
   const none = outsideCard(GITHUB, 'move', [def('g', 'claude_code')], { view: { ...VIEW, gateways: [] }, clients: FOUND });
-  assert.equal(textOf(none.after), GATEWAY_NOTE);
+  assert.equal(textOf(none.after), `${GATEWAY_NOTE} Kitden has no switch to turn it off in Claude Code; Claude Code has one per project in its /mcp panel.`);
   // A plugin's server stays with its plugin, and says so.
   const plugin = outsideCard(row('linear', 'claude_code', [], { stays: 'linear comes with a plugin; it stays with the plugin.' }), 'plugin', [def('l', 'claude_code', { actions: [] })], { view: VIEW, clients: FOUND });
   assert.deepEqual([labels(plugin), moreLabels(plugin), plugin.id], [[], [], 'From a plugin · outside the gateway']);
@@ -1663,4 +1663,24 @@ test('a tool pick made on the map shows in the server list, and goes with Clear'
   } finally {
     globalThis.document.addEventListener = saved;
   }
+});
+
+test('a Codex server that is off says so and turns on for its own scope; the others say why they have no switch', () => {
+  const sqlite = row('sqlite', 'codex', ['s'], { off: ['codex'], stays: 'sqlite is off. Turn it on first to move it into the gateway.' });
+  const card = outsideCard(sqlite, 'local', [def('s', 'codex', { actions: ['mcp.remove_direct', 'plugin.enable'] })], { view: VIEW, clients: FOUND });
+  assert.deepEqual(facts(card)[1], ['State', 'Off in Codex']);
+  assert.ok(labels(card).includes('Turn on in Codex for all projects…'));
+  assert.equal(card.actions.find((a) => a.label.startsWith('Turn on')).body.action, 'plugin.enable');
+  // A project's own entry names its project.
+  const own = outsideCard(sqlite, 'local', [def('s', 'codex', { actions: ['plugin.enable'], project: '/home/u/work/atlas', scope: 'project' })], { view: VIEW, clients: FOUND });
+  assert.ok(labels(own).includes('Turn on in Codex in atlas…'));
+  // Claude Code and Cursor: one line says Kitden has no switch there.
+  const both = outsideCard({ ...GITHUB, columns: ['claude_code', 'cursor'] }, 'move', [def('g', 'claude_code')], { view: VIEW, clients: FOUND, linked: ['claude_code', 'codex'] });
+  assert.match(textOf(both.after), /Kitden has no switch to turn it off in Claude Code and Cursor; Claude Code has one per project in its \/mcp panel\./);
+});
+
+test('a project server says why it has no Add to other clients', () => {
+  const card = outsideCard({ ...DOCS, stays: null }, 'move', [def('a', 'claude_code', { scope: 'project' })], { view: VIEW, clients: FOUND });
+  assert.ok(!moreLabels(card).some((l) => l.startsWith('+ Add')));
+  assert.match(textOf(card.after), /Kitden copies only servers set for all projects to other clients\./);
 });

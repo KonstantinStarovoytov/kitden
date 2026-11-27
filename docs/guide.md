@@ -32,7 +32,9 @@ Codex also loads skills in sub-folders of its skills folders, even inside anothe
 Each has a row and a switch of its own. Turning off the outer skill leaves the ones inside it on;
 removing it removes them too, and the review names them.
 
-An MCP server you turned off with `/mcp` in one project shows as off in that project.
+An MCP server you turned off with `/mcp` in one project shows as off in that project. So does a
+Codex server with `enabled = false`: the **Gateway** lists it outside the gateway as **Off in
+Codex**, and its **Details** offer **Turn on in Codex for all projects…**.
 
 **From your Claude account** holds the plugins you or your organization turned on for your
 Claude account. The Claude app gives them to Claude Code in its Code tab. Each shows what it
@@ -50,6 +52,18 @@ While a change waits in the preview, every row and card that shows the thing say
 with a dashed ring: in the Library and the Gateway, as a list and as a map. With **All projects**,
 a plugin's Details also name a project whose own settings turn it off; in that project they say
 why it has no switch there.
+
+A thing has the same switch wherever it shows. A skill's **Details** in the Library and on
+**Context** have the same switch, **On**, **Name only** (Claude Code) or **Off**, with a line that
+names the client and where it holds ("Claude Code · all projects"), so a skill you turned off can
+be turned on again in the same place. A plugin's switch says where it holds too: **Turn off for all
+projects…**, **Turn on for all projects…**, and with a project picked **Turn off in this
+project…** or **Use the shared rule…**; Context's group header offers the same. A trusted Codex
+project whose own `.codex/config.toml` names a plugin gets **Turn off in this project…** or **Turn
+on in this project…**, which change that file. Where a client has no switch, the place where it
+would be says why: Codex has no **Name only**, Cursor has no switch for one skill (add
+`disable-model-invocation: true` to its `SKILL.md` to keep its description out), and Kitden only
+shows hooks. In the Library's List an empty cell with a reason shows a small **?**; point at it.
 
 ## Choose your clients
 
@@ -112,15 +126,18 @@ few that take most of the list stand out. For Claude Code a skill's size also co
 `when_to_use`, as Claude Code does. A skill's **Details** shows its description, with
 the part the agent did not get in grey. There you can also
 switch it to **On**, **Name only** (Claude Code) or **Off** where the client
-allows it; Cursor has no switch. A skill built into Claude Code, such as `dataviz`, is marked
+allows it, the same switch as in the Library; a Codex skill that is off turns on again here too.
+Cursor has no switch, and its Details say what to do instead. A skill built into Claude Code, such as `dataviz`, is marked
 **built-in**: it is not a file, so the Library does not list it, but most have the same switch,
 for all projects. A skill of a plugin that Claude Code installed follows its plugin: its Details
 name the plugin first, say that the switch is the plugin's and what it holds, and offer **Turn
-off** for the whole plugin, the same switch as on its group's header. While it waits in the
+off for all projects…** for the whole plugin, the same switch as on its group's header and in the
+Library. While it waits in the
 preview, the plugin's group says **Off after Apply** and all of its skills go together, and the
 preview's row says what goes ("Turns off all of plugin-dev: 7 skills, 1 command and 3 agents.").
 It counts in the estimate and on the limit line as a skill's own switch does, whether you pressed
-it here or in the Library. After Apply the whole group says **Off**, with one **Turn on**. When Kitden has no switch
+it here or in the Library. After Apply the whole group says **Off**, with one **Turn on for all
+projects…**. When Kitden has no switch
 for a skill, such as one the Claude app adds, its Details say so and why. A skill of a plugin
 from your Claude account names that plugin, and its Details offer the plugin's own switch. A skill
 that is off now is drawn off in its group (struck through), where you can turn it on again: right
@@ -251,6 +268,10 @@ An agent that calls a tool that is off, by a switch, a project rule or strict mo
 "<name> is turned off in Kitden."
 A server that must start in its own folder starts there in the gateway, so it also works in
 Cursor, which has no such setting.
+A server outside the gateway has an on/off switch only in Codex, which has an `enabled` key for it;
+its **Details** offer **Turn off in Codex for all projects…** or **Turn on…**. Kitden has no switch
+for one in Claude Code (Claude Code's `/mcp` panel turns one on or off per project) or Cursor, and
+the **Details** say so. In the gateway every server gets a switch.
 If the gateway already has a server of that name, moving another one in works only when it is
 the same server; a new token for it is fine, and the review says so. A different server of that
 name is refused until you keep one. When a client keeps its own server of a name the gateway

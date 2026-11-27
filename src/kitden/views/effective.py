@@ -55,6 +55,8 @@ class EffectiveView:
     project: str | None
     items: list[Item] = field(default_factory=list)
     shadowed: list[tuple[Item, Item, str]] = field(default_factory=list)
+    # The items that would load here but are off: the Gateway lists its off MCP servers.
+    off: list[Item] = field(default_factory=list)
 
 
 def _ranked(item: Item, base: str) -> int | None:
@@ -120,12 +122,9 @@ def effective_view(inventory, client: str, project: str | None) -> EffectiveView
             else i
             for i in candidates
         ]
-    kept = [
-        i
-        for i in candidates
-        if (_ranked(i, base) is None or winners[(i.kind, i.name)] is i)
-        and i.enabled is not Enabled.OFF
-    ]
+    first = [i for i in candidates if _ranked(i, base) is None or winners[(i.kind, i.name)] is i]
+    kept = [i for i in first if i.enabled is not Enabled.OFF]
+    view.off = [i for i in first if i.enabled is Enabled.OFF]
     loaded_plugins = {i.name for i in kept if i.kind is ItemKind.PLUGIN}
     view.items = [
         i

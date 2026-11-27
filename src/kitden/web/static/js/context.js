@@ -13,9 +13,11 @@ import { button, el, icon, reportError } from "./dom.js";
 import { headActions } from "./map-page.js";
 import { animateTo, fold, riseHead } from "./motion.js";
 import { closePanel, openPanel, panelState, whenGone } from "./panel.js";
-import { banner, CLIENT_NAMES, mark, skeleton } from "./parts.js";
-import { current, currentError, data, go, goTo, loadContext, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
-import { addToTray, CONTEXT_NOTE, inTray, keyFor, onTray, ruleState, takeOut, tray, trayRow } from "./tray.js";
+import { banner, CLIENT_NAMES, folderName, mark, skeleton } from "./parts.js";
+import { ALL_PROJECTS_SCOPE, skillSwitch } from "./skill-switch.js";
+import { context as libraryContext, OFF_ALL, ON_ALL, pluginSwitches, removeRows, skillProjectSwitches } from "./library-details.js";
+import { current, currentError, data, go, goTo, loadContext, projectPath, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
+import { addToTray, CONTEXT_NOTE, keyFor, onTray, ruleState, takeOut, tray, trayRow } from "./tray.js";
 
 const TITLE = "Do your skills fit?";
 const PILL_NUMBERS = "The number beside a skill is the length of its description, in characters.";
@@ -25,7 +27,6 @@ const ESTIMATE = /^(After Apply, estimate:|Estimate:)/;
 // The picture's own words; the rest is the server's.
 const PICTURE = { window: "Context window", rest: "Rest of the window", list: "Skill list", now: "Skill list now, estimate", sent: "Sent", free: "Free" };
 const OVER = { claude_code: "Over the limit: not sent", codex: "Over the limit: cut off" };
-const STATES = { on: "On", "name-only": "Name only", off: "Off" };
 const HOW = "How this is counted";
 // The skill list limit (specs skill-list-limit and limit-line-control): the limit line on the bar is
 // its control, and Details explain it. The sentences, the places and their numbers are the server's.
@@ -487,13 +488,17 @@ function groupNode(card, facts, view, after, heat, opened, id, arrived, focus) {
   head.append(toggle, name);
   if (group.from) head.append(el("span", "ctx-gfrom", group.from));
   head.append(meta);
-  if (group.switch) head.append(groupSwitch(group.switch));
+  // The plugin's switches are the Library's own (pluginSwitches), for this client; Context's own
+  // offer only for a plugin the Library does not show.
+  const switches = librarySwitches(card, libraryEntry(group.lookup));
+  if (switches) head.append(...switches.map(switchButton));
+  else if (group.switch) head.append(groupSwitch(group.switch));
   head.addEventListener("click", (event) => { if (!event.target || !event.target.closest || !event.target.closest("button")) setOpen(!opened.has(group.key)); });
   // The pills: sent first, then only a name or cut, then in no list, then off.
   const body = el("div", "fold ctx-gbody");
   body.id = id;
   const inner = el("div", "fold-in");
-  if (group.why) inner.append(el("p", "ctx-gwhy", group.why));
+  if (group.why && !(switches && switches.length)) inner.append(el("p", "ctx-gwhy", group.why));
   const cloud = el("div", "ctx-cloud");
   const order = { sent: 0, lo: 1, apart: 2, going: 3, off: 4 };
   const members = [...facts.members].sort((a, b) => order[a.look] - order[b.look]);
@@ -537,8 +542,56 @@ function groupNode(card, facts, view, after, heat, opened, id, arrived, focus) {
 // The group's switch on its header: the plugin's own, the same row as its Details and the Library
 // add (one row, `switch:<item>`); a second press takes it out.
 function groupSwitch(offer) {
-  const words = offer.action === "plugin.disable" ? "Turn off" : "Turn on";
+  const words = offer.action === "plugin.disable" ? OFF_ALL : ON_ALL;
   return pluginButton(offer, { words, className: "btn small ctx-gswitch", focus: "gswitch" });
+}
+
+// The Library's entry for a group's plugin (`lookup`, its id), from the Library's map that Context
+// reads too (store.js); null while it is not read or the Library does not show the plugin.
+function libraryEntry(lookup, item = null, kind = "plugin") {
+  const map = current("libraryMap");
+  if (!map || !(lookup || item)) return null;
+  const mine = (entry) => entry.kind === kind && (lookup ? entry.plugin === lookup : Object.values(entry.items || {}).some((ids) => ids.includes(item)));
+  for (const group of map.groups || []) {
+    const found = (group.items || []).find(mine);
+    if (found) return found;
+  }
+  return null;
+}
+
+// The Library's switches for a plugin in this card's client, where the card shows the scope the
+// Library shows: not for a last chat in another folder than the picked one (All projects with a
+// chat in atlas), where the group's own words say why.
+function librarySwitches(card, entry) {
+  if (!entry || !sameScope(card)) return null;
+  return pluginSwitches(entry, libraryContext(current("libraryMap")), card.client);
+}
+
+// The card's chat is in the picked scope (no chat in another folder than the picked one).
+function sameScope(card) {
+  const folder = card.fact && card.fact.folder;
+  if (!folder) return true;
+  return Array.isArray(data.projects) && folder === projectPath();
+}
+
+// One of the Library's switches on a group's header: a press adds its rows (a second press takes
+// them out), each saying what goes with it.
+function switchButton({ label, bodies, goes }) {
+  const keys = bodies.map(keyFor);
+  const node = button(label, async () => {
+    if (keys.every((key) => trayRow(key))) {
+      for (const key of keys) takeOut(key);
+      return;
+    }
+    for (const body of bodies) if (!trayRow(keyFor(body))) await addToTray(body, { note: CONTEXT_NOTE, goes });
+  }, "btn small ctx-gswitch");
+  node.dataset.focus = `gswitch:${label}`;
+  followTray(node, keys[0], () => {
+    const waits = keys.every((key) => trayRow(key));
+    node.setAttribute("aria-pressed", String(waits));
+    node.classList.toggle("pending", waits);
+  });
+  return node;
 }
 
 // The Library with the group's plugin selected: it opens the same Details as there. Back returns.
@@ -638,8 +691,14 @@ function openSkill(client, name) {
   if (plugin) facts.push({ label: "Plugin", value: plugin });
   if (skill.size) facts.push({ label: "Size", value: `${fmt(skill.size)} characters` });
   if (skill.source) facts.push({ label: "Source", value: skill.source });
-  const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(skill.plugin_switch, plugin) : null;
-  const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: plugin ? null : skill.note, text: describe(skill) });
+  const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(card, skill.plugin_switch, plugin) : null;
+  // The Library's own project rows and Remove for this skill in this client, where the Library
+  // shows the same scope.
+  const entry = skill.item && sameScope(card) ? libraryEntry(null, skill.item, "skill") : null;
+  const c = entry ? libraryContext(current("libraryMap")) : null;
+  const actions = entry ? skillProjectSwitches(entry, c, card.client).map((one) => ({ label: one.label, node: switchButton(one) })) : [];
+  const more = entry ? removeRows(entry, card.client) : [];
+  const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: plugin ? null : skill.note, text: describe(skill), actions, more });
   openPanel(content);
   panelState.current = { type: "context-skill", client, name };
   keepFrom(() => openSkill(client, name), content);
@@ -668,22 +727,13 @@ function describe(skill) {
   return box;
 }
 
-// The row a state of this skill adds: for all projects, or for a project's own skill in its
-// project (Claude Code takes it only there).
-function ruleBody(card, skill, value) {
-  const params = skill.project ? { scope: "project", project: skill.project, state: value } : { scope: "all", state: value };
-  // A built-in skill has no item: the target is its name.
-  const which = skill.built_in ? { built_in: skill.name } : { item: skill.item };
-  return { action: "skill.rule", targets: [{ client: card.client, ...which }], params };
-}
-
 // The plugin's name from its switch's label ("Turn off plug").
 const pluginName = (offer) => offer.label.replace(/^Turn (off|on) /, "");
 
 // A plugin skill's plugin: whose switch it is, the server's sentence on what goes with it, and one
 // button that adds the Library's own row for the plugin (a second press takes it out). The row says
 // what goes with it too. `plugin`: the plugin's name, for the line that says the switch is its.
-function pluginSwitch(offer, plugin = null) {
+function pluginSwitch(card, offer, plugin = null) {
   const box = el("div", "ctx-plugin");
   const body = { action: offer.action, targets: [{ item: offer.item }], params: {} };
   const key = keyFor(body);
@@ -696,44 +746,20 @@ function pluginSwitch(offer, plugin = null) {
   });
   if (plugin) box.append(el("p", "why", `The switch is ${plugin}'s: it turns the whole plugin ${offer.action === "plugin.disable" ? "off" : "on"}, not one skill.`));
   if (offer.say) box.append(el("p", "why", offer.say));
-  box.append(node);
+  // The Library's own switches for the plugin, in this client, where the Library shows it.
+  const switches = librarySwitches(card, libraryEntry(null, offer.item));
+  if (switches && switches.length) box.append(...switches.map(switchButton));
+  else box.append(node);
   return box;
 }
 
-// The skill's states, the pressed one as the tray will leave it. A press adds the row (one row per
-// skill, whatever its state); a press on the state it has now takes the row out.
+// The skill's switch, the Library's own (skill-switch.js): for all projects, or for a project's own
+// skill in its project (Claude Code takes it only there).
 function switchFor(card, skill) {
-  const box = el("div", "seg ctx-switch");
-  box.setAttribute("role", "group");
-  box.setAttribute("aria-label", "State");
-  const key = keyFor(ruleBody(card, skill, "off"));
-  // Codex writes only `enabled = false`: a Codex skill that is off comes back by Undo in Changes,
-  // so its switch shows Off and no On.
-  const values = card.client === "codex" && skill.state === "off" ? skill.switch.filter((v) => v !== "on") : skill.switch;
-  const parts = values.map((value) => {
-    const node = button(STATES[value] || value, () => choose(card, skill, value), "");
-    node.dataset.state = value;
-    node.dataset.focus = `state:${value}`;
-    return node;
-  });
-  box.append(...parts);
-  followTray(box, key, () => {
-    const row = trayRow(key);
-    const now = row ? ruleState(row.body.params) : skill.state;
-    for (const node of parts) {
-      const on = node.dataset.state === now;
-      node.setAttribute("aria-pressed", String(on));
-      node.classList.toggle("pending", on && Boolean(row));
-    }
-  });
-  return box;
-}
-
-function choose(card, skill, value) {
-  const body = ruleBody(card, skill, value);
-  if (value !== skill.state) return addToTray(body, { note: CONTEXT_NOTE });
-  const key = keyFor(body);
-  return inTray(key) ? takeOut(key) : null;
+  const target = skill.built_in ? { built_in: skill.name } : { item: skill.item };
+  const own = skill.project && Array.isArray(data.projects) ? data.projects.find((p) => p.id === skill.project) : null;
+  const scope = own ? `in ${folderName(own.path)}` : ALL_PROJECTS_SCOPE;
+  return skillSwitch({ client: card.client, target, states: skill.switch, now: skill.state, project: skill.project, scope, note: CONTEXT_NOTE });
 }
 
 // The skill list limit ---------------------------------------------------------------------------

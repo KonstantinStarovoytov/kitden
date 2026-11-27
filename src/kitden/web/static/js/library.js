@@ -143,7 +143,11 @@ export function cellNode(row, client) {
   if (cell.state === "none") {
     const node = el("span", "socket s-none");
     node.append(el("span", "sr-only", cell.reason || "Not added"));
-    if (cell.reason) node.title = cellHint(cell);
+    // An empty cell with a reason shows a small mark, so its hover text can be found.
+    if (cell.reason) {
+      node.title = cellHint(cell);
+      node.classList.add("has-why");
+    }
     return node;
   }
   // Kept from the last good read of a file that now fails: a dashed dot, and the hover says when.

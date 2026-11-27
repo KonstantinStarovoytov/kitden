@@ -532,7 +532,8 @@ def test_a_codex_skill_turned_off_after_the_chat_is_said_and_leaves_the_estimate
     assert cx["limit"]["why"] == words.LIMIT_NOT_NEEDED
     rows = {s["name"]: s for s in cx["skills"]}
     assert (rows["gamma"]["state"], rows["gamma"]["side"]) == ("off", 0)
-    assert rows["gamma"]["switch"] == [] and rows["alpha"]["state"] == "on"
+    # Off, it keeps its switch: On turns it on again.
+    assert rows["gamma"]["switch"] == ["on", "off"] and rows["alpha"]["state"] == "on"
     assert rows["gamma"]["note"] == words.NOTE_OFF
 
 

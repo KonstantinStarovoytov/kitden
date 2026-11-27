@@ -445,6 +445,9 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .socket.pv .dot::after { transform: scale(0); }
 .row-wait { color: var(--route); font-size: 12px; white-space: nowrap; margin-left: 6px; }
 .s-none, .s-missing { color: var(--ink-4); }
+/* An empty cell with a reason: a small info mark; the reason is its hover text. */
+.s-none.has-why { cursor: help; }
+.s-none.has-why::after { content: "?"; display: inline-grid; place-items: center; width: 14px; height: 14px; border: 1px solid var(--line); border-radius: 50%; font-size: 10px; line-height: 1; color: var(--ink-3); }
 .socket .word { color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }
 /* The tag of a cell in a project view ("This project", "Only this project"): the accent family. */
 .socket .tag { color: var(--route); background: var(--route-soft); font-size: 11px; line-height: 18px; padding: 0 6px; border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }
@@ -1427,8 +1430,12 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .ctx-pill.off .ctx-tag, .ctx-pill.going .ctx-tag { text-decoration: none; }
 .ctx-pill.going { border-style: dashed; border-color: var(--preview-line); background: transparent; color: var(--ink-3); }
 .ctx-seg.gone { opacity: 0.32; }
-/* A skill's switch in Details: the pressed state rests raised; dashed while its row waits in the tray. */
+/* A skill's switch in Details (skill-switch.js, on Context and in the Library): a quiet line names
+   its client and scope; the pressed state rests raised; dashed while its row waits in the tray. */
 .ctx-switch { justify-self: start; }
+.skill-switches { display: grid; gap: 10px; }
+.skill-switch { display: grid; gap: 4px; justify-items: start; }
+.skill-switch .sw-scope { margin: 0; font-size: 12px; color: var(--ink-3); }
 .ctx-desc { display: grid; gap: 6px; }
 .ctx-desc p { margin: 0; }
 .ctx-desc-head, .ctx-desc-note { color: var(--ink-3); font-size: 12px; }

@@ -8,6 +8,7 @@ and follow the plugin, so the map never says "N of M on". Paths are only under `
 
 from pathlib import Path
 
+from kitden.changes.actions import SKILL_SWITCHES
 from kitden.changes.engine import writable, writable_roots
 from kitden.clients.base import (
     PLUGIN_DISABLE,
@@ -15,6 +16,7 @@ from kitden.clients.base import (
     PLUGIN_REMOVE,
     SKILL_REMOVE,
     found_columns,
+    from_plugin,
     listed_columns,
 )
 from kitden.clients.claude_account import is_account_plugin
@@ -246,6 +248,14 @@ def _can(
             "project": project_decides,
             "local": local,
             "shared": shared,
+            # Codex's own table in the picked project, which Kitden turns on or off there.
+            "project_switch": [
+                c
+                for c in project_decides
+                if c == "codex"
+                and (item := by_id[ids[c][0]]).project == project
+                and {PLUGIN_ENABLE, PLUGIN_DISABLE} & set(item.actions)
+            ],
         }
     if row.kind is ItemKind.SKILL:
         routes = offer["routes"] if offer else {}
@@ -255,16 +265,34 @@ def _can(
             for c in ("codex",)
             if by.get(c) == "on" and c not in through and by_id[ids[c][0]].project is not None
         ]
+        rule = [c for c in RULES if c in held and _ruled(by_id[ids[c][0]])]
+        # A project's own skill folder can go too, from that project's view.
+        own_folder = [
+            c
+            for c in project_decides
+            if c not in through
+            and by_id[ids[c][0]].project == project
+            and SKILL_REMOVE in by_id[ids[c][0]].actions
+        ]
         return {
             "add": add,
             "off": [c for c in RULES if c in own],
-            "remove": removable(SKILL_REMOVE),
+            "on": [c for c in rule if by[c] == "off"],
+            # The skill's own switch for all projects, per client: the states it takes (the same
+            # answer as Context's), shown as On, Name only and Off.
+            "rule": {c: list(SKILL_SWITCHES[c]) for c in rule},
+            "remove": [*removable(SKILL_REMOVE), *own_folder],
             "project": project_decides,
             "local": local,
             "shared": shared,
             "copy": copy,
         }
     return {}
+
+
+def _ruled(item: Item) -> bool:
+    """A skill rule reaches it: a client's own skill, not one of a plugin's."""
+    return item.kind is ItemKind.SKILL and not from_plugin(item)
 
 
 def _off_in(inventory, own: list[Item]) -> list[str]:
@@ -297,6 +325,8 @@ def _no_switch(row: Row, can: dict, deciding: dict[str, list[Item]], project: st
     """Why a plugin has no switch in the picked project: Codex's project settings set it there,
     and Kitden does not write them. The same words as Context's group."""
     if row.kind is not ItemKind.PLUGIN or not project or "codex" not in can.get("project", []):
+        return None
+    if "codex" in can.get("project_switch", []):
         return None
     if not any(i.project == project for i in deciding.get("codex", [])):
         return None
@@ -481,6 +511,11 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             said = [state for state in said if state and state != "off"]
             if said:
                 entry["skill_state"] = said[0]
+            # Where its switch is, the state it shows now, per client.
+            entry["can"]["now"] = {
+                c: "off" if by[c] == "off" else states.get(ids[c][0]) or "on"
+                for c in entry["can"]["rule"]
+            }
         account = next((i for i in own if is_account_plugin(i)), None)
         if account is not None and account.change_hint:
             entry["note"] = account.change_hint

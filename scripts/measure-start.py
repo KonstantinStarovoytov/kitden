@@ -55,9 +55,10 @@ SCALE = "KITDEN_START_BUDGET_SCALE"
 GIVE_UP_SECONDS = 60
 SLOW_STEP = "Codex plugins"
 # The map probe (Part 4.1): servers on the Gateway, held plus outside rows. The medium sample has
-# 2 held and 7 outside rows; build_probe adds the rest.
+# 2 held and 9 outside rows (2 of them off, which the Gateway lists since 2026-11-26); build_probe
+# adds the rest, so the Gateway still draws 20.
 PROBE_SERVERS = 20
-MEDIUM_ROWS = 9
+MEDIUM_ROWS = 11
 
 
 def build_sandbox(root: Path, slow: float) -> Path:

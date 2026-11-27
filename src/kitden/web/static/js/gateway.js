@@ -367,15 +367,21 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
       // The clients whose line leaves, each with the keys of the rows that take its entries out.
       const leaves = new Map(columns.map((c) => [c, goneWith(row, c, gone)]).filter(([, by]) => by));
       const leaving = columns.length > 0 && leaves.size === columns.length;
-      const meta = `In ${joinWords(columns.map((c) => CLIENT_NAMES[c]))}`;
+      // Off in every client that has it (`row.off`): an off block, its lines dashed.
+      const offAll = columns.length > 0 && columns.every((c) => (row.off || []).includes(c));
+      // Off in some clients only: the words name both sides, as the dashed lines do.
+      const names = (list) => joinWords(list.map((c) => CLIENT_NAMES[c]));
+      const offIn = columns.filter((c) => (row.off || []).includes(c));
+      const onIn = columns.filter((c) => !offIn.includes(c));
+      const meta = offAll ? `Off in ${names(columns)}` : offIn.length ? `In ${names(onIn)} · Off in ${names(offIn)}` : `In ${names(columns)}`;
       const targets = movesTo(view, group, row);
       const tag = picked && row.override ? ORIGIN_WORDS.override : null;
       // A drop moves into the Kitden gateway, so a grip needs it; a move already in the tray
       // needs no second one, and a server on its way out has none.
       const grip = targets.length > 0 && !first && !moved.has(id) && !leaving;
-      const state = row.unknown ? "unk" : "on";
-      blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, lamp: "out", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, row, groupKey: group, columns, move: targets.length > 0, grip, from: `preview:${row.name}`, ...(leaving ? { leaving } : {}) });
-      for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line, ...(leaves.has(client) ? leavesWith(leaves.get(client)) : {}) });
+      const state = offAll ? "off" : row.unknown ? "unk" : "on";
+      blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, offSome: offIn.length > 0, lamp: offAll ? "off" : "out", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, row, groupKey: group, columns, move: targets.length > 0, grip, from: `preview:${row.name}`, ...(leaving ? { leaving } : {}) });
+      for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line, ...((row.off || []).includes(client) ? { unk: true } : {}), ...(leaves.has(client) ? leavesWith(leaves.get(client)) : {}) });
     }
     for (const [name, move] of out) {
       const server = ((kitden && kitden.servers) || []).find((s) => s.name === name);
@@ -697,8 +703,9 @@ export function listRows(model, open = new Set(), folded = new Set()) {
     }
   }
   const outside = model.blocks.find((b) => b.id === "group:outside");
-  // An outside server no client is known to load says so; the others are on.
-  const outsideRow = (b) => row(b, outside.id, 1, { usedBy: b.columns, action: b.move ? "move" : "open", meta: b.state === "unk" ? NOT_KNOWN : null });
+  // An outside server no client is known to load says so, one that is off in some client says
+  // where, as the map does; the others are on.
+  const outsideRow = (b) => row(b, outside.id, 1, { usedBy: b.columns, action: b.move ? "move" : "open", meta: b.state === "unk" ? NOT_KNOWN : b.offSome ? b.meta : null });
   if (outside) group(outside.id, OUTSIDE, null, 0, children.get(outside.id) || [], outsideRow, outside.icon);
   return rows;
 }

@@ -28,7 +28,9 @@ def test_gateway_groups_have_one_row_per_server(home):
     assert neon["clients"] == ["cursor"]
     assert len(neon["items"]) == 1  # the one direct entry that can be removed
     assert row(groups, "local", "n8n-mcp")["clients"] == ["cursor"]
-    assert all(r["name"] != "aseprite" for g in groups.values() for r in g)  # turned off
+    # Turned off in Codex: listed as off there, not left out.
+    aseprite = next(r for g in groups.values() for r in g if r["name"] == "aseprite")
+    assert aseprite["off"] == aseprite["columns"] == ["codex"]
     # A dimmed second line says what the server is: its address or its command.
     assert neon["summary"] == "https://mcp.neon.tech/mcp"
     assert row(groups, "local", "n8n-mcp")["summary"].startswith("npx n8n-mcp")

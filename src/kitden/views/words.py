@@ -56,6 +56,13 @@ NO_ADD_REVIEW = "Same name, another source: decide first."
 # project MCP write needs each client's project file, checked with a date: Later).
 NO_PROJECT_SERVER = "Kitden adds MCP servers for all projects only."
 ONLY_IN_PROJECT = "This skill is in one project only. Pick that project to add it."
+# Hooks: Kitden shows them and changes none (no switch, no add); it reads no Codex hooks.
+HOOKS_ONLY_SHOWN = "Kitden only shows hooks; it does not add or turn them off."
+HOOKS_NOT_READ = "Kitden does not read Codex's hooks."
+# A server outside the gateway that is off in every client that has it: a move would turn it on.
+OFF_STAYS = "{0} is off. Turn it on first to move it into the gateway."
+# A server in an untrusted project's `.codex/config.toml`: Codex does not read that file.
+UNTRUSTED = "Codex skips {0}'s own settings until you trust {0} in Codex."
 PROJECT_TRUST = "To add it to {name}, trust {name} in Codex first."
 
 # Socket state and word per action, as the Library shows them after the change. "Removed",
@@ -142,6 +149,11 @@ ROUTE_WORDS: dict[str, str] = {
 # A skill or a plugin turned off by a settings rule (`skill.rule`, spec 5.5). A refusal says why
 # there is no switch; the review's note names a project whose own rule wins.
 CURSOR_NO_SKILL_SWITCH = "Cursor has no switch to turn off one skill."
+# docs/clients.md (Cursor, 2026-11-09): `disable-model-invocation` keeps the description out.
+CURSOR_NO_SWITCH_NOTE = (
+    f"{CURSOR_NO_SKILL_SWITCH} To keep its description out of the list, add "
+    "disable-model-invocation: true to its SKILL.md; then the agent uses it only when you ask."
+)
 CODEX_NO_PROJECT = "Codex has no switch for one project; turn it off for all projects."
 CODEX_NO_NAME_ONLY = "Codex has no Name only setting."
 PLUGIN_NO_NAME_ONLY = "A plugin is On or Off; it has no Name only setting."

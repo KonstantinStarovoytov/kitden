@@ -423,6 +423,7 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "project": [],
         "local": [],
         "shared": [],
+        "project_switch": [],
     }
     # Off already: Claude Code can turn it on again, or remove it. A bundled plugin no marketplace
     # offers: nothing to add, only Codex's switch.
@@ -434,6 +435,7 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "project": [],
         "local": [],
         "shared": [],
+        "project_switch": [],
     }
     assert items["browser"]["can"] == {
         "add": [],
@@ -443,6 +445,7 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "project": [],
         "local": [],
         "shared": [],
+        "project_switch": [],
     }
     assert items["ui-kit"]["can"] == {
         "add": [],
@@ -452,34 +455,44 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "project": [],
         "local": [],
         "shared": [],
+        "project_switch": [],
     }
     # A skill: each client that loads its own copy has a rule; Cursor has none.
     assert items["brandkit"]["can"] == {
         "add": ["codex"],
         "off": ["claude_code"],
+        "on": [],
+        "rule": {"claude_code": ["on", "name-only", "off"]},
         "remove": ["claude_code"],
         "project": [],
         "local": [],
         "shared": [],
         "copy": [],
+        "now": {"claude_code": "on"},
     }
     assert items["code-review"]["can"] == {
         "add": ["claude_code"],
         "off": ["codex"],
+        "on": [],
+        "rule": {"codex": ["on", "off"]},
         "remove": ["codex"],
         "project": [],
         "local": [],
         "shared": [],
         "copy": [],
+        "now": {"codex": "on"},
     }
     assert items["ui-polish"]["can"] == {
         "add": ["claude_code", "codex"],
         "off": [],
+        "on": [],
+        "rule": {},
         "remove": ["cursor"],
         "project": [],
         "local": [],
         "shared": [],
         "copy": [],
+        "now": {},
     }
     # A hook has no switch.
     assert items["PreToolUse: Bash"]["can"] == {}
@@ -509,20 +522,26 @@ def test_a_skill_says_which_clients_can_take_a_copy_cursor_too(tmp_path):
     assert items["brandkit"]["can"] == {
         "add": ["codex"],
         "off": ["claude_code"],
+        "on": [],
+        "rule": {"claude_code": ["on", "name-only", "off"]},
         "remove": ["claude_code"],
         "project": [],
         "local": [],
         "shared": [],
         "copy": [],
+        "now": {"claude_code": "on"},
     }
     assert items["ui-polish"]["can"] == {
         "add": ["claude_code", "codex"],
         "off": [],
+        "on": [],
+        "rule": {},
         "remove": ["cursor"],
         "project": [],
         "local": [],
         "shared": [],
         "copy": [],
+        "now": {},
     }
     # A plugin's can stays as it was: never Cursor.
     assert items["superpowers"]["can"]["add"] == ["codex"]

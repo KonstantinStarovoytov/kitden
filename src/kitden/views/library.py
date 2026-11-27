@@ -31,6 +31,8 @@ from kitden.views.skills import project_skills, skill_catalog
 from kitden.views.words import (
     ACCOUNT_ONLY_CLAUDE,
     CLIENT_UNREAD,
+    HOOKS_NOT_READ,
+    HOOKS_ONLY_SHOWN,
     NO_ADD_REVIEW,
     NO_ADD_UNREAD,
     NO_PROJECT_SERVER,
@@ -312,6 +314,11 @@ def _server_why(
         return NO_PROJECT_SERVER if only_here(row) else None
 
     return why
+
+
+def _hook_why(row: Row, client: str) -> str:
+    """Why a client has no hook here: Kitden reads no Codex hooks, and adds none."""
+    return HOOKS_NOT_READ if client == "codex" else HOOKS_ONLY_SHOWN
 
 
 def _marketplace_why(offers: list[dict]) -> Why:
@@ -855,8 +862,8 @@ def _tables(inventory, adapters, project: str | None, *, hidden: frozenset[str])
             in_project=project is not None,
             project_rows=project_skills(inventory, adapters, project) if project else [],
         ),
-        # Kitden adds no hooks, so a hook's dash has no reason.
-        "hook": _map_rows(map_rows, "hook", found),
+        # Kitden adds no hooks, and reads none of Codex's: a hook's dash says which.
+        "hook": _map_rows(map_rows, "hook", found, _hook_why),
         "marketplace": _map_rows(map_rows, "marketplace", found, _marketplace_why(offers)),
         # Instruction files, commands and agents: Details says when each client reads a file.
         # Kitden adds none, so a dash has no reason.

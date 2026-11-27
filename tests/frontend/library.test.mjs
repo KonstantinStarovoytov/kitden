@@ -71,8 +71,11 @@ test('a cell with an add shows its label and nothing else', () => {
 test('a cell with nothing to do shows nothing and says why', () => {
   const reason = "Cursor can't install this plugin, and it has no skills to copy.";
   const node = cellNode(row({ cursor: cell({ reason }) }), 'cursor');
-  // Only a screen reader hears it; the hover says it too.
-  assert.deepEqual(node.children.map((c) => [c.className, c.textContent]), [['sr-only', reason]]);
+  // A screen reader hears it; the hover says it too, and a small mark shows there is a reason.
+  assert.deepEqual(node.children[0].className, 'sr-only');
+  assert.equal(node.children[0].textContent, reason);
+  assert.equal(node.children.length, 1);
+  assert.match(node.className, /has-why/);
   assert.equal(node.title, reason);
   // A client that just does not have it keeps the plain words.
   const plain = cellNode(row({ cursor: cell({}) }), 'cursor');

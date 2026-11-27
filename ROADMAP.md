@@ -18,6 +18,13 @@ What Kitden does today and what comes next. Ideas and bugs:
   skills are not listed, and shows a project's own share. The Library names a project that turns a
   plugin off, and says why it has no switch there. A change waiting in the preview is marked
   **in preview** on the Library's and the Gateway's rows and cards too (#228).
+- **The same actions wherever a thing is shown:** a skill has one switch, **On**, **Name only** and
+  **Off** with its scope, in the Library and on Context, so a skill turned off turns on again where
+  it was turned off, a Codex skill too. Context's plugin groups offer the Library's own switches,
+  in a project too, and a trusted Codex project's own plugin entry gets its switch. A Codex server
+  that is off shows on the Gateway as off, with **Turn on**. Where a client has no switch (Cursor
+  skills, Codex's Name only, hooks, servers in Claude Code and Cursor), the page says so there.
+  A skill's Details offer **Add to …**; a project's own skill can be removed.
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,

@@ -2434,8 +2434,15 @@ def _codex(
             return None
         return _codex_switch(_codex_plugin(plugins, plugin_of(item)))
 
+    # A skill that is off is in no loaded item: its switch and its group go by the item that is
+    # off, so it can be turned on again here.
+    turned_off = _off_skills(inventory, client, sent_list.folder)
+    off_items = {os.path.realpath(i.source.path): i for i in turned_off.values() if i.source.path}
+    members = [
+        r.item or off_items.get(os.path.realpath(r.file)) if r.file else r.item for r in rows
+    ]
     skills = []
-    for r in rows:
+    for r, member in zip(rows, members, strict=True):
         logged = None if r.sent is None else len(r.sent)
         side = None if r.then is None else int(_codex_kind(logged, len(r.then)) != "full")
         note = words.NOTE_NO_FILE if r.full is None else None
@@ -2462,7 +2469,7 @@ def _codex(
             _skill(
                 client,
                 r.name,
-                r.item,
+                member,
                 size,
                 side,
                 note,
@@ -2488,12 +2495,6 @@ def _codex(
                 plugin_switch=offer,
             )
         )
-    # A skill that is off is in no loaded item: its group goes by the item that is off.
-    turned_off = _off_skills(inventory, client, sent_list.folder)
-    off_items = {os.path.realpath(i.source.path): i for i in turned_off.values() if i.source.path}
-    members = [
-        r.item or off_items.get(os.path.realpath(r.file)) if r.file else r.item for r in rows
-    ]
     # A listed skill's plugin by its file, which names its marketplace.
     by_file = [plugin_at(r.file) if r.file else None for r in rows]
     groups = _grouped(
@@ -2583,7 +2584,8 @@ def _cursor(inventory, folder: str | None) -> dict:
     for item in items:
         asked = item.skill_state == "only-asked"
         text = _description(item.source.path)
-        note = words.NOTE_ONLY_ASKED if asked else None
+        # Cursor has no switch for one skill: its Details say so, and what to do instead.
+        note = words.NOTE_ONLY_ASKED if asked else words.CURSOR_NO_SWITCH_NOTE
         skills.append(
             _skill(client, item.name, item, len(text or ""), int(asked), note, description=text)
         )
