@@ -49,7 +49,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   mode and a tool's Calls, and its Context and terminal parts are cut to what you do. The README
   and Privacy say exactly what Kitden does with secrets, and what it does not. The guide says what
   stays the same from 1.0. `clients.json` and each change record now say their format
-  (`"version": 1`); older files read the same.
+  (`"version": 1`); older files read the same (#233).
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,
