@@ -1705,3 +1705,17 @@ test('a plugin the preview adds to a client shows its skills under Added · in p
     data.libraryMap = null;
   }
 });
+
+test("a skill added to a folder another client reads shows under that client's Added too", async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'cursor' };
+  const steps = [{ client: 'codex', reaches: ['codex', 'cursor'] }];
+  tray.rows = [{ key: 'add-tidy', body: { action: 'skill.install', targets: [{ client: 'codex' }], params: { skill: 'tidy@m' } }, part: { steps } }];
+  try {
+    show(answer(CLAUDE, CODEX, CURSOR));
+    const added = byClass(main, 'ctx-off').find((n) => n.getAttribute('aria-label') === 'Added · in preview');
+    assert.deepEqual(byClass(added, 'ctx-pill').map(text), ['tidy']);
+  } finally {
+    tray.rows = [];
+  }
+});

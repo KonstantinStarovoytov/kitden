@@ -434,7 +434,10 @@ const ADDED = `Added · ${WAITING}`;
 const INSTALLS = ["skill.install", "plugin.install"];
 function addsOf(client) {
   const rows = tray.phase === "applied" ? [] : tray.rows;
-  const named = rows.filter(({ body }) => INSTALLS.includes(body.action) && (body.targets || []).some((t) => t.client === client));
+  // The client it is added to, or one that reads the folder it lands in (its step's `reaches`:
+  // Cursor reads ~/.agents/skills, where a Codex skill goes).
+  const reaches = (row) => (row.body.targets || []).some((t) => t.client === client) || ((row.part || {}).steps || []).some((step) => (step.reaches || []).includes(client));
+  const named = rows.filter((row) => INSTALLS.includes(row.body.action) && reaches(row));
   return named.flatMap(({ body }) => {
     const params = body.params || {};
     if (params.skill) return [String(params.skill).split("@")[0]];
