@@ -20,7 +20,7 @@ from pathlib import Path
 from kitden import __version__, page, system
 from kitden.clients.choice import clients_on
 from kitden.clients.version_cache import refresh_versions
-from kitden.model import Client, ClientStatus
+from kitden.model import Client, ClientStatus, ItemKind
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
 HOST = page.HOST
@@ -308,9 +308,7 @@ def _print_summary(
     from kitden.views.effective import column_of
     from kitden.views.overview import READ_PROBLEMS
 
-    # An item reached twice (a project listed by its path and by a symlink to it) counts once.
-    seen = {(i.client, str(i.kind), i.id) for i in inventory.items}
-    counts = Counter((client, kind) for client, kind, _ in seen)
+    counts = _have_counts(inventory)
     misfits = False
     blocks = []
     for client in inventory.clients:
@@ -372,6 +370,22 @@ def _print_summary(
         print(words.SCAN_FIX if warned or inventory.problems else words.SCAN_OPEN)
 
 
+def _have_counts(inventory: Inventory) -> Counter:
+    """What each client has, by kind, as the scan's "On this computer" line counts it. A plugin or
+    a skill counts once by name, as the Library lists it: a project's own entry for it, or another
+    copy, is the same one (copies get a warning of their own). A plugin's skills count with their
+    plugin. Any other item counts once, also when reached twice (a project listed by its path and
+    by a symlink to it)."""
+    from kitden.clients.base import from_plugin
+
+    seen = {
+        (i.client, str(i.kind), i.name if i.kind in (ItemKind.PLUGIN, ItemKind.SKILL) else i.id)
+        for i in inventory.items
+        if not (i.kind is ItemKind.SKILL and from_plugin(i))
+    }
+    return Counter((client, kind) for client, kind, _ in seen)
+
+
 def _version(client: Client) -> str:
     return client.version or "unknown version"
 
@@ -424,17 +438,23 @@ def _warning(finding: dict, by_id: dict) -> str:
         client=CLIENT_WORDS.get(finding["client"], finding["client"]),
         kind=KIND_WORDS.get(str(item.kind), str(item.kind)),
         name=base_name(item),
-        times="twice" if n == 2 else f"{n} times",
+        times=words.times(n),
     )
 
 
 def _findings_lines(findings: list[dict], by_id: dict) -> list[str]:
-    """The first warnings in words, then how many notes, and where to read them: one sentence,
+    """The first warnings in words, then how many notes (as the Overview folds them), and where to
+    read them: one sentence,
     in lines of at most 80 columns. No lines when there are no findings."""
+    from types import SimpleNamespace
+
     from kitden.views import words
+    from kitden.views.overview import note_count
 
     warnings = [_warning(f, by_id) for f in findings if f["severity"] == "warning"]
-    notes = len(findings) - len(warnings)
+    # The notes as the Overview counts them: items with the same words fold into one row.
+    infos = [f for f in findings if f["severity"] != "warning"]
+    notes = note_count([SimpleNamespace(names=f["names"], type=f["type"]) for f in infos])
     command = _whole(words.SCAN_FINDINGS)
     parts = []
     if warnings:

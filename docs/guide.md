@@ -28,6 +28,12 @@ the client's instruction files ("3 files"); commands and agents are not counted,
 that has only those says "Commands and agents only". A client with nothing says "Nothing
 loaded".
 
+When a client loads one plugin or skill more than once, its row counts the copies ("Cursor
+loads it 3 times"), the same number as the Overview's card. **Keep one…** on that card opens the
+item in the Library with its **Details**, which list each copy with its folder and whose it is.
+**Keep this one…** beside a copy adds the removal of the others to the preview; a copy in another
+client's folder goes from that client too, and the preview says so.
+
 Codex also loads skills in sub-folders of its skills folders, even inside another skill's folder.
 Each has a row and a switch of its own. Turning off the outer skill leaves the ones inside it on;
 removing it removes them too, and the review names them.
@@ -308,14 +314,16 @@ wait; after an hour Kitden asks again, because a plugin switched in Codex on ano
 does not change your settings file. It prints one block for each agent, with the problem first:
 whether the skill list fit in that chat, and the names of the skills that did not fit (Claude
 Code and Codex). Under it, one line says what the agent has on this computer, such as `On this
-computer: 2 plugins, 4 skills`. The two skill numbers can differ, and a line under it says why:
-the first counts the skills Kitden found, in all your projects; a chat's list has one project's
-skills, plus the ones the agent adds, such as the skills built into Claude Code. The Claude
+computer: 2 plugins, 4 skills`. It counts a plugin or skill once by name, on or off, as the
+Library lists it; a plugin's skills are in its plugin. The two skill numbers can differ, and a
+line under it says why: the first counts the skills Kitden found, in all your projects; a
+chat's list has one project's skills, plus the ones the agent adds, such as the skills built into Claude Code. The Claude
 Desktop app's Code tab loads what Claude Code loads, so it has one line under Claude Code, with
 the MCP servers that only the app has. Skills you set to Name only are not listed. A Codex
 skill whose plugin update changed its description after the chat is not counted as cut: the
 line says Kitden cannot tell for it. When Kitden cannot tell at all (Cursor, or no chat yet),
-the line says why. Then one line names the warnings and counts the notes, which need no fix;
+the line says why. Then one line names the warnings and counts the notes, which need no fix, as the Overview folds
+them;
 `kitden show findings` prints them all. The last line says what to do: turn off the skills you
 do not use when some did not fit, or fix a warning, in `kitden open`. Before Kitden is
 installed, run these with `uvx --python 3.13` in front. A client you turned off in Kitden is

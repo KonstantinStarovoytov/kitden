@@ -22,8 +22,10 @@ from kitden.clients.base import (
 from kitden.clients.claude_account import is_account_plugin
 from kitden.clients.claude_code import holds, local_files, rule_file
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Enabled, Item, ItemKind, Scope
+from kitden.views.after import home_path
 from kitden.views.catalog import catalog, installed_inside, plugin_folders
 from kitden.views.effective import effective_view, in_project
+from kitden.views.findings import duplicate_copies
 from kitden.views.load_map import Row, load_map, row_key
 from kitden.views.skills import skill_catalog
 from kitden.views.words import (
@@ -31,6 +33,7 @@ from kitden.views.words import (
     OFF_IN_PROJECT,
     ORIGIN_WORDS,
     STATE_WORDS,
+    times,
     why_project,
 )
 
@@ -290,6 +293,46 @@ def _can(
     return {}
 
 
+def _copies(inventory, copies: dict[str, list[Item]], ids: dict, home: Path | None) -> dict:
+    """Per client that loads the item more than once, `say` ("Cursor loads it 3 times:") and in
+    `list` each copy it loads: `where` (a skill's
+    folder, a plugin's marketplace), `owner` (the client whose folder or entry it is: "shared" for
+    ~/.agents/skills), `remove` (the item whose removal takes this copy away, or None) and `also`
+    (the other clients that lose it with it). The copies are the duplicate finding's items, the
+    same the Overview and the terminal count."""
+    out = {}
+    for client, held in ids.items():
+        same = next((copies[i] for i in held if i in copies), None)
+        if same:
+            say = f"{CLIENT_WORDS[client]} loads it {times(len(same))}:"
+            out[client] = {"say": say, "list": [_copy(inventory, i, client, home) for i in same]}
+    return out
+
+
+def _copy(inventory, item: Item, client: str, home: Path | None) -> dict:
+    action = PLUGIN_REMOVE if item.kind is ItemKind.PLUGIN else SKILL_REMOVE
+    # A skill's file is its own, so another client's item of that file is the same copy; a
+    # plugin's file holds every plugin (Claude Code's settings.json), so a plugin is only itself.
+    path = item.source.path if item.kind is ItemKind.SKILL else None
+    holders = [
+        i
+        for i in inventory.items
+        if i.kind is item.kind and (i.id == item.id or (path and i.source.path == path))
+    ]
+    remove = next((i for i in holders if action in i.actions), None)
+    if item.kind is ItemKind.PLUGIN:
+        where = item.name.partition("@")[2] or item.name
+    else:
+        folder = str(Path(path).parent.parent) if path else ""
+        where = home_path(folder, home) if home and folder else folder
+    return {
+        "where": where,
+        "owner": item.source.owner_client,
+        "remove": remove.id if remove else None,
+        "also": sorted({i.client for i in holders if i.client != client and i.client in CLIENTS}),
+    }
+
+
 def _ruled(item: Item) -> bool:
     """A skill rule reaches it: a client's own skill, not one of a plugin's."""
     return item.kind is ItemKind.SKILL and not from_plugin(item)
@@ -458,6 +501,8 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     sources = _marketplace_sources(inventory)
     entries = _marketplace_entries(inventory)
     outside = _rule_outside(inventory, adapters, project)
+    copies = duplicate_copies(inventory, project)
+    home = next((a.home.resolve() for a in adapters.values()), None)
 
     # A skill's own state (Name only) as the client reads it there, a project's local file too.
     states = {
@@ -505,6 +550,8 @@ def library_map(inventory, adapters, project: str | None) -> dict:
                 entry["can"]["local_in"] = {"claude_code": folder}
         if skill:
             entry["skill"] = skill["id"]
+        if loads_twice := _copies(inventory, copies, ids, home):
+            entry["copies"] = loads_twice
         if row.kind is ItemKind.SKILL:
             entry["off_in"] = _off_in(inventory, own)
             said = [states.get(i.id, i.skill_state) for i in own]

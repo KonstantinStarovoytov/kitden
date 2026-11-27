@@ -97,6 +97,7 @@ needs no other test. The table lists those written so far, in product order:
 | 18 | A stack under a selection: a client selected or pointed at lights only its own cards on a stack that mixes two clients (Library and Gateway), with the stacks either side of a page, and nothing moves | `test_map_stacks.py` |
 | 19 | A plugin turned off from Context: its switch waiting in the preview counts in the verdict and on the limit line; after Apply its skills stand under Turned off at once, also where Kitden can only count, and Undo puts them back; Codex's limit line where Kitden can only count | `test_context_off.py` |
 | 20 | Context's groups by source: a plugin turned off from its group's header counts in the estimate at once and is one tray row with its skill's Details; a header opens its group with the mouse and the keyboard; a plugin's Details in the Library say what it takes and open its group | `test_context_groups.py` |
+| 21 | The Overview's **Keep one…**: the item opens in view with its copies in Details; **Keep this one…** removes the others (Apply, Undo); the Library counts the copies as the Overview does | `test_numbers.py` |
 
 Flows 3 to 5 and 13 use the `sample` fixture: the demo's sample, not in demo mode, with the
 stand-ins of `tests/offline.py` and the network guard on, so a test that tries to go online

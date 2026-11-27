@@ -81,12 +81,13 @@ export function dayWords(day, now = new Date(), locale = undefined) {
   return new Date(year, month - 1, date).toLocaleDateString(locale, words);
 }
 
-// How many changes were made since Monday of this week.
+// How many changes were made since Monday of this week. An Apply of several tray rows counts each
+// row, as its toast does ("Applied 2 changes"); one with no rows counts one.
 export function weekCount(entries, now = new Date()) {
   const monday = new Date(now);
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
   const since = localDay(monday);
-  return entries.filter((e) => e.day && e.day >= since).length;
+  return entries.filter((e) => e.day && e.day >= since).reduce((n, e) => n + Math.max(1, (e.rows || []).length), 0);
 }
 
 function clock(time) {

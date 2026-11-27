@@ -25,6 +25,12 @@ What Kitden does today and what comes next. Ideas and bugs:
   that is off shows on the Gateway as off, with **Turn on**. Where a client has no switch (Cursor
   skills, Codex's Name only, hooks, servers in Claude Code and Cursor), the page says so there.
   A skill's Details offer **Add to …**; a project's own skill can be removed.
+- **Numbers and copies:** **Keep one…** on the Overview opens the item with its Details, which list
+  each copy with its folder and offer **Keep this one…**. Every place counts copies the same
+  ("3 times", not "twice"). `kitden scan` counts a plugin once however many projects set it, and
+  its notes as the Overview folds them. The Overview's server card says how many more can move in;
+  Changes counts an Apply of several rows as the toast does; a skill named like a built-in one no
+  longer hides it on Context (#230).
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,

@@ -6,7 +6,9 @@ in the side panel.
 """
 
 from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from kitden.changes.actions import (
     GATEWAY_MOVE,
@@ -21,7 +23,6 @@ from kitden.model import (
     CLIENT_WORDS,
     CLIENTS,
     ClientStatus,
-    Finding,
     FindingType,
     ItemKind,
     Severity,
@@ -248,7 +249,8 @@ def _move_ins(groups: dict) -> list[dict]:
     if rest:
         clients = sorted({c for _, row in rest for c in row["columns"]}, key=client_order)
         n = len(rest)
-        name = f"{n} more {'server skips' if n == 1 else 'servers skip'} the gateway"
+        # The same set as the cards above: servers a move can take, not every one outside.
+        name = f"{n} more {'server' if n == 1 else 'servers'} can move in"
         line = f"Kitden's rules don't reach {'it' if n == 1 else 'them'}."
         go = {"view": "gateway", "sel": "group:outside", "mode": "list"}
         action = {"label": "Show…", "go": go}
@@ -338,10 +340,11 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
 FOLD_FROM = 4
 
 
-def note_count(findings: list[Finding]) -> int:
-    """The rows the folded notes draw. An item is one name; the words of its notes are its
-    distinct note types, in the order they come. Items with the same words (FOLD_FROM or more of
-    them) are one row; every other item has a row of its own (overview.js `noteRows`)."""
+def note_count(findings: Sequence[Any]) -> int:
+    """The rows the folded notes draw, of findings or anything with their `names` and `type`.
+    An item is one name; the words of its notes are its distinct note types, in the order they
+    come. Items with the same words (FOLD_FROM or more of them) are one row; every other item
+    has a row of its own (overview.js `noteRows`)."""
     words: dict[str, list[str]] = {}
     for finding in findings:
         for name in dict.fromkeys(finding.names):

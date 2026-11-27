@@ -7,6 +7,7 @@ import pytest
 
 from kitden.demo import build_demo_home
 from kitden.model import (
+    CLIENT_WORDS,
     CLIENTS,
     Client,
     ClientStatus,
@@ -363,4 +364,38 @@ def test_a_review_cell_that_follows_the_shared_setup_carries_no_tag(tmp_path):
         "review",
         None,
         "Same name, another source.",
+    )
+
+
+def test_three_copies_of_a_skill_say_three_and_name_every_other_source():
+    def skill(owner, path, client="cursor"):
+        source = Source(kind=SourceKind.FOLDER, path=path, owner_client=owner)
+        return Item(
+            client=client,
+            kind=ItemKind.SKILL,
+            name="dup-skill",
+            source=source,
+            scope=Scope.USER,
+        )
+
+    clients = [
+        Client(id=c, display_name=CLIENT_WORDS[c], status=ClientStatus.FOUND)
+        for c in ("claude_code", "codex", "cursor")
+    ]
+    shared = "/h/.agents/skills/dup-skill/SKILL.md"
+    claude = "/h/.claude/skills/dup-skill/SKILL.md"
+    items = [
+        skill("cursor", "/h/.cursor/skills/dup-skill/SKILL.md"),
+        skill("shared", shared),
+        skill("claude_code", claude),
+        # Codex and Claude Code load the shared and their own folder's copy too.
+        skill("shared", shared, "codex"),
+        skill("claude_code", claude, "claude_code"),
+    ]
+    row = rows_by(load_map(Inventory(clients=clients, items=items), None), "skill", "dup-skill")
+    flag = next(f for f in row.flags if f["client"] == "cursor")
+    assert flag["text"] == "Cursor loads it 3 times"
+    assert flag["fix"] == (
+        "3 copies load in Cursor: its own, the one shared with Codex and Claude Code's. Keep "
+        "one; removing another client's copy also removes it for Codex and Claude Code."
     )

@@ -333,7 +333,7 @@ def test_more_than_three_servers_give_one_more_card(tmp_path):
     moves = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Move in…"]
     assert len(moves) == 3
     [more] = [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Show…"]
-    assert more["name"] == f"{len(rows) - 3} more servers skip the gateway"
+    assert more["name"] == f"{len(rows) - 3} more servers can move in"
     assert more["line"] == "Kitden's rules don't reach them."
     assert more["group"] == "improve"
     assert more["action"] == {
@@ -375,11 +375,11 @@ def test_a_picked_project_gets_the_cards_of_its_own_servers(tmp_path):
         [{"item": i} for i in r["items"]] for r in rows[:3]
     ]
     [more] = [c for c in here if c["action"] and c["action"]["label"] == "Show…"]
-    assert more["name"] == f"{len(rows) - 3} more servers skip the gateway"
+    assert more["name"] == f"{len(rows) - 3} more servers can move in"
     # website has a server of its own that All projects does not count. All projects has the
     # sample's skill list card too, with the same button.
-    [shared_more] = [c for c in shared if c["name"].endswith("skip the gateway")]
-    assert shared_more["name"] == f"{len(rows) - 4} more servers skip the gateway"
+    [shared_more] = [c for c in shared if c["name"].endswith("can move in")]
+    assert shared_more["name"] == f"{len(rows) - 4} more servers can move in"
 
 
 def test_four_servers_give_three_cards_and_one_more_server(home):
@@ -397,7 +397,7 @@ def test_four_servers_give_three_cards_and_one_more_server(home):
     data = overview(inventory, None, held=held)
     names = [c["name"] for c in _cards(data, "improve")]
     left = len(movable) - 3
-    assert f"{left} more {'server skips' if left == 1 else 'servers skip'} the gateway" in names
+    assert f"{left} more {'server' if left == 1 else 'servers'} can move in" in names
 
 
 def test_a_client_not_connected_gets_a_connect_card(connected):

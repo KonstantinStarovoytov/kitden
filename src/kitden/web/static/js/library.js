@@ -9,7 +9,7 @@ import { chooseButton, offLine, showChoice } from "./clients-choice.js";
 import { button, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, plural, treeRow } from "./dom.js";
 import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, pressLibraryAdd, renderLibraryMap, setListOnly } from "./library-map.js";
 import { addHeadButton, headActions, glidePill, modeSwitch, switchedNow } from "./map-page.js";
-import { CALM, afterOldPage, animate, entrance, glide, reducedMotion, rise } from "./motion.js";
+import { CALM, afterDrawn, afterOldPage, animate, entrance, glide, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { isPanelOpen, openInfo, panelState, previewButton, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, shownClients, skeleton, socket, sourceLines, staleNote } from "./parts.js";
@@ -403,8 +403,8 @@ function renderList(main) {
   for (const note of answer.notes) main.append(el("p", "note", note));
   main.append(sourceBox());
   // A selection that arrived (from another place, Back, Forward or a link) opens once its rows
-  // are in; its group unfolds for it.
-  const arrived = fresh ? arrivalIn(answer) : null;
+  // and the map read its Details are drawn from are in; its group unfolds for it.
+  const arrived = fresh && mapRead(kind) ? arrivalIn(answer) : null;
   const rows = listRows(answer, searchOpen(answer, asked.q), onList.folded);
   if (!rows.length) {
     main.append(emptyState(asked));
@@ -422,6 +422,12 @@ function renderList(main) {
   finish(rows);
   entrance("library", [grid]);
   if (arrived) showArrived(arrived);
+}
+
+// The tab's map read is in, or failed: Details can be drawn from it, or say it failed.
+function mapRead(kind) {
+  const read = kind === "plugin" ? "libraryMap" : "instructionsMap";
+  return Boolean(current(read) || currentError(read));
 }
 
 // Another project drawn in place: Details a row opened follow the same item, drawn for that
@@ -836,7 +842,11 @@ function showArrived(id) {
   const node = onList.nodes.get(id);
   if (!node) return;
   node.classList.add("arrive");
-  if (node.scrollIntoView) requestAnimationFrame(() => node.scrollIntoView({ block: "nearest" }));
+  // After a place change's own scroll to the top, or it undoes this one; the row as drawn then.
+  afterDrawn(() => {
+    const now = onList.nodes.get(id);
+    if (now && now.scrollIntoView) now.scrollIntoView({ block: "nearest" });
+  });
   const row = { id, sel: state.selected };
   focusRow(id);
   openRow(row);

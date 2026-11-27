@@ -59,6 +59,20 @@ def base_name(item: Item) -> str:
     return item.name.split("@", 1)[0] if item.kind is ItemKind.PLUGIN else item.name
 
 
+def duplicate_copies(inventory, project: str | None = None) -> dict[str, list[Item]]:
+    """Each item a client loads more than once, by id: every copy that client loads of it. The
+    one count of copies: the Overview, the Library, the terminal and the MCP answer read it
+    through the duplicate finding."""
+    by_id = {i.id: i for i in inventory.items}
+    out: dict[str, list[Item]] = {}
+    for finding in find_findings(inventory, project):
+        if finding.type is FindingType.DUPLICATE_IN_CLIENT:
+            same = [by_id[i] for i in finding.items if i in by_id]
+            for item_id in finding.items:
+                out[item_id] = same
+    return out
+
+
 def find_findings(inventory, project: str | None = None) -> list[Finding]:
     findings: list[Finding] = []
     clients = sorted({i.client for i in inventory.items} - {DESKTOP})
