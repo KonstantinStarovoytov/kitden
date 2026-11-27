@@ -427,7 +427,7 @@ function shelfFor(card, { head, look }, skills, states, after, heat, result) {
   return shelf;
 }
 
-// What the tray adds to this client (a skill, or a plugin with its skills): one quiet shelf,
+// What the tray adds to this client (a skill, or a plugin's skills): one quiet shelf,
 // "Added · in preview", with their names, so an add waits here as an off does. The estimate counts
 // them only after Apply, when the client lists them.
 const ADDED = `Added · ${WAITING}`;
@@ -435,7 +435,19 @@ const INSTALLS = ["skill.install", "plugin.install"];
 function addsOf(client) {
   const rows = tray.phase === "applied" ? [] : tray.rows;
   const named = rows.filter(({ body }) => INSTALLS.includes(body.action) && (body.targets || []).some((t) => t.client === client));
-  return named.map(({ body }) => String((body.params || {}).skill || (body.params || {}).plugin || "").split("@")[0]).filter(Boolean);
+  return named.flatMap(({ body }) => {
+    const params = body.params || {};
+    if (params.skill) return [String(params.skill).split("@")[0]];
+    return pluginSkills(String(params.plugin || ""));
+  }).filter(Boolean);
+}
+// The skills a plugin brings, as Context names them ("kit:draw"), from what the Library read
+// inside it; its own name when Kitden read nothing there.
+function pluginSkills(id) {
+  const name = id.split("@")[0];
+  const entry = libraryEntry(id);
+  const skills = (entry && entry.inside && entry.inside.skills) || [];
+  return skills.length ? skills.map((skill) => `${name}:${skill}`) : [name];
 }
 function addsShelf(card) {
   const names = addsOf(card.client);

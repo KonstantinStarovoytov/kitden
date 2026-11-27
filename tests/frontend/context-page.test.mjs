@@ -1688,3 +1688,20 @@ test("the Library's link opens Context on the group, opened and focused", async 
   assert.equal(headOf('plugin:plug@m').classList.contains('arrive'), true);
   assert.equal(globalThis.document.activeElement, toggleOf('plugin:plug@m'));
 });
+
+test('a plugin the preview adds to a client shows its skills under Added · in preview', async () => {
+  await fresh();
+  state.selected = { kind: 'client', name: 'codex' };
+  const plugin = { kind: 'plugin', name: 'kit', plugin: 'kit@m', items: {}, inside: { skills: ['draw', 'plan'] } };
+  Object.assign(data, { libraryMap: { groups: [{ items: [plugin] }] } });
+  data.scope.libraryMap = state.project;
+  tray.rows = [{ key: 'add-kit', body: { action: 'plugin.install', targets: [{ client: 'codex' }], params: { plugin: 'kit@m' } }, part: {} }];
+  try {
+    show(answer(CLAUDE, CODEX, CURSOR));
+    const added = byClass(main, 'ctx-off').find((n) => n.getAttribute('aria-label') === 'Added · in preview');
+    assert.deepEqual(byClass(added, 'ctx-pill').map(text), ['kit:draw', 'kit:plan']);
+  } finally {
+    tray.rows = [];
+    data.libraryMap = null;
+  }
+});

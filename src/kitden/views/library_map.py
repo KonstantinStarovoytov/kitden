@@ -361,7 +361,7 @@ def _costs(inventory, gone: list[Item], rows: list[dict], project: str | None) -
         for i in inventory.items
         if i.kind is ItemKind.SKILL
         and i.name == name
-        and i.enabled is not Enabled.OFF
+        and i.enabled is Enabled.ON  # a copy whose state Kitden does not know may not load
         and i.source.path is not None
         # A copy inside a removed folder (a nested skill of the same name) goes too.
         and not _inside(i, gone)

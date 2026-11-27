@@ -123,3 +123,34 @@ def test_a_copy_inside_another_copys_folder_is_never_the_one_kept(tmp_path):
     by_where = {copy["where"]: copy for copy in item["copies"]["codex"]["list"]}
     assert by_where["~/.codex/skills/solo/nested"]["keep"] is None
     assert by_where["~/.codex/skills"]["keep"] is not None
+
+
+def test_a_copy_whose_state_kitden_does_not_know_does_not_count_as_kept():
+    """Claude Code's only other duo comes from a plugin whose state Kitden does not know: keeping
+    Cursor's own copy could leave Claude Code with none, so it is not offered."""
+    from kitden.model import Enabled, Item, ItemKind, Scope, Source, SourceKind
+    from kitden.views.inventory import Inventory
+    from kitden.views.library_map import copy_choices
+
+    def skill(client, path, owner, scope=Scope.USER, enabled=Enabled.ON, actions=()):
+        source = Source(kind=SourceKind.FILE, path=path, owner_client=owner)
+        return Item(
+            client=client,
+            kind=ItemKind.SKILL,
+            name="duo",
+            source=source,
+            scope=scope,
+            enabled=enabled,
+            actions=actions,
+        )
+
+    claudes = "/h/.claude/skills/duo/SKILL.md"
+    own = skill("cursor", "/h/.cursor/skills/duo/SKILL.md", "cursor", actions=("skill.remove",))
+    read = skill("cursor", claudes, "claude_code")
+    claude = skill("claude_code", claudes, "claude_code", actions=("skill.remove",))
+    plugin = skill(
+        "claude_code", "/h/p/skills/duo/SKILL.md", "claude_code", Scope.PLUGIN, Enabled.UNKNOWN
+    )
+    inventory = Inventory(clients=[], items=[own, read, claude, plugin])
+    rows = copy_choices(inventory, [own, read], "cursor")["list"]
+    assert rows[0]["keep"] is None
