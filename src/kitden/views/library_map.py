@@ -350,24 +350,32 @@ def copy_choices(
 
 def _costs(inventory, gone: list[Item], rows: list[dict], project: str | None) -> set[str]:
     """The clients that would have none of the item once the copies `gone` are removed: they
-    lose a copy (`also`) and load no other one in the picked project, its settings applied, or
+    lose a copy (`also`) and load no other one in the picked project (with All projects, in some
+    project), its settings applied, or
     lose another skill that sits inside a removed folder."""
     lose = {c for row in rows for c in row["also"]}
     if not gone or gone[0].kind is not ItemKind.SKILL:
         return lose
     name = gone[0].name
-    # What each client loads in the picked project (or in every project), its settings there
-    # applied. A copy whose state Kitden does not know may not load.
+    # What each client loads in the picked project, its settings there applied. With All
+    # projects picked the removal reaches every project, so a client must keep a copy in each.
+    # A copy whose state Kitden does not know may not load.
+    scopes = [project] if project else [None, *(p.path for p in inventory.projects)]
     kept = {
         c
         for c in lose
-        for i in effective_view(inventory, c, project).items
-        if i.kind is ItemKind.SKILL
-        and i.name == name
-        and i.enabled is Enabled.ON
-        and i.source.path is not None
-        # A copy inside a removed folder (a nested skill of the same name) goes too.
-        and not _inside(i, gone)
+        if all(
+            any(
+                i.kind is ItemKind.SKILL
+                and i.name == name
+                and i.enabled is Enabled.ON
+                and i.source.path is not None
+                # A copy inside a removed folder (a nested skill of the same name) goes too.
+                and not _inside(i, gone)
+                for i in effective_view(inventory, c, scope).items
+            )
+            for scope in scopes
+        )
     }
     # A skill folder can hold other skills (Codex and Cursor read sub-folders): they go with it.
     inside = {
