@@ -178,7 +178,7 @@ test('the head has the tabs, the lede, the scope bar and Map | List', () => {
   assert.ok(texts(scope).includes('All projects'));
   assert.ok(map());
   assert.equal(hintLine.hidden, false);
-  assert.equal(hintLine.children.at(-1).textContent, 'Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details');
+  assert.equal(hintLine.children.at(-1).textContent, 'Point at a link: its × removes a plugin from that client, or turns a skill off there · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details');
 });
 
 test('in a project the scope bar names it with a folder', () => {

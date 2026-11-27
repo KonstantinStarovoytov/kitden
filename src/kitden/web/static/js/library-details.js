@@ -441,27 +441,24 @@ export function skillCard(item, c, { someStep = () => {}, addStep = () => {} } =
   return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, list: afterOf(copiesNode(item), switches), actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
 }
 
-// A skill's switches for one project, the one answer the Library's and Context's Details read
-// (`only`: one client's): "Turn off in this project…" and "Follow all projects…" (Claude Code's
-// rule there), and "Turn off this copy in Codex…". Each is `{ label, bodies }`.
-export function skillProjectSwitches(item, c, only = null) {
+// A skill's switches for one project: "Turn off in this project…" and "Follow all projects…"
+// (Claude Code's rule there), and "Turn off this copy in Codex…". Each is `{ label, bodies }`.
+function skillProjectSwitches(item, c) {
   const out = [];
-  if (!only || only === "claude_code") {
-    const here = skillHereBody(item, c);
-    if (here) out.push({ label: OFF_HERE, bodies: [here] });
-    const back = sharedBody(item, c);
-    if (back) out.push({ label: USE_SHARED, bodies: [back] });
-  }
-  const copy = copyBodies(item).filter((body) => !only || body.targets[0].client === only);
+  const here = skillHereBody(item, c);
+  if (here) out.push({ label: OFF_HERE, bodies: [here] });
+  const back = sharedBody(item, c);
+  if (back) out.push({ label: USE_SHARED, bodies: [back] });
+  const copy = copyBodies(item);
   if (copy.length) out.push({ label: OFF_COPY, bodies: copy });
   return out;
 }
 
 // A skill's switch for all projects in each client that has one (`can.rule`, the states it takes;
 // `can.now`, the state it has): skill-switch.js, the same control as Context's. Null with none.
-export function skillSwitches(item, only = null) {
+function skillSwitches(item) {
   const can = item.can || {};
-  const clients = Object.keys(can.rule || {}).sort(byClientOrder).filter((client) => !only || client === only);
+  const clients = Object.keys(can.rule || {}).sort(byClientOrder);
   if (!clients.length) return null;
   const box = el("div", "skill-switches");
   for (const client of clients) {

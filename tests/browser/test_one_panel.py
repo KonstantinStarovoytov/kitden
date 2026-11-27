@@ -56,3 +56,5 @@ def test_a_skill_off_in_the_last_chats_project_says_where(page, demo):
     details = page.get_by_role("complementary", name="Details")
     expect(details).to_contain_text("On · Off in atlas")
     expect(details).to_contain_text("every project except atlas")
+    # The panel is the Library's, with its switch: no word that there is none.
+    expect(details).not_to_contain_text("no switch here")

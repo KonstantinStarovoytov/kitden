@@ -58,6 +58,14 @@ What Kitden does today and what comes next. Ideas and bugs:
   through, with its switch; Codex's own skills say they are built in. After Apply, the Overview's
   skill list card says a new chat shows it and no longer needs attention; with no fix, it says
   why. `kitden scan` and a skill's Details name the fix Context names.
+- **One thing, one panel; safe copies:** **Keep this one…** shows only where every client still
+  has the skill afterwards; where no copy can stay alone, the Overview's card and the Details say
+  why and name Cursor's third-party setting. Removing a copy says how many stay. A skill has one
+  Details panel, the Library's, also on Context, which adds its size, use and description. A state
+  names the project whose settings set it (**On · Off in atlas**, **Off in atlas** on a pill), and
+  **Name only** reads Name only in the List. A waiting add or move is marked **in preview** too, in
+  every client's cell it reaches, and Context lists what the preview adds. The Library map's hint
+  says what × does; a Codex copy in one project has one control.
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,

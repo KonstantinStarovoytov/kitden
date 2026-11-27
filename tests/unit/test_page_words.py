@@ -2723,7 +2723,7 @@ def test_the_library_map_words_and_looks():
     text = script("library-map.js")
     for words in (
         '"The plugins, skills and instruction files your agents load, and where each comes from."',
-        '"Point at a link and press × to remove it · drag a plugin onto a client to add it there '
+        '"Point at a link: its × removes a plugin from that client, or turns a skill off there · drag a plugin onto a client to add it there '
         '· + adds it for all projects · click anything for its Details"',
         '[["plugins", "Plugins and skills"], ["instructions", "Instructions"]]',
         'caption: "Clients"',

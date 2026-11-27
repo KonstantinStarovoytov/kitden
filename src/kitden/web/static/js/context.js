@@ -739,7 +739,9 @@ function openSkill(client, name, { step = null, again = false } = {}) {
   const content = (own && skillDetails(where, (one) => {
     one.facts.push(...ours);
     one.text = describe(skill);
-    if (skill.note) one.why = `${skill.note} ${one.why || ""}`.trim();
+    // Context's sentence on the last chat (a cut description, its fix). A skill with no switch on
+    // Context gets its reason from the Library's words instead, which say where it holds.
+    if (skill.note && skill.switch.length) one.why = `${skill.note} ${one.why || ""}`.trim();
   })) || otherSkill(card, skill, ours);
   if (step) stepTo(content, step);
   else openPanel(content);
