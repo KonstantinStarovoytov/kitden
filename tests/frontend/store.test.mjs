@@ -378,6 +378,7 @@ test('one search box: a search goes where something of that name is, the Gateway
     // and a match on the other, the search goes there.
     assert.equal(searchPlace('library', 'filesystem'), 'gateway');
     assert.equal(searchPlace('gateway', 'superpowers'), 'library');
+    assert.equal(searchPlace('gateway', 'brainstorm'), 'library'); // a plugin's own skill
     assert.equal(searchPlace('gateway', 'playwright'), 'gateway');
     assert.equal(searchPlace('library', 'nothing-here'), 'library');
     assert.equal(searchPlace('gateway', ''), 'gateway');
