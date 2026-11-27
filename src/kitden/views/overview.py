@@ -40,6 +40,8 @@ from kitden.views.words import (
     BACK_BY_OTHER,
     BACK_IN,
     CONTEXT_CARD_LINES,
+    OFFER_FITS,
+    OFFER_LEAVES,
     SKILL_LIST_IN,
     join_words,
 )
@@ -225,17 +227,33 @@ def _context(clients: list[dict]) -> list[dict]:
         were = "was" if n == 1 else "were"
         line = CONTEXT_CARD_LINES[misfit["kind"]].format(skills=skills, were=were, client=word)
         action = {"label": "Show…", "go": {"view": "context", "sel": f"client:{client}"}}
+        title = SKILL_LIST_IN.format(client=word)
+        card_id = _hash("context", client)
+        # Changed since that chat, and by Kitden's estimate everything fits now (a new limit was
+        # applied, or skills turned off): Context's words, and nothing more to do but a new chat.
+        now = card.get("now")
+        if now is not None and now.get("misfit") is None and card.get("changed"):
+            line = card["changed"][0]
+            cards.append(
+                _card(card_id, "improve", "gauge", title, line, [client], action, "library")
+            )
+            continue
         # The cheapest fix, when Context offers one: its new limit, one press away, at its cost.
-        offer = (card.get("limit") or {}).get("offer")
+        # With none, the reason Context gives.
+        limit = card.get("limit") or {}
+        offer = limit.get("offer")
+        if not offer and limit.get("why"):
+            line = f"{line}. {limit['why']}"
         if offer:
             param = card["limit"].get("param") or "fraction"
             params = {param: offer[param]}
             body = {"action": SKILL_LIMIT, "targets": [{"client": client}], "params": params}
             action = {"label": f"{offer['label']}…", "body": body}
             cost = offer["cost"][0].lower() + offer["cost"][1:]
-            line = f"{line}. {offer['label']} fits them: {cost}."
-        card_id = _hash("context", client)
-        title = SKILL_LIST_IN.format(client=word)
+            # The largest share, when none fits them all, says what it still leaves.
+            leaves = offer.get("leaves")
+            fits = OFFER_LEAVES.format(n=leaves) if leaves else OFFER_FITS
+            line = f"{line}. {offer['label']} {fits}: {cost}."
         cards.append(_card(card_id, "attention", "gauge", title, line, [client], action, "library"))
     return cards
 

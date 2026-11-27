@@ -310,6 +310,7 @@ def _print_summary(
 
     counts = _have_counts(inventory)
     misfits = False
+    fixes: list[str] = []
     blocks = []
     for client in inventory.clients:
         if column_of(client.id) != client.id:
@@ -332,6 +333,10 @@ def _print_summary(
                 lines += _wrap(say, "  ", "  ")
                 if names:
                     misfits = True
+                    # The fix Context names under the verdict: its suggested limit.
+                    offer = (card.get("limit") or {}).get("offer") if card else None
+                    if offer:
+                        fixes.append(words.SCAN_FIX_ONE.format(label=offer["label"], client=name))
                     lines += _wrap(_first_few(names, FEW_NAMES, ", "), "    ", "    ")
                 if folder and folder != here:
                     lines.append(
@@ -364,7 +369,10 @@ def _print_summary(
         print(line)
     warned = any(f["severity"] == "warning" for f in findings)
     print(words.SCAN_READ_ONLY)
-    if misfits:
+    if fixes:
+        line = words.SCAN_FIX_LIMIT.format(fixes=" and ".join(fixes))
+        print("\n".join(_wrap(line, "", "")))
+    elif misfits:
         print(words.SCAN_FIX_SKILLS)
     else:
         unread = words.SCAN_FIX_UNREAD[len(inventory.problems) > 1]

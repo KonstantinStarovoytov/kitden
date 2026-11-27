@@ -50,6 +50,14 @@ What Kitden does today and what comes next. Ideas and bugs:
   and Privacy say exactly what Kitden does with secrets, and what it does not. The guide says what
   stays the same from 1.0. `clients.json` and each change record now say their format
   (`"version": 1`); older files read the same (#233).
+- **Context shows the right numbers:** a skill removed since the last chat no longer counts or
+  raises the suggested limit, and a skill of yours named like a built-in one is a skill of its
+  own. A large Claude Code setup gets 4% suggested, with how many still show only a name, and the
+  built-in skills' share in view. The limit line skips a step that would leave more skills with
+  only a name; the offer and the line count one set. A Codex skill turned off stays, struck
+  through, with its switch; Codex's own skills say they are built in. After Apply, the Overview's
+  skill list card says a new chat shows it and no longer needs attention; with no fix, it says
+  why. `kitden scan` and a skill's Details name the fix Context names.
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,

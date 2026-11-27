@@ -566,7 +566,7 @@ const STEPS = steps(
 );
 const LIMIT = {
   now: '1% of the context window: 8,000 characters',
-  offer: { fraction: 0.015, label: 'Set to 1.5%', say: '1.5%: all 3 skills get their description', cost: 'About 3,000 more characters in every chat (about 750 tokens)' },
+  offer: { fraction: 0.015, label: 'Set to 1.5%', say: '1.5%: all 3 skills fit', cost: 'About 3,000 more characters in every chat (about 750 tokens)' },
   back: null,
   note: 'Kitden writes it in your Claude Code user settings, for all projects. Start a new chat to see the new list.',
   why: null,
@@ -612,7 +612,7 @@ test('the limit line is the control: a handle, a flag that opens Details, no but
   await fire(handle, 'pointerdown', at(spotOf(8000)));
   await fire(handle, 'pointerup', { ...at(spotOf(8000)), type: 'pointerup' });
   assert.match(text(drawer), /Skill list limit/);
-  assert.match(text(drawer), /Suggested1\.5%: all 3 skills get their description/);
+  assert.match(text(drawer), /Suggested1\.5%: all 3 skills fit/);
   assert.match(text(drawer), /CostAbout 3,000 more characters in every chat \(about 750 tokens\)/);
   closePanel({ instant: true });
   const flag = byClass(main, 'ctx-flag')[0];
@@ -730,7 +730,7 @@ const LIST_STEPS = SHARES.map((value, i) => ({
   say: i === 0 ? '1% now · 1 of 3 show only a name' : `${SAY(value)} · all 3 fit · about 3,000 more characters per chat`,
   ...(i === 0 ? { now: true } : {}),
 }));
-const LIST_LIMIT = { ...LIMIT, offer: { ...LIMIT.offer, fraction: 0.011, label: 'Set to 1.1%', say: '1.1%: all 3 skills get their description' }, steps: LIST_STEPS };
+const LIST_LIMIT = { ...LIMIT, offer: { ...LIMIT.offer, fraction: 0.011, label: 'Set to 1.1%', say: '1.1%: all 3 skills fit' }, steps: LIST_STEPS };
 // The bar of TIGHT with this list: the suggested place is 1.1% (8,800), ten places lie past it.
 const LIST_SCALE = Math.max(11000, 8800 * roomFor(10));
 const listSpots = () => placesOf(controlOf({ client: 'claude_code', limit: LIST_LIMIT }), (n) => (n / LIST_SCALE) * 100);
@@ -940,7 +940,7 @@ test('with no limit line for the chat, the control stands at today\'s limit; Det
 // that does not fit them all would still cut (`short` is null).
 const COUNTED = {
   ...LIMIT,
-  offer: { fraction: 0.02, label: 'Set to 2%', say: '2%: all 3 skills get their description', cost: 'About 3,000 more characters in every chat (about 750 tokens)' },
+  offer: { fraction: 0.02, label: 'Set to 2%', say: '2%: all 3 skills fit', cost: 'About 3,000 more characters in every chat (about 750 tokens)' },
   counted: [
     "Kitden could not rebuild this chat's list exactly, so it counts what all descriptions need.",
     '1 skill has no description Kitden can find; it is counted at the longest, 1,536 characters.',

@@ -49,7 +49,6 @@ def test_each_skill_is_in_the_group_of_its_source(home):
         "dataviz": "Charts.",
         "anthropic-skills:pdf": "PDF.",
         "venture:review": "Reviews.",
-        "mystery": "What.",
     }
     claude_chat(home, sent)
     card = view(home)["claude_code"]
@@ -61,7 +60,6 @@ def test_each_skill_is_in_the_group_of_its_source(home):
         "built_in",
         "app",
         "other:venture",
-        "unknown",
     ]
     by_skill = {s["name"]: s["group"] for s in card["skills"]}
     assert all(name in groups[by_skill[name]]["skills"] for name in sent)
@@ -83,7 +81,6 @@ def test_each_skill_is_in_the_group_of_its_source(home):
     assert groups["built_in"]["why"] == words.GROUP_WHY_BUILT_IN
     assert (groups["app"]["name"], groups["app"]["why"]) == (words.SOURCE_APP, words.NOTE_APP)
     assert groups["other:venture"]["why"] == words.NOTE_OTHER_PLUGIN.format("venture")
-    assert groups["unknown"]["why"] == words.NOTE_NO_ITEM
     assert all(g["lookup"] is None for k, g in groups.items() if k != f"plugin:{key}")
 
 

@@ -31,7 +31,7 @@ Codex 0.171.0
 
 6 notes (nothing to fix): kitden show findings
 Your agents' settings were not changed: scan only reads them.
-To make the skills fit, turn off the ones you do not use: kitden open
+To make the skills fit, press Set to 1.1% for Claude Code: kitden open
 ```
 
 <p align="center">One local page for their MCP servers, plugins, skills and instruction files.<br>

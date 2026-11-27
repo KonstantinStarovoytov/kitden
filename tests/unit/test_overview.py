@@ -12,6 +12,7 @@ from kitden.clients import version_cache
 from kitden.context.rules import codex_rule
 from kitden.demo import build_demo_home
 from kitden.model import Finding, FindingType, Severity
+from kitden.views import words
 from kitden.views.context_view import context_view
 from kitden.views.findings import find_findings
 from kitden.views.gateway_view import gateway_view
@@ -763,7 +764,10 @@ def test_a_claude_list_that_showed_only_names_gets_a_card(tmp_path):
     _claude_chat_with_names_only(home)
     [card] = _context_cards(home)
     assert card["group"] == "attention"
-    assert card["line"] == "2 skills showed only a name in your last Claude Code chat"
+    assert (
+        card["line"]
+        == "2 skills showed only a name in your last Claude Code chat. " + words.LIMIT_NOT_FIXED
+    )
     assert card["clients"] == ["claude_code"]
     assert card["action"] == {
         "label": "Show…",
@@ -837,7 +841,7 @@ def test_a_picked_project_gets_the_card_of_its_own_last_chat(tmp_path):
     project.mkdir()
     _claude_chat_with_names_only(home, folder=str(project))
     assert [c["line"] for c in _context_cards(home, project)] == [
-        "2 skills showed only a name in your last Claude Code chat"
+        "2 skills showed only a name in your last Claude Code chat. " + words.LIMIT_NOT_FIXED
     ]
     # Another project has no chat of its own.
     other = tmp_path / "other"
@@ -853,7 +857,10 @@ def test_the_page_passes_the_context_cards_to_the_overview(tmp_path):
     with page_for(home) as page:
         cards = page.get("/api/overview").json()["cards"]
     [card] = [c for c in cards if c["icon"] == "gauge"]
-    assert card["line"] == "2 skills showed only a name in your last Claude Code chat"
+    assert (
+        card["line"]
+        == "2 skills showed only a name in your last Claude Code chat. " + words.LIMIT_NOT_FIXED
+    )
 
 
 def test_a_context_read_that_fails_leaves_the_rest_of_the_overview(tmp_path, monkeypatch):
@@ -911,3 +918,68 @@ def test_an_unreadable_file_in_a_project_names_the_project(tmp_path):
     assert card["line"].startswith("In project website: the file has a syntax error")
     path = home / "work/website/.cursor/mcp.json"
     assert card["action"] == {"label": "Copy path", "copy": str(path)}
+
+
+def test_after_apply_the_skill_list_card_says_a_new_chat_shows_it_and_needs_no_attention(tmp_path):
+    # Round 3, row 5 (05-P3): the card stayed, counted as needing attention.
+    from tests.unit.test_skill_limit import cut_chat
+
+    home = _context_home(tmp_path)
+    cut_chat(home)
+    [card] = _context_cards(home)
+    assert card["group"] == "attention" and card["action"]["label"] == "Set to 1.1%…"
+    write_json(home / ".claude/settings.json", {"skillListingBudgetFraction": 0.011})
+    [card] = _context_cards(home)
+    assert card["group"] == "improve"
+    assert card["line"] == (
+        "The limit was changed after this chat: it is 1.1% now. Start a new chat to see the new "
+        "list."
+    )
+    assert card["action"]["label"] == "Show…"
+    inventory = build_inventory(home)
+    clients = context_view(inventory, home, home / ".codex", None, {})["clients"]
+    assert overview(inventory, None, context_cards=clients)["counts"]["attention"] == 0
+
+
+def test_a_skill_list_card_with_no_offer_gives_contexts_reason():
+    # Round 3, row 5 (04-C11): Codex's card said nothing of why there is no fix.
+    from kitden.views import words
+    from kitden.views.overview import _context
+
+    why = words.CODEX_LIMIT_NOT_ENOUGH.format(n="10,000")
+    card = {
+        "client": "codex",
+        "lamp": "warn",
+        "windows": [{"result": {"misfit": {"kind": "cut", "n": 31}}}],
+        "limit": {"offer": None, "why": why},
+        "now": None,
+        "changed": [],
+    }
+    [out] = _context([card])
+    assert out["line"] == f"31 skills were cut short in your last Codex chat. {why}"
+    assert out["group"] == "attention"
+
+
+def test_a_largest_share_that_leaves_some_says_so_on_the_card():
+    from kitden.views.overview import _context
+
+    offer = {
+        "fraction": 0.04,
+        "label": "Set to 4%",
+        "say": "",
+        "cost": "About 24,000 more",
+        "leaves": 21,
+    }
+    card = {
+        "client": "claude_code",
+        "lamp": "warn",
+        "windows": [{"result": {"misfit": {"kind": "name", "n": 45}}}],
+        "limit": {"offer": offer, "param": "fraction", "why": None},
+        "now": None,
+        "changed": [],
+    }
+    [out] = _context([card])
+    assert out["line"] == (
+        "45 skills showed only a name in your last Claude Code chat. Set to 4% leaves 21 with "
+        "only a name: about 24,000 more."
+    )

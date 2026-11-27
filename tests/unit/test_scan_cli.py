@@ -133,7 +133,7 @@ def test_scan_says_which_skills_the_last_chat_cut(bare, capsys):
         "  A chat lists only one project's skills, and Claude Code's own too.",
         "",
     ]
-    assert lines[-1] == "To make the skills fit, turn off the ones you do not use: kitden open"
+    assert lines[-1] == "To make the skills fit, set some skills to Name only or Off: kitden open"
     assert all(len(line) <= 80 for line in lines)
 
 
@@ -402,7 +402,7 @@ def test_scan_last_line_says_what_to_do(bare, capsys):
     for name in names:
         skill(bare / ".claude/skills", name, "Does it.")
     claude_chat(bare, names)
-    fits = "To make the skills fit, turn off the ones you do not use: kitden open"
+    fits = "To make the skills fit, set some skills to Name only or Off: kitden open"
     assert _summary(bare, capsys)[-1] == fits
 
 
@@ -540,3 +540,13 @@ def test_scan_counts_notes_as_the_overview_folds_them():
     assert cli._findings_lines(findings, {}) == [
         "2 notes (nothing to fix): kitden show findings".replace(" ", " ")
     ]
+
+
+def test_scan_last_line_names_the_fix_context_names(bare, capsys):
+    # Round 3, row 7 (05-P5): the scan said "turn off", Context "Set to 1.1%".
+    from tests.unit.test_skill_limit import cut_chat
+
+    cut_chat(bare)
+    assert _summary(bare, capsys)[-1] == (
+        "To make the skills fit, press Set to 1.1% for Claude Code: kitden open"
+    )

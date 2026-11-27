@@ -372,7 +372,7 @@ def test_a_rule_that_does_not_rebuild_the_list_shows_no_estimate(home):
 
 
 def test_a_name_only_skill_with_no_file_means_no_check(home):
-    claude_chat(home, {"alpha": None})  # no file on disk: its size is not known
+    claude_chat(home, {"plug:alpha": None})  # no file on disk: its size is not known
     cc = view(home)["claude_code"]
     assert (cc["checked"], cc["message"]) == (False, None)
     assert cc["windows"][0]["result"]["over"] == {}
@@ -785,7 +785,8 @@ def test_a_skill_from_outside_says_where_it_comes_from_and_why_it_has_no_switch(
     assert rows["venture:review"]["note"] == words.NOTE_OTHER_PLUGIN.format("venture")
     assert rows["anthropic-skills:pdf"]["source"] == words.SOURCE_APP
     assert rows["anthropic-skills:pdf"]["note"] == words.NOTE_APP
-    assert (rows["mystery"]["source"], rows["mystery"]["note"]) == (None, words.NOTE_NO_ITEM)
+    # Not built in, no plugin and no file: gone since the chat, so not on the page.
+    assert "mystery" not in rows
     assert (
         rows["ship-local"]["source"]
         == rows["security-review"]["source"]
@@ -1562,7 +1563,9 @@ def test_a_skill_of_unknown_size_does_not_hide_the_window_when_no_size_changes_t
     built_in = ("dataviz", "simplify", "loop", "schedule", "run", "code-review")
     # ghost has no file. The built-in skills alone pass 8,000 characters, so it shows only a
     # name on a 200K window whatever its size, and gets a description on a 1M window.
-    claude_chat(home, dict.fromkeys(built_in, "x" * 1536) | {"ghost": None}, model="claude-new-9")
+    claude_chat(
+        home, dict.fromkeys(built_in, "x" * 1536) | {"plug:ghost": None}, model="claude-new-9"
+    )
     cc = view(home)["claude_code"]
     assert cc["windows"][0]["title"] == "200K window"
     assert cc["checked"] is False
@@ -1626,8 +1629,8 @@ def test_no_room_gives_advice_only_when_a_skill_can_be_switched(home):
     cc = view(home)["claude_code"]
     assert cc["checked"] is True
     notes = {s["name"]: s["note"] for s in cc["skills"]}
-    # A built-in skill can be switched too.
-    assert notes["alpha"] == f"{words.NOTE_NO_ROOM} {words.NOTE_FREE_ROOM}"
+    # Context suggests a limit: the note names it (round 3, row 7).
+    assert notes["alpha"] == f"{words.NOTE_NO_ROOM} Set to 1.3% gives it room."
     # Nobody checked that a rule reaches these three, so none of them can free room.
     unchecked = ("artifact-design", "artifact-capabilities", "schedule")
     sent = dict.fromkeys(unchecked, "x" * 2000) | {"alpha": None}
@@ -1638,8 +1641,13 @@ def test_no_room_gives_advice_only_when_a_skill_can_be_switched(home):
     assert "Set a skill" not in notes["alpha"]
 
 
-def test_no_room_with_a_skill_to_switch_keeps_the_advice(home):
+def test_no_room_names_the_suggested_limit_else_keeps_the_advice(home):
     eight_skills(home, model="claude-sonnet-4-6")
+    notes = {s["name"]: s["note"] for s in view(home)["claude_code"]["skills"]}
+    assert notes["s8"] == "No room for its description. Set to 1.1% gives it room."
+    # A fixed limit in env: Kitden suggests none, and a skill to switch frees room.
+    write_json(home / ".claude/settings.json", {"env": {"SLASH_COMMAND_TOOL_CHAR_BUDGET": "8000"}})
+    before_the_chat(home / ".claude/settings.json")
     notes = {s["name"]: s["note"] for s in view(home)["claude_code"]["skills"]}
     assert notes["s8"] == (
         "No room for its description. Set a skill with a description to Name only or Off to "
@@ -1903,3 +1911,27 @@ def test_a_user_skill_named_like_a_built_in_one_is_its_own_row_and_the_built_in_
         rows = [s for s in view(home)["claude_code"]["skills"] if s["name"] == "dataviz"]
         mine = {r["description"]: r["built_in"] for r in rows}
         assert mine == {"My charts.": False, "Charts.": True}, content
+
+
+def test_codex_own_skills_say_they_are_built_into_codex(home):
+    # Round 3, row 6 (01-B1): Kitden read the file, so "did not find" was false.
+    paths = codex_home(home, window=20_000)
+    system = str(skill(home / ".codex/skills/.system", "imagegen", "Makes images.").resolve())
+    codex_chat(
+        home,
+        [
+            f"- imagegen: Makes images. (file: {system})",
+            f"- alpha: {CODEX_A} (file: {paths['alpha']})",
+        ],
+    )
+    cx = view(home)["codex"]
+    row = next(s for s in cx["skills"] if s["name"] == "imagegen")
+    assert (row["built_in"], row["switch"], row["source"]) == (True, [], "Built into Codex")
+    assert row["note"] == words.NOTE_BUILT_IN_CODEX
+    group = next(g for g in cx["groups"] if "imagegen" in g["skills"])
+    assert (group["kind"], group["name"], group["why"]) == (
+        "built_in",
+        "Built into Codex",
+        words.GROUP_WHY_BUILT_IN_CODEX,
+    )
+    assert "Kitden did not find" not in str(cx)

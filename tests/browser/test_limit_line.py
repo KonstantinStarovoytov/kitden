@@ -110,7 +110,7 @@ def test_the_flag_opens_details_and_set_to_applies_then_undo_brings_the_first_st
     details = page.get_by_role("complementary", name="Details")
     expect(details).to_contain_text("Skill list limit")
     expect(details).to_contain_text("Now1% of the context window: 8,000 characters")
-    expect(details).to_contain_text("Suggested1.1%: all 20 skills get their description")
+    expect(details).to_contain_text("Suggested1.1%: all 20 skills fit")
     expect(details).to_contain_text("CostAbout 650 more characters in every chat")
     details.get_by_role("button", name="Set to 1.1%").click()
     dock = page.locator("#dock")
@@ -446,7 +446,7 @@ class TestCounted:
         expect(main).to_contain_text("4 of 20 skills showed only a name")
         page.locator(".ctx-flag").click()
         details = page.get_by_role("complementary", name="Details")
-        expect(details).to_contain_text("Suggested1.1%: all 20 skills get their description")
+        expect(details).to_contain_text("Suggested1.1%: all 20 skills fit")
         expect(details).to_contain_text(
             "Kitden could not rebuild this chat's list exactly, so it counts what all "
             "descriptions need."

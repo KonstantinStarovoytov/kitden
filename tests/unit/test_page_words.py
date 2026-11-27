@@ -1590,7 +1590,7 @@ def test_a_skill_limit_says_the_share_everywhere_it_shows():
     assert "Skill list limit$/" in tips
     assert "Drag the line to set the limit for your next chats, or click it for details." in tips
     assert said.LIMIT_NOW == "{share} of the context window: {n} characters"
-    assert said.LIMIT_FITS_ALL == "{share}: all {n} skills get their description"
+    assert said.LIMIT_FITS_ALL == "{share}: all {n} skills fit"
     assert said.LIMIT_FITS_ONE == "{share}: the skill gets its description"
     assert said.LIMIT_COST == "About {chars} more characters in every chat (about {tokens} tokens)"
     assert (said.LIMIT_SET, said.LIMIT_BACK) == ("Set to {share}", "Back to {share}")
