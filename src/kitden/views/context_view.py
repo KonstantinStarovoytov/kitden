@@ -357,6 +357,10 @@ def _skill(
         "plugin": name.rpartition(":")[0] or None,
         "item": item.id if item else None,
         "project": Project(project, True).id if project else None,
+        # A Codex skill only one project has: its rule names this copy, in that project's folder.
+        "copy_in": Path(item.project).name
+        if client == "codex" and item is not None and item.project and not plugin
+        else None,
         "source": source or _source(item, built_in),
         # Not a file on this computer: no Library item.
         "built_in": built_in,

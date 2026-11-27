@@ -1133,6 +1133,12 @@ test('a Codex skill that is off shows Off and offers On, and says it has no Name
   assert.deepEqual(switches.map((n) => [text(n), n.getAttribute('aria-pressed')]), [['On', 'false'], ['Off', 'true']]);
   assert.ok(text(drawer).includes('Codex · all projects'));
   assert.ok(text(drawer).includes('Codex has no Name only setting.'));
+  // A copy only one project has: its switch names that copy, never all projects.
+  show(answer(CLAUDE, { ...CODEX, skills: [skill('api', 300, 0, { copy_in: 'atlas', switch: ['on', 'off'] })] }, CURSOR));
+  await fire(pillOf('api'), 'click');
+  assert.ok(text(drawer).includes('Codex · this copy in atlas'));
+  assert.ok(!text(drawer).includes('Codex · all projects'));
+  show(answer(CLAUDE, { ...CODEX, skills: [skill('lint', 300, 0, { state: 'off', switch: ['on', 'off'] }), skill('fmt', 200, 0, { switch: ['on', 'off'] })] }, CURSOR));
   await fire(pillOf('fmt'), 'click');
   switches = walk(drawer).filter((n) => n.dataset && n.dataset.state);
   assert.deepEqual(switches.map(text), ['On', 'Off']);

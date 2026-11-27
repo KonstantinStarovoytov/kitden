@@ -283,6 +283,12 @@ def test_a_codex_skill_in_one_project_can_turn_off_that_copy(tmp_path):
     assert items["api-style"]["can"]["copy"] == ["codex"]
     # A skill of all projects has no such copy.
     assert items["code-review"]["can"]["copy"] == []
+    # One control for the copy: no switch "for all projects" beside it, in atlas or All projects.
+    for project in (str(home / "work/atlas"), None):
+        api = _items(_map(home, project)).get("api-style")
+        if api:
+            assert "codex" not in api["can"]["rule"], project
+            assert api["can"]["copy"] == ["codex"], project
 
 
 def test_hooks_sit_under_your_settings(tmp_path):

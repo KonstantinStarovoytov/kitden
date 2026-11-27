@@ -193,3 +193,28 @@ class TestPluginOn:
         expect(group).to_contain_text("after your next Codex chat")
         expect(group.get_by_role("button", name="Turn off browser")).to_be_visible()
         wait_until(lambda: True)
+
+
+def test_adds_moves_and_every_client_a_change_reaches_are_marked(page, demo):
+    turn_off(page, "superpowers@demo-market")
+    expect(page.locator("#dock")).to_contain_text("superpowers")
+    page.evaluate("location.hash = '#library?kind=plugin&view=list'")
+    # Cursor gets the plugin through Claude Code: both cells say the change waits.
+    expect(list_row(page, "superpowers").locator(".row-wait")).to_have_count(2)
+    # The skills tab's row of the plugin's skills is marked too, in both cells.
+    page.evaluate("location.hash = '#library?kind=skill&view=list'")
+    expect(list_row(page, "superpowers").locator(".row-wait")).to_have_count(2)
+    page.locator("#dock").get_by_role("button", name="Cancel").click()
+    # An add: the client's cell, and Context's card of that client.
+    page.get_by_role("button", name="Add brandkit to Codex").click()
+    expect(page.locator("#dock")).to_contain_text("brandkit")
+    marked(list_row(page, "brandkit"))
+    open_codex(page)
+    expect(page.get_by_role("main")).to_contain_text("Added · in preview")
+    page.locator("#dock").get_by_role("button", name="Cancel").click()
+    # A move into the gateway: the server's row in the Gateway List.
+    page.evaluate("location.hash = '#gateway?view=list'")
+    list_row(page, "analytics").get_by_role("button", name="Move in…").click()
+    expect(page.locator("#dock")).to_contain_text("analytics")
+    page.keyboard.press("Escape")
+    marked(list_row(page, "analytics"))

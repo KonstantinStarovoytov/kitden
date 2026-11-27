@@ -14,7 +14,7 @@ import { projectNote } from "./offer.js";
 import { isPanelOpen, openInfo, panelState, previewButton, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, shownClients, skeleton, socket, sourceLines, staleNote } from "./parts.js";
 import { afterShared, arrival, current, currentError, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
-import { markedRows, onTray, rowsAbout } from "./tray.js";
+import { cellWaits, markedRows, onTray } from "./tray.js";
 
 // The List's tabs, as on the Map, and what it shows of Plugins and skills.
 const TABS = [["plugin", "Plugins and skills"], ["instructions", "Instructions"]];
@@ -138,6 +138,7 @@ export function cellNode(row, client) {
     const node = button(cell.add.label, () => startAdd(cell.add, client, row), "btn small add");
     node.setAttribute("aria-label", addName(row, client, cell.add, state.project));
     node.dataset.focus = `add:${row.key}:${client}`;
+    watch(node, row, client);
     return node;
   }
   if (cell.state === "none") {
@@ -154,24 +155,37 @@ export function cellNode(row, client) {
   const node = socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason, stale: Boolean(cell.stale_at) });
   const hint = cellHint(cell);
   if (hint) node.title = hint;
-  if ((cell.items || []).length) {
-    node.dataset.items = cell.items.join(" ");
-    markWaiting(node);
-  }
+  if ((cell.items || []).length || (row.plugin_items || []).length) watch(node, row, client);
   return node;
 }
 
-// A change to the cell's item waits in the tray: its dashed ring and "in preview", as the maps and
-// the Gateway mark it (tray.js rowsAbout). Marked in place when the tray changes.
+// A change that waits in the tray and touches this cell (tray.js cellWaits: a change to the row's
+// item that reaches this client, its plugin's for a plugin's skill, or an add of it here): its
+// dashed ring and "in preview", as the maps and the Gateway mark it. Marked in place when the
+// tray changes.
+const watched = new WeakMap();
+function watch(node, row, client) {
+  const items = [...Object.values(row.cells || {}).flatMap((one) => one.items || []), ...(row.plugin_items || [])];
+  const cell = row.cells[client] || {};
+  const add = cell.add ? (cell.add.skill ? { skill: cell.add.skill } : { plugin: cell.add.plugin }) : null;
+  watched.set(node, { items, own: cell.items || [], add, client });
+  node.dataset.waits = "";
+  markWaiting(node);
+}
 function markWaiting(node) {
-  const waits = rowsAbout(markedRows(), { items: node.dataset.items.split(" ") }).length > 0;
-  node.classList.toggle("pv", waits);
-  const tag = node.querySelector(":scope > .row-wait");
-  if (waits && !tag) node.append(el("span", "row-wait", "in preview"));
-  if (!waits && tag) tag.remove();
+  const about = watched.get(node);
+  if (!about) return;
+  const marked = cellWaits(markedRows(), about);
+  if (marked === Boolean(about.tag)) return;
+  node.classList[marked ? "add" : "remove"]("pv");
+  if (marked) node.append((about.tag = el("span", "row-wait", "in preview")));
+  else {
+    about.tag.remove();
+    about.tag = null;
+  }
 }
 onTray(() => {
-  for (const node of document.querySelectorAll("#main .socket[data-items]")) markWaiting(node);
+  for (const node of document.querySelectorAll("#main [data-waits]")) markWaiting(node);
 });
 
 // A cell's hover text: where it applies (in full, where the cell may cut it), how the client
@@ -629,7 +643,9 @@ export function listRows(answer, open = new Set(), folded = new Set()) {
       if (!opened) continue;
       for (const part of parts) {
         const partId = `part:${item.id}:${part.key}:${part.name}`;
-        rows.push({ id: partId, key: partId, parent: itemId, depth: 2, kind: "part", name: part.name, meta: PART_WORDS[part.kind], flags: part.flags || [], cells: part.cells, sel: null, group: false, source: part.source, same_name: part.same_name });
+        // Its plugin's items: a change to the plugin marks the part's cells too.
+        const pluginItems = Object.values(item.cells || {}).flatMap((one) => one.items || []);
+        rows.push({ id: partId, key: partId, parent: itemId, depth: 2, kind: "part", name: part.name, meta: PART_WORDS[part.kind], flags: part.flags || [], cells: part.cells, sel: null, group: false, source: part.source, same_name: part.same_name, plugin_items: pluginItems });
       }
     }
   }

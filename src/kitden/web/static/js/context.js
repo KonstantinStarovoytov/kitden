@@ -13,7 +13,7 @@ import { button, el, icon, reportError } from "./dom.js";
 import { headActions } from "./map-page.js";
 import { animateTo, fold, riseHead } from "./motion.js";
 import { closePanel, drawQuietly, isPanelOpen, openPanel, panelState, stepTo, whenGone } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, mark, skeleton, STATE_WORDS, waitsAs } from "./parts.js";
+import { banner, CLIENT_NAMES, folderName, mark, skeleton, STATE_WORDS, WAITING, waitsAs } from "./parts.js";
 import { ALL_PROJECTS_SCOPE, skillSwitch } from "./skill-switch.js";
 import { context as libraryContext, OFF_ALL, ON_ALL, pluginSwitches, skillDetails } from "./library-details.js";
 import { current, currentError, data, go, goTo, loadContext, projectPath, readLibraryMap, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
@@ -204,6 +204,8 @@ export function renderContext(main, { again = false } = {}) {
     const view = { result, base: now || shown.result, fact: card.windows[0].result, estimate, planned: Boolean(planned), states };
     main.append(groupsFor(card, view, after, heat));
   } else if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
+  const adds = addsShelf(card);
+  if (adds) main.append(adds);
   const how = fix && card.limit.why ? card.how.filter((line) => line !== card.limit.why) : card.how;
   if (how.length) main.append(howFor(how));
   markAll();
@@ -422,6 +424,27 @@ function shelfFor(card, { head, look }, skills, states, after, heat, result) {
     shelf.append(row);
   }
   if (alone.children.length) shelf.append(alone);
+  return shelf;
+}
+
+// What the tray adds to this client (a skill, or a plugin with its skills): one quiet shelf,
+// "Added · in preview", with their names, so an add waits here as an off does. The estimate counts
+// them only after Apply, when the client lists them.
+const ADDED = `Added · ${WAITING}`;
+const INSTALLS = ["skill.install", "plugin.install"];
+function addsOf(client) {
+  const rows = tray.phase === "applied" ? [] : tray.rows;
+  const named = rows.filter(({ body }) => INSTALLS.includes(body.action) && (body.targets || []).some((t) => t.client === client));
+  return named.map(({ body }) => String((body.params || {}).skill || (body.params || {}).plugin || "").split("@")[0]).filter(Boolean);
+}
+function addsShelf(card) {
+  const names = addsOf(card.client);
+  if (!names.length) return null;
+  const shelf = el("section", "ctx-off ctx-going ctx-apart");
+  shelf.setAttribute("aria-label", ADDED);
+  const cloud = el("div", "ctx-cloud");
+  cloud.append(...names.map((name) => el("span", "ctx-pill chg", name)));
+  shelf.append(el("p", "ctx-off-head", ADDED), cloud);
   return shelf;
 }
 
@@ -805,7 +828,8 @@ function pluginSwitch(card, offer, plugin = null) {
 function switchFor(card, skill) {
   const target = skill.built_in ? { built_in: skill.name } : { item: skill.item };
   const own = skill.project && Array.isArray(data.projects) ? data.projects.find((p) => p.id === skill.project) : null;
-  const scope = own ? `in ${folderName(own.path)}` : ALL_PROJECTS_SCOPE;
+  // A Codex copy only one project has: its rule names that copy, so the switch says so.
+  const scope = own ? `in ${folderName(own.path)}` : skill.copy_in ? `this copy in ${skill.copy_in}` : ALL_PROJECTS_SCOPE;
   return skillSwitch({ client: card.client, target, states: skill.switch, now: skill.state, project: skill.project, scope, note: CONTEXT_NOTE });
 }
 
@@ -1171,6 +1195,11 @@ function followDraft() {
   const model = current("context");
   if (!model) return;
   const draft = JSON.stringify(draftFrom(model));
+  // An add changes no estimate: the page is drawn again, not read.
+  const adds = JSON.stringify((model.clients || []).map((card) => addsOf(card.client)));
+  const drawn = page.adds;
+  page.adds = adds;
+  if (drawn !== undefined && adds !== drawn && draft === page.draft && state.view === "context") render();
   if (draft === page.draft) return;
   page.draft = draft;
   if (state.view !== "context") return;
