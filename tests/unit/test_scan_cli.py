@@ -558,3 +558,11 @@ def test_scan_last_line_names_the_fix_context_names(bare, capsys):
     assert _summary(bare, capsys)[-1] == (
         "To make the skills fit, press Set to 1.1% for Claude Code: kitden open"
     )
+
+
+def test_the_scan_counts_a_skill_and_a_server_of_one_name_as_two_notes():
+    # As the Overview does (Lantern on #239).
+    skill = {**_finding("info", items=("s",), kind="cross_loaded"), "names": ["sentry"]}
+    server = {**_finding("info", items=("m",), kind="same_in_other_clients"), "names": ["sentry"]}
+    skill["kinds"], server["kinds"] = ["skill"], ["mcp_server"]
+    assert cli._findings_lines([skill, server], {})[-1].startswith("2 notes")

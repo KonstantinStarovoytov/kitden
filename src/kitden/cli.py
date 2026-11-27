@@ -466,7 +466,9 @@ def _findings_lines(findings: list[dict], by_id: dict) -> list[str]:
     warnings = [_warning(f, by_id) for f in findings if f["severity"] == "warning"]
     # The notes as the Overview counts them: items with the same words fold into one row.
     infos = [f for f in findings if f["severity"] != "warning"]
-    notes = note_count([SimpleNamespace(names=f["names"], type=f["type"]) for f in infos])
+    notes = note_count(
+        [SimpleNamespace(names=f["names"], type=f["type"], kinds=f.get("kinds", [])) for f in infos]
+    )
     command = _whole(words.SCAN_FINDINGS)
     parts = []
     if warnings:
