@@ -10,7 +10,7 @@ import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { callsText, closePanel, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, loadPanel, moveBody, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toolRows, toolsHead, writingToolsOn } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, FIND_PROJECT, folderName, GATEWAY_NOTE, kitdenClients, kitdenHouse, mark, menuItems, originText, shownClients, STATE_WORDS, versionsOpen, WRITABLE } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayWords, WAITING, kitdenClients, kitdenHouse, mark, menuItems, originText, shownClients, STATE_WORDS, versionsOpen, WRITABLE } from "./parts.js";
 import { current, data, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, TAKE_OUT, takeOut, tray, trayRow } from "./tray.js";
 
@@ -125,8 +125,15 @@ export function connectBody(client, setup) {
 // Null where it has a button, or Kitden cannot say.
 function noButtonWords(entry, found) {
   if (!entry) return null;
-  if (entry.state === "not_installed") return found && found.status === "unreadable" ? "settings not readable" : "not on this computer";
+  if (entry.state === "not_installed") return found && found.status === "unreadable" ? "settings not readable" : null;
   return entry.enabled === false ? "its entry is off" : null;
+}
+
+// Whether a client is not on this computer: the scan did not find it, or its kitden entry says so
+// and the scan does not say its settings are only unreadable. It is "Not installed".
+export function notInstalled(entry, found) {
+  if (found && found.status === "not_found") return true;
+  return Boolean(entry && entry.state === "not_installed" && !(found && found.status === "unreadable"));
 }
 
 // Whether Kitden knows the tools of every server in `servers`.
@@ -160,8 +167,8 @@ const TURNS_ON = ["codex"];
 // The Gateway fact: the lamp and Connected or Not connected ("Not known" with no lamp, without the
 // setup read), then " · change in preview" in the accent while its Connect or Disconnect waits in
 // the tray (`key`).
-function gatewayFact(known, on, key) {
-  const text = known ? (on ? "Connected" : "Not connected") : "Not known";
+function gatewayFact(known, on, key, missing = false) {
+  const text = known ? gatewayWords(on, missing) : "Not known";
   const value = el("span", "fact-mark");
   const words = el("span", null, text);
   if (key) words.append(waitWords(key, " · change in preview"));
@@ -259,7 +266,7 @@ export function clientCard(client, { setup, clients, progress = data.progress, v
   const through = throughKitden(view);
   const own = ownServers(view, client);
   const facts = [
-    gatewayFact(known, on, action && keyFor(action.body)),
+    gatewayFact(known, on, action && keyFor(action.body), notInstalled(entry, found)),
     throughFact(known, on, through),
     ownFact(own),
     { label: "Projects", value: picked ? folder : ALL_PROJECTS },
@@ -301,8 +308,10 @@ export function clientRows(setup, clientList) {
   for (const client of shownClients(clientList)) {
     const on = linked.includes(client);
     const action = connectAction(client, setup);
-    const why = action ? null : noButtonWords((setup || []).find((e) => e.client === client), (clientList || []).find((c) => c.id === client));
-    const said = el("span", null, [on ? "Connected" : "Not connected", why].filter(Boolean).join(" · "));
+    const found = (clientList || []).find((c) => c.id === client);
+    const entry = (setup || []).find((e) => e.client === client);
+    const why = action ? null : noButtonWords(entry, found);
+    const said = el("span", null, [gatewayWords(on, notInstalled(entry, found)), why].filter(Boolean).join(" · "));
     const state = el("small");
     state.append(lamp(on ? "on" : "off"), said);
     const words = el("div", "sw-tx");
@@ -310,7 +319,7 @@ export function clientRows(setup, clientList) {
     const row = el("div", "sw-row");
     row.append(mark(client), words);
     if (action) {
-      said.append(waitWords(keyFor(action.body), " · in preview"));
+      said.append(waitWords(keyFor(action.body), ` · ${WAITING}`));
       row.append(rowButton(client, action));
     }
     list.append(row);
@@ -384,7 +393,7 @@ export function gatewayCard(gateway, { view, setup, clientList = data.clients } 
   }
   let warning = known ? null : "Kitden could not read which clients use it.";
   if (gateway.problem) warning = gateway.problem;
-  const why = "The gateway controls only the servers in it. Direct entries and terminal tools are outside it.";
+  const why = "The gateway controls only the servers in it, not a server a client starts on its own.";
   return { kind: KIND.gateway, title: gateway.name, id: gateway.where, tile: houseTile(), facts, list: known ? clientRows(setup, clientList) : null, why, actions: [], more, warning };
 }
 
@@ -393,9 +402,9 @@ export function gatewayCard(gateway, { view, setup, clientList = data.clients } 
 // Details of a server outside the gateway, for its row of one group (one name in two groups is
 // two rows), as the mockup's panel for it (gateway-notes 3.8): its icon, Remote, Local or From a
 // plugin "· outside the gateway"; the clients that set it up, its direct route, and that Kitden's
-// rules do not reach it; a sentence (outsideSay). "Move into the gateway…" when a move can take it
-// (primary), else why not; under More (D18): "Remove direct entry…" when no gateway takes a remote
-// one, "+ Add to <client>…" for each client Kitden writes that lacks it, while no client gets it
+// rules do not reach it; a sentence (outsideSay). "Move in…" when a move can take it
+// (primary), else why not; under More (D18): "Remove from <clients>…" when no gateway takes a remote
+// one, "Add to <client>…" for each client Kitden writes that lacks it, while no client gets it
 // through a gateway (as the Library's cells), and a Remove for each of its own entries.
 // `definitions` come from /api/explain; [] until they are read. `linked`: the clients that use the
 // Kitden gateway (null when not read).
@@ -408,9 +417,10 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
   const more = [];
   const moves = movesTo(view, group, row);
   // The button is the move's own, so it says when the move waits in the tray.
-  if (moves.length) actions.push({ label: "Move into the gateway…", body: moveBody(moves[0], row.items), primary: true });
-  else if (group === "move" && row.items.length && !targets.length) {
-    more.push({ label: "Remove direct entry…", body: { action: "mcp.remove_direct", targets: row.items.map((item) => ({ item })), params: {} } });
+  if (moves.length) actions.push({ label: "Move in…", body: moveBody(moves[0], row.items), primary: true });
+  // One Remove per own entry follows; this one is for entries the card has no definition of yet.
+  else if (group === "move" && row.items.length && !targets.length && !row.items.every((id) => own.some((d) => d.id === id && d.actions.includes("mcp.remove_direct")))) {
+    more.push({ label: `Remove from ${names}…`, body: { action: "mcp.remove_direct", targets: row.items.map((item) => ({ item })), params: {} } });
   }
   const source = own.find((d) => d.scope === "user" && d.actions.includes("mcp.remove_direct"));
   // A client that cannot take it (Claude Code has no start folder setting) gets no Add, only why;
@@ -430,7 +440,7 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
       }
       const body = { action: "mcp.add", targets: [{ client }], params: { item: source.id } };
       // In a project an add still goes to the client's settings for all projects; its note says so.
-      more.push({ label: `+ Add to ${CLIENT_NAMES[client]}…`, body, note: projectNote(state.project) });
+      more.push({ label: `Add to ${CLIENT_NAMES[client]}…`, body, note: projectNote(state.project) });
     }
   }
   // Its own switch where the client file has one (Codex's `enabled`), for the entry's own scope.
@@ -469,7 +479,7 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
   };
 }
 
-// Why the outside card offers no "+ Add to …".
+// Why the outside card offers no Add to a client.
 export const NO_ADD_PROJECT = "Kitden copies only servers set for all projects to other clients.";
 export const NO_ADD_HELD = "The Kitden gateway holds it too: clients connected to the gateway get it there.";
 
@@ -724,7 +734,7 @@ function toolActions(server, tool, { picked, folder, detail, shared, some }) {
   if (!picked) return { actions: [...(all ? [{ ...all, primary: !on }] : []), ...(some ? [some] : [])], more: [] };
   const flip = on ? "off" : "on";
   const here = tool.origin === "project"
-    ? { label: detail.follows ? `Use ${detail.follows}'s rule…` : "Use the shared rule…", body: ruleBody(server, tool.name, null, picked) }
+    ? { label: detail.follows ? `Follow ${detail.follows}…` : "Follow all projects…", body: ruleBody(server, tool.name, null, picked) }
     : { label: `Turn ${flip} in ${folder}…`, body: ruleBody(server, tool.name, flip, picked) };
   return { actions: [{ ...here, primary: true }, ...(all ? [all] : [])], more: some ? [some] : [] };
 }
@@ -853,7 +863,7 @@ function heldMore(server, picked, detail, some) {
   const name = server.name;
   const more = [];
   if (picked && server.origin === "project") {
-    more.push({ label: detail.follows ? `Use ${detail.follows}'s rule…` : "Use the shared rule…", body: ruleBody(name, null, null, picked) });
+    more.push({ label: detail.follows ? `Follow ${detail.follows}…` : "Follow all projects…", body: ruleBody(name, null, null, picked) });
   }
   const shared = sharedOf(server, detail);
   if ((picked || !Array.isArray(detail.tools)) && shared) more.push({ label: FOR_ALL[other(shared)], body: ruleBody(name, null, other(shared), null) });
@@ -1202,7 +1212,7 @@ function followLine(p, rows, ownOf, ticks) {
 }
 
 // Whether the rule `body` waits in the tray as it is: a row for that project with another state
-// (a "Use the shared rule…") is not this tick.
+// (a "Follow all projects…") is not this tick.
 function ticked(body) {
   const row = trayRow(keyFor(body));
   return Boolean(row) && row.body.params.state === body.params.state;

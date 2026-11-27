@@ -207,11 +207,11 @@ test('a skill rule says what it turns off and where', () => {
   assert.equal(changeWords(plugin, body({ scope: 'project', project: 'p1', off: true })).title, 'Turn off superpowers in website');
   // Name only is not Off.
   assert.deepEqual(changeWords(off(target('all')), body({ scope: 'all', state: 'name-only' })), { title: 'Set deploy to Name only for all projects', done: 'deploy is Name only for all projects' });
-  assert.equal(changeWords(off(here), body({ scope: 'project', project: 'p1', state: 'on' })).title, 'Use the shared rule for deploy in website');
+  assert.equal(changeWords(off(here), body({ scope: 'project', project: 'p1', state: 'on' })).title, 'Make deploy follow all projects in website');
   // On for all projects: the user's own key goes, and the skill is on again.
   assert.deepEqual(changeWords(off(target('all')), body({ scope: 'all', state: 'on' })), { title: 'Turn on deploy for all projects', done: 'Turned on deploy for all projects' });
   // Back to the shared rule: the project's own key goes.
-  assert.deepEqual(changeWords(off(here), body({ scope: 'project', project: 'p1', off: false })), { title: 'Use the shared rule for deploy in website', done: 'deploy uses the shared rule in website' });
+  assert.deepEqual(changeWords(off(here), body({ scope: 'project', project: 'p1', off: false })), { title: 'Make deploy follow all projects in website', done: 'deploy follows all projects in website' });
 });
 
 test('a skill list limit says the share it sets, for all projects', () => {
@@ -241,15 +241,15 @@ test("Codex's skill list limit says the tokens it sets, or back to the default",
 test('connecting a client to Kitden and disconnecting it name their place and no scope', () => {
   for (const action of ['setup_server.register', 'client.disconnect']) assert.ok(PLACE_IN_TITLE.includes(action), action);
   const connect = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }], target: target('all') };
-  assert.deepEqual(changeWords(connect), { title: 'Connect Cursor to Kitden', done: 'Connected Cursor to Kitden' });
+  assert.deepEqual(changeWords(connect), { title: 'Connect Cursor to the gateway', done: 'Connected Cursor to the gateway' });
   // Several clients, in the page's order.
   const two = { ...connect, steps: [{ client: 'codex', name: 'kitden' }, { client: 'claude_code', name: 'kitden' }] };
-  assert.deepEqual(changeWords(two), { title: 'Connect Claude Code and Codex to Kitden', done: 'Connected Claude Code and Codex to Kitden' });
+  assert.deepEqual(changeWords(two), { title: 'Connect Claude Code and Codex to the gateway', done: 'Connected Claude Code and Codex to the gateway' });
   const gone = { action: 'client.disconnect', steps: [{ client: 'codex', name: 'kitden' }], target: target('all') };
-  assert.deepEqual(changeWords(gone), { title: 'Disconnect Codex from Kitden', done: 'Disconnected Codex from Kitden' });
+  assert.deepEqual(changeWords(gone), { title: 'Disconnect Codex from the gateway', done: 'Disconnected Codex from the gateway' });
   // The same without a target, as a change from before the server named it.
-  assert.equal(changeWords({ ...gone, target: undefined }).title, 'Disconnect Codex from Kitden');
-  assert.equal(changeWords({ ...connect, target: undefined }).title, 'Connect Cursor to Kitden');
+  assert.equal(changeWords({ ...gone, target: undefined }).title, 'Disconnect Codex from the gateway');
+  assert.equal(changeWords({ ...connect, target: undefined }).title, 'Connect Cursor to the gateway');
   // Neither is an add that needs a scope in its lede.
   assert.equal(addScope('setup_server.register', ''), null);
   assert.equal(addScope('client.disconnect', ''), null);

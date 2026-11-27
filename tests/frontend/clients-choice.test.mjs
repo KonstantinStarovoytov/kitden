@@ -54,10 +54,10 @@ test('the panel has a row per client: its words, and a switch that shows whether
   assert.deepEqual(rows.map((r) => [r.id, r.name, r.words, r.on, r.last, r.gateway]), [
     ['claude_code', 'Claude Code', '2.1.311', true, false, null],
     ['codex', 'Codex', '0.159.2', true, false, null],
-    ['cursor', 'Cursor', 'Not found on this computer', true, false, null],
+    ['cursor', 'Cursor', 'Not installed', true, false, null],
   ]);
   const off = choiceRows([ALL[0], client('codex', 'off'), ALL[2]], []);
-  assert.deepEqual(off.map((r) => [r.words, r.on]), [['2.1.311', true], ['Off', false], ['Not found on this computer', true]]);
+  assert.deepEqual(off.map((r) => [r.words, r.on]), [['2.1.311', true], ['Off', false], ['Not installed', true]]);
 });
 
 test('the last client that is on has a disabled switch with the same words as its hover text', () => {
@@ -121,6 +121,9 @@ test('the Gateway map has no block for a client that is off, and one for a clien
   const ids = (tree) => tree.blocks.filter((b) => b.kind === 'client').map((b) => b.id);
   assert.deepEqual(ids(gatewayTree(view, { setup, clients })), ['client:claude_code', 'client:cursor']);
   assert.deepEqual(ids(gatewayTree(view, { setup, clients: [clients[0], client('codex', 'found', '1'), clients[2]] })), ['client:claude_code', 'client:codex', 'client:cursor']);
+  // A client not on this computer says the same word as every tab, and offers nothing to connect.
+  const cursor = gatewayTree(view, { setup, clients }).blocks.find((b) => b.id === 'client:cursor');
+  assert.deepEqual([cursor.meta, cursor.connect, cursor.drags], ['Not installed', null, false]);
 });
 
 test('the Gateway panel lists no client that is off', () => {

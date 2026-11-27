@@ -4,7 +4,7 @@ import { chooseButton, offLine } from "./clients-choice.js";
 import { $, button, byKeys, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, pageWaits, plural, reportError, treeRow, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
-import { connectAction, connectBody, followProject, heldServer, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool } from "./gateway-details.js";
+import { connectAction, connectBody, followProject, heldServer, movesTo, notInstalled, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { flipToolPick, onToolPick, pickTools, setToolPick, toolPick } from "./tools.js";
@@ -13,7 +13,7 @@ import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, revealMatc
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, panelState, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, shownClients, skeleton, STATE_WORDS, staleNote, WRITABLE } from "./parts.js";
+import { banner, CLIENT_NAMES, folderName, gatewayWords, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, shownClients, skeleton, STATE_WORDS, staleNote, WRITABLE } from "./parts.js";
 import { arrival, busy, current, currentError, data, gatewayShows, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { openAccess } from "./access-form.js";
@@ -462,7 +462,7 @@ function connectParts(links, kitden, waits) {
   }
 }
 
-// A client's block: Connected or Not connected, and on a first run that it is found, with its
+// A client's block: Connected, Not connected or Not installed (not on this computer: no link to make), and on a first run that it is found, with its
 // version; and the change that disconnects it (`disconnect`) where its link's × can (connectAction).
 // One that is not connected, past a first run, has the change that connects it (`connect`,
 // connectBody) and can be dragged onto the gateway (`drags`). While a change that connects it waits
@@ -473,8 +473,9 @@ function connectParts(links, kitden, waits) {
 function clientBlock(id, { setup, linked, known, first, clients, wait = null }) {
   const on = linked.includes(id);
   const found = (clients || []).find((c) => c.id === id && c.status === "found");
+  const missing = notInstalled((setup || []).find((e) => e.client === id), (clients || []).find((c) => c.id === id));
   // Without the setup read, a client is neither connected nor not.
-  let meta = known ? (on ? "Connected" : "Not connected") : NOT_KNOWN;
+  let meta = known ? gatewayWords(on, missing) : NOT_KNOWN;
   // Found lights the lamp; the state stays what the link shows: no gateway reached yet. A client
   // whose state Kitden does not know has no lamp: a grey one would say off.
   let lamp = known ? (on ? "on" : "off") : null;
@@ -482,7 +483,7 @@ function clientBlock(id, { setup, linked, known, first, clients, wait = null }) 
   if (firstFound) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
   const action = on ? connectAction(id, setup) : null;
   const disconnect = action && !action.connect ? action.body : null;
-  const connect = !on && !first ? connectBody(id, setup) : null;
+  const connect = !on && !first && !missing ? connectBody(id, setup) : null;
   const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", stateInMeta: !firstFound, client: id, ports: { right: true }, disconnect, connect, drags: Boolean(connect) };
   if (!wait) return block;
   // The dot stays with the words before it (a no-break space), so a wrap never starts a line with it.
@@ -688,9 +689,10 @@ export function listRows(model, open = new Set(), folded = new Set()) {
     const linked = reaches(gateway.id);
     const count = groups.reduce((n, g) => n + (children.get(g.id) || []).length, 0);
     const expanded = groups.length ? !folded.has(gateway.id) : undefined;
-    // What it holds, or why Kitden does not know. A first run's slot says what a gateway is for.
+    // What it holds, or why Kitden does not know. A first run's slot says no more than its name and
+    // its Set up…: its line did not fit the List's row, and its Details say what a gateway is for.
     let meta = gateway.unread === null ? plural(count, "server", "servers") : gateway.unread;
-    if (gateway.kind === "slot") meta = gateway.meta;
+    if (gateway.kind === "slot") meta = null;
     row(gateway, null, 0, { usedBy: linked, meta, expanded });
     if (!expanded) continue;
     for (const g of groups) {
@@ -1640,7 +1642,7 @@ function listRow(row, block, { current, selected, view, press }) {
   if (row.usedBy.length) used.append(el("span", "sr-only", joinWords(row.usedBy.map((c) => CLIENT_NAMES[c]))));
   const action = cell("tg-action");
   if (row.action === "move") {
-    // The drag's keyboard path: the same review as "Move into the gateway…" in Details.
+    // The drag's keyboard path: the same review as "Move in…" in Details.
     const move = button("Move in…", () => moveInto(movesTo(view, block.groupKey, block.row)[0], block.row.items), "btn small");
     move.tabIndex = current ? 0 : -1;
     move.dataset.focus = `move:${row.id}`;

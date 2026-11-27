@@ -268,7 +268,7 @@ def _fold(cards: list[dict], kind: str) -> list[dict]:
 
 def _move_ins(groups: dict) -> list[dict]:
     """A card per server outside the Kitden gateway that a move can take, as the Gateway's
-    "Move into the gateway…" offers it (gateway-details.js `movesTo`): its row has entries
+    "Move in…" offers it (gateway-details.js `movesTo`): its row has entries
     Kitden can remove and nothing that makes the move refuse it. "Move in…" adds the same
     change (details.js `moveBody`). Two cards with one name (a remote and a local server) start
     their line with the group's word. Past SERVER_CARDS, one card says how many more and opens

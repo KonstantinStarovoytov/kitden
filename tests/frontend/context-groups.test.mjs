@@ -41,7 +41,7 @@ test('the groups go largest first, those off now last; the size without the tray
   const all = groupsOf(CARD, view);
   assert.deepEqual(keys(all), ['plugin:p@m', 'own', 'plugin:q@m']);
   assert.equal(all[0].state, 'going');
-  assert.deepEqual(groupLine(CARD, all[0], true), ['Off after Apply', 'frees about 600 characters']);
+  assert.deepEqual(groupLine(CARD, all[0], true), ['Off · in preview', 'frees about 600 characters']);
   // c gets its description after Apply: none of Your skills would show only a name.
   assert.deepEqual(groupLine(CARD, all[1], true), ['3 skills', '630 characters']);
 });
@@ -51,7 +51,7 @@ test('a group the tray turns on again says so and counts in the estimate after A
   const view = { result: after, base: FACT, fact: FACT, estimate: true, planned: true, states: { 'q:z': 'on' } };
   const q = factsOf(CARD, CARD.groups[2], view);
   assert.equal(q.state, 'back');
-  assert.deepEqual(groupLine(CARD, q, true), ['On after Apply', '1 skill', '400 characters']);
+  assert.deepEqual(groupLine(CARD, q, true), ['On · in preview', '1 skill', '400 characters']);
 });
 
 test('a skill turned off in a group of its own counts as off there, and Name only by choice is no misfit', () => {

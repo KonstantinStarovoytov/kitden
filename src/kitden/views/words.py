@@ -6,13 +6,18 @@ def join_words(words: list[str]) -> str:
     return " and ".join([", ".join(words[:-1]), words[-1]] if len(words) > 1 else words)
 
 
+def possessive(name: str) -> str:
+    """A name with its 's: "Codex's", but "superpowers'" for a name that ends in s."""
+    return f"{name}'" if name.endswith("s") else f"{name}'s"
+
+
 def percent(share: float) -> str:
     """0.02 as "2%", 0.015 as "1.5%"."""
     return f"{share * 100:g}%"
 
 
 # The Instructions map: found clients that read no instruction file in the scope shown.
-NO_FILE_ALL = "{names} {loads} no instruction file in every project."
+NO_FILE_ALL = "{names} {loads} no instruction file for all projects."
 NO_FILE_HERE = "{names} {loads} no instruction file in this project."
 PICK_PROJECT = "Pick a project to see its own files."
 
@@ -198,7 +203,7 @@ CLAUDE_SHARE_SET = "Your Claude Code settings let this list use {share} of the c
 # In place of CONTEXT_LIMITS when the user's own setting is the limit.
 CONTEXT_LIMIT_SET = {
     "claude_code": "Your Claude Code settings limit this list to {n} characters.",
-    "codex": "Your config.toml limits this list to {n} tokens.",
+    "codex": "Your Codex settings limit this list to {n} tokens.",
 }
 # A config.toml value above the most Codex allows.
 CODEX_MOST = "Codex lets this list use {n} tokens at most."
@@ -413,7 +418,7 @@ NOTE_NO_ROOM = "No room for its description."
 # After NOTE_NO_ROOM, when a skill with a description has a switch.
 NOTE_FREE_ROOM = "Set a skill with a description to Name only or Off to free room."
 # The limit does not explain the list, so Kitden does not blame it.
-NOTE_NOT_SENT = "Its description was not sent in your last chat. Kitden cannot tell why."
+NOTE_NOT_SENT = "Its description was not sent in your last chat."
 NOTE_NAME_ONLY = "The agent sees the name, not when to use it."
 NOTE_ONLY_ASKED = "The agent uses it only when you type its name."
 NOTE_CODEX_OFF = "Off frees room, so long descriptions get cut less."
@@ -452,7 +457,7 @@ HOW_CLAUDE_WINDOW = (
 )
 HOW_CLAUDE_SETTING = (
     "The limit is SLASH_COMMAND_TOOL_CHAR_BUDGET from your Claude Code settings. "
-    "A value set in the shell is out of Kitden's sight."
+    "Kitden cannot see a value set in the shell."
 )
 HOW_CLAUDE_FRACTION = (
     "The limit is skillListingBudgetFraction in Claude Code's settings: {share} of the context "
@@ -461,7 +466,7 @@ HOW_CLAUDE_FRACTION = (
 HOW_CLAUDE_CAP = (
     "A description is cut at skillListingMaxDescChars in Claude Code's settings: {n} characters."
 )
-HOW_CLAUDE_SHELL = "A SLASH_COMMAND_TOOL_CHAR_BUDGET set in the shell is out of Kitden's sight."
+HOW_CLAUDE_SHELL = "Kitden cannot see a limit set in the shell (SLASH_COMMAND_TOOL_CHAR_BUDGET)."
 HOW_CLAUDE_SURFACE = "The list in the terminal can differ from the Claude app."
 
 # Details' "Skill list limit" on the Context page (spec skill-list-limit, 2026-11-23): Claude
@@ -473,12 +478,12 @@ LIMIT_COST = "About {chars} more characters in every chat (about {tokens} tokens
 LIMIT_SET = "Set to {share}"
 LIMIT_BACK = "Back to {share}"
 LIMIT_NOTE = (
-    "Kitden writes it in your Claude Code user settings, for all projects. Your next chat will "
-    "show the real list."
+    "Kitden writes it in your Claude Code user settings, for all projects. Start a new chat to "
+    "see the new list."
 )
-# Quiet lines in Details when the suggestion is a count, not a replay of the chat's list.
+# Quiet lines in Details when the suggestion is a count, not a rebuild of the chat's list.
 LIMIT_COUNTED = (
-    "Kitden could not replay this chat's list exactly, so it counts what all descriptions need."
+    "Kitden could not rebuild this chat's list exactly, so it counts what all descriptions need."
 )
 LIMIT_COUNTED_ONE = (
     "{n} skill has no description Kitden can find; it is counted at the longest, {cap} characters."
@@ -499,12 +504,12 @@ LIMIT_ADDED_MANY = "{n} skills were not in this chat's list; they are counted to
 LIMIT_KEEPS_CHOSEN = "Skills set to Name only stay as they are."
 # Under the last chat's verdict when the share changed after that chat; an estimate follows.
 LIMIT_CHANGED = (
-    "The limit was changed after this chat: it is {share} now. Your next chat will show the real "
+    "The limit was changed after this chat: it is {share} now. Start a new chat to see the new "
     "list."
 )
 # The same when the skills now are not the ones that list was sent with; an estimate follows.
 SKILLS_CHANGED = (
-    "Your skills changed after this list was sent. Your next chat will show the real list."
+    "Your skills changed after this list was sent. Start a new chat to see the new list."
 )
 # After SKILLS_CHANGED or LIMIT_CHANGED, when Kitden has no estimate for the setup now.
 NOW_NO_LIMIT = "Kitden cannot estimate your next chat's list: it does not know its limit."
@@ -513,8 +518,8 @@ NOW_NO_RULE = (
     "your last list, so it cannot tell what changes."
 )
 LIMIT_AND_SKILLS_CHANGED = (
-    "The limit and your skills changed after this list was sent: the limit is {share} now. Your "
-    "next chat will show the real list."
+    "The limit and your skills changed after this list was sent: the limit is {share} now. Start "
+    "a new chat to see the new list."
 )
 # Codex: skills added after that list whose line Kitden cannot work out; said beside the estimates.
 CODEX_NOT_COUNTED_ONE = (
@@ -564,8 +569,8 @@ CODEX_LIMIT_NOW_SET = "Set in config.toml: {n} tokens"
 CODEX_LIMIT_FITS = "{limit}: no description is cut and no skill is left out"
 CODEX_LIMIT_COST = "About {tokens} more tokens in every chat"
 CODEX_LIMIT_NOTE = (
-    "Kitden writes it in your Codex config.toml, for all projects. Your next chat will show the "
-    "real list."
+    "Kitden writes it in your Codex settings, for all projects. Start a new chat to see the new "
+    "list."
 )
 CODEX_LIMIT_BACK = "Back to the default"
 CODEX_LIMIT_NOT_ENOUGH = (
@@ -619,7 +624,7 @@ HOW_CODEX_TOKENS = "Tokens here are Codex's own count, not exact model tokens."
 HOW_CURSOR = (
     "Cursor does not publish a limit for this list, and Kitden found no log that shows what it "
     "sends. Checked 2026-11-06.",
-    "Sizes and the Only when asked setting come from your skill files.",
+    "Sizes and the Only when you ask setting come from your skill files.",
     "Cursor's own built-in skills are not counted.",
 )
 # Cursor loads plugins (Claude Code's too), but Kitden does not read their skills for Cursor.
@@ -661,7 +666,7 @@ SCAN_COUNT_NOTE = "A chat lists only one project's skills, and {client}'s own to
 # A client's status after its name, when it has no version line: plain words, not the ids of
 # `scan --json`.
 SCAN_STATUS = {
-    "not_found": "not found",
+    "not_found": STATE_WORDS["missing"].lower(),
     "unreadable": "could not be read",
     "off": "turned off in Kitden",
 }
@@ -691,5 +696,9 @@ SCAN_READ_ONLY = "Your agents' settings were not changed: scan only reads them."
 # The last line: skills that did not fit; else a warning or a file that could not be read; else
 # nothing wrong.
 SCAN_FIX_SKILLS = "To make the skills fit, turn off the ones you do not use: kitden open"
-SCAN_FIX = "To fix this: kitden open"
+SCAN_FIX = "To fix the warnings: kitden open"
+SCAN_FIX_UNREAD = (
+    "To fix the file Kitden could not read: kitden open",
+    "To fix the files Kitden could not read: kitden open",
+)
 SCAN_OPEN = "To see or change it: kitden open"

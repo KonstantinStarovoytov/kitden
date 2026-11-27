@@ -29,7 +29,7 @@ test('labels built with a name get words that add something', () => {
     'Connect Cursor to the gateway…', 'Disconnect Codex from the gateway…', 'Move all 3…',
     'Move secrets to the Keychain…', 'Put back in Cursor…', 'Remove from Codex…', 'Set up in Cursor…',
     'Turn off in website…', 'Turn on search_docs in website…', 'Turn it on in Codex…', 'Turn off Figma in this project…',
-    "Update neon's Kitden entry…", "Use website's rule…", 'Apply', 'Apply all', 'Apply 3', 'Undo', 'Replace…', 'Sign out', 'Add access…',
+    "Update neon's Kitden entry…", 'Follow website…', 'Apply', 'Apply all', 'Apply 3', 'Undo', 'Replace…', 'Sign out', 'Add access…',
   ]) assert.ok(tipFor(label), label);
 });
 
@@ -49,8 +49,8 @@ test('words already on screen are not shown again, unless they are cut off', () 
     getAttribute: () => null,
     querySelectorAll: () => [{ scrollWidth: cut ? 200 : 100, clientWidth: 100 }],
   });
-  assert.equal(wordsOf(node('+ Add to Codex…', '+ Add to Codex…')), null);
-  assert.equal(wordsOf(node('+ Add to Codex…', '+ Add to Codex…', true)), '+ Add to Codex…');
+  assert.equal(wordsOf(node('Add to Codex…', 'Add to Codex…')), null);
+  assert.equal(wordsOf(node('Add to Codex…', 'Add to Codex…', true)), 'Add to Codex…');
   // A map block's title is its name, already shown beside its state.
   assert.equal(wordsOf(node('Kitden gateway On this computer 3 clients 7 servers', 'Kitden gateway')), null);
   assert.equal(wordsOf(node('reference-lang… 2 of 2 on', 'reference-langfuse-docs', true)), 'reference-langfuse-docs');

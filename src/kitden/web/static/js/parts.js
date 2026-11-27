@@ -1,6 +1,10 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
 import { $, button, byKeys, el, icon, joinWords, plural, secretsWord, shortPath } from "./dom.js";
 import { animateTo, D, reducedMotion, rise, rollTo } from "./motion.js";
+import { gatewayWords, possessive, SKILL_STATE_WORDS, STATE_WORDS, WAITING, waitsAs } from "./words.js";
+
+// The page's words for a state live in words.js; the other modules take them from here too.
+export { gatewayWords, possessive, SKILL_STATE_WORDS, STATE_WORDS, WAITING, waitsAs };
 
 // The shared baseline: the picker's first choice, and the scope of what is set for every project.
 export const ALL_PROJECTS = "All projects";
@@ -242,7 +246,7 @@ export function projectMenu(projects, picked, onPick, from = null) {
 // the rules this page has, so none is "no rules of its own": the rest of the project's setup
 // may still differ. A page that counts no rules (the Library's map) names only the project.
 export function scopeText(folder, count) {
-  if (!folder) return "Shared setup · project overrides stay separate";
+  if (!folder) return ALL_PROJECTS;
   if (count === undefined) return `Project ${folder}`;
   if (count === null) return `Project ${folder} · rules not known`;
   if (count > 0) return `Project ${folder} · ${plural(count, "rule differs", "rules differ")} from the shared setup`;
@@ -283,14 +287,6 @@ export function baseNames(text) {
   });
 }
 
-// The twin of views/words.py STATE_WORDS.
-export const STATE_WORDS = {
-  on: "On", off: "Off", unk: "Unknown", review: "Needs review", gw: "Via gateway",
-  missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
-  unread: "Could not read",
-};
-// The twin of views/words.py SKILL_STATE_WORDS: a skill's own state beyond On and Off.
-export const SKILL_STATE_WORDS = { "name-only": "Name only", "user-invocable-only": "Only when you ask", "only-asked": "Only when you ask" };
 // The twin of views/words.py ORIGIN_WORDS: the tag of a cell in a project view. "This project":
 // the project's own settings decide the cell. "Only this project": only that project has the item.
 export const ORIGIN_WORDS = { override: "This project", project: "Only this project" };
@@ -620,8 +616,8 @@ const ACTION_WORDS = {
   "plugin.disable": "Turned off",
   "plugin.remove": "Removed",
   "skill.remove": "Removed",
-  "setup_server.register": "Connected to Kitden",
-  "client.disconnect": "Disconnected from Kitden",
+  "setup_server.register": "Connected to the gateway",
+  "client.disconnect": "Disconnected from the gateway",
   "setup_server.update": "Updated Kitden",
   "setup_server.enable": "Turned on the kitden entry",
   "gateway.rule": "Changed the rule for",
@@ -686,7 +682,7 @@ export function failedWord(error) {
 // short name ("superpowers"); the review named the exact entry before Apply.
 // A change whose backup or record keeps a secret says so on the Changes page.
 export function backupNote(entry) {
-  return entry.holds_secret ? "This change's backup or record holds a secret." : null;
+  return entry.holds_secret ? "Its backup holds a secret. The backup stays on this computer." : null;
 }
 
 // A server moved out of the gateway: the server, then the client that got its entry (the other
@@ -754,6 +750,8 @@ export function changeTitle(entry) {
     return `${verb}${oneCopy ? " one copy of" : ""} ${names.join(", ")}${place} · ${lose.map((c) => CLIENT_NAMES[c] || c).join(", ")}`;
   }
   // A skill rule turns a skill or a plugin off, or takes a project's own rule out.
+  // Its tray row, when kept, says which way it went ("Turned off deploy for all projects").
+  if (entry.action === "skill.rule" && entry.rows && entry.rows.length === 1 && pastTitle(entry.rows[0].title) !== entry.rows[0].title) return `${pastTitle(entry.rows[0].title)} · ${clients.join(", ")}`;
   if (entry.action === "skill.rule") return `${verb} ${names.join(", ")} loads${place} · ${clients.join(", ")}`;
   // A plugin's skills can be many; the line counts them, the change lists them.
   if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")}${place} · ${clients.join(", ")}`;

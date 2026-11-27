@@ -39,6 +39,12 @@ What Kitden does today and what comes next. Ideas and bugs:
   says why **Your skills** has no group switch, shows how often you used a Claude Code skill, says
   plainly that the rest of the window is not measured, and compares an estimate with an estimate.
   The header search says what it finds from each tab.
+- **One word for one thing:** a client that is not on this computer says **Not installed** on
+  every tab and in `kitden scan`; a waiting change says **in preview** on Context too; one label
+  each for Move in, Remove, Add and Connect. After Apply on Context the toast says the restart a
+  change needs. The browser asks before a reload drops the preview; the limit slider takes Home
+  and End; texts that said nothing useful are cut or say what to do; findings for agents use the
+  page's client names.
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,

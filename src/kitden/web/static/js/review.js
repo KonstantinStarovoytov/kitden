@@ -6,7 +6,7 @@ import { $, $$, button, el, joinWords, plural, reportError, secretsWord, shortPa
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
-import { allPutBack, baseNames, byClientOrder, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
+import { allPutBack, baseNames, byClientOrder, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, mark, movedNames, notesSection, PLACE_IN_TITLE, possessive, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, data, gatewayShows, reload, render, setBusy, state } from "./store.js";
 import { projectLabel } from "./tools.js";
 import { addToTray, changeOutcome, checkTrayStale, onTray, ruleState, takeOut, tray, undone, writing } from "./tray.js";
@@ -121,20 +121,21 @@ export function changeWords(change, previewBody) {
   const added = change.steps[0] ? change.steps[0].name : String(server).split("/").pop();
   let title = {
     "gateway.move": `Move ${names} into the Kitden gateway`,
-    "plugin.disable": `Turn off ${names} in ${clients}`,
-    "plugin.enable": `Turn on ${names} in ${clients}`,
+    // A plugin by the name the page shows ("superpowers", not "superpowers@market").
+    "plugin.disable": `Turn off ${short} in ${clients}`,
+    "plugin.enable": `Turn on ${short} in ${clients}`,
     "mcp.remove_direct": `Remove ${names} from ${clients}`,
     "plugin.remove": `Remove ${short} from ${clients}`,
     "gateway.connect": `Connect the gateway to ${clients}`,
-    "plugin.install": `Add ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name))])} to ${clients}`,
+    "plugin.install": `Add ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name.split("@")[0]))])} to ${clients}`,
     "marketplace.add": `Add the ${names} marketplace to ${clients}`,
     "skill.install": `Add ${names} to ${clients}`,
     "mcp.add": `Add ${names} to ${clients}`,
-    "plugin.skills": `Add ${plugin}'s skills to ${clients}`,
+    "plugin.skills": `Add ${possessive(plugin)} skills to ${clients}`,
     // Each client's last step adds the new entry; it is named after the gateway.
     "gateway.switch": `Use ${steps.length ? steps[steps.length - 1].name : "the new gateway"} in ${clients}`,
-    "setup_server.register": `Connect ${clients} to Kitden`,
-    "client.disconnect": `Disconnect ${clients} from Kitden`,
+    "setup_server.register": `Connect ${clients} to the gateway`,
+    "client.disconnect": `Disconnect ${clients} from the gateway`,
     "setup_server.update": `Update Kitden in ${clients}`,
     "setup_server.enable": `Turn on the kitden entry in ${clients}`,
     "gateway.remove": `Remove ${server} from the Kitden gateway`,
@@ -143,7 +144,7 @@ export function changeWords(change, previewBody) {
     "gateway.keychain": `Move the secrets of ${server} to the ${secretsWord()}`,
     "gateway.sign_in": `Sign in to ${server} again`,
     "gateway.add": `Add ${added} to the Kitden gateway`,
-    "skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`,
+    "skill.rule": off ? `Turn off ${short}` : `Make ${short} follow all projects`,
     "skill.limit": `Set ${limitWords(previewBody && previewBody.params, clients)}`,
   }[change.action] || change.action;
   // A skill set to Name only is neither off nor back to the shared rule.
@@ -168,9 +169,9 @@ export function changeWords(change, previewBody) {
   } else if (["gateway.connect", "gateway.switch", "setup_server.update", "setup_server.enable"].includes(change.action)) {
     what = `${verb} ${["setup_server.update", "setup_server.enable", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;
   } else if (change.action === "setup_server.register") {
-    what = `${verb} ${clients} to Kitden`;
+    what = `${verb} ${clients} to the gateway`;
   } else if (change.action === "client.disconnect") {
-    what = `${verb} ${clients} from Kitden`;
+    what = `${verb} ${clients} from the gateway`;
   } else if (change.action === "gateway.move") {
     what = `${verb} ${short} into the Kitden gateway`;
   } else if (change.action === "gateway.remove") {
@@ -186,7 +187,7 @@ export function changeWords(change, previewBody) {
   } else if (change.action === "gateway.add") {
     what = `${verb} ${added} to the Kitden gateway`;
   } else if (change.action === "skill.rule") {
-    what = nameOnly ? `${short} is Name only` : off ? `${verb} ${short}` : onForAll ? `Turned on ${short}` : `${short} uses the shared rule`;
+    what = nameOnly ? `${short} is Name only` : off ? `${verb} ${short}` : onForAll ? `Turned on ${short}` : `${short} follows all projects`;
   } else if (change.action === "skill.limit") {
     what = `${verb} ${limitWords(previewBody && previewBody.params, clients)}`;
   } else if (change.action === "plugin.skills") {
@@ -218,17 +219,18 @@ export function changeWords(change, previewBody) {
 // order. Each label says what, from which client, and where it goes; `note` says when the
 // client has the name in another case, or a client would load it twice. Those start unchecked.
 const PLACE_WORDS = { project: "this project", all: "all projects" };
+// A note that every item of a group has is the group's (`note`), said once under its legend.
 export function alignGroups(align) {
-  return CLIENT_ORDER.map((client) => ({
-    client,
-    name: clientName(client),
-    items: align.candidates.filter((c) => c.to === client).map((c) => ({
+  return CLIENT_ORDER.map((client) => {
+    const items = align.candidates.filter((c) => c.to === client).map((c) => ({
       key: c.key,
       label: `${c.name} · ${KIND_WORDS[c.kind]} · from ${clientName(c.from)} · ${PLACE_WORDS[c.place]}`,
       note: c.note || null,
       chosen: c.chosen,
-    })),
-  })).filter((group) => group.items.length);
+    }));
+    const shared = items.length > 1 && items[0].note && items.every((i) => i.note === items[0].note) ? items[0].note : null;
+    return { client, name: clientName(client), note: shared, items: shared ? items.map((i) => ({ ...i, note: null })) : items };
+  }).filter((group) => group.items.length);
 }
 
 // The chosen keys once one box changes, in candidate order.
@@ -248,6 +250,7 @@ function alignSection(change, onChoose) {
   for (const group of alignGroups(align)) {
     const set = el("fieldset", "checks list");
     set.append(el("legend", null, `Add to ${group.name}`));
+    if (group.note) set.append(el("p", "muted", group.note));
     for (const item of group.items) {
       const label = el("label");
       const [box, tick] = checkBox();

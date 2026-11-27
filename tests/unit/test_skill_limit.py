@@ -54,8 +54,8 @@ def test_the_page_offers_the_first_share_on_the_list_that_fits_every_description
         },
         "back": None,
         "note": (
-            "Kitden writes it in your Claude Code user settings, for all projects. Your next "
-            "chat will show the real list."
+            "Kitden writes it in your Claude Code user settings, for all projects. Start a new "
+            "chat to see the new list."
         ),
         "why": None,
     }
@@ -440,8 +440,8 @@ def test_after_a_raise_the_chat_keeps_its_own_limit_and_the_page_says_it_changed
     assert fact["result"]["misfit"]["n"] == 1
     assert cc["checked"] and len(cc["windows"]) == 2
     assert cc["changed"] == [
-        "The limit was changed after this chat: it is 1.5% now. Your next chat will show the "
-        "real list.",
+        "The limit was changed after this chat: it is 1.5% now. Start a new chat to see the "
+        "new list.",
         "Estimate: On a 200K window, every skill would keep its description.",
     ]
     # Nothing to raise; Back to 1% stays reachable.
@@ -574,7 +574,7 @@ def test_no_places_when_nothing_is_offered(home):
 
 TEN = "abcdefghij"
 REPLAY = (
-    "Kitden could not replay this chat's list exactly, so it counts what all descriptions need."
+    "Kitden could not rebuild this chat's list exactly, so it counts what all descriptions need."
 )
 
 
@@ -922,9 +922,9 @@ def test_after_apply_of_a_share_that_fits_the_count(home):
     counted_chat(home)
     after = view(home, draft={"limits": {"claude_code": 0.02}})["claude_code"]["after"]
     assert after["budget"] == 16_000
+    # "Every skill would keep its description" says the gains already: once (04-F19c).
     assert after["say"] == (
-        "After Apply, estimate: On a 200K window, every skill would keep its description. 4 "
-        "skills get descriptions."
+        "After Apply, estimate: On a 200K window, every skill would keep its description."
     )
     assert (after["gets"], after["loses"]) == (["a", "h", "i", "j"], [])
     assert set(after["result"]["sent"]) == set(TEN) and after["result"]["over"] == {}
@@ -963,7 +963,7 @@ def test_after_the_limit_was_set_the_counted_chat_keeps_its_own_limit(home):
     # The chat's list ends at 8,000 (the next description had no room), not at 16,000.
     assert not cc["checked"] and cc["windows"][0]["budget"] == 8_000
     assert cc["changed"] == [
-        "The limit was changed after this chat: it is 2% now. Your next chat will show the real "
+        "The limit was changed after this chat: it is 2% now. Start a new chat to see the new "
         "list.",
         "Estimate: On a 200K window, every skill would keep its description.",
     ]

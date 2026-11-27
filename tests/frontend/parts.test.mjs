@@ -192,6 +192,9 @@ test('a skill rule on the Changes page says what changed and where', () => {
   assert.equal(changeTitle(all), 'Changed how deploy loads for all projects · Claude Code');
   const here = { action: 'skill.rule', steps: [{ client: 'claude_code', name: 'superpowers@demo-market' }], target: { scope: 'project', project: '/Users/me/work/website' } };
   assert.equal(changeTitle(here), 'Changed how superpowers loads in website · Claude Code');
+  // With its tray row kept, the line says which way it went, off or on (03-A22b).
+  assert.equal(changeTitle({ ...all, rows: [{ title: 'Turn off deploy for all projects' }] }), 'Turned off deploy for all projects · Claude Code');
+  assert.equal(changeTitle({ ...all, rows: [{ title: 'Turn on deploy for all projects' }] }), 'Turned on deploy for all projects · Claude Code');
 });
 
 test('a skill list limit on the Changes page keeps its row title, in the past', () => {
@@ -241,10 +244,10 @@ test('the Changes page names what moved into the Kitden gateway and which rule c
 
 test('the Changes page names a client connected to or disconnected from Kitden', () => {
   const entry = (action, ...clients) => ({ action, steps: clients.map((client) => ({ client, name: 'kitden' })), target: { scope: 'all' } });
-  assert.equal(changeTitle(entry('client.disconnect', 'codex')), 'Disconnected from Kitden · Codex');
-  assert.equal(changeTitle(entry('setup_server.register', 'claude_code', 'cursor')), 'Connected to Kitden · Claude Code, Cursor');
+  assert.equal(changeTitle(entry('client.disconnect', 'codex')), 'Disconnected from the gateway · Codex');
+  assert.equal(changeTitle(entry('setup_server.register', 'claude_code', 'cursor')), 'Connected to the gateway · Claude Code, Cursor');
   // A line from before Kitden kept the target reads the same.
-  assert.equal(changeTitle({ ...entry('setup_server.register', 'cursor'), target: undefined }), 'Connected to Kitden · Cursor');
+  assert.equal(changeTitle({ ...entry('setup_server.register', 'cursor'), target: undefined }), 'Connected to the gateway · Cursor');
   for (const action of ['setup_server.register', 'client.disconnect']) assert.ok(PLACE_IN_TITLE.includes(action), action);
 });
 
@@ -328,7 +331,7 @@ test('the Changes page names a held server whose secrets moved to the Keychain',
 });
 
 test('a change whose backup holds a secret says so', () => {
-  assert.equal(backupNote({ holds_secret: true }), "This change's backup or record holds a secret.");
+  assert.equal(backupNote({ holds_secret: true }), "Its backup holds a secret. The backup stays on this computer.");
   assert.equal(backupNote({ holds_secret: false }), null);
   assert.equal(backupNote({}), null);
 });
@@ -343,8 +346,8 @@ test('a change of several rows reads in the past, like one row does', () => {
   assert.equal(several('Update Kitden in Claude Code'), 'Updated Kitden in Claude Code and 1 more');
   assert.equal(several('Move brain-agents into the Kitden gateway for all projects'), 'Moved brain-agents into the Kitden gateway for all projects and 1 more');
   assert.equal(several('Turn off agent-docs in xnj'), 'Turned off agent-docs in xnj and 1 more');
-  assert.equal(several('Disconnect Codex from Kitden'), 'Disconnected Codex from Kitden and 1 more');
-  assert.equal(several('Connect Cursor to Kitden'), 'Connected Cursor to Kitden and 1 more');
+  assert.equal(several('Disconnect Codex from the gateway'), 'Disconnected Codex from the gateway and 1 more');
+  assert.equal(several('Connect Cursor to the gateway'), 'Connected Cursor to the gateway and 1 more');
   assert.equal(several('Sign out of github'), 'Signed out of github and 1 more');
   // A title already in the past, or one that starts with another word, stays as it is.
   assert.equal(several('Turned off auth0 for all projects · Codex'), 'Turned off auth0 for all projects · Codex and 1 more');
@@ -461,17 +464,17 @@ test('the project menu lists All projects first, then projects by name with thei
 });
 
 test('the scope bar says what the page shows', () => {
-  assert.equal(scopeText('', 0), 'Shared setup · project overrides stay separate');
+  assert.equal(scopeText('', 0), 'All projects');
   assert.equal(scopeText('mcp-gateway', 1), 'Project mcp-gateway · 1 rule differs from the shared setup');
   assert.equal(scopeText('mcp-gateway', 3), 'Project mcp-gateway · 3 rules differ from the shared setup');
   // Kitden counts only the gateway's rules: none of its own is not "follows the shared setup".
   assert.equal(scopeText('api', 0), 'Project api · no rules of its own');
   // The gateway settings could not be read (`null`): no count.
   assert.equal(scopeText('api', null), 'Project api · rules not known');
-  assert.equal(scopeText('', 4), 'Shared setup · project overrides stay separate');
-  assert.equal(scopeText('', null), 'Shared setup · project overrides stay separate');
+  assert.equal(scopeText('', 4), 'All projects');
+  assert.equal(scopeText('', null), 'All projects');
   const shared = scopeBar('', 0);
-  assert.equal(shared.querySelector('span').textContent, 'Shared setup · project overrides stay separate');
+  assert.equal(shared.querySelector('span').textContent, 'All projects');
   assert.equal(shared.classList.contains('project'), false);
   const project = scopeBar('api', 2);
   assert.equal(project.querySelector('span').textContent, 'Project api · 2 rules differ from the shared setup');

@@ -50,7 +50,7 @@ def test_a_plugins_switch_waiting_in_the_preview_counts_in_the_verdict_and_on_th
     # The whole plugin goes, together, and its row in the preview says what goes with it.
     wait_until(lambda: going(page) == list(SKILLS))
     expect(page.locator(".ctx-group.going .ctx-gmeta")).to_have_text(
-        re.compile(r"^Off after Apply")
+        re.compile(r"^Off · in preview")
     )
     expect(page.locator("#dock")).to_contain_text("Turns off all of superpowers: 2 skills.")
     expect(handle).to_have_attribute("aria-valuetext", "1% now · 1 of 18 show only a name")

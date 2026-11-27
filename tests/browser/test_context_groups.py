@@ -28,7 +28,7 @@ def test_a_plugin_turned_off_from_its_header_counts_in_the_estimate_at_once(page
     )
     expect(handle).to_have_attribute("aria-valuetext", "1% now · 1 of 18 show only a name")
     expect(group).to_have_class(re.compile(r"\bgoing\b"))
-    expect(group.locator(".ctx-gmeta")).to_contain_text("Off after Apply")
+    expect(group.locator(".ctx-gmeta")).to_contain_text("Off · in preview")
     expect(switch).to_have_attribute("aria-pressed", "true")
     # One row, whichever tab adds it: the Details of its skill show it pressed.
     expect(page.locator("#dock")).to_contain_text("Turn off superpowers")

@@ -568,7 +568,7 @@ const LIMIT = {
   now: '1% of the context window: 8,000 characters',
   offer: { fraction: 0.015, label: 'Set to 1.5%', say: '1.5%: all 3 skills get their description', cost: 'About 3,000 more characters in every chat (about 750 tokens)' },
   back: null,
-  note: 'Kitden writes it in your Claude Code user settings, for all projects. Your next chat will show the real list.',
+  note: 'Kitden writes it in your Claude Code user settings, for all projects. Start a new chat to see the new list.',
   why: null,
   param: 'fraction',
   steps: STEPS,
@@ -703,6 +703,14 @@ test('keys move the handle place by place; Enter commits, Esc cancels, Enter wit
   await fire(handle, 'keydown', { key: 'Escape', stopPropagation() {} });
   assert.equal(handle.getAttribute('aria-valuenow'), '8000');
   assert.equal(readout().hidden, true);
+  // Home and End go to the first and the last place, as on any slider (04-F12).
+  const max = handle.getAttribute('aria-valuemax');
+  await fire(handle, 'keydown', { key: 'End' });
+  assert.equal(handle.getAttribute('aria-valuenow'), max);
+  await fire(handle, 'keydown', { key: 'Home' });
+  assert.equal(handle.getAttribute('aria-valuenow'), handle.getAttribute('aria-valuemin'));
+  await fire(handle, 'keydown', { key: 'Escape', stopPropagation() {} });
+  assert.equal(handle.getAttribute('aria-valuenow'), '8000');
   await fire(handle, 'keydown', { key: 'ArrowRight' });
   queue(PREVIEW, previewed('c1'));
   queue(LIMIT_URL, { status: 200, json: answer({ ...TIGHT, limit: LIMIT, after: LIMIT_AFTER }, CODEX, CURSOR) });
@@ -795,7 +803,7 @@ test('the places stay apart on the bar whichever place is suggested, and the sna
 test('with a share above the default, the line drags back to 1% and adds the Back row; a changed limit is said under the verdict', async () => {
   await fresh();
   state.selected = { kind: 'client', name: 'claude_code' };
-  const changed = ['The limit was changed after this chat: it is 1.5% now. Your next chat will show the real list.', 'Estimate: On a 200K window, every skill would keep its description.'];
+  const changed = ['The limit was changed after this chat: it is 1.5% now. Start a new chat to see the new list.', 'Estimate: On a 200K window, every skill would keep its description.'];
   const backOnly = {
     ...LIMIT, now: '1.5% of the context window: 12,000 characters', offer: null, back: { fraction: 'default', label: 'Back to 1%' }, note: null,
     why: 'Kitden does not offer a new skill list limit: every description fits.',
@@ -934,7 +942,7 @@ const COUNTED = {
   ...LIMIT,
   offer: { fraction: 0.02, label: 'Set to 2%', say: '2%: all 3 skills get their description', cost: 'About 3,000 more characters in every chat (about 750 tokens)' },
   counted: [
-    "Kitden could not replay this chat's list exactly, so it counts what all descriptions need.",
+    "Kitden could not rebuild this chat's list exactly, so it counts what all descriptions need.",
     '1 skill has no description Kitden can find; it is counted at the longest, 1,536 characters.',
   ],
   steps: steps(
@@ -994,7 +1002,7 @@ const CODEX_LIMIT = {
   now: '2% of the context window: 5,440 tokens',
   offer: { tokens: 5500, label: 'Set to 5,500 tokens', say: '5,500 tokens: no description is cut and no skill is left out', cost: 'About 60 more tokens in every chat' },
   back: null,
-  note: 'Kitden writes it in your Codex config.toml, for all projects. Your next chat will show the real list.',
+  note: 'Kitden writes it in your Codex settings, for all projects. Start a new chat to see the new list.',
   why: null,
   param: 'tokens',
   steps: [
@@ -1222,7 +1230,7 @@ test('a skill that is off stands under Turned off, and its Details turn it on ag
   const late = skill('beta', 1990, 0, { state: 'off' });
   show(answer({ ...TIGHT, skills: [TIGHT.skills[0], late, TIGHT.skills[2], gone] }, CODEX, CURSOR));
   const [off] = byClass(main, 'ctx-off');
-  assert.equal(text(byClass(off, 'ctx-off-head')[0]), 'Turned off');
+  assert.equal(text(byClass(off, 'ctx-off-head')[0]), 'Off');
   // Off now goes there also where the page shows the last chat's list, which still held beta.
   assert.deepEqual(pills(off).map((p) => p.dataset.skill), ['beta', 'dataviz']);
   assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha'], ['gamma']]);
@@ -1364,7 +1372,7 @@ test("another window's estimate knows nothing of the tray: the skill stands apar
 
 // The setup changed after the chat: delta was added, so the server expects beta to lose its place and
 // alpha and delta to be sent (`now`).
-const NOW_LINES = ['Your skills changed after this list was sent. Your next chat will show the real list.', 'Estimate: On a 200K window, 2 of 4 skills would show only a name. The agent may not use them.'];
+const NOW_LINES = ['Your skills changed after this list was sent. Start a new chat to see the new list.', 'Estimate: On a 200K window, 2 of 4 skills would show only a name. The agent may not use them.'];
 const NOW = {
   short: '', say: '', sent: { alpha: 4000, delta: 2500 }, over: { beta: 1992, gamma: 3000 }, used: 6600, size: 11592, room: null, misfit: { kind: 'name', n: 2 }, budget: 8000,
 };
@@ -1541,14 +1549,14 @@ test('while the plugin\'s switch waits, all of its skills go off together, and i
   await flush();
   await flush();
   assert.equal(tray.rows[0].goes, WHOLE.goes);
-  const going = shelf('Off after Apply');
+  const going = shelf('Off · in preview');
   const row = byClass(going, 'ctx-offplug')[0];
   assert.equal(text(byClass(row, 'ctx-offline')[0]), 'plug · 2 skills');
   assert.deepEqual(pills(row).map((p) => p.dataset.skill), ['plug:tool', 'plug:start']);
   syncTray();
   assert.equal(buttonIn(row, 'Turn off plug').getAttribute('aria-pressed'), 'true');
   // An off plugin waits in one place too, with one way back.
-  const off = byClass(shelf('Turned off'), 'ctx-offplug')[0];
+  const off = byClass(shelf('Off'), 'ctx-offplug')[0];
   assert.equal(text(byClass(off, 'ctx-offline')[0]), 'plug2 · 1 skill');
   assert.ok(buttonIn(off, 'Turn on plug2'));
 });

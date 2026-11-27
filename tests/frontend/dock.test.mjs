@@ -443,7 +443,7 @@ test('appliedToast says Applied 3 changes with Undo all, and Undo all undoes the
 test('rows added on the Context page get its own toast; any other row keeps the usual words', async () => {
   await fresh();
   const row = (key, note = CONTEXT_NOTE) => ({ part: remove, body: {}, key, note });
-  const words = 'The backup is in Changes. Your next chat will show the real list.';
+  const words = 'The backup is in Changes. Start a new chat to see the new list.';
   try {
     appliedToast({ change: { id: 'c1' }, rows: [row('k1'), row('k2')] });
     assert.deepEqual(toastParts(), [['span', ''], ['span', `Applied 2 changes. ${words}`], ['button', 'Undo all']]);
@@ -451,6 +451,10 @@ test('rows added on the Context page get its own toast; any other row keeps the 
     assert.deepEqual(toastParts(), [['span', ''], ['span', `Applied 1 change. ${words}`], ['button', 'Undo']]);
     appliedToast({ change: { id: 'c3' }, rows: [row('k1'), row('k2', null)] });
     assert.deepEqual(toastParts(), [['span', ''], ['span', 'Applied 2 changes'], ['button', 'Undo all']]);
+    // A change that needs a restart says the restart, its own next step, not the new chat (03-A12).
+    const codex = { action: 'skill.rule', steps: [{ client: 'codex', name: 'gamma', restart_note: 'Restart Codex (the app and any open CLI sessions) for this to take effect.' }], target: { scope: 'all' } };
+    appliedToast({ change: { id: 'c4' }, rows: [{ part: codex, body: {}, key: 'k4', note: CONTEXT_NOTE }] });
+    assert.deepEqual(toastParts(), [['span', ''], ['span', 'Applied 1 change. The backup is in Changes. Restart Codex (the app and any open CLI sessions).'], ['button', 'Undo']]);
   } finally {
     hideToast();
   }

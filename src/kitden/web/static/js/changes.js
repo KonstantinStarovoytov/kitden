@@ -104,7 +104,7 @@ export function renderChanges(main, { again = false } = {}) {
   main.append(head);
   if (!again) page.drew = false;
   const entries = data.changes;
-  setHint(entries ? HINT : "");
+  setHint(entries && entries.length ? HINT : "");
   if (!entries) {
     page.drew = false;
     main.append(data.errors.changes ? banner("the changes", retry) : skeleton("card", 2));

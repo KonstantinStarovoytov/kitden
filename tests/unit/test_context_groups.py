@@ -153,6 +153,8 @@ def test_a_codex_plugin_group_has_its_switch_and_its_skills_take_it(home):
     assert group["switch"]["label"] == "Turn off plug" and group["skills"] == ["plug:tool"]
     row = next(s for s in card["skills"] if s["name"] == "plug:tool")
     assert row["plugin_switch"] == group["switch"]
+    # Its tray row says what goes with it, as the Library's switch for it does (01-W8).
+    assert group["switch"]["goes"] == "Turns off all of plug: 1 skill."
 
 
 def test_an_off_codex_plugin_keeps_its_group_after_a_chat_without_it(home):

@@ -4,7 +4,7 @@
 import { $, $$, button, el, joinWords, reportError, secretsWord, shortPath, withFocusKey } from "./dom.js";
 import { fold } from "./motion.js";
 import { header, isPanelOpen, isQuiet, panelState } from "./panel.js";
-import { ALL_PROJECTS, byClientOrder, callout, CLIENT_NAMES, folderName, ROUTE_WORDS, WRITABLE } from "./parts.js";
+import { ALL_PROJECTS, byClientOrder, callout, CLIENT_NAMES, folderName, ROUTE_WORDS, WAITING, WRITABLE } from "./parts.js";
 import { review } from "./review.js";
 import { data, projectPath } from "./store.js";
 import { inTray, keyFor, shownInTray, takeOut } from "./tray.js";
@@ -272,7 +272,7 @@ export function technical(rows) {
 
 // The tray in Details --------------------------------------------------------------------------
 
-export const IN_PREVIEW = "In preview";
+export const IN_PREVIEW = WAITING[0].toUpperCase() + WAITING.slice(1);
 // How each control whose change can wait in the tray shows whether it does: `look(waiting)`.
 const trayLooks = new WeakMap();
 

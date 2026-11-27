@@ -13,6 +13,7 @@ from collections.abc import Iterable
 from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.clients.base import from_plugin
 from kitden.model import (
+    CLIENT_WORDS,
     ClientStatus,
     Enabled,
     Finding,
@@ -25,13 +26,21 @@ from kitden.model import (
 from kitden.views.effective import DESKTOP, effective_view
 from kitden.views.match import odd_sources, plugin_copies
 from kitden.views.setup_server import is_own_entry
+from kitden.views.words import possessive
 
 # Kinds where two copies are a problem. Hooks all run by design; marketplaces are just sources.
 DUPLICATE_KINDS = {ItemKind.MCP_SERVER, ItemKind.SKILL, ItemKind.PLUGIN}
 
 
+def _name(client: str | None) -> str:
+    """A client as the page names it ("Claude Code", not "claude_code")."""
+    if client == DESKTOP:
+        return "the Claude Desktop app"
+    return CLIENT_WORDS.get(client or "", client or "")
+
+
 def _where(item: Item) -> str:
-    return item.source.path or f"{item.source.owner_client} account"
+    return item.source.path or f"{_name(item.source.owner_client)} account"
 
 
 def _finding(
@@ -93,8 +102,8 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                         FindingType.DUPLICATE_IN_CLIENT,
                         Severity.WARNING,
                         same,
-                        f"{client} loads {kind.replace('_', ' ')} '{name}' {len(same)} times: "
-                        f"{places}",
+                        f"{_name(client)} loads {kind.replace('_', ' ')} '{name}' "
+                        f"{len(same)} times: {places}",
                         client,
                     )
                 )
@@ -108,7 +117,7 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                     FindingType.SCOPE_OVERRIDE,
                     Severity.INFO,
                     [winner, loser],
-                    f"In {client}, '{winner.name}' from {winner.scope} ({_where(winner)}) "
+                    f"In {_name(client)}, '{winner.name}' from {winner.scope} ({_where(winner)}) "
                     f"{'is merged over' if mode == 'merged' else 'replaces'} the {loser.scope} "
                     f"definition ({_where(loser)})",
                     client,
@@ -122,8 +131,8 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                         FindingType.CROSS_LOADED,
                         Severity.INFO,
                         [item],
-                        f"{client} loads '{item.name}' from {item.source.owner_client}: "
-                        f"{_where(item)}",
+                        f"{_name(client)} loads '{item.name}' from "
+                        f"{possessive(_name(item.source.owner_client))} folder: {_where(item)}",
                         client,
                     )
                 )
@@ -145,8 +154,8 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                     FindingType.UNKNOWN_STATE,
                     Severity.INFO,
                     unknown,
-                    f"{client}: on/off state of {len(unknown)} items "
-                    "cannot be read from local files",
+                    f"{_name(client)}: Kitden cannot read whether {len(unknown)} "
+                    f"{'item is' if len(unknown) == 1 else 'items are'} on or off.",
                     client,
                 )
             )
@@ -169,7 +178,7 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
     for (kind, name), by_client in own.items():
         if len(by_client) < 2:
             continue
-        where = ", ".join(sorted(by_client))
+        where = ", ".join(_name(c) for c in sorted(by_client))
         odd = sorted(odd_sources({c: [i] for c, i in by_client.items()}, copies))
         if not odd:
             found, text = (
@@ -177,7 +186,7 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                 f"{kind.replace('_', ' ')} '{name}' is set up separately in {where}",
             )
         else:
-            whose = " and ".join(f"{c}'s" for c in odd)
+            whose = " and ".join(possessive(_name(c)) for c in odd)
             found, text = (
                 FindingType.SAME_NAME_OTHER_SOURCE,
                 f"{kind.replace('_', ' ')} '{name}' has the same name in {where}, but {whose} "
@@ -250,7 +259,7 @@ def find_bypasses(inventory, project: str | None = None) -> list[Finding]:
             if is_own_entry(item):  # Kitden's own read-only server, not a tool server
                 continue
             text = (
-                f"{client}: {item.name} {bypass_kind(item)} and does not go through the "
+                f"{_name(client)}: {item.name} {bypass_kind(item)} and does not go through the "
                 f"gateway. Source: {_where(item)}."
             )
             findings.append(

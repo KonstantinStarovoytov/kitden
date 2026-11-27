@@ -21,7 +21,7 @@ import {
   switchProject,
 } from "./store.js";
 import { refreshRestarts, startRestarts } from "./restarts.js";
-import { checkTrayStale, tray } from "./tray.js";
+import { checkTrayStale, leaveWarns, tray } from "./tray.js";
 import { startUpdate } from "./update.js";
 
 const PLACES = {
@@ -333,6 +333,8 @@ function listen() {
     });
   };
   connect();
+  // A reload or a closed tab would drop the changes in preview: the browser asks first.
+  window.addEventListener("beforeunload", (event) => { if (leaveWarns()) event.preventDefault(); });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       clearTimeout(closing);

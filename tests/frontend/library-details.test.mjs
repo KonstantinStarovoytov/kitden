@@ -343,7 +343,7 @@ test("a skill's switch for all projects is Context's: one per client that can, a
   const card = details.skillCard(skill, c());
   assert.deepEqual(facts(card), [['Plugin', 'None, a skill on its own'], ['State', 'On'], ['Comes from', 'All projects'], ['Source', 'Your skills'], ['Clients', '3 clients']]);
   assert.deepEqual(labels(card), [['Turn off in some projects…', false]]);
-  assert.match(card.why, /Codex has no switch for one project\. Cursor has no switch to turn off one skill\.$/);
+  assert.match(card.why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\.$/);
   assert.match(texts(card.list).join(' '), /Claude Code · all projects On Name only Off Codex · all projects On Off Codex has no Name only setting\./);
   // The map × still turns it off with the same row.
   assert.deepEqual(offBodies(skill), [
@@ -559,10 +559,10 @@ test('a skill rule is queued for its own state only', async () => {
 test('the no-switch notes say only what applies', () => {
   const skill = MEDIUM.groups[1].items[0];
   // Codex has it (a skill of all projects): its note; Cursor only through Claude Code but on: its note.
-  assert.match(details.skillCard(skill, c()).why, /Codex has no switch for one project\. Cursor has no switch to turn off one skill\.$/);
+  assert.match(details.skillCard(skill, c()).why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\.$/);
   // Even when no project can take the rule, Codex still has no switch for one.
   const closed = details.context({ ...MEDIUM, skill_rules: { projects: {} } });
-  assert.match(details.skillCard(skill, closed).why, /Codex has no switch for one project\./);
+  assert.match(details.skillCard(skill, closed).why, /Codex has no switch for one project; turn it off for all projects\./);
   // Cursor off, no Codex: no notes.
   const quiet = { ...skill, by: { claude_code: 'on', cursor: 'off' }, through: {} };
   assert.doesNotMatch(details.skillCard(quiet, c()).why, /no switch/);
@@ -743,7 +743,7 @@ test("where a project's own settings decide, Details say so and offer no Turn on
   assert.deepEqual(card.more.map((a) => a.label), ['Commands…']);
   // A skill too; with All projects there is no such line.
   const skill = own('s9', 'api-style', 'skill', { by: { codex: 'on', cursor: 'on' }, items: { codex: ['cx'], cursor: ['cu'] }, can: { add: [], off: [], remove: [], project: ['codex', 'cursor'] } });
-  assert.equal(details.skillCard(skill, details.context(MEDIUM, 'a', 'atlas')).after.textContent, "Codex's setting for this comes from atlas's own settings. Cursor's setting for this comes from atlas's own settings.");
+  assert.equal(details.skillCard(skill, details.context(MEDIUM, 'a', 'atlas')).after.textContent, "Codex's setting for this comes from atlas' own settings. Cursor loads this from atlas.");
   assert.equal(details.pluginCard({ ...decided, can: { ...decided.can, project: [] } }, c()).after, null);
 });
 
@@ -755,18 +755,18 @@ test('the account card says what Claude Code keeps in the account, and that it i
   assert.equal(card.actions, undefined);
 });
 
-test("Use the shared rule… takes the project's local key out, for a skill and a plugin", async () => {
+test("Follow all projects… takes the project's local key out, for a skill and a plugin", async () => {
   await reset();
   const atlas = details.context(MEDIUM, 'atlas', 'atlas');
   // The project's local settings turn superpowers off for Claude Code (can.local, library_map.py).
   const plugin = { ...SUPERPOWERS, by: { claude_code: 'off', cursor: 'off' }, here: { claude_code: true }, can: { add: [], off: [], on: [], remove: [], project: ['claude_code'], local: ['claude_code'], shared: [] } };
   const card = details.pluginCard(plugin, atlas);
-  assert.deepEqual(labels(card), [['Use the shared rule…', false]]);
-  assert.equal(card.after.textContent, "Claude Code's setting for this comes from atlas's local settings.");
+  assert.deepEqual(labels(card), [['Follow all projects…', false]]);
+  assert.equal(card.after.textContent, "Claude Code's setting for this comes from atlas' local settings.");
   // Final fix wave: a rule in the repository root's file names the root's folder, not the project.
   const web = details.context(MEDIUM, 'web', 'web');
   const rooted = { ...plugin, can: { ...plugin.can, local_in: { claude_code: 'atlas' } } };
-  assert.equal(details.pluginCard(rooted, web).after.textContent, "Claude Code's setting for this comes from atlas's local settings.");
+  assert.equal(details.pluginCard(rooted, web).after.textContent, "Claude Code's setting for this comes from atlas' local settings.");
   assert.deepEqual(details.sharedBody(plugin, atlas), { action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-sp' }], params: { scope: 'project', project: 'atlas', off: false } });
   // Drawn: its press adds the one row and it says "In preview"; "Turn off in this project…" for
   // the same key (on and off share it) is another row, so it does not.
@@ -776,7 +776,7 @@ test("Use the shared rule… takes the project's local key out, for a skill and 
   await flush();
   await addToTray(details.projectBody(plugin, 'atlas'));
   await flush();
-  const back = node(drawer, 'action:Use the shared rule…');
+  const back = node(drawer, 'action:Follow all projects…');
   assert.ok(!texts(back).includes('In preview'));
   press(back);
   await flush();
@@ -785,7 +785,7 @@ test("Use the shared rule… takes the project's local key out, for a skill and 
   await reset();
   // A skill too.
   const skill = { ...MEDIUM.groups[1].items[0], by: { claude_code: 'off', codex: 'on', cursor: 'off' }, here: { claude_code: true }, can: { off: ['codex'], project: ['claude_code'], local: ['claude_code'], shared: [] } };
-  assert.ok(labels(details.skillCard(skill, atlas)).some(([label]) => label === 'Use the shared rule…'));
+  assert.ok(labels(details.skillCard(skill, atlas)).some(([label]) => label === 'Follow all projects…'));
   // The project's shared, committed settings: the line says so, and nothing changes that file.
   const committed = { ...plugin, can: { ...plugin.can, local: [], shared: ['claude_code'] } };
   const shared = details.pluginCard(committed, details.context(MEDIUM, 'w', 'website'));
@@ -835,7 +835,7 @@ test("another client's project copy does not offer Turn off in this project… f
 test("the part card's button and the checklist's tick tell a rule's on and off apart", async () => {
   await reset();
   const atlas = details.context(MEDIUM, 'atlas', 'atlas');
-  // "Use the shared rule…" for superpowers waits: the same key, but off is false.
+  // "Follow all projects…" for superpowers waits: the same key, but off is false.
   await addToTray({ ...details.projectBody(SUPERPOWERS, 'atlas'), params: { scope: 'project', project: 'atlas', off: false } });
   const part = libraryTree(MEDIUM).blocks.find((b) => b.id === 'part:p2:skills:brainstorm');
   const button = details.partCard(part, atlas).actions.find((a) => a.label === 'Turn off in this project…').node;
@@ -869,11 +869,11 @@ test("a project whose rule file Kitden does not write says so and offers no rule
   const mine = own('s9', 'site-notes', 'skill', { source: 'Only this project', by: { claude_code: 'on' }, items: { claude_code: ['cc-sn'] }, can: { off: [], project: ['claude_code'], local: [], shared: [] } });
   const skill = details.skillCard(mine, atlas);
   assert.deepEqual(labels(skill), []);
-  // Final fix wave: the outside line only, not also "… comes from atlas's own settings.".
+  // Final fix wave: the outside line only, not also "… comes from atlas' own settings.".
   assert.equal(skill.after.textContent, words);
   // Another client whose setting the project decides keeps its own line.
   const both = { ...mine, by: { claude_code: 'on', codex: 'on' }, items: { claude_code: ['cc-sn'], codex: ['cx-sn'] }, can: { ...mine.can, project: ['claude_code', 'codex'] } };
-  assert.deepEqual(details.skillCard(both, atlas).after.children.map((n) => n.textContent), ["Codex's setting for this comes from atlas's own settings.", words]);
+  assert.deepEqual(details.skillCard(both, atlas).after.children.map((n) => n.textContent), ["Codex's setting for this comes from atlas' own settings.", words]);
   // Not in another project.
   assert.equal(details.pluginCard(SUPERPOWERS, details.context(answer, 'web', 'web')).after, null);
   // The checklist row cannot be ticked and says why.

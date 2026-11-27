@@ -80,14 +80,14 @@ def test_a_codex_skill_that_is_off_turns_on_from_context_and_the_library(page, d
 def test_with_a_project_picked_a_plugin_has_the_librarys_switches_on_context(page, demo):
     atlas = project_id(page, demo, "atlas")
     details = library(page, "plugin:superpowers@demo-market", atlas)
-    expect(details.get_by_role("button", name="Use the shared rule…")).to_be_visible()
+    expect(details.get_by_role("button", name="Follow all projects…")).to_be_visible()
     in_library = details.get_by_role("button", name=re.compile(r"^Turn (off|on) |^Use the shared"))
     names = in_library.all_inner_texts()
     page.evaluate(f"location.hash = '#context?project={atlas}'")
     group = page.locator('.ctx-group[data-group="plugin:superpowers@demo-market"]')
     expect(group.locator(".ctx-gswitch")).to_have_text(names)
     expect(group).not_to_contain_text("no switch here")
-    expect(group.locator(".ctx-gswitch")).to_contain_text(["Use the shared rule…"])
+    expect(group.locator(".ctx-gswitch")).to_contain_text(["Follow all projects…"])
 
 
 def test_a_codex_server_that_is_off_shows_as_off_and_turns_on(page, demo):

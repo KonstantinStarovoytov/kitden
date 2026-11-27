@@ -175,7 +175,7 @@ test('the head has the tabs, the lede, the scope bar and Map | List', () => {
   assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
   assert.equal(tabs.className, 'seg sm map-tabs');
   assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Plugins and skills', 'true'], ['Instructions', 'false']]);
-  assert.ok(texts(scope).includes('Shared setup · project overrides stay separate'));
+  assert.ok(texts(scope).includes('All projects'));
   assert.ok(map());
   assert.equal(hintLine.hidden, false);
   assert.equal(hintLine.children.at(-1).textContent, 'Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details');
@@ -1259,7 +1259,7 @@ test('a file card says its meta whole in its title', () => {
 });
 
 test('the Instructions tab says why a client has no file, under the scope line', () => {
-  const note = 'Cursor loads no instruction file in every project. Pick a project to see its own files.';
+  const note = 'Cursor loads no instruction file for all projects. Pick a project to see its own files.';
   try {
     Object.assign(data, { libraryMap: MEDIUM, instructionsMap: { ...INSTR, note }, projects: [] });
     Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
@@ -1295,7 +1295,7 @@ test('with no instruction files the tab says No instruction files here.', () => 
     // No empty group caption is drawn.
     assert.equal(node(map(), 'block:group:files:all'), null);
     // The server's note alone says it: not twice.
-    Object.assign(data, { instructionsMap: { ...empty, note: 'Cursor loads no instruction file in every project. Pick a project to see its own files.' } });
+    Object.assign(data, { instructionsMap: { ...empty, note: 'Cursor loads no instruction file for all projects. Pick a project to see its own files.' } });
     main.replaceChildren();
     renderLibrary(main);
     settle();

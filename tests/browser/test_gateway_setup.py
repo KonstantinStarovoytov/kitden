@@ -25,7 +25,7 @@ def test_set_up_adds_kitdens_entry_to_claude_code(page, demo):
     slot = page.get_by_role("button", name=re.compile(r"^No gateway yet, .*Set up…$"))
     slot.click()
     dock = page.locator("#dock")
-    expect(dock.get_by_text("Connect Claude Code to Kitden")).to_be_visible()
+    expect(dock.get_by_text("Connect Claude Code to the gateway")).to_be_visible()
     dock.get_by_role("button", name="Apply").click()
     expect(page.get_by_role("button", name="Undo")).to_be_visible()
     wait_until(lambda: "kitden" in json.loads(claude.read_text())["mcpServers"])

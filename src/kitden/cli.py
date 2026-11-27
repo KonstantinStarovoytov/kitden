@@ -367,7 +367,8 @@ def _print_summary(
     if misfits:
         print(words.SCAN_FIX_SKILLS)
     else:
-        print(words.SCAN_FIX if warned or inventory.problems else words.SCAN_OPEN)
+        unread = words.SCAN_FIX_UNREAD[len(inventory.problems) > 1]
+        print(words.SCAN_FIX if warned else unread if inventory.problems else words.SCAN_OPEN)
 
 
 def _have_counts(inventory: Inventory) -> Counter:

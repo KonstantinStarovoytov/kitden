@@ -227,7 +227,7 @@ def test_a_project_rule_marks_here(tmp_path):
     assert not any(here["pr-review"]["here"].values())
     # The project's own items have their group, not the tag.
     assert not any(here["api-style"]["here"].values())
-    # Local settings decide: "Use the shared rule…" can take the key out there.
+    # Local settings decide: "Follow all projects…" can take the key out there.
     assert here["superpowers"]["can"]["local"] == ["claude_code"]
     assert here["brandkit"]["can"]["local"] == ["claude_code"]
     assert here["superpowers"]["can"]["shared"] == []

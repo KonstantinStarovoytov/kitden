@@ -79,8 +79,8 @@ def test_the_codex_card_offers_the_smallest_500_tokens_that_fit_and_every_place(
         },
         "back": None,
         "note": (
-            "Kitden writes it in your Codex config.toml, for all projects. Your next chat will "
-            "show the real list."
+            "Kitden writes it in your Codex settings, for all projects. Start a new chat to see "
+            "the new list."
         ),
         "why": None,
         "param": "tokens",
@@ -115,8 +115,8 @@ def test_after_a_raise_the_codex_chat_keeps_its_own_limit_and_says_it_changed(ho
     assert cx["windows"][0]["result"]["misfit"]["n"] == 2
     window = cx["windows"][0]["title"].split(" ")[0]
     assert cx["changed"] == [
-        "The limit was changed after this chat: it is 500 tokens now. Your next chat will show "
-        "the real list.",
+        "The limit was changed after this chat: it is 500 tokens now. Start a new chat to see "
+        "the new list.",
         f"Estimate: On a {window} window, every skill would keep its full description.",
     ]
     limit = cx["limit"]

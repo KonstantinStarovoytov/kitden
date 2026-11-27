@@ -13,7 +13,7 @@ import { button, el, icon, reportError } from "./dom.js";
 import { headActions } from "./map-page.js";
 import { animateTo, fold, riseHead } from "./motion.js";
 import { closePanel, openPanel, panelState, whenGone } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, mark, skeleton } from "./parts.js";
+import { banner, CLIENT_NAMES, folderName, mark, skeleton, STATE_WORDS, waitsAs } from "./parts.js";
 import { ALL_PROJECTS_SCOPE, skillSwitch } from "./skill-switch.js";
 import { context as libraryContext, OFF_ALL, ON_ALL, pluginSwitches, removeRows, skillProjectSwitches } from "./library-details.js";
 import { current, currentError, data, go, goTo, loadContext, projectPath, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
@@ -363,7 +363,7 @@ function sidesFor(card, result, after, estimate, heat) {
   const off = [];
   const going = [];
   for (const skill of card.skills) {
-    // A skill the tray turns off leaves the list: it waits under Off after Apply, with the rest of
+    // A skill the tray turns off leaves the list: it waits under "Off · in preview", with the rest of
     // its plugin when its plugin's switch turns it off.
     if (states[skill.name] === "off") {
       if (skill.state !== "off") going.push(skill);
@@ -389,7 +389,7 @@ function sidesFor(card, result, after, estimate, heat) {
 }
 
 // The shelves under the two sides: what the tray turns off, and what is off now.
-const OFF_SHELVES = { going: { head: "Off after Apply", look: "ctx-off ctx-going" }, off: { head: "Turned off", look: "ctx-off" } };
+const OFF_SHELVES = { going: { head: waitsAs("off"), look: "ctx-off ctx-going" }, off: { head: STATE_WORDS.off, look: "ctx-off" } };
 
 // A shelf of skills that go off, or are off: those of one plugin together, on a line that names the
 // plugin, how many skills go with it and its one switch (the way back, or the row that waits); the
@@ -441,7 +441,7 @@ function pluginButton(offer, { words = offer.label, className = "btn small", foc
 // The groups -----------------------------------------------------------------------------------
 
 // The words of a group's parts, and of a pill's state inside it.
-const GROUP = { library: "Details in the Library", show: "Show the skills of", hide: "Hide the skills of", off: "Off", going: "Off after Apply" };
+const GROUP = { library: "Details in the Library", show: "Show the skills of", hide: "Hide the skills of", off: STATE_WORDS.off, going: waitsAs("off") };
 
 // The skills by where they come from: a group per source, largest first (groupsOf), each with its
 // header (the name, what it takes, its switch) and its pills. More than a few start closed; the
@@ -510,7 +510,7 @@ function groupNode(card, facts, view, after, heat, opened, id, arrived, focus) {
   const cloud = el("div", "ctx-cloud");
   const order = { sent: 0, lo: 1, apart: 2, going: 3, off: 4 };
   const members = [...facts.members].sort((a, b) => order[a.look] - order[b.look]);
-  // A pill says Off, or Off after Apply, where its header does not say it for the whole group.
+  // A pill says Off, or "Off · in preview", where its header does not say it for the whole group.
   const whole = facts.state === "off" || facts.state === "going";
   cloud.append(...members.map((m) => pillFor(card, m.skill, view.states, after, heat, view.result, m.look, whole)));
   inner.append(cloud);
@@ -1004,12 +1004,14 @@ function limitControl(card, control, { hold, pct, flag, chatLimit, chatLine, at 
   grip.addEventListener("pointercancel", release);
   grip.addEventListener("keydown", (event) => {
     const move = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[event.key];
-    if (move && steps.length) {
+    // Home and End go to the first and the last place, as on any slider.
+    const end = { Home: 0, End: steps.length - 1 }[event.key];
+    if ((move || end !== undefined) && steps.length) {
       event.preventDefault();
       // The readout takes the place under the handle where its hover words were: they stay off, as
       // for a drag.
       if (!moving) grip.dispatchEvent?.(new Event("quiettip", { bubbles: true }));
-      const i = Math.min(steps.length - 1, Math.max(0, shown + move));
+      const i = end !== undefined ? end : Math.min(steps.length - 1, Math.max(0, shown + move));
       moving = moving || i !== control.at;
       draw(i, true);
     } else if (event.key === "Enter" || event.key === " ") {
