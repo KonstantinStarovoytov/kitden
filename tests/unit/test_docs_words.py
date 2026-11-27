@@ -140,6 +140,5 @@ def test_the_security_page_says_how_to_report_in_private():
 def test_guide_names_the_search_words_and_what_a_move_in_gives():
     # Lantern on #231: the page's new words are in the guide too.
     guide = " ".join((ROOT / "docs/guide.md").read_text().split())
-    assert '"Search servers and tools…"' in guide
-    assert '"Search skills, plugins and marketplaces…"' in guide
-    assert '"In the gateway you can turn each of its tools on or off."' in guide
+    assert '"Search skills, plugins, servers and tools…"' in guide
+    assert "can move into the gateway" in guide

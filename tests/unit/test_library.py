@@ -1250,7 +1250,7 @@ def test_api_library_list_takes_a_tab_and_show_diff(tmp_path):
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as client:
         client.get("/?token=tok")
         answer = client.get("/api/library-list?kind=plugin").json()
-        assert set(answer) == {"project", "columns", "groups", "attention", "notes"}
+        assert set(answer) == {"project", "columns", "groups", "attention", "notes", "missing"}
         # An old tab or show choice gets Plugins and skills, as installed.
         old = client.get("/api/library-list?kind=marketplace&show=new").json()
         assert old == answer

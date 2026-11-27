@@ -1032,7 +1032,10 @@ def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
 def test_overview_notes_are_sentences_with_an_info_icon():
     text = script("overview.js")
     assert 'node.append(icon("info", 13), el("span", null, noteSentence(group)));' in text
-    assert "`${group.name} ${joinWords(group.notes.map((words) => words.one))}.`" in text
+    assert (
+        "`${group.label || group.name} ${joinWords(group.notes.map((words) => words.one))}.`"
+        in text
+    )
     assert "(nothing to fix)" in text and "`Hide ${plural(count" in text
     assert "shortPaths" not in text and "flag(" not in text
     assert '.ov-fold[aria-expanded="true"] svg { rotate: 90deg; }' in CSS
@@ -1218,15 +1221,13 @@ def test_rows_say_they_open_details_and_search_names_its_scope():
     assert re.search(r"\n\.opens \{[^}]*color: var\(--ink-3\)", CSS)
     assert re.search(r"\.tg-row:hover \.opens[^{]*\{ color: var\(--route\)", CSS)
     assert ".tg-row:focus-visible .opens" in CSS
-    # The search promises what it finds from the place (02-N02): the Gateway its servers and
-    # tools, every other place the Library's. The placeholder trails off; the accessible name
-    # does not repeat the dots.
-    # One box searches the whole setup, with the same words on every place.
+    # One box searches the whole setup, with the same words on every place (02-R03). The
+    # placeholder trails off; the accessible name does not repeat the dots.
     assert 'placeholder="Search skills, plugins, servers and tools…"' in INDEX
     assert 'aria-label="Search skills, plugins, servers and tools"' in INDEX
     assert 'SEARCH_WORDS = "Search skills, plugins, servers and tools"' in script("app.js")
     assert "Search plugins and skills to add" not in script("app.js")
-    assert 'go("library", { q })' in script("app.js")
+    assert "searchPlace(state.view, q)" in script("app.js")
     assert "Find an item" not in INDEX
 
 
@@ -2236,7 +2237,8 @@ def test_the_gateway_says_what_it_could_not_read():
 
 def test_search_on_a_map_page_finds_on_that_page():
     app = script("app.js")
-    assert 'MAP_PAGES = ["gateway", "library"]' in app and 'go("library", { q })' in app
+    assert 'MAP_PAGES = ["gateway", "library"]' in app
+    assert "go(searchPlace(state.view, q), { q });" in app
     # The chip's words are shared by every map page, so they live in map.js.
     assert '"match", "matches"' in script("map.js") and '"No matches"' in script("map.js")
     assert '<span class="find-chip" id="find-chip" role="status"></span>' in INDEX
