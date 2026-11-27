@@ -564,6 +564,10 @@ class Engine:
                 )
             edit.before_hash = _sha(data)
             edit.masked_diff = masked_diff(edit)
+            # Apply also adds the file's format version where it has none: the preview says so.
+            text = (data or b"").decode()
+            if _with_version(edit, text) != text:
+                edit.masked_diff += f'\nversion\n+"version": {edit.version}'
         change = Change(action=action, steps=steps)
         self.changes[change.id] = change
         return change

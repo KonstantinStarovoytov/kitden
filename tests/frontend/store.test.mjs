@@ -18,7 +18,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadLibraryMap, loadMap, parseHash, parseSel, projectGone, readLibraryMap, reload, retry, searchPlace, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadLibraryMap, loadMap, parseHash, parseSel, projectGone, readForSearch, readLibraryMap, reload, retry, searchPlace, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -390,5 +390,21 @@ test('one search box: a search goes where something of that name is, the Gateway
     assert.equal(searchPlace('library', 'filesystem'), 'library');
   } finally {
     Object.assign(data, was);
+  }
+});
+
+test('a search reads what it looks in, but not what the place shown reads itself', async () => {
+  // Lantern on #239: a second Library map read undid the Library's own, which then never drew.
+  const was = { view: state.view, libraryMap: data.libraryMap, gateway: data.gateway };
+  try {
+    Object.assign(data, { libraryMap: null, gateway: null });
+    state.view = 'library';
+    asked.length = 0;
+    await readForSearch();
+    assert.ok(asked.some((url) => url.startsWith('/api/gateway-view')));
+    assert.ok(!asked.some((url) => url.startsWith('/api/library-map')));
+  } finally {
+    state.view = was.view;
+    Object.assign(data, { libraryMap: was.libraryMap, gateway: was.gateway });
   }
 });

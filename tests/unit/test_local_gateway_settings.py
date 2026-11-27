@@ -484,6 +484,9 @@ def test_a_rule_change_adds_the_version_only_when_missing_and_undo_puts_the_file
     before = path.read_bytes()
     engine = engine_for(tmp_path)
     change = engine.preview("gateway.rule", [rule_step(tmp_path, "/p", "github", None, "off")])
+    # The preview shows every write: the version only where Apply adds it (Lantern on #239).
+    shown = change.steps[0].edit.masked_diff
+    assert ('+"version": 1' in shown) is (version is None), shown
     engine.apply(change.id)
     assert str(change.state) == "verified", change.error
     saved = json.loads(path.read_text())
