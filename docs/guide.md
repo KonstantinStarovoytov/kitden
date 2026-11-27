@@ -6,6 +6,31 @@ the short version.
 Kitden can change your client settings. Only add plugins and MCP servers you trust:
 they can run code with your permissions. Undo does not reverse actions a tool already ran.
 
+## Start on the Overview
+
+The page opens on **Overview**. Its first line says how many things need your attention, and in
+which clients. Under it stand cards in two groups:
+
+- **Needs attention:** something that costs you now. The most costly comes first: a skill list
+  that did not fit in the last chat, then a change that came undone, then other problems such as
+  a file Kitden could not read (its **Copy path** gives the file's path), and last a plugin or
+  skill a client loads more than once.
+- **Can improve:** something you may want. Up to three servers outside the gateway get a **Move
+  in…** card ("In the gateway you can turn each of its tools on or off."), and one card stands for
+  the rest; a server outside the gateway is a normal setup, not a fault.
+
+Each card has one button. Most add a change to the preview, which you review and **Apply**; some
+open the page where you fix it. When Context suggests a limit, the skill list card's button adds
+that limit, and its line says what it costs. **Keep one…** on a copies card opens the item in the
+Library with its **Details**, which list each copy with its folder; **Keep this one…** beside a
+copy removes the others. A card leaves once its change is applied, and comes back if you undo it.
+Four or more cards of one kind fold into one row ("35 skills load more than once"); **Show…**
+opens them.
+
+**Show 5 notes (nothing to fix)** under the cards opens the notes: facts worth knowing that need
+no change. **Your setup**, beside the cards, is a small map of your clients and the Kitden
+gateway; point at a card to see on it what the card is about.
+
 ## See what each agent loads
 
 Open **Library** and choose **All projects** or one project. **List → Differences** shows
@@ -15,254 +40,112 @@ The search box at the top says what it finds from the tab you are on: on the **G
 marketplaces…" opens the Library with the matches.
 On the map, a group of two or more starts folded as a stack of cards. Press a stack to open it;
 a big group shows five at a time, with the rest in the stack below. **Collapse** folds it again.
-When you select a client or point at it, a stack that holds some of its items shows those in
-front, dims the others, and its badge says how many of the stack are that client's ("3 of 55").
-The Gateway's groups work the same way.
+When you select a client, a stack that holds some of its items shows those in front and says how
+many are that client's ("3 of 55"). The Gateway's groups work the same way.
 
 | What | How to manage it |
 | --- | --- |
-| **Plugins and skills** | Use **+ Add**, or drag an item onto another client. Turn it on or off, choose its scope, or remove a copy in **Details**, where the client supports it. A Claude Code skill can also be off in one project only, beside your other skill rules. A plugin that a project turns on, but that is not installed on this computer, shows as unknown. **Add missing plugins and skills…** fills gaps across clients. |
-| **Marketplaces** | Browse their plugins and skills. **+ Add → Add a marketplace…** adds a GitHub source. **Details → More → Commands…** has update and remove commands to copy. |
-| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents. With **All projects** it shows the files loaded in every project, and a quiet line names a client that loads none; pick a project to see its own files. A project's `CLAUDE.md` shows Cursor beside Claude Code, and Codex shows no project files in a project marked untrusted. When a client is turned off in Kitden, the tab says so. A Claude Code hook that `disableAllHooks` turns off shows as off, as does one that can never run because its `if` is on an event that ignores it. Kitden only reads these; edit them in your editor. |
+| **Plugins and skills** | Use **+ Add**, or drag an item onto another client. Turn it on or off, choose its scope, or remove a copy in **Details**, where the client supports it. A Claude Code skill can also be off in one project only. A plugin that a project turns on, but that is not installed on this computer, shows as unknown. **Add missing plugins and skills…** fills gaps across clients. |
+| **Marketplaces** | Browse their plugins and skills. **+ Add plugins → On this computer → Add a marketplace…** adds one from a GitHub repository or a folder. **Details → More → Commands…** has update and remove commands to copy. |
+| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents; pick a project to see its own files. Kitden only reads these; edit them in your editor. |
 
-On the map each client's block says what it loads there: its plugins and skills ("5 plugins ·
-62 skills"), or its hooks when a hook is all it has ("1 hook"). On **Instructions** it counts
-the client's instruction files ("3 files"); commands and agents are not counted, and a client
-that has only those says "Commands and agents only". A client with nothing says "Nothing
-loaded".
+A thing has the same switch wherever it shows, with a line that says where it holds ("Claude
+Code · all projects"). A skill has **On**, **Name only** (Claude Code) and **Off**. A plugin has
+**Turn off for all projects…** or **Turn on for all projects…**, and with a project picked **Turn
+off in this project…** or **Follow all projects…**. Where a client has no switch, the place where
+it would be says why: Codex has no **Name only**, Cursor has no switch for one skill (add
+`disable-model-invocation: true` to its `SKILL.md` to keep its description out), and hooks are
+only shown. In the Library's List, an empty cell with a reason shows a small **?**; point at it.
 
-When a client loads one plugin or skill more than once, its row counts the copies ("Cursor
-loads it 3 times"), the same number as the Overview's card. **Keep one…** on that card opens the
-item in the Library with its **Details**, which list each copy with its folder and whose it is.
-**Keep this one…** beside a copy adds the removal of the others to the preview; a copy in another
-client's folder goes from that client too, and the preview says so. When four or more such
-cards come at once, the Overview folds them into one row ("35 skills load more than once"), and
-its **Show…** opens them, so they do not push the other cards down. The Overview puts what costs
-you most first: a skill list that did not fit, then a change that came undone, then a file
-Kitden could not read (its **Copy path** gives the file's path), then copies.
+When a client loads one plugin or skill more than once, its row counts the copies ("Cursor loads
+it 3 times"), the same number as the Overview's card.
 
-Codex also loads skills in sub-folders of its skills folders, even inside another skill's folder.
-Each has a row and a switch of its own. Turning off the outer skill leaves the ones inside it on;
-removing it removes them too, and the review names them.
+**From your Claude account** holds the plugins you or your organization turned on for your Claude
+account, which the Claude app gives to Claude Code. **Turn off** changes Claude Code's own
+setting, so the plugin stays in your account; to remove it from your account, use the Claude app
+or claude.ai. A plugin your organization requires has no switch. Plugins the terminal gets from
+your account are not read yet.
 
-An MCP server you turned off with `/mcp` in one project shows as off in that project. So does a
-Codex server with `enabled = false`: the **Gateway** lists it outside the gateway as **Off in
-Codex**, and its **Details** offer **Turn on in Codex for all projects…**.
+A Codex server with `enabled = false` shows on the **Gateway** as **Off in Codex**, with **Turn on
+in Codex for all projects…** in its **Details**.
 
-**From your Claude account** holds the plugins you or your organization turned on for your
-Claude account. The Claude app gives them to Claude Code in its Code tab. Each shows what it
-holds, and its skills follow it, here and on **Context**. **Turn off** writes Claude Code's own
-setting, for all projects or for one, so the plugin stays in your account and in your other
-Claude apps. To remove it from your account, turn it off in the Claude app or on claude.ai. A
-plugin your organization requires has no switch. The group also has **Claude account plugins and
-connectors**, as Unknown: Kitden cannot see the rest of what your account keeps. The terminal gets
-the same plugins another way, which Kitden does not read yet, so a terminal chat's skill list
-does not count them for the next chat.
-
-The preview names the clients and projects affected. Adds on the map go to all projects;
-the List offers a project scope where supported. Start a new client session to load a change.
-While a change waits in the preview, every row and card that shows the thing says **in preview**
-with a dashed ring: in the Library and the Gateway, as a list and as a map. With **All projects**,
-a plugin's Details also name a project whose own settings turn it off; in that project they say
-why it has no switch there.
-
-A thing has the same switch wherever it shows. A skill's **Details** in the Library and on
-**Context** have the same switch, **On**, **Name only** (Claude Code) or **Off**, with a line that
-names the client and where it holds ("Claude Code · all projects"), so a skill you turned off can
-be turned on again in the same place. A plugin's switch says where it holds too: **Turn off for all
-projects…**, **Turn on for all projects…**, and with a project picked **Turn off in this
-project…** or **Follow all projects…**; Context's group header offers the same. A trusted Codex
-project whose own `.codex/config.toml` names a plugin gets **Turn off in this project…** or **Turn
-on in this project…**, which change that file. Where a client has no switch, the place where it
-would be says why: Codex has no **Name only**, Cursor has no switch for one skill (add
-`disable-model-invocation: true` to its `SKILL.md` to keep its description out), and Kitden only
-shows hooks. In the Library's List an empty cell with a reason shows a small **?**; point at it.
+The preview names the clients and projects affected. While a change waits in the preview, every
+row and card that shows the thing says **in preview** with a dashed ring. Start a new client
+session to load a change.
 
 ## Choose your clients
 
-If you use only some of Claude Code, Codex and Cursor, tell Kitden. Press
-**Choose clients…** at the top right of the **Overview**, the **Library**, the **Gateway** or
-the **Context** page. Each of these pages says which clients are turned off. **Details** lists the three clients, each with a
-switch. A client that is not on this computer says **Not installed**, on every page and in
-`kitden scan`. Turn a client off and Kitden stops reading it: it runs none of the client's commands,
-and the client leaves the Overview, the Library, the Gateway, **Let agents read this setup** and `kitden scan`. Turn
-it on and it comes back. A toast with **Undo** follows each switch. Kitden keeps at least one
-client on, so the last switch stays disabled.
+If you use only some of Claude Code, Codex and Cursor, press **Choose clients…** at the top right
+of the **Overview**, the **Library**, the **Gateway** or **Context**. A client that is not on this
+computer says **Not installed**. Turn a client off and Kitden stops reading it: it runs none of
+the client's commands, and the client leaves the Overview, the Library, the Gateway, **Let agents
+read this setup** and `kitden scan`. Turn it on and it comes back. Kitden keeps at least one client on.
 
-Nothing in a client's own settings changes. If the client still has the `kitden` entry, its row
-says so: disconnect it on the Gateway first if you want that gone. A change you made to an off
-client stays in **Changes**, but its Undo waits: it says "Turn Codex on to undo this." A preview
-you had not applied yet waits the same way. Kitden
-keeps your choice in `clients.json` in its data folder, so it holds after a restart. The small
-**−** on a Library List column is another thing: it hides that column in this browser only,
-Kitden still reads the client, and **Show** brings the column back.
+Nothing in a client's own settings changes. A change you made to a client that is now off stays
+in **Changes**, but its Undo waits until you turn the client on again. Kitden keeps your choice in
+`clients.json` in its data folder. The small **−** on a Library List column only hides that column
+in this browser.
 
 ## Check that your skills fit
 
-Open **Context** to see whether each client's skill list fit in its last chat: for Claude Code
-that is the chat that last got a full skill list, one that was started or resumed. Claude Code and
-Codex let that list use only a small part of the context window. Claude Code then shows some
-skills by name only; Codex shortens descriptions and, past that, leaves skills out. Kitden reads
-the skill list from the last chat log, plus the settings, skill files and use counts it needs
-to size and check that list; it keeps none of it and sends nothing. When your skills or the limit
-changed after that chat, the card also says, as an estimate, how many would show only a name now
-(Codex: how many would be cut short or left out, [below](#when-your-setup-changed-after-the-last-chat)). Estimates for another
-window, for your setup now, or for a switch you are about to make, show only while Kitden's rule
-rebuilds that last list; all but another window's also come from a count (below). Claude Code's log does not say the window, so Kitden names it only when one window alone
-gives that list. When Claude Code's settings set the limit, with `skillListingBudgetFraction` or
-`SLASH_COMMAND_TOOL_CHAR_BUDGET`, Kitden uses that limit, and `skillListingMaxDescChars` for the
-length of a description. Cursor gets no verdict, because Kitden cannot see what Cursor sends; the
-skills inside its plugins are not listed, and the card says so. With **All projects**, the window
-card names the folder of the last chat ("Last chat · Nov 6 · in atlas"): its list held that
-project's skills and followed its settings. A project that sets its own share shows that share.
+Every chat starts with the list of your skills, and that list has a small limit: 1% of the
+context window in Claude Code (or the share your settings set), 2% in Codex. Past it, Claude Code
+sends some skills by name only, and Codex shortens descriptions and then leaves skills out. The
+agent may never reach for those skills.
 
-Under the verdict stands the simplest fix: the suggested limit, what it costs in every chat, and
-its **Set to …** button. When Kitden offers no new limit for a list that did not fit, the same
-place says why (for example, even 4% of the window would not fit every description: set some
-skills to **Name only** or **Off**). The strip at the top of the picture is the whole context
-window; Kitden measures only the skill list in it, not the system prompt, MCP tools, instruction
-files, hooks or the chat, and the strip says so.
+Open **Context**. For Claude Code and Codex it reads the last chat's log and says how many skills
+went in whole. With **All projects**, the window card names the folder of that chat. Kitden keeps
+none of the log and sends nothing. Cursor gets no verdict, because Kitden cannot see what Cursor
+sends.
 
-For Claude Code and Codex the skills stand in groups by where they come from, with the Library's
-names: each plugin (with its marketplace), **Your skills**, a project's skills, the plugins from your
-Claude account, and **Built into Claude Code**. Each group's header says how many skills it has, how
-many characters of the list they take (Codex: tokens), and how many showed only a name or were cut,
-in the same numbers as the bar and the sentence above: the last chat's, or the estimate when your
-setup changed or a change waits. The groups you can turn off come first, the one that takes the
-most first; **Built into Claude Code**, which has no switch for all of its skills, comes after
-them. A plugin's header has its switch, **Turn off**: it
-adds the same change as the Library's, and the estimate, the bar and the limit line count it at
-once, before you apply it. Its name opens the plugin's Details in the Library. A group without a
-switch says why when you open it, and where to turn it off. Press a header to open the group to its
-skills; with more than three groups they start closed. A group that is off says **Off** and what it
-took in your last chat (a Codex plugin that was not in that chat shows no skills, as Codex does not list them: off, with its **Turn on**, or on, until your next Codex chat lists them), and a group you are turning off says **Off · in preview** and about how much
-it frees. A plugin's Details in the Library repeat its group's line here, and a skill's say what
-its pill says (its description sent, only its name, cut short or off), with **Show in Context**,
-which opens its group here. Where Context has no list to read (Cursor, or a project with no chat)
-they say nothing of the skill list. Cursor's skills stay in two boxes: those the
-agent can pick, and those it uses only when you ask.
+**The fix is under the verdict:** the suggested limit, what it costs in every chat, and its **Set
+to …** button. When Kitden offers no new limit, the same place says why, for example when even 4%
+of the window would not fit every description: then set some skills to **Name only** or **Off**.
+The strip at the top is the whole context window. Kitden measures only the skill list in it, not
+the system prompt, MCP tools, instruction files, hooks or the chat.
 
-Skills
-whose descriptions are sent go from grey to orange with the length of their description, so the
-few that take most of the list stand out. For Claude Code a skill's size also counts its
-`when_to_use`, as Claude Code does. A skill's **Details** shows its description, with
-the part the agent did not get in grey. For Claude Code it also says how often you used the
-skill and when you last did, from Claude Code's own count, so you can tell which ones you do not
-use. There you can also
-switch it to **On**, **Name only** (Claude Code) or **Off** where the client
-allows it, the same switch as in the Library; a Codex skill that is off turns on again here too.
-Cursor has no switch, and its Details say what to do instead. A skill built into Claude Code, such as `dataviz`, is marked
-**built-in**: it is not a file, so the Library does not list it, but most have the same switch,
-for all projects. A skill of a plugin that Claude Code installed follows its plugin: its Details
-name the plugin first, say that the switch is the plugin's and what it holds, and offer **Turn
-off for all projects…** for the whole plugin, the same switch as on its group's header and in the
-Library. While it waits in the
-preview, the plugin's group says **Off · in preview** and all of its skills go together, and the
-preview's row says what goes ("Turns off all of plugin-dev: 7 skills, 1 command and 3 agents.").
-It counts in the estimate and on the limit line as a skill's own switch does, whether you pressed
-it here or in the Library. After Apply the whole group says **Off**, with one **Turn on for all
-projects…**. When Kitden has no switch
-for a skill, such as one the Claude app adds, its Details say so and why. A skill of a plugin
-from your Claude account names that plugin, and its Details offer the plugin's own switch. A skill
-that is off now is drawn off in its group (struck through), where you can turn it on again: right
-after Apply, even when the page still shows the last chat's list, which had it (its part of the bar
-is faded then), and after your next chat, when it is no longer in the list. That holds for your own and built-in Claude Code skills and for the skills
-of a plugin that is off. A skill that a project's own settings set has no switch here.
-The change goes through preview, **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
-did not fit, first of all its cards; when Context suggests a limit, the card's button adds it to
-the preview, and its line says what it costs. `kitden show context`, which the plugin's `context` skill runs, also prints each
-skill's description, so your agent sees it too. With no chat in the current folder, it shows the
-last chat in any folder and names that folder; with `--project` it stays with that folder.
+**The groups** sort the skills by where they come from, with the Library's names: each plugin,
+**Your skills**, a project's skills, the plugins from your Claude account, and **Built into Claude
+Code**. Each header says how many skills the group has, how much of the list they take, and how
+many showed only a name. The groups you can turn off come first. A plugin's header has its **Turn
+off** switch; the bar and the estimate count it at once, before you apply it. A group without a
+switch says why when you open it.
 
-When some Claude Code skills showed only a name because the list ran out of room, the limit
-line on the skill list's bar has a handle. Drag it to the right: a second line, for your next
-chats, moves from share to share of the window (1%, 1.1%, 1.2%, 1.3%, 1.4%, 1.5%, 1.7%, 2%,
-2.5%, 3%, 3.5% and 4%, the most Kitden offers), and a note beside it says what each step gives,
-such as "1.4% · all 20 fit · about 650 more characters per chat". It snaps to the step where
-every description fits, which a small mark shows. Let go to add the change to the preview, or
-press Esc to leave it. Drag it back to where it started to take the change out. With the
-keyboard, Tab to the handle, use the arrow keys and press Enter. Click the line's label (or the
-handle, or press Enter on it without moving) for the details: the share of the context window
-now, the first share above it at which every description fits (skills you set to Name only or Off
-stay as they are), and about how many more characters and tokens every chat then costs, with
-**Set to 1.4%** (or the share shown). When your user settings set a share above 1%, drag the
-line back to 1% or press **Back to 1%** to take it out again. You can also drag it down to any
-share of the list between 1% and the one you have, such as 1.2% from 1.3%; Codex's line does the
-same in steps of 500 tokens. After Apply, the last chat keeps
-the limit it was sent under, the next chats' line shows the new one, and the page says the
-limit changed and what Kitden expects from your next chat (see
-[When your setup changed](#when-your-setup-changed-after-the-last-chat)). A share in your settings that is not
-on the list, such as 4.5% from an earlier Kitden or one you wrote by hand, still works: Kitden
-shows it as the limit now, offers the shares of the list above it (none above 4%), and **Back to
-1%**.
+**A skill's Details** show its description, with the part the agent did not get in grey. For
+Claude Code they also say how often you used the skill and when you last did, so you can tell which
+ones you do not use. The switch there is the Library's: **On**, **Name only** (Claude Code) or
+**Off**. A skill of a plugin follows its plugin. A skill you turned off stays in its group, struck
+through, so you can turn it on again.
 
-The line also works when Kitden cannot replay the last chat's list exactly: a newer Claude Code
-may choose other descriptions, or a listed skill may have no file Kitden can find. Then Kitden
-counts what all descriptions need. A step that has room for all of them says "all 92 fit"; a
-step that does not says about how many would show only a name ("about 3 of 92 show only a
-name"), because without the replay Kitden cannot tell which ones it would keep. The details say that it is a count, and how many skills have no description
-Kitden can find: those count at the longest a description can be (1,536 characters, or your
-`skillListingMaxDescChars`), so the share may be a step higher than you need. A skill built into
-Claude Code has no file: when an earlier chat's list sent its description, it counts at that
-length, and the details say how many count so. The place of today says how many skills showed
-only a name ("1.3% now · 2 of 92 show only a name") when the last chat was sent under today's
-limit, no skill joined since, and none it sent was turned off or set to Name only since. When the limit was changed after the last chat, the cost is
-measured from what the list uses at today's limit, not from what that chat used.
+**The limit line.** When skills showed only a name, the line on the bar has a handle. Drag it to
+the right, from 1% up to 4% of the window; a note says what each step gives ("1.4% · all 20 fit ·
+about 650 more characters per chat"), and it snaps to the step where every description fits. Let
+go to add the change to the preview, or press Esc. With the keyboard: Tab to the handle, then the
+arrow keys, Home or End, and Enter. Click the line's label for the details and **Set to …**;
+**Back to 1%** takes a higher share out again. For Codex the line moves in steps of 500 tokens, up
+to 10,000, and **Back to the default** takes it out.
 
-The share is for your next chats, so skills you added or turned on after the last chat are
-counted too, and the details say how many. Changes waiting in the preview count as well: turn
-skills off, set them to Name only or turn them on again, and the line's steps and note count the
-same skills as the estimate above. The handle stays while they wait, even when everything fits.
-A count gives an estimate for a switch too: "every skill would keep its description" or "about 3
-of 92 skills would show only a name". When that count differs from the last chat's own number,
-the sentence "Without the change, estimate: …" stands beside it, so you compare an estimate with
-an estimate.
+Kitden writes `skillListingBudgetFraction` in your Claude Code user settings
+(`~/.claude/settings.json`, or the folder `CLAUDE_CONFIG_DIR` names), or `[skills]
+max_context_tokens` in Codex's `config.toml`, for all projects, with a backup and Undo. Restart
+Codex after it. Kitden has not yet checked on a real chat that Claude Code and Codex follow the
+value it writes: your next chat's list on Context shows whether they did. Kitden does not offer a
+limit when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when a project's own settings set the share,
+or when the last chat's limit is not known; the page says which.
 
-### When your setup changed after the last chat
-
-The last chat is a fact, so its sentence and its window card stay. When you added, turned off or
-turned on skills after it (in Claude Code, also when the chat itself got more skills on the way),
-or changed the limit, two lines under it say so and what Kitden expects now:
+**When your setup changed after the last chat,** the last chat stays as it was, and two lines
+under it say what Kitden expects now:
 
 > Your skills changed after this list was sent. Start a new chat to see the new list.
 >
 > **Estimate:** On a 1M window, 23 of 96 skills would show only a name. The agent may not use them.
 
-The bar, then named **Skill list now, estimate**, and the group headers show that estimate. When
-everything would fit, a line says about how much room is left. When Kitden can only count, it says
-"every skill would keep its description" and shows that too, or about how many would show only a
-name ("about 3 of 92 skills would show only a name. Kitden counted them and cannot tell which."),
-and the bar and the groups stay the last chat's. When it cannot estimate at all, because its count
-does not explain the last chat or it does not know the limit, the second line says that and why.
+The bar, then named **Skill list now, estimate**, shows that estimate. When Kitden can only count
+the descriptions, not rebuild the list, it says "about 3 of 92" and cannot name them. When it
+cannot estimate at all, it says why. **How this is counted** has the details.
 
-For Codex the estimate says how many descriptions would be cut short, or how many skills left out.
-A skill you added has the line Codex would give it, so it counts. Two kinds do not: a skill that
-is a link, and one in a folder the last list did not have, as Kitden cannot tell how Codex will
-write their lines. It names them, says that its estimates leave them out, and gives no estimate
-when nothing else changed. A skill that Codex never lists, because its `agents/openai.yaml` sets
-`allow_implicit_invocation: false`, is no change; one that was on the last list and is set so now
-leaves the estimate.
-
-Codex's line works the same way, in tokens: when Codex cut descriptions short or left skills
-out, drag it in steps of 500 tokens, up to 10,000, the most Codex allows. When Kitden cannot
-rebuild Codex's last list (a skill's file is gone or changed since), it counts your next chat with
-your skills as they are now, each description as its file has it, or as the chat sent it when the
-file is gone, and
-says so above the bar; the bar is then the estimate and the line has its places all the same. When
-it does not know the window of the chat's model and no limit is set, a line says there is no limit
-line, and that one new Codex chat brings it back. The line snaps to the
-smallest limit at which no description is cut and no skill is left out. Kitden writes
-`[skills] max_context_tokens` in your Codex `config.toml` (for all projects), with a backup and
-Undo; **Back to the default** takes it out, so Codex uses 2% of the window again. Restart Codex
-for it to take effect. Kitden writes `skillListingBudgetFraction` in your user
-settings (`~/.claude/settings.json`, or the folder `CLAUDE_CONFIG_DIR` names), for all projects, with a backup and Undo. Start a new chat
-to see the new list. Kitden does not offer it when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when
-a project's own settings file sets the share, when the limit of the last chat is not known, when
-everything fits, when by its count everything fits although the chat left descriptions out, or
-when even 4% would not fit every description. When the list did not fit, the sentence under the
-verdict says which; otherwise "How this is counted" does. The limit's Details say it too. For
-Codex: when there is no estimate, when everything fits, or when even 10,000 tokens would not fit
-every description.
+`kitden show context`, which the plugin's `context` skill runs, prints the same verdict and each
+skill's description, so your agent sees it too.
 
 ## Add from the catalogs
 
@@ -274,43 +157,37 @@ and MCP servers go to the Kitden gateway, so every connected client gets them.
 See [online sources](discovery.md) for formats and limits.
 
 - **Tokens:** a server asks for exactly the value it needs. Kitden checks it against the server
-  before Apply and keeps it in the **macOS Keychain** or the **Linux keyring** only. A secret
+  before Apply and keeps it in the **macOS Keychain** or the **Linux keyring**. A secret
   longer than about 1,970 bytes does not fit the macOS Keychain: Kitden says so and changes
   nothing.
 - **Browser sign-in:** **Sign in** opens the server's page; Kitden catches the answer itself
   and refreshes it later. A server that allows no sign-in for Kitden asks for an API key instead.
-  A sign-in too long for the macOS Keychain is not saved; give the server a token in a header
-  instead, if it takes one.
 - **Not ready yet:** it waits in the preview; Apply writes the rest. **Details** show each secret
   by name, only its first and last characters, with **Replace** and **Remove**.
 - **A key added later:** when a catalog says a server in the gateway now needs a key it does not
   have, the map shows **Needs key** and **Add access…** comes with the key's name filled in.
-  Kitden learns this when you add the server from a catalog, find it there again, or press
-  **Rescan** (it then asks the Official MCP Registry about each server by its name).
 
 ## Share a server between your agents
 
 Open **Gateway** to share MCP servers and turn individual tools on or off for each project.
-The Overview offers up to three servers outside the gateway as **Move in…** cards ("In the
-gateway you can turn each of its tools on or off."), and one card for the rest; a server outside
-the gateway is a normal setup, not a fault.
-Pick several with a band or Shift-click and drag them in together. Library works on its own.
-An agent that calls a tool that is off, by a switch, a project rule or strict mode, is told
-"<name> is turned off in Kitden."
-A server that must start in its own folder starts there in the gateway, so it also works in
-Cursor, which has no such setting.
-A server outside the gateway has an on/off switch only in Codex, which has an `enabled` key for it;
-its **Details** offer **Turn off in Codex for all projects…** or **Turn on…**. Kitden has no switch
-for one in Claude Code (Claude Code's `/mcp` panel turns one on or off per project) or Cursor, and
-the **Details** say so. In the gateway every server gets a switch.
+Pick several with a band or Shift-click and drag them in together. An agent that calls a tool
+that is off is told "<name> is turned off in Kitden."
+
+- **Strict mode:** in a server's **Details → More**, **Turn strict mode on…** turns off every tool
+  without a rule of its own, and the tools the server adds later start off. Then turn on only the
+  tools you want.
+- **Calls:** a tool's **Details** say how often agents called it through the gateway and when last
+  ("12 calls · last today 10:02"). Kitden counts only calls that go through the gateway.
+
+A server outside the gateway has an on/off switch only in Codex. Kitden has no switch for one in
+Claude Code (its `/mcp` panel turns one on or off per project) or Cursor, and the **Details** say
+so. In the gateway every server gets a switch.
+
 If the gateway already has a server of that name, moving another one in works only when it is
-the same server; a new token for it is fine, and the review says so. A different server of that
-name is refused until you keep one. When a client keeps its own server of a name the gateway
-also has, the review says it will have both.
-A server's secrets, in its env, headers or arguments such as `--api-key=…`, go to the macOS
-Keychain or the Linux keyring; the gateway's settings keep a reference. If a server moved in by
-an earlier Kitden still has one in plain text, its **Details** offer **Move secrets to the
-Keychain…**.
+the same server. A different server of that name is refused until you keep one. A server's
+secrets, in its env, headers or arguments such as `--api-key=…`, go to the macOS Keychain or the
+Linux keyring; the gateway's settings keep a reference. If a server moved in by an earlier Kitden
+still has one in plain text, its **Details** offer **Move secrets to the Keychain…**.
 
 ## Review a change. Apply it. Undo it.
 
@@ -330,31 +207,17 @@ asks first.
 uvx --python 3.13 kitden scan
 ```
 
-Kitden is not installed and no page opens. `scan` reads your agents' settings and, for the
-folder you run it in, what they sent in your last chat. With no chat in that folder, it reads
-your last chat in any folder and names that folder. It changes none of them. It asks each agent
-for its version, and Codex for its plugin list, and keeps the versions and the plugin list in
-two small files in Kitden's own data folder. If Codex has to be asked, it says so on stderr and
-waits up to 15 seconds. A run within the next hour, with unchanged Codex settings, does not
-wait; after an hour Kitden asks again, because a plugin switched in Codex on another computer
-does not change your settings file. It prints one block for each agent, with the problem first:
-whether the skill list fit in that chat, and the names of the skills that did not fit (Claude
-Code and Codex). Under it, one line says what the agent has on this computer, such as `On this
-computer: 2 plugins, 4 skills`. It counts a plugin or skill once by name, on or off, as the
-Library lists it; a plugin's skills are in its plugin. The two skill numbers can differ, and a
-line under it says why: the first counts the skills Kitden found, in all your projects; a
-chat's list has one project's skills, plus the ones the agent adds, such as the skills built into Claude Code. The Claude
-Desktop app's Code tab loads what Claude Code loads, so it has one line under Claude Code, with
-the MCP servers that only the app has. Skills you set to Name only are not listed. A Codex
-skill whose plugin update changed its description after the chat is not counted as cut: the
-line says Kitden cannot tell for it. When Kitden cannot tell at all (Cursor, or no chat yet),
-the line says why. Then one line names the warnings and counts the notes, which need no fix, as the Overview folds
-them;
-`kitden show findings` prints them all. The last line says what to do: turn off the skills you
-do not use when some did not fit, or fix a warning, in `kitden open`. Before Kitden is
-installed, run these with `uvx --python 3.13` in front. A client you turned off in Kitden is
-not read and gets one line, `Codex: turned off in Kitden`; `kitden scan --json` lists it with
-`"status": "off"`. `kitden scan --json` prints everything the page shows.
+Nothing is installed and no page opens. `scan` reads your agents' settings and, for the folder you
+run it in, your last chat; with no chat there, your last chat in any folder, and it names that
+folder. It changes none of your settings.
+
+It prints one block for each agent, with the problem first: whether the skill list fit, and the
+skills that did not. Under it one line says what the agent has on this computer, such as `On this
+computer: 2 plugins, 4 skills`. The last lines count the warnings and notes and say what to do
+next. `kitden show findings` prints every note, and `kitden scan --json` prints everything the page
+shows.
+
+When Kitden has to ask Codex for its plugins, `scan` says so and waits up to 15 seconds.
 
 ## Try the sample
 
@@ -410,12 +273,9 @@ Kitden and its dependencies from source, which takes a few minutes the first tim
 Closing the tab does not end Kitden. Run `kitden` or `kitden open` to open the same page
 again: if a page is already running for your home folder, Kitden opens that one, and if not,
 it starts one in the background and opens it. A page started that way stops by itself 10
-minutes after its last tab closes, unless a change is still being written. Open it again
-after that and Kitden starts a fresh one.
+minutes after its last tab closes, unless a change is still being written.
 
-`kitden serve` runs the page in the terminal instead. It stays until you press **Ctrl+C**;
-closing the tab does not stop it. Only one page runs for a home folder, so `kitden` while
-`kitden serve` runs opens that page.
+`kitden serve` runs the page in the terminal instead. It stays until you press **Ctrl+C**.
 
 ### If Claude Code uses another folder
 
@@ -427,9 +287,7 @@ the same variable as Claude Code:
 CLAUDE_CONFIG_DIR=~/.claude-work kitden
 ```
 
-A page that is open for another folder stops, and a new one starts. Kitden does not see a variable
-set in the `env` of a settings file. Skills and plugins in a moved folder are not counted as
-Cursor's.
+Kitden does not see a variable set in the `env` of a settings file.
 
 ## Stop using Kitden
 
@@ -448,21 +306,47 @@ Kitden's own data folder, with its backups, stays until you delete it:
 
 ## Privacy and limits
 
-The short version for the plugin and the program is in [Privacy](../PRIVACY.md).
+What Kitden reads, keeps and sends is in [Privacy](../PRIVACY.md). In short:
 
-- The page runs locally at `127.0.0.1`, with a private access link. No account or telemetry.
 - Credentials go to the server they belong to, or to a gateway you move that server into.
-  Secrets you type or sign in with are kept in the macOS Keychain or the Linux keyring only;
-  the page never shows more than their first and last characters. Kitden masks secret fields and known token
-  formats in its page and logs.
-- Kitden goes online only to reach remote servers, the catalogs you open, the GitHub
-  sources you add, and the Official MCP Registry when you press **Rescan**. Nothing from a
-  catalog runs during search or download.
-- Backups stay for 30 days, and the newest 100 changes always keep theirs.
+- Secrets Kitden keeps are in the macOS Keychain or the Linux keyring: tokens you type, sign-ins,
+  and the secrets of a server you move into the gateway. The page shows no more than their first
+  and last characters. Moving a server out of the gateway writes its secrets into that client's
+  file as plain text, and the review says so.
+- Kitden does not look for tokens that sit in plain text in a client's own settings. A server
+  you move into the gateway takes its secrets to the Keychain or keyring.
+- A backup keeps a changed file as it was, secrets too, in Kitden's data folder, readable only
+  by you. Backups stay for 30 days, and the newest 100 changes always keep theirs.
 - Undo of plugin removal installs the plugin again, but does not restore its saved options.
 - Kitden writes to your home folder, its own data folder, known projects and detected client
-  settings folders. The preview shows which files will change. Project settings stay separate
-  from the shared setup.
+  settings folders. The preview shows which files will change.
+
+## What stays the same from 1.0
+
+Kitden is 0.x today, so any of this may still change; the release notes say when. From 1.0,
+these change only in a new major version:
+
+- **The commands:** `kitden` (the same as `kitden open`), `kitden serve`, `kitden demo`,
+  `kitden scan`, `kitden show` with `setup`, `findings`, `item`, `projects` and `context`, and
+  `kitden mcp`, with the options `kitden <command> --help` lists.
+- **The tools of `kitden mcp`:** `show_setup`, `list_findings`, `explain_item` and
+  `list_projects`. A gateway tool offered under its own name keeps that name while its server
+  stays in the gateway, so a server added later cannot take it.
+- **Where Kitden keeps its data:** `~/Library/Application Support/kitden` on macOS,
+  `~/.local/share/kitden` on Linux. There `gateway.json` holds the gateway's servers and rules,
+  `clients.json` the clients you turned off, and `changes` with `changes.log` each change and its
+  backups. Secrets are Keychain or keyring items of the service `kitden`.
+- **What Kitden writes in a client:** only that client's own settings, in its own format. The
+  gateway entry is named `kitden` and runs `kitden mcp`.
+- **Undo after an update:** `clients.json` and each change record say their format
+  (`"version": 1`), and files from an earlier Kitden, which have none, read the same. A change
+  made by one 1.x version can be undone by a later 1.x while its backup is kept: 30 days, and
+  the newest 100 changes always. `gateway.json` has no format version yet.
+
+What may still change in 1.x: the page, its tabs and words; the text `kitden scan` prints; the
+JSON of `kitden scan --json` and `kitden show`, which can get new fields; the other files in
+Kitden's data folder, which it keeps for itself; and how Kitden reads a client when that client
+changes its own files ([what Kitden relies on](clients.md)).
 
 ## Let your agent read your setup
 

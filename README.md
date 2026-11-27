@@ -46,11 +46,12 @@ It changes nothing until you press Apply, and every change can be undone.</p>
 
 ### See whether your skills fit
 
-Every chat starts with the list of your skills, and that list has a small budget: 1% of the context window in Claude Code (or the share you set in its settings), 2% in Codex. Past it, Claude Code sends some skills by name
-only and Codex shortens or drops them, so the agent may never reach for them. Kitden reads the
-last chat's log and shows which skills went in whole, and says how the list stands now if you added or turned off skills since. Turn off the ones you do not use, or drag the limit line to give the list more room. A skill's Details shows its description, with the part the agent did not get in grey, and how often you used it (Claude Code). A
-guess for another window is marked Estimate. Cursor gets no verdict: Kitden cannot see what it
-sends.
+Every chat starts with the list of your skills, and that list has a small budget: 1% of the
+context window in Claude Code (or the share you set), 2% in Codex. Past it, some skills go by
+name only or are left out, so the agent may never reach for them. Kitden reads the last chat's
+log and shows which skills went in whole. Under the verdict stands the simplest fix: a larger
+limit, with what it costs. Or turn off skills you do not use; a skill's Details say how often you
+used it (Claude Code). Cursor gets no verdict: Kitden cannot see what it sends.
 
 <img src="docs/images/readme/context-light.png#gh-light-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Under it the skills stand in groups by source: Built into Claude Code, 15 skills, 7,604 characters; the plugin superpowers, 2 skills, 1 showed only a name, with its Turn off switch; Your skills, 3 skills, all 3 showed only a name.">
 <img src="docs/images/readme/context-dark.png#gh-dark-mode-only" width="860" alt="Context for Claude Code on the sample. In the last chat, in a 200K window, 4 of 20 skills showed only a name; in a 1M window all 20 would fit. A bar shows the skill list against its limit of 8,000 characters. Under it the skills stand in groups by source: Built into Claude Code, 15 skills, 7,604 characters; the plugin superpowers, 2 skills, 1 showed only a name, with its Turn off switch; Your skills, 3 skills, all 3 showed only a name.">
@@ -59,7 +60,8 @@ sends.
 
 Claude Code, Codex and Cursor each keep their own settings. Kitden puts their plugins, skills,
 MCP servers and instruction files on one map, so what one agent has and another lacks shows
-at a glance. Pick an agent to see just what it loads. Add what an agent is missing, turn an item off or remove it, on the same page.
+at a glance. Add a plugin, skill or server an agent is missing, turn one off or remove it, on the
+same page. Instruction files and hooks are shown, not changed.
 
 <img src="docs/images/readme/library-light.png#gh-light-mode-only" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
 <img src="docs/images/readme/library-dark.png#gh-dark-mode-only" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
@@ -88,12 +90,13 @@ refused, not just hidden. A token or sign-in is given once and checked before Ap
   the exact edit under Show changes.
 - **Apply keeps a backup, and Undo puts it back.** Changes keeps the history of what you
   did. If a file changed since, Kitden stops instead of overwriting it.
-- **Everything stays on your computer.** The page runs at 127.0.0.1 behind a private link. No
-  account, no telemetry. Kitden goes online only for the catalogs you open (also on
-  **Rescan**), the remote servers you add, and a check for a newer Kitden, at most once a day.
-- **Secrets live in the macOS Keychain or your Linux keyring only.** The page shows no more
-  than their first and last characters.
-- **Kitden's agent tools only read.** Asking an agent to show your setup changes none of your settings.
+- **Everything stays on your computer.** No account, no telemetry. Kitden goes online only for
+  the catalogs you open, the remote servers you add, and a check for a newer Kitden, at most once
+  a day. [Privacy](https://github.com/KonstantinStarovoytov/kitden/blob/main/PRIVACY.md).
+- **Secrets Kitden keeps go to the macOS Keychain or your Linux keyring:** tokens you type,
+  sign-ins, and the secrets of a server you move into the gateway. Kitden does not look for
+  tokens already in plain text in a client's own settings, and moving a server out of the
+  gateway writes its secrets into that client's file (the review says so).
 - **Leaving is easy.** Plugins and skills you add live in each agent's own settings, and a server
   in the gateway moves back out. [How to stop using Kitden](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md#stop-using-kitden).
 
@@ -103,8 +106,8 @@ Add only servers and plugins you trust: they run with your permissions.
 
 | Feature | What it does |
 | --- | --- |
-| **Per project** | Turn a server or a tool on or off for one project only. |
-| **See what runs** | How often each tool is called, and which tools only read. |
+| **Per project** | Turn a gateway server or tool, or a Claude Code skill or plugin, on or off for one project only. |
+| **See what runs** | For tools in the gateway: how often each is called, and which only read. |
 | **Instructions in view** | Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each client loads, and where they come from. |
 | **MCP server** | `kitden mcp` lets any agent read your setup, so "show my setup" or "why does this load twice" gets a true answer. Its own tools only read. |
 | **Plugin** | For Claude Code and Codex. `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` adds six skills and no server. `/kitden:audit` lists what to turn off in the project you are in, and `/kitden:context` says whether your skills fit. The skills only read, and offer to install Kitden when it is missing; you change things on the page. [More](https://github.com/KonstantinStarovoytov/kitden/blob/main/plugins/kitden/README.md). <!-- Checked 2026-11-05: https://code.claude.com/docs/en/discover-plugins --> |
@@ -112,25 +115,23 @@ Add only servers and plugins you trust: they run with your permissions.
 ## Get started
 
 Needs **macOS or Linux**, [uv](https://docs.astral.sh/uv/getting-started/installation/) and at
-least one of **Claude Code, Codex or Cursor**. On Linux, install `libsecret-tools` (Debian,
-Ubuntu) or `libsecret` (Fedora, Arch) so Kitden can keep server secrets in your keyring.
-
-The scan at the top of this page needs no install. To try the page on a sample instead, with
-your own settings not read or changed:
+least one of **Claude Code, Codex or Cursor**. To try the page on a sample, with your own
+settings not read or changed:
 
 <!-- Release checklist: docs/readme-media.md -->
 ```bash
 uvx --python 3.13 kitden demo
 ```
 
-Install it and open it for your own setup:
+Install it and open it for your own setup (on Linux, first see the keyring line in
+[Install](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md#install)):
 
 ```bash
 uv tool install --python 3.13 kitden && kitden
 ```
 
-Or with Homebrew: `brew install konstantinstarovoytov/tap/kitden`, then `kitden`.
-Update later from the page, or with `uv tool upgrade kitden` or `brew upgrade kitden`.
+Or with Homebrew: `brew install konstantinstarovoytov/tap/kitden`, then `kitden`. See also
+[what stays the same from 1.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md#what-stays-the-same-from-10).
 
 ## Help build Kitden
 

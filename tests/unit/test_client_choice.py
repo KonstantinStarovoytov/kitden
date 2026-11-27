@@ -44,11 +44,20 @@ def test_unknown_ids_are_ignored(tmp_path):
     assert off_clients(home) == {"codex"}
 
 
+def test_a_file_from_before_the_version_reads_the_same(tmp_path):
+    home = make_home(tmp_path, *ALL)
+    _file(home).parent.mkdir(parents=True, exist_ok=True)
+    _file(home).write_text(json.dumps({"off": ["codex"]}))
+    assert off_clients(home) == {"codex"}
+    assert set_client(home, "cursor", False) == {"codex", "cursor"}
+    assert json.loads(_file(home).read_text())["version"] == 1
+
+
 def test_set_client_saves_and_reads_back(tmp_path):
     home = make_home(tmp_path, *ALL)
     assert set_client(home, "codex", False) == {"codex"}
     assert set_client(home, "cursor", False) == {"codex", "cursor"}
-    assert json.loads(_file(home).read_text()) == {"off": ["codex", "cursor"]}
+    assert json.loads(_file(home).read_text()) == {"version": 1, "off": ["codex", "cursor"]}
     assert (_file(home).stat().st_mode & 0o777) == 0o600
     assert set_client(home, "codex", True) == {"cursor"}
     assert off_clients(home) == {"cursor"}

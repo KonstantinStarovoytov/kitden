@@ -22,7 +22,7 @@ Linux. It is open source under Apache-2.0, and its code is in the same repositor
 | Skill | What it does |
 | --- | --- |
 | `show-setup` | Answers what each client loads in a project, where an item comes from and why it loads twice. |
-| `audit` | Compares what loads with the project you are in and lists what to turn off. It judges by what the project is; Kitden does not tell how often an item is used. |
+| `audit` | Compares what loads with the project you are in and lists what to turn off. It judges by what the project is, not by how often you used an item. |
 | `context` | Says whether your skills fit in the client's skill list, and which ones lost their description. |
 | `before-install` | Before you add a server, plugin or skill, looks whether a client already has it. |
 | `open` | Opens the Kitden page and gives you the link. |
