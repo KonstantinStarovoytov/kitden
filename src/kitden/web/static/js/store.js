@@ -342,15 +342,17 @@ export function afterShared(read) {
 // and the Gateway search themselves; while the page shown finds nothing of that name and the other
 // does (a server, a tool; a plugin, a skill, a marketplace), the search goes there. Any other
 // place sends it where the name is, the Library first. What Kitden has not read yet matches
-// nothing, so the search stays (readForSearch reads it).
+// nothing, so the search stays (readForSearch reads it), and so does what was read for another
+// project than the one picked.
+const readHere = (name) => Boolean(data[name]) && data.scope[name] === state.project;
 function hits(place, words) {
   const has = (name) => String(name || "").toLowerCase().includes(words);
   if (place === "library") {
-    const map = data.libraryMap;
+    const map = readHere("libraryMap") ? data.libraryMap : null;
     if (!map) return null;
     return (map.groups || []).some((g) => has(g.name) || (g.items || []).some((i) => has(i.name) || (i.parts || []).some((p) => has(p.name))));
   }
-  const view = data.gateway;
+  const view = readHere("gateway") ? data.gateway : null;
   if (!view) return null;
   const outside = Object.values(view.groups || {}).flat();
   const held = (view.gateways || []).flatMap((g) => g.servers || []);
@@ -364,9 +366,9 @@ export function searchPlace(view, q) {
   const other = view === "library" ? "gateway" : "library";
   return hits(view, words) === false && hits(other, words) ? other : view;
 }
-// What a search looks in, read once if this visit has not read it. Resolves when both are read.
+// What a search looks in, read for the picked project if it is not yet. Resolves when both are.
 export function readForSearch() {
-  return Promise.all([data.gateway || loadGateway(), data.libraryMap || loadLibraryMap()]).catch(() => {});
+  return Promise.all([readHere("gateway") || loadGateway(), readHere("libraryMap") || loadLibraryMap()]).catch(() => {});
 }
 
 export async function loadOverview() {

@@ -402,9 +402,11 @@ function start() {
     // The Library and the Gateway find on themselves; a search goes to the other when only the
     // other has that name, and from any other place to where the name is.
     go(searchPlace(state.view, q), { q });
-    // What was not read yet may hold the name: once read, the same search may go there.
+    // What was not read yet may hold the name: once read, the same search may go there, unless
+    // the person has typed on or gone to another place meanwhile.
+    const from = state.view;
     readForSearch().then(() => {
-      if ($("#q").value.trim() !== q) return;
+      if ($("#q").value.trim() !== q || state.view !== from) return;
       const place = searchPlace(state.view, q);
       if (place !== state.view) go(place, { q });
     });

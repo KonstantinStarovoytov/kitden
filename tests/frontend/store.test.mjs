@@ -367,6 +367,7 @@ test('one search box: a search goes where something of that name is, the Gateway
   try {
     data.libraryMap = { groups: [{ name: 'demo-market', items: [{ kind: 'plugin', name: 'superpowers', parts: [{ name: 'brainstorming' }] }, { kind: 'skill', name: 'playwright' }] }] };
     data.gateway = { groups: { move: [{ name: 'filesystem' }], local: [{ name: 'playwright' }] }, gateways: [{ servers: [{ name: 'files', tool_list: [{ name: 'read_file' }] }] }] };
+    Object.assign(data.scope, { libraryMap: state.project, gateway: state.project });
     // From a page with no search of its own: where the name is, the Library first.
     assert.equal(searchPlace('overview', 'filesystem'), 'gateway');
     assert.equal(searchPlace('context', 'read_file'), 'gateway');
@@ -380,6 +381,10 @@ test('one search box: a search goes where something of that name is, the Gateway
     assert.equal(searchPlace('gateway', 'playwright'), 'gateway');
     assert.equal(searchPlace('library', 'nothing-here'), 'library');
     assert.equal(searchPlace('gateway', ''), 'gateway');
+    // Read for another project (Lantern on #239): it does not count, so the search stays.
+    data.scope.gateway = 'other';
+    assert.equal(searchPlace('library', 'filesystem'), 'library');
+    data.scope.gateway = state.project;
     // Not read yet: the search stays.
     data.gateway = null;
     assert.equal(searchPlace('library', 'filesystem'), 'library');

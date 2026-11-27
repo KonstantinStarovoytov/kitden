@@ -1228,6 +1228,8 @@ def test_rows_say_they_open_details_and_search_names_its_scope():
     assert 'SEARCH_WORDS = "Search skills, plugins, servers and tools"' in script("app.js")
     assert "Search plugins and skills to add" not in script("app.js")
     assert "searchPlace(state.view, q)" in script("app.js")
+    # Lantern on #239: a read that ends after the person went elsewhere moves nothing.
+    assert 'if ($("#q").value.trim() !== q || state.view !== from) return;' in script("app.js")
     assert "Find an item" not in INDEX
 
 
