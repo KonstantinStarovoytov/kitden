@@ -610,7 +610,7 @@ function commandRow(command) {
 }
 
 // Copy a command to the clipboard; the button and live region say whether it worked.
-function copyText(text, node) {
+export function copyText(text, node) {
   const said = (words) => { node.textContent = words; say(words); };
   const clipboard = globalThis.navigator && navigator.clipboard;
   if (!clipboard) return Promise.resolve(said(NOT_COPIED));

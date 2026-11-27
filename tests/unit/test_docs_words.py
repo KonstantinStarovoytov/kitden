@@ -24,7 +24,8 @@ def test_docs_promise_no_undo_they_cannot_keep():
     guide = " ".join((ROOT / "docs/guide.md").read_text().split())
     assert "Look at each change first. Apply keeps a backup for Undo." in guide
     for name in ("README.md", "docs/guide.md"):
-        assert "any time" not in (ROOT / name).read_text(), name
+        # As words of their own: "how many times" is not the promise.
+        assert not re.search(r"\bany time\b", (ROOT / name).read_text()), name
 
 
 def test_readme_is_short_and_the_guide_names_the_page_words():
@@ -134,3 +135,11 @@ def test_the_security_page_says_how_to_report_in_private():
     text = " ".join((ROOT / "SECURITY.md").read_text().split())
     assert "https://github.com/KonstantinStarovoytov/kitden/security/advisories/new" in text
     assert "do not open a public issue" in text.lower()
+
+
+def test_guide_names_the_search_words_and_what_a_move_in_gives():
+    # Lantern on #231: the page's new words are in the guide too.
+    guide = " ".join((ROOT / "docs/guide.md").read_text().split())
+    assert '"Search servers and tools…"' in guide
+    assert '"Search skills, plugins and marketplaces…"' in guide
+    assert '"In the gateway you can turn each of its tools on or off."' in guide

@@ -539,6 +539,9 @@ input:focus-visible + .chk { outline: 2px solid var(--focus); outline-offset: 2p
 .ov-cards { display: flex; flex-direction: column; gap: 8px; }
 .ov-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
 .ov-card.leaving { overflow: hidden; pointer-events: none; }
+/* A row for many cards of one kind: its cards sit under it, set in, as a note row's items. */
+.ov-card-fold { display: flex; flex-direction: column; gap: 8px; }
+.ov-fold-cards { padding-left: 23px; }
 .ov-card .itile { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--wire); border-radius: 6px; background: var(--inset); color: var(--ink-2); }
 .ov-card > .client-mark, .ov-card > .mono-mark { --tile: 28px; flex: none; }
 .ov-card .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -1322,6 +1325,8 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .drawer .btn.pending, .drawer .btn.primary.pending { background: var(--preview-fill); border-color: var(--preview-line); color: var(--ink); }
 .ctx-room, .ctx-note { max-width: 900px; margin: -14px 0 22px; font-size: 12px; color: var(--ink-3); }
 .ctx-room { font-size: 13px; color: var(--ink-2); }
+/* The fix under the verdict: its words, then its button. */
+.ctx-fix { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; max-width: 900px; margin: -14px 0 22px; font-size: 13px; color: var(--ink-2); }
 /* The zoom picture: the window strip, its slice opening into the skill list's bar, the limit line
    and the hatched part past it. Pieces move 240 ms --calm when the bar is drawn again (context.js). */
 .ctx-zoom { max-width: 900px; }

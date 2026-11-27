@@ -95,10 +95,10 @@ def test_a_codex_server_that_is_off_shows_as_off_and_turns_on(page, demo):
     row = page.locator(".tg-row", has_text="sqlite").first
     expect(row).to_contain_text("Off in Codex")
     # The header search finds it on the Gateway.
-    page.get_by_role("searchbox", name="Search your setup and marketplaces").fill("sqlite")
+    page.get_by_role("searchbox", name="Search servers and tools").fill("sqlite")
     expect(page.get_by_role("main")).not_to_contain_text("No matches")
     expect(row).to_be_visible()
-    page.get_by_role("searchbox", name="Search your setup and marketplaces").fill("")
+    page.get_by_role("searchbox", name="Search servers and tools").fill("")
     row.click()
     details = page.get_by_role("complementary", name="Details")
     expect(details).to_contain_text("Off in Codex")

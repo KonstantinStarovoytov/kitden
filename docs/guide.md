@@ -10,6 +10,9 @@ they can run code with your permissions. Undo does not reverse actions a tool al
 
 Open **Library** and choose **All projects** or one project. **List → Differences** shows
 what differs between Claude Code, Codex and Cursor. Click an item for its **Details**.
+The search box at the top says what it finds from the tab you are on: on the **Gateway**,
+"Search servers and tools…" finds on that page; on every other tab, "Search skills, plugins and
+marketplaces…" opens the Library with the matches.
 On the map, a group of two or more starts folded as a stack of cards. Press a stack to open it;
 a big group shows five at a time, with the rest in the stack below. **Collapse** folds it again.
 When you select a client or point at it, a stack that holds some of its items shows those in
@@ -32,7 +35,11 @@ When a client loads one plugin or skill more than once, its row counts the copie
 loads it 3 times"), the same number as the Overview's card. **Keep one…** on that card opens the
 item in the Library with its **Details**, which list each copy with its folder and whose it is.
 **Keep this one…** beside a copy adds the removal of the others to the preview; a copy in another
-client's folder goes from that client too, and the preview says so.
+client's folder goes from that client too, and the preview says so. When four or more such
+cards come at once, the Overview folds them into one row ("35 skills load more than once"), and
+its **Show…** opens them, so they do not push the other cards down. The Overview puts what costs
+you most first: a skill list that did not fit, then a change that came undone, then a file
+Kitden could not read (its **Copy path** gives the file's path), then copies.
 
 Codex also loads skills in sub-folders of its skills folders, even inside another skill's folder.
 Each has a row and a switch of its own. Turning off the outer skill leaves the ones inside it on;
@@ -108,13 +115,21 @@ skills inside its plugins are not listed, and the card says so. With **All proje
 card names the folder of the last chat ("Last chat · Nov 6 · in atlas"): its list held that
 project's skills and followed its settings. A project that sets its own share shows that share.
 
+Under the verdict stands the simplest fix: the suggested limit, what it costs in every chat, and
+its **Set to …** button. When Kitden offers no new limit for a list that did not fit, the same
+place says why (for example, even 4% of the window would not fit every description: set some
+skills to **Name only** or **Off**). The strip at the top of the picture is the whole context
+window; Kitden measures only the skill list in it, not the system prompt, MCP tools, instruction
+files, hooks or the chat, and the strip says so.
+
 For Claude Code and Codex the skills stand in groups by where they come from, with the Library's
 names: each plugin (with its marketplace), **Your skills**, a project's skills, the plugins from your
 Claude account, and **Built into Claude Code**. Each group's header says how many skills it has, how
 many characters of the list they take (Codex: tokens), and how many showed only a name or were cut,
 in the same numbers as the bar and the sentence above: the last chat's, or the estimate when your
-setup changed or a change waits. The group that takes the most comes first, so the first thing on
-the page is the most useful thing to turn off. A plugin's header has its switch, **Turn off**: it
+setup changed or a change waits. The groups you can turn off come first, the one that takes the
+most first; **Built into Claude Code**, which has no switch for all of its skills, comes after
+them. A plugin's header has its switch, **Turn off**: it
 adds the same change as the Library's, and the estimate, the bar and the limit line count it at
 once, before you apply it. Its name opens the plugin's Details in the Library. A group without a
 switch says why when you open it, and where to turn it off. Press a header to open the group to its
@@ -130,7 +145,9 @@ Skills
 whose descriptions are sent go from grey to orange with the length of their description, so the
 few that take most of the list stand out. For Claude Code a skill's size also counts its
 `when_to_use`, as Claude Code does. A skill's **Details** shows its description, with
-the part the agent did not get in grey. There you can also
+the part the agent did not get in grey. For Claude Code it also says how often you used the
+skill and when you last did, from Claude Code's own count, so you can tell which ones you do not
+use. There you can also
 switch it to **On**, **Name only** (Claude Code) or **Off** where the client
 allows it, the same switch as in the Library; a Codex skill that is off turns on again here too.
 Cursor has no switch, and its Details say what to do instead. A skill built into Claude Code, such as `dataviz`, is marked
@@ -151,7 +168,8 @@ after Apply, even when the page still shows the last chat's list, which had it (
 is faded then), and after your next chat, when it is no longer in the list. That holds for your own and built-in Claude Code skills and for the skills
 of a plugin that is off. A skill that a project's own settings set has no switch here.
 The change goes through preview, **Apply** and **Undo** like any other. The **Overview** shows a card when a last chat's list
-did not fit. `kitden show context`, which the plugin's `context` skill runs, also prints each
+did not fit, first of all its cards; when Context suggests a limit, the card's button adds it to
+the preview, and its line says what it costs. `kitden show context`, which the plugin's `context` skill runs, also prints each
 skill's description, so your agent sees it too. With no chat in the current folder, it shows the
 last chat in any folder and names that folder; with `--project` it stays with that folder.
 
@@ -195,7 +213,9 @@ counted too, and the details say how many. Changes waiting in the preview count 
 skills off, set them to Name only or turn them on again, and the line's steps and note count the
 same skills as the estimate above. The handle stays while they wait, even when everything fits.
 A count gives an estimate for a switch too: "every skill would keep its description" or "about 3
-of 92 skills would show only a name".
+of 92 skills would show only a name". When that count differs from the last chat's own number,
+the sentence "Without the change, estimate: …" stands beside it, so you compare an estimate with
+an estimate.
 
 ### When your setup changed after the last chat
 
@@ -238,7 +258,8 @@ settings (`~/.claude/settings.json`, or the folder `CLAUDE_CONFIG_DIR` names), f
 shows the real list. Kitden does not offer it when `SLASH_COMMAND_TOOL_CHAR_BUDGET` is set, when
 a project's own settings file sets the share, when the limit of the last chat is not known, when
 everything fits, when by its count everything fits although the chat left descriptions out, or
-when even 4% would not fit every description; "How this is counted" then says which. For
+when even 4% would not fit every description. When the list did not fit, the sentence under the
+verdict says which; otherwise "How this is counted" does. The limit's Details say it too. For
 Codex: when there is no estimate, when everything fits, or when even 10,000 tokens would not fit
 every description.
 
@@ -269,6 +290,9 @@ See [online sources](discovery.md) for formats and limits.
 ## Share a server between your agents
 
 Open **Gateway** to share MCP servers and turn individual tools on or off for each project.
+The Overview offers up to three servers outside the gateway as **Move in…** cards ("In the
+gateway you can turn each of its tools on or off."), and one card for the rest; a server outside
+the gateway is a normal setup, not a fault.
 Pick several with a band or Shift-click and drag them in together. Library works on its own.
 An agent that calls a tool that is off, by a switch, a project rule or strict mode, is told
 "<name> is turned off in Kitden."

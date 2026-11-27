@@ -31,6 +31,14 @@ What Kitden does today and what comes next. Ideas and bugs:
   its notes as the Overview folds them. The Overview's server card says how many more can move in;
   Changes counts an Apply of several rows as the toast does; a skill named like a built-in one no
   longer hides it on Context (#230).
+- **The worst problem first, with its fix:** the Overview puts the skill list card first, with
+  Context's suggested limit as its button and its cost; four or more cards of one kind fold into
+  one row; a file Kitden could not read says where it is and offers **Copy path**; the gateway
+  cards say what a move gives instead of calling the setup a fault. Context shows the fix, or why
+  there is none, right under the verdict, puts the built-in group after the ones you can turn off,
+  says why **Your skills** has no group switch, shows how often you used a Claude Code skill, says
+  plainly that the rest of the window is not measured, and compares an estimate with an estimate.
+  The header search says what it finds from each tab.
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,

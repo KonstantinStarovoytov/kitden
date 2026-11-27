@@ -25,7 +25,7 @@ const PILL_NUMBERS = "The number beside a skill is the length of its description
 const ESTIMATE = /^(After Apply, estimate:|Estimate:)/;
 
 // The picture's own words; the rest is the server's.
-const PICTURE = { window: "Context window", rest: "Rest of the window", list: "Skill list", now: "Skill list now, estimate", sent: "Sent", free: "Free" };
+const PICTURE = { window: "Context window", rest: "Rest of the window: not measured (system prompt, MCP tools, instruction files, hooks, the chat)", list: "Skill list", now: "Skill list now, estimate", sent: "Sent", free: "Free" };
 const OVER = { claude_code: "Over the limit: not sent", codex: "Over the limit: cut off" };
 const HOW = "How this is counted";
 // The skill list limit (specs skill-list-limit and limit-line-control): the limit line on the bar is
@@ -173,6 +173,13 @@ export function renderContext(main, { again = false } = {}) {
   // expects now. The picture and the sides show that estimate; the verdict and the card stay the
   // chat's fact.
   if (index === 0 && !after) for (const line of card.changed || []) main.append(sentence(line, "ctx-room"));
+  // The estimate after Apply next to the same estimate for the setup as it is, when the count
+  // does not rebuild the chat: estimate with estimate, not with the chat's own number.
+  if (after && after.before) main.append(sentence(after.before, "ctx-room"));
+  // The cheapest fix where the problem is named: the suggested limit with its cost, or why there
+  // is none (the same words leave "How this is counted").
+  const fix = index === 0 ? fixFor(card) : null;
+  if (fix) main.append(fix);
   const now = index === 0 && !after && shown ? card.now || null : null;
   const room = shown && !after ? (now || shown.result).room : null;
   if (room) main.append(sentence(room, "ctx-room"));
@@ -195,7 +202,8 @@ export function renderContext(main, { again = false } = {}) {
     const view = { result, base: now || shown.result, fact: card.windows[0].result, estimate, planned: Boolean(planned), states };
     main.append(groupsFor(card, view, after, heat));
   } else if (card.skills.length) main.append(sidesFor(card, result, after, estimate, heat));
-  if (card.how.length) main.append(howFor(card.how));
+  const how = fix && card.limit.why ? card.how.filter((line) => line !== card.limit.why) : card.how;
+  if (how.length) main.append(howFor(how));
   markAll();
   followDraft();
 }
@@ -691,6 +699,8 @@ function openSkill(client, name) {
   if (plugin) facts.push({ label: "Plugin", value: plugin });
   if (skill.size) facts.push({ label: "Size", value: `${fmt(skill.size)} characters` });
   if (skill.source) facts.push({ label: "Source", value: skill.source });
+  // Claude Code's own count of its use: what to turn off.
+  if (skill.used) facts.push({ label: "Used", value: skill.used });
   const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(card, skill.plugin_switch, plugin) : null;
   // The Library's own project rows and Remove for this skill in this client, where the Library
   // shows the same scope.
@@ -1040,10 +1050,25 @@ function openLimit(client) {
     text.append(...limit.counted.map((line) => el("p", "ctx-desc-note ctx-counted", line)));
   }
   // With nothing to raise, only the limit now and Back.
-  const content = detailsCard({ kind: LIMIT.kind, title: LIMIT.title, facts, why: limit.offer ? limit.note : null, text, actions });
+  const content = detailsCard({ kind: LIMIT.kind, title: LIMIT.title, facts, why: limit.offer ? limit.note : limit.why, text, actions });
   openPanel(content);
   panelState.current = { type: "context-limit", client };
   keepFrom(() => openLimit(client), content);
+}
+
+// The fix under the verdict: the suggested limit ("1.1%: all 20 skills get their description.
+// About 650 more characters in every chat (about 160 tokens).") with its Set button, the one the
+// limit's Details have; or, when the list did not fit and there is none, why. Null when nothing
+// needs fixing.
+function fixFor(card) {
+  const limit = card.limit;
+  if (!limit) return null;
+  const box = el("p", "ctx-fix");
+  if (limit.offer) {
+    box.append(el("span", null, `${limit.offer.say}. ${limit.offer.cost}.`), limitButton(card.client, limit.offer, true, limit.param || "fraction"));
+  } else if (limit.why && card.lamp === "warn") box.append(el("span", null, limit.why));
+  else return null;
+  return box;
 }
 
 // "How this is counted": folded, with the server's lines; it stays open across a redraw.
