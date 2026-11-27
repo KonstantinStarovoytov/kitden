@@ -442,7 +442,7 @@ test('hover or focus on a card focuses the setup map on its path', () => {
 test('the notes fold opens and closes and is hidden at 0', async () => {
   queue('/api/findings', { status: 200, json: [
     { type: 'same_name_other_source', severity: 'info', names: ['docs'], items: ['i1'], clients: ['codex'] },
-    { type: 'bypasses_gateway', severity: 'info', names: ['docs'], items: ['i1'], clients: ['codex'] },
+    { type: 'same_in_other_clients', severity: 'info', names: ['docs'], items: ['i1'], clients: ['codex'] },
     { type: 'cross_loaded', severity: 'info', names: ['tidy'], items: ['i2'], clients: ['cursor'] },
     { type: 'duplicate_in_client', severity: 'warning', names: ['x'], items: ['i3'], clients: ['cursor'] },
   ] });
@@ -461,7 +461,7 @@ test('the notes fold opens and closes and is hidden at 0', async () => {
   assert.equal(box.animations[0].options.duration, 280);
   await flush();
   // One plain sentence per item, with the info icon; a warning is no note.
-  assert.deepEqual(box.children.map(text), ['docs has the same name as an entry from another source and is not connected to the gateway.', 'tidy loads from another client.']);
+  assert.deepEqual(box.children.map(text), ['docs has the same name as an entry from another source and is set up in more than one client.', 'tidy loads from another client.']);
   assert.equal(box.children[0].children[0].dataset.icon, 'info');
   assert.ok(box.children.every((n) => n.animations.length === 1 && n.animations[0].options.duration === 260));
   fire(fold, 'click');
@@ -562,8 +562,8 @@ test('notes are grouped by item, each with its clients', () => {
   const note = (type, names, clients) => ({ type, names, clients, items: ['i'], severity: 'info' });
   const groups = noteGroups([
     note('same_name_other_source', ['docs', 'docs'], ['claude_code', 'codex']),
-    note('bypasses_gateway', ['docs'], ['claude_code']),
-    note('bypasses_gateway', ['docs'], ['codex']),
+    note('same_in_other_clients', ['docs'], ['claude_code']),
+    note('same_in_other_clients', ['docs'], ['codex']),
     note('unknown_state', ['a', 'b'], ['codex']),
   ]);
   assert.deepEqual(groups.map((g) => [g.name, g.clients, g.notes.length]), [
@@ -574,6 +574,20 @@ test('notes are grouped by item, each with its clients', () => {
   assert.equal(groups[0].first.type, 'same_name_other_source');
 });
 
+test('a skill and a server of one name are two notes, each naming its kind', () => {
+  // 02-R07: sentry the skill loads from another client; sentry the server is in two clients.
+  const groups = noteGroups([
+    { type: 'cross_loaded', names: ['sentry'], kinds: ['skill'], clients: ['cursor'], items: ['s'], severity: 'info' },
+    { type: 'same_in_other_clients', names: ['sentry'], kinds: ['mcp_server'], clients: ['claude_code', 'codex'], items: ['m'], severity: 'info' },
+    { type: 'cross_loaded', names: ['tidy'], kinds: ['skill'], clients: ['cursor'], items: ['t'], severity: 'info' },
+  ]);
+  assert.deepEqual(groups.map(noteSentence), [
+    'sentry (skill) loads from another client.',
+    'sentry (MCP server) is set up in more than one client.',
+    'tidy loads from another client.',
+  ]);
+});
+
 // The same example as tests/unit/test_overview.py `test_note_count_folds_repeats`: five items that
 // load from another client (one row), three with an unreadable state (three rows), and "docs" with
 // two notes (one row). Five rows in all.
@@ -581,7 +595,7 @@ const REPEATS = [
   ...['a', 'b', 'c', 'd', 'e'].map((name) => ({ type: 'cross_loaded', names: [name], clients: ['codex'], items: ['i'], severity: 'info' })),
   ...['u1', 'u2', 'u3'].map((name) => ({ type: 'unknown_state', names: [name], clients: ['cursor'], items: ['i'], severity: 'info' })),
   { type: 'same_name_other_source', names: ['docs'], clients: ['codex'], items: ['i'], severity: 'info' },
-  { type: 'bypasses_gateway', names: ['docs'], clients: ['codex'], items: ['i'], severity: 'info' },
+  { type: 'same_in_other_clients', names: ['docs'], clients: ['codex'], items: ['i'], severity: 'info' },
 ];
 
 test('items with the same words fold into one row from four on', () => {
@@ -593,14 +607,14 @@ test('items with the same words fold into one row from four on', () => {
     'u1 may be on or off; Kitden cannot read which.',
     'u2 may be on or off; Kitden cannot read which.',
     'u3 may be on or off; Kitden cannot read which.',
-    'docs has the same name as an entry from another source and is not connected to the gateway.',
+    'docs has the same name as an entry from another source and is set up in more than one client.',
   ]);
   // Exactly four fold; three stay single.
   const four = (n) => noteRows(noteGroups(REPEATS.slice(0, n)));
   assert.equal(four(4).length, 1);
   assert.equal(four(3).length, 3);
   // Every kind of note has its plural words.
-  const types = ['cross_loaded', 'same_in_other_clients', 'same_name_other_source', 'scope_override', 'unknown_state', 'bypasses_gateway'];
+  const types = ['cross_loaded', 'same_in_other_clients', 'same_name_other_source', 'scope_override', 'unknown_state'];
   const many = types.map((type) => rowSentence(noteRows(noteGroups(['a', 'b', 'c', 'd'].map((name) => ({ type, names: [name], clients: [], items: ['i'], severity: 'info' }))))[0]));
   assert.deepEqual(many, [
     '4 items load from another client.',
@@ -608,7 +622,6 @@ test('items with the same words fold into one row from four on', () => {
     '4 items have the same name as an entry from another source.',
     '4 items have one definition that replaces another.',
     '4 items may be on or off; Kitden cannot read which.',
-    '4 items are not connected to the gateway.',
   ]);
 });
 

@@ -394,7 +394,6 @@ const NOTE_WORDS = {
   same_name_other_source: { one: "has the same name as an entry from another source", many: "have the same name as an entry from another source" },
   scope_override: { one: "has one definition that replaces another", many: "have one definition that replaces another" },
   unknown_state: { one: "may be on or off; Kitden cannot read which", many: "may be on or off; Kitden cannot read which" },
-  bypasses_gateway: { one: "is not connected to the gateway", many: "are not connected to the gateway" },
 };
 const noteWords = (type) => NOTE_WORDS[type] || { one: `has a note: ${type.replaceAll("_", " ")}`, many: `have a note: ${type.replaceAll("_", " ")}` };
 
@@ -467,26 +466,34 @@ function fillNotes(list, lift) {
   });
 }
 
-// The notes by item: one group per name, in the order first seen. A note about several names
-// (unknown on/off state) joins each name's group. A group has the clients of all its notes, the
-// distinct note words, and its first note for opening its item.
+// The notes by item: one group per name and kind (a skill and a server of one name are two), in
+// the order first seen. A note about several names (unknown on/off state) joins each name's group.
+// A group has the clients of all its notes, the distinct note words, and its first note for
+// opening its item. Where one name has two kinds, each group's `label` names its kind.
+const KIND_NAMES = { skill: "skill", mcp_server: "MCP server", plugin: "plugin", hook: "hook" };
 export function noteGroups(findings) {
   const groups = new Map();
   for (const finding of findings) {
     const words = noteWords(finding.type);
-    for (const name of new Set(finding.names)) {
-      if (!groups.has(name)) groups.set(name, { name, clients: [], notes: [], first: finding });
-      const group = groups.get(name);
+    const kinds = finding.kinds || [];
+    const keys = new Map((finding.names || []).map((name, at) => [`${kinds[at] || ""}:${name}`, [name, kinds[at] || ""]]));
+    for (const [key, [name, kind]] of keys) {
+      if (!groups.has(key)) groups.set(key, { name, kind, label: name, clients: [], notes: [], first: finding });
+      const group = groups.get(key);
       for (const client of finding.clients || []) if (!group.clients.includes(client)) group.clients.push(client);
       if (!group.notes.includes(words)) group.notes.push(words);
     }
   }
-  return [...groups.values()];
+  const all = [...groups.values()];
+  for (const group of all) {
+    if (all.some((other) => other !== group && other.name === group.name)) group.label = `${group.name} (${KIND_NAMES[group.kind] || group.kind})`;
+  }
+  return all;
 }
 
-// "docs has the same name as an entry from another source and is not connected to the gateway."
+// "docs has the same name as an entry from another source and is set up in more than one client."
 export function noteSentence(group) {
-  return `${group.name} ${joinWords(group.notes.map((words) => words.one))}.`;
+  return `${group.label || group.name} ${joinWords(group.notes.map((words) => words.one))}.`;
 }
 
 // The rows of the fold: items with exactly the same words (FOLD_FROM or more of them) are one

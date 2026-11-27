@@ -55,8 +55,9 @@ def test_attention_cards_and_the_notes_count(home):
     data = overview(build_inventory(home), None)
     assert [c["name"] for c in _cards(data, "attention")] == ["docker-expert", "superpowers"]
     assert data["counts"]["attention"] == 2
-    # 14 names have notes; those with the same words fold into one row each (FOLD_FROM or more).
-    assert data["notes"] == 4
+    # The items with notes; those with the same words fold into one row each (FOLD_FROM or more).
+    # Servers outside the gateway are not notes.
+    assert data["notes"] == 3
 
 
 def test_no_card_shows_a_file_path(home, tmp_path):
@@ -300,8 +301,8 @@ def test_duplicate_cards_are_in_name_order_then_client_order():
 
 
 def test_notes_count_rows_not_findings(tmp_path):
-    home = build_demo_home(tmp_path, "medium")  # 16 notes about 14 names: docs has three
-    assert overview(build_inventory(home), None)["notes"] == 5
+    home = build_demo_home(tmp_path, "medium")  # more notes than names: docs has two
+    assert overview(build_inventory(home), None)["notes"] == 4
 
 
 def test_the_notes_count_is_the_rows_the_page_draws(home):
@@ -309,8 +310,19 @@ def test_the_notes_count_is_the_rows_the_page_draws(home):
         count = page.get("/api/overview").json()["notes"]
         findings = page.get("/api/findings").json()
     names = {n for f in findings if f["severity"] == "info" for n in f["names"]}
-    assert any(f["type"] == "bypasses_gateway" for f in findings)
     assert count <= len(names)
+
+
+def test_the_notes_do_not_count_servers_outside_the_gateway(home):
+    """A third count of servers outside the gateway ("N items are not connected to the gateway")
+    is gone (02-R06): the Can improve card says how many can move in, the Gateway shows them."""
+    held = [{"name": "kept", "kind": "local", "tools": 0}]
+    with page_for(home) as page:
+        findings = page.get("/api/findings").json()
+    assert not [f for f in findings if f["type"] == "bypasses_gateway"]
+    data = overview(build_inventory(home), None, held=held)
+    info = [f for f in find_findings(build_inventory(home), None) if f.severity is Severity.INFO]
+    assert data["notes"] == note_count(info)
 
 
 def _note(kind, *names):
@@ -922,3 +934,20 @@ def test_a_largest_share_that_leaves_some_says_so_on_the_card():
         "45 skills showed only a name in your last Claude Code chat. Set to 4% leaves 21 with "
         "only a name: about 24,000 more."
     )
+
+
+def test_a_skill_and_a_server_of_one_name_are_two_note_rows():
+    """sentry the skill loads from another client; sentry the server is in two clients. One
+    row would say both of one thing (02-R07): each kind is its own row."""
+    skill = Finding(
+        FindingType.CROSS_LOADED, Severity.INFO, ("s",), "x", names=("sentry",), kinds=("skill",)
+    )
+    server = Finding(
+        FindingType.SAME_IN_OTHER_CLIENTS,
+        Severity.INFO,
+        ("m",),
+        "x",
+        names=("sentry",),
+        kinds=("mcp_server",),
+    )
+    assert note_count([skill, server]) == 2

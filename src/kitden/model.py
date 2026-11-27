@@ -201,6 +201,7 @@ class Finding:
     names: tuple[str, ...] = ()
     client: str | None = None
     clients: tuple[str, ...] = ()  # every client the finding is about; not part of the id
+    kinds: tuple[str, ...] = ()  # each item's kind, beside `names` ("skill", "mcp_server")
 
     def __post_init__(self) -> None:
         if not self.items:

@@ -29,7 +29,7 @@ from kitden.model import (
     _hash,
 )
 from kitden.views.effective import client_order
-from kitden.views.findings import base_name, find_bypasses, find_findings
+from kitden.views.findings import base_name, find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.library_map import copy_choices, has_own_rules, library_map
 from kitden.views.setup_server import ENABLE_KEYS, kitden_on, setup_server_state
@@ -397,13 +397,16 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
 
 def note_count(findings: Sequence[Any]) -> int:
     """The rows the folded notes draw, of findings or anything with their `names` and `type`.
-    An item is one name; the words of its notes are its distinct note types, in the order they
-    come. Items with the same words (FOLD_FROM or more of them) are one row; every other item
-    has a row of its own (overview.js `noteRows`)."""
-    words: dict[str, list[str]] = {}
+    An item is one name of one kind (a skill and a server of one name are two items); the
+    words of its notes are its distinct note types, in the order they come. Items with the same
+    words (FOLD_FROM or more of them) are one row; every other item has a row of its own
+    (overview.js `noteRows`)."""
+    words: dict[tuple[str, str], list[str]] = {}
     for finding in findings:
-        for name in dict.fromkeys(finding.names):
-            seen = words.setdefault(name, [])
+        kinds = getattr(finding, "kinds", ()) or ()
+        keys = [(kinds[at] if at < len(kinds) else "", n) for at, n in enumerate(finding.names)]
+        for key in dict.fromkeys(keys):
+            seen = words.setdefault(key, [])
             if str(finding.type) not in seen:
                 seen.append(str(finding.type))
     same = Counter(tuple(w) for w in words.values())
@@ -451,8 +454,9 @@ def overview(
     if held and not problem:
         cards += _connects(inventory)
 
-    # The notes the page lists: the info findings of /api/findings, gateway bypasses too.
-    info = [f for f in findings + find_bypasses(inventory, project) if f.severity is Severity.INFO]
+    # The notes the page lists: the info findings of /api/findings. A server outside the gateway
+    # is not a note: the card above counts the ones that can move in.
+    info = [f for f in findings if f.severity is Severity.INFO]
     setup = _setup_map(inventory, adapters or {}, project, held, gateway_rules, bool(problem))
     return {
         "cards": cards,
