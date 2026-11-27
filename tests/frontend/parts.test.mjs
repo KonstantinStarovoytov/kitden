@@ -547,6 +547,11 @@ test('a hint seen on an earlier visit folds behind its "i": the words show on ho
     const info = line.children[0];
     assert.deepEqual([info.tag, info.getAttribute('aria-label')], ['button', 'Seen before.']);
     assert.equal(line.children.at(-1).textContent, 'Seen before.');
+    // A hint with buttons (picked tools) never folds and is not kept (Lantern on #239).
+    const before = stored['kitden-hints-seen'];
+    setHint('2 tools picked', [globalThis.document.createElement('button')]);
+    assert.equal(line.classList.contains('folded'), false);
+    assert.equal(stored['kitden-hints-seen'], before);
   } finally {
     globalThis.document.getElementById = find;
     globalThis.localStorage = had;

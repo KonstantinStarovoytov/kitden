@@ -293,7 +293,9 @@ export function setHint(text, actions = []) {
   const line = document.getElementById("hint");
   line.replaceChildren();
   line.hidden = !text;
-  const folded = Boolean(text) && foldsNow(text);
+  // A hint with buttons (picked tools: "2 tools picked", Turn off, Clear) is about what you do
+  // now: it never folds, and is not kept as seen.
+  const folded = Boolean(text) && !actions.length && foldsNow(text);
   line.classList.toggle("folded", folded);
   if (folded) {
     const info = el("button", "hint-i");
