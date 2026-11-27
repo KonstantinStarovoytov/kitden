@@ -367,10 +367,11 @@ export function searchPlace(view, q) {
   return hits(view, words) === false && hits(other, words) ? other : view;
 }
 // What a search looks in, read for the picked project if it is not yet. Resolves when both are.
-// The place shown reads its own (a second read would undo the Library's own, Lantern on #239).
+// The Library's map joins a read that runs (a second one would undo the Library's own, Lantern on
+// #239).
 export function readForSearch() {
-  const read = (name, view, load) => readHere(name) || state.view === view || load();
-  return Promise.all([read("gateway", "gateway", loadGateway), read("libraryMap", "library", loadLibraryMap)]).catch(() => {});
+  const library = readHere("libraryMap") || readLibraryMap();
+  return Promise.all([readHere("gateway") || loadGateway(), library]).catch(() => {});
 }
 
 export async function loadOverview() {

@@ -393,16 +393,18 @@ test('one search box: a search goes where something of that name is, the Gateway
   }
 });
 
-test('a search reads what it looks in, but not what the place shown reads itself', async () => {
+test('a search reads what it looks in, and joins the Library map read that runs', async () => {
   // Lantern on #239: a second Library map read undid the Library's own, which then never drew.
   const was = { view: state.view, libraryMap: data.libraryMap, gateway: data.gateway };
   try {
     Object.assign(data, { libraryMap: null, gateway: null });
     state.view = 'library';
     asked.length = 0;
+    const own = readLibraryMap(); // the Library's own read, still running
     await readForSearch();
+    await own;
     assert.ok(asked.some((url) => url.startsWith('/api/gateway-view')));
-    assert.ok(!asked.some((url) => url.startsWith('/api/library-map')));
+    assert.equal(asked.filter((url) => url.startsWith('/api/library-map')).length, 1);
   } finally {
     state.view = was.view;
     Object.assign(data, { libraryMap: was.libraryMap, gateway: was.gateway });
