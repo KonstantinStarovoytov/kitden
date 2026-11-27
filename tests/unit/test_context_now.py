@@ -942,3 +942,14 @@ def test_a_cut_skills_details_name_the_fix_context_names(home):
     cut_chat(home)
     notes = {s["name"]: s["note"] for s in claude(home)["skills"]}
     assert notes["g"] == f"{words.NOTE_NO_ROOM} Set to 1.1% gives it room."
+
+
+def test_a_listed_codex_skill_turned_off_is_counted_once_when_turned_on_again(home):
+    # Lantern on #235: a listed skill turned off must not also come back as a new one.
+    roomy_chat(home)
+    codex_off(home, own(home, "alpha").resolve())
+    cx = codex(home)
+    assert [s["name"] for s in cx["skills"]].count("alpha") == 1
+    after = codex(home, {"alpha": "on"})["after"]["result"]
+    assert list(after["sent"]).count("alpha") == 1
+    assert after["size"] == codex(home)["windows"][0]["result"]["size"]
