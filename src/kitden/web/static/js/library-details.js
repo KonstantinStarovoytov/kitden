@@ -6,7 +6,7 @@
 // adds a row to the tray; nothing is written before Apply. Paths stay under Technical details.
 import { getJson, query } from "./api.js";
 import { $, button, el, icon, joinWords, plural } from "./dom.js";
-import { IN_PREVIEW, previewLook } from "./details.js";
+import { detailsCard, IN_PREVIEW, previewLook } from "./details.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { initLibraryAdd } from "./library-add.js";
 import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
@@ -90,14 +90,22 @@ function loadsSay(item, { folder = "", noun = "it" } = {}) {
   const through = item.through || {};
   const own = clientsBy(item, "on").filter((client) => !through[client]);
   const lines = [];
-  if (own.length) lines.push(`${joinWords(names(own))} ${verb(own, "loads", "load")} ${noun} ${folder ? `in ${folder}` : "in every project"}.`);
+  // With All projects, a client that a project's own settings turn off there says so in the same
+  // sentence (`off_folders`): never "in every project" beside an off.
+  const offIn = folder ? {} : item.off_folders || {};
+  const everywhere = own.filter((client) => !(offIn[client] || []).length);
+  if (everywhere.length) lines.push(`${joinWords(names(everywhere))} ${verb(everywhere, "loads", "load")} ${noun} ${folder ? `in ${folder}` : "in every project"}.`);
+  for (const client of inOrder(own.filter((one) => !everywhere.includes(one)))) {
+    const folders = offIn[client];
+    const whose = folders.length === 1 ? `${folders[0]}'s own settings turn` : "their own settings turn";
+    lines.push(`${CLIENT_NAMES[client]} loads ${noun} in every project except ${joinWords(folders)}: ${whose} it off there.`);
+  }
   for (const owner of inOrder(new Set(Object.values(through)))) {
     const readers = Object.keys(through).filter((client) => through[client] === owner);
     lines.push(`${joinWords(names(readers))} ${verb(readers, "gets", "get")} it through ${CLIENT_NAMES[owner]}.`);
   }
   const off = clientsBy(item, "off");
   if (off.length) lines.push(`It is off in ${joinWords(names(off))}.`);
-  lines.push(...(item.off_where || []));
   const unknown = clientsBy(item, "unknown");
   if (unknown.length) lines.push(`Kitden can't tell whether ${joinWords(names(unknown))} ${verb(unknown, "loads", "load")} it.`);
   if (clientsBy(item, "via").length) lines.push("Cursor gets it once Claude Code adds it.");
@@ -107,11 +115,19 @@ function loadsSay(item, { folder = "", noun = "it" } = {}) {
 // The facts every item shares.
 // On in one client and off in another, it names both ("On in Cursor · Off in Claude Code"), so the
 // header never says On for a skill a client has off.
-function stateFact(item) {
+// A skill set to Name only says Name only (`can.now`), not On. With All projects, a project whose own
+// settings turn it off is named: "On · Off in atlas" (`off_folders`).
+function stateFact(item, c = {}) {
   const look = lampOf(item);
-  const on = clientsBy(item, "on");
-  const off = clientsBy(item, "off");
-  const words = on.length && off.length ? `On in ${names(inOrder(on)).join(", ")} · Off in ${names(inOrder(off)).join(", ")}` : LAMP_WORDS[look];
+  const now = (item.can && item.can.now) || {};
+  const wordOf = (client) => (item.by[client] === "off" ? STATE_WORDS.off : SKILL_STATE_WORDS[now[client]] || STATE_WORDS.on);
+  const held = inOrder(Object.keys(item.by || {}).filter((client) => ["on", "off"].includes(item.by[client])));
+  const order = [STATE_WORDS.on, ...Object.values(SKILL_STATE_WORDS), STATE_WORDS.off];
+  const kinds = [...new Set(held.map(wordOf))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  let words = kinds.length > 1 ? kinds.map((word) => `${word} in ${names(held.filter((client) => wordOf(client) === word)).join(", ")}`).join(" · ") : kinds[0] || LAMP_WORDS[look];
+  const offIn = c.project ? {} : item.off_folders || {};
+  const who = Object.keys(offIn).filter((client) => offIn[client].length);
+  for (const client of inOrder(who)) words += ` · Off in ${joinWords(offIn[client])}${held.length > 1 ? ` for ${CLIENT_NAMES[client]}` : ""}`;
   const value = el("span", "fact-mark");
   value.append(lamp(look), el("span", null, words));
   return { label: "State", value, text: words };
@@ -202,9 +218,10 @@ function rowsButton(label, bodies, look = "btn", goes = null) {
   return node;
 }
 
-// The copies a client loads of one thing (`item.copies`, library_map.py): each copy's folder (a
-// plugin's marketplace) and whose it is, and "Keep this one…", which adds a Remove of every other
-// copy to the tray. A copy Kitden cannot remove leaves its others without the button. Null with none.
+// The copies a client loads of one thing (`item.copies`, library_map.py `copy_choices`): each
+// copy's folder (a plugin's marketplace) and whose it is, and "Keep this one…" where the server
+// offers it (`keep`: the removals after which every client still has it), which adds those to the
+// tray. With none to keep, one line says why (`why`). Null with no copies.
 const KEEP_ONE = "Keep this one…";
 function copiesNode(item) {
   const copies = item.copies || {};
@@ -212,15 +229,14 @@ function copiesNode(item) {
   if (!clients.length) return null;
   const box = el("div", "copies");
   for (const client of clients) {
-    const { say, list } = copies[client];
+    const { say, list, why } = copies[client];
     const rows = el("ul", "copy-list");
     rows.setAttribute("aria-label", `Copies in ${CLIENT_NAMES[client]}`);
     list.forEach((copy, index) => {
       const row = el("li", "copy-row");
       row.append(el("span", "copy-where", `${copy.where} · ${copyOwner(copy, client)}`));
-      const others = list.filter((_, at) => at !== index);
-      const bodies = others.filter((other) => other.remove).map((other) => ({ action: item.kind === "plugin" ? "plugin.remove" : "skill.remove", targets: [{ item: other.remove }], params: {} }));
-      if (bodies.length && bodies.length === others.length) {
+      const bodies = (copy.keep || []).map((remove) => ({ action: item.kind === "plugin" ? "plugin.remove" : "skill.remove", targets: [{ item: remove }], params: {} }));
+      if (bodies.length) {
         const keep = rowsButton(KEEP_ONE, bodies);
         keep.dataset.focus = `keep:${client}:${index}`;
         row.append(keep);
@@ -228,6 +244,7 @@ function copiesNode(item) {
       rows.append(row);
     });
     box.append(el("p", "muted", say), rows);
+    if (why) box.append(el("p", "muted", why));
   }
   return box;
 }
@@ -339,7 +356,7 @@ export const addLabel = (clients) => `Add to ${names(clients).join(" or ")}…`;
 // Claude account adds its `note`: the app adds it, and where its switch is.
 export function pluginCard(item, c, { addStep = () => {}, commandsStep = () => {} } = {}) {
   const inside = insideWords(item.inside);
-  const facts = [stateFact(item), { label: "Inside", value: inside || "Not known", quiet: !inside }, clientsFact(item), comesFrom(item, c)];
+  const facts = [stateFact(item, c), { label: "Inside", value: inside || "Not known", quiet: !inside }, clientsFact(item), comesFrom(item, c)];
   const actions = [];
   const adds = (item.can && item.can.add) || [];
   if (adds.length) actions.push({ label: addLabel(adds), run: addStep, primary: true });
@@ -406,9 +423,7 @@ export function partCard(block, c) {
 export function skillCard(item, c, { someStep = () => {}, addStep = () => {} } = {}) {
   const source = el("span", "fact-mark");
   source.append(icon(item.source === ORIGIN_WORDS.project ? "folder" : "user-round", 13), el("span", null, item.source));
-  const facts = [{ label: "Plugin", value: NO_PLUGIN, quiet: true }, stateFact(item), comesFrom(item, c), { label: "Source", value: source, text: item.source }, clientsFact(item, { count: true })];
-  const own = SKILL_STATE_WORDS[item.skill_state];
-  if (own) facts.splice(2, 0, { label: "Loads", value: own, text: own });
+  const facts = [{ label: "Plugin", value: NO_PLUGIN, quiet: true }, stateFact(item, c), comesFrom(item, c), { label: "Source", value: source, text: item.source }, clientsFact(item, { count: true })];
   const actions = [];
   // Add to a client: the same step as a plugin's, for a skill the skill catalog can copy (the List's
   // "+ Add" and a drag do the same).
@@ -441,9 +456,6 @@ export function skillProjectSwitches(item, c, only = null) {
   if (copy.length) out.push({ label: OFF_COPY, bodies: copy });
   return out;
 }
-
-// Remove from one client (`only`), or from each: the rows under More.
-export const removeRows = (item, only = null) => removeActions(item).filter((one) => !only || one.label === removeLabel(only));
 
 // A skill's switch for all projects in each client that has one (`can.rule`, the states it takes;
 // `can.now`, the state it has): skill-switch.js, the same control as Context's. Null with none.
@@ -651,10 +663,11 @@ function cardOf(thing, c, id) {
   if (INSTRUCTION_CARDS[block.kind]) return INSTRUCTION_CARDS[block.kind](block, c);
   if (block.kind === "client") return clientCard(block.client, c);
   if (block.kind === "account") return accountCard(block);
-  if (block.kind === "group") return marketplaceCard(block.group, { commandsStep: () => commandsStep(id) });
+  if (block.kind === "group") return marketplaceCard(block.group, { commandsStep: () => commandsStep(libraryWhere(id)) });
   if (block.kind === "part") return partCard(block, c);
-  if (block.kind === "plugin") return pluginCard(block.item, c, { addStep: () => addStep(id), commandsStep: () => commandsStep(id) });
-  if (block.kind === "skill") return skillCard(block.item, c, { someStep: () => someStep(id), addStep: () => addStep(id) });
+  const where = libraryWhere(id);
+  if (block.kind === "plugin") return pluginCard(block.item, c, { addStep: () => addStep(where), commandsStep: () => commandsStep(where) });
+  if (block.kind === "skill") return skillSteps(block.item, c, where);
   return hookCard(block.item, c);
 }
 
@@ -680,10 +693,33 @@ function showLibrary(id, { step = null } = {}) {
   return Promise.resolve(nodes);
 }
 
+// Where a card and its steps are drawn: `shown` (the panel's state), `find` (what it shows now:
+// `{ block, answer }`, or null when it is gone) and `show` (draws the card again; `{ step: "back" }`
+// slides it in from a step). The Library's, by the map's id; Context has its own (openSkillDetails).
+function libraryWhere(id) {
+  return { shown: { type: "library", id }, find: () => libraryThing(id), show: (opts) => showLibrary(id, opts) };
+}
+
+// A skill's card with its steps: the one the Library and Context draw.
+function skillSteps(item, c, where) {
+  return skillCard(item, c, { someStep: () => someStep(where), addStep: () => addStep(where) });
+}
+
+// A skill's Details where it is not the Library's selection (Context): the same card, its steps
+// and their way back, from the Library's entry `find()` gives (`{ block, answer }`); `extra` adds
+// the place's own facts. The nodes, or null when the entry is gone.
+export function skillDetails(where, extra = null) {
+  const found = where.find();
+  if (!found) return null;
+  const card = skillSteps(found.block.item, context(found.answer), where);
+  if (extra) extra(card);
+  return detailsCard(card);
+}
+
 // Back from a step to its card, focus on the button that stepped there (or More, which it waits
 // under again).
-function backFrom(id, label) {
-  return () => showLibrary(id, { step: "back" }).then(() => focusAfterStep(`action:${label}`, "more"));
+function backFrom(where, label) {
+  return () => Promise.resolve(where.show({ step: "back" })).then(() => focusAfterStep(`action:${label}`, "more"));
 }
 
 // "Add <name> to the clients you pick": one row per client that can take it or has it already
@@ -711,9 +747,9 @@ export function addNodes(item, back) {
 // A step in the panel: its nodes come in as the next step (`dir`), or drawn again in place (null);
 // what it shows stays the selection's, with the step named. A new step shows from its top, even
 // when the control that takes focus (Done) sits below the fold.
-function openStep(id, name, nodes, dir, focus) {
-  panelState.current = { type: "library", id, step: name };
-  keepFrom(() => STEPS[name](id, null), nodes, () => showLibrary(id));
+function openStep(where, name, nodes, dir, focus) {
+  panelState.current = { ...where.shown, step: name };
+  keepFrom(() => STEPS[name](where, null), nodes, () => where.show());
   if (!dir) return swapContent(nodes);
   return stepTo(nodes, dir).then(() => {
     focusAfterStep(focus);
@@ -721,12 +757,12 @@ function openStep(id, name, nodes, dir, focus) {
   });
 }
 
-function addStep(id, dir = "fwd") {
-  const thing = libraryThing(id);
+function addStep(where, dir = "fwd") {
+  const thing = where.find();
   if (!thing) return closePanel({ focus: false });
   const { item } = thing.block;
-  const nodes = addNodes(item, backFrom(id, addLabel(item.can.add)));
-  return openStep(id, "add", nodes, dir, `tick:${item.can.add[0]}`);
+  const nodes = addNodes(item, backFrom(where, addLabel(item.can.add)));
+  return openStep(where, "add", nodes, dir, `tick:${item.can.add[0]}`);
 }
 
 // "Turn off <name> in the projects you pick": the Gateway's project checklist (D13), one row per
@@ -747,22 +783,22 @@ export function someNodes(item, c, back) {
   return projectChecklist({ crumb: `Skill · ${item.name}`, title: `Turn off ${item.name} in the projects you pick`, why: SOME_WHY, rows, back });
 }
 
-function someStep(id, dir = "fwd") {
-  const thing = libraryThing(id);
+function someStep(where, dir = "fwd") {
+  const thing = where.find();
   if (!thing) return closePanel({ focus: false });
-  const nodes = someNodes(thing.block.item, context(thing.answer), backFrom(id, OFF_SOME));
-  return openStep(id, "some", nodes, dir, "find");
+  const nodes = someNodes(thing.block.item, context(thing.answer), backFrom(where, OFF_SOME));
+  return openStep(where, "some", nodes, dir, "find");
 }
 
 // "Commands…" of a plugin or a marketplace's caption, as a step; focus goes to its Done.
-function commandsStep(id, dir = "fwd") {
-  const thing = libraryThing(id);
+function commandsStep(where, dir = "fwd") {
+  const thing = where.find();
   if (!thing) return closePanel({ focus: false });
   const { block } = thing;
   const group = block.kind === "group";
   const entries = group ? marketplaceEntries(block.group) : pluginEntries(block.item);
   const crumb = group ? `Marketplace · ${block.group.name}` : `${KIND_WORDS.plugin} · ${block.item.name}`;
-  return openStep(id, "commands", commandsNodes(crumb, entries, backFrom(id, COMMANDS)), dir, "commands:done");
+  return openStep(where, "commands", commandsNodes(crumb, entries, backFrom(where, COMMANDS)), dir, "commands:done");
 }
 
 // The steps a Details card goes to, by name, to draw one again in place.

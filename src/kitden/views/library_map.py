@@ -6,6 +6,7 @@ has is left out, and so are account plugins. A plugin's parts are read from its 
 and follow the plugin, so the map never says "N of M on". Paths are only under `technical`.
 """
 
+import os
 from pathlib import Path
 
 from kitden.changes.actions import SKILL_SWITCHES
@@ -29,10 +30,12 @@ from kitden.views.findings import duplicate_copies
 from kitden.views.load_map import Row, load_map, row_key
 from kitden.views.skills import skill_catalog
 from kitden.views.words import (
+    CURSOR_READS_OTHERS,
     GROUP_WORDS,
-    OFF_IN_PROJECT,
+    KEEP_COSTS,
     ORIGIN_WORDS,
     STATE_WORDS,
+    join_words,
     times,
     why_project,
 )
@@ -295,18 +298,65 @@ def _can(
 
 def _copies(inventory, copies: dict[str, list[Item]], ids: dict, home: Path | None) -> dict:
     """Per client that loads the item more than once, `say` ("Cursor loads it 3 times:") and in
-    `list` each copy it loads: `where` (a skill's
-    folder, a plugin's marketplace), `owner` (the client whose folder or entry it is: "shared" for
-    ~/.agents/skills), `remove` (the item whose removal takes this copy away, or None) and `also`
-    (the other clients that lose it with it). The copies are the duplicate finding's items, the
-    same the Overview and the terminal count."""
+    `list` each copy it loads (`copy_choices`); `why` when no copy can be kept."""
     out = {}
     for client, held in ids.items():
         same = next((copies[i] for i in held if i in copies), None)
         if same:
-            say = f"{CLIENT_WORDS[client]} loads it {times(len(same))}:"
-            out[client] = {"say": say, "list": [_copy(inventory, i, client, home) for i in same]}
+            out[client] = copy_choices(inventory, same, client, home)
     return out
+
+
+def copy_choices(inventory, same: list[Item], client: str, home: Path | None = None) -> dict:
+    """The copies `client` loads of one item: `where` (a skill's folder, a plugin's marketplace),
+    `owner` (the client whose folder or entry it is: "shared" for ~/.agents/skills), `remove`
+    (the item whose removal takes this copy away, or None), `also` (the other clients that lose
+    it with it) and `keep` (the removals that keep only this copy, or None). Keep is offered
+    only where every client still has the item after it. The copies are the duplicate finding's
+    items, the same the Overview and the terminal count. With no copy to keep, `why` says so."""
+    rows = [_copy(inventory, i, client, home) for i in same]
+    lost: set[str] = set()
+    for index, row in enumerate(rows):
+        others = [
+            (item, other)
+            for at, (item, other) in enumerate(zip(same, rows, strict=True))
+            if at != index
+        ]
+        if all(other["remove"] for _, other in others):
+            costs = _costs(inventory, [item for item, _ in others], [o for _, o in others])
+            lost |= costs
+            row["keep"] = None if costs else [other["remove"] for _, other in others]
+        else:
+            row["keep"] = None
+    out = {"say": f"{CLIENT_WORDS[client]} loads it {times(len(same))}:", "list": rows}
+    if lost and not any(row["keep"] for row in rows):
+        others = {row["owner"] for row in rows} - {client, "shared"}
+        if client == "cursor" and others & {"claude_code", "codex"}:
+            out["why"] = CURSOR_READS_OTHERS
+        else:
+            names = join_words([CLIENT_WORDS[c] for c in sorted(lost, key=CLIENTS.index)])
+            out["why"] = KEEP_COSTS.format(clients=names)
+    return out
+
+
+def _costs(inventory, gone: list[Item], rows: list[dict]) -> set[str]:
+    """The clients that would have none of the item once the copies `gone` are removed: they
+    lose a copy (`also`) and load no other one."""
+    lose = {c for row in rows for c in row["also"]}
+    if not lose or not gone or gone[0].kind is not ItemKind.SKILL:
+        return lose
+    paths = {os.path.realpath(str(i.source.path)) for i in gone if i.source.path}
+    name = gone[0].name
+    kept = {
+        i.client
+        for i in inventory.items
+        if i.kind is ItemKind.SKILL
+        and i.name == name
+        and i.enabled is not Enabled.OFF
+        and i.source.path is not None
+        and os.path.realpath(i.source.path) not in paths
+    }
+    return lose - kept
 
 
 def _copy(inventory, item: Item, client: str, home: Path | None) -> dict:
@@ -350,18 +400,22 @@ def _off_in(inventory, own: list[Item]) -> list[str]:
     return [p.id for p in inventory.projects if p.path in paths]
 
 
-def _plugin_off_in(inventory, row: Row) -> list[str]:
-    """What the Library says of a plugin with All projects: each project whose own settings turn
-    it off (Codex's project config.toml, Claude Code's project settings)."""
-    folders = dict.fromkeys(
-        i.project
-        for i in inventory.items
-        if i.kind is ItemKind.PLUGIN
-        and i.name == row.lookup
-        and i.project is not None
-        and i.enabled is Enabled.OFF
-    )
-    return [OFF_IN_PROJECT.format(project=Path(f).name) for f in folders if f]
+def _plugin_off_in(inventory, row: Row) -> dict[str, list[str]]:
+    """What the Library says of a plugin with All projects: per client, the folder names of the
+    projects whose own settings turn it off (Codex's project config.toml, Claude Code's project
+    settings)."""
+    out: dict[str, list[str]] = {}
+    for i in inventory.items:
+        if (
+            i.kind is ItemKind.PLUGIN
+            and i.name == row.lookup
+            and i.project is not None
+            and i.enabled is Enabled.OFF
+        ):
+            folders = out.setdefault(i.client, [])
+            if Path(i.project).name not in folders:
+                folders.append(Path(i.project).name)
+    return out
 
 
 def _no_switch(row: Row, can: dict, deciding: dict[str, list[Item]], project: str | None):
@@ -554,14 +608,19 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             entry["copies"] = loads_twice
         if row.kind is ItemKind.SKILL:
             entry["off_in"] = _off_in(inventory, own)
+            # With All projects: the projects whose own settings turn it off, by folder name.
+            names = [Path(p.path).name for p in inventory.projects if p.id in entry["off_in"]]
+            if project is None and names:
+                entry["off_folders"] = {"claude_code": names}
             said = [states.get(i.id, i.skill_state) for i in own]
             said = [state for state in said if state and state != "off"]
             if said:
                 entry["skill_state"] = said[0]
-            # Where its switch is, the state it shows now, per client.
+            # The state it shows now, per client that has it (its switch and its State read it).
             entry["can"]["now"] = {
                 c: "off" if by[c] == "off" else states.get(ids[c][0]) or "on"
-                for c in entry["can"]["rule"]
+                for c in by
+                if by[c] in ("on", "off") and ids.get(c)
             }
         account = next((i for i in own if is_account_plugin(i)), None)
         if account is not None and account.change_hint:
@@ -570,7 +629,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
         if row.kind is ItemKind.PLUGIN:
             entry["plugin"] = row.lookup
             if project is None and (off_in := _plugin_off_in(inventory, row)):
-                entry["off_where"] = off_in
+                entry["off_folders"] = off_in
             if why := _no_switch(row, entry["can"], deciding, project):
                 entry["no_switch"] = why
             if row.lookup in held:

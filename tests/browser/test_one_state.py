@@ -107,8 +107,12 @@ def test_all_projects_on_context_names_the_last_chats_folder(page, demo):
     expect(group).to_contain_text("atlas's own settings set this plugin")
     # The Library says the same for all projects: on, and off in atlas by its own settings.
     details = library(page, "plugin:browser@openai-bundled")
-    expect(details).to_contain_text("Codex loads it in every project.")
-    expect(details).to_contain_text("It is off in atlas: atlas's own settings set this plugin")
+    # One sentence, no "in every project" beside an off: the state names the project.
+    expect(details).to_contain_text(
+        "Codex loads it in every project except atlas: atlas's own settings turn it off there."
+    )
+    expect(details).to_contain_text("On · Off in atlas")
+    expect(details).not_to_contain_text("Codex loads it in every project.")
 
 
 def test_a_project_view_offers_codexs_own_switch_for_a_plugin_its_settings_set(page, demo):
@@ -122,7 +126,10 @@ def test_a_project_view_offers_codexs_own_switch_for_a_plugin_its_settings_set(p
 def test_a_skill_set_to_name_only_in_a_projects_local_file_says_so_in_the_library(page, demo):
     atlas = project_id(page, demo, "atlas")
     details = library(page, "skill:release-notes", atlas, kind="skill")
-    expect(details).to_contain_text("Name only")
+    # The state is Name only, in Details and in the List's Claude Code cell, not On.
+    expect(details).to_contain_text("Name only in Claude Code")
+    cell = list_row(page, "release-notes").get_by_role("gridcell").nth(1)
+    expect(cell).to_contain_text("Name only")
 
 
 def list_row(page, name: str):

@@ -157,6 +157,15 @@ ROUTE_WORDS: dict[str, str] = {
 # A skill or a plugin turned off by a settings rule (`skill.rule`, spec 5.5). A refusal says why
 # there is no switch; the review's note names a project whose own rule wins.
 CURSOR_NO_SKILL_SWITCH = "Cursor has no switch to turn off one skill."
+# Why Keep this one… is not offered on a Cursor skill: each removal would take the skill from the
+# client whose folder Cursor reads (docs/clients.md, the third-party setting, 2026-11-27).
+CURSOR_READS_OTHERS = (
+    "Cursor also reads Claude Code's and Codex's skill folders. To load each skill once, turn off "
+    "Include Third-Party Plugins, Skills, and Other Configs in Cursor Settings → Agents → "
+    "Third-Party Imports."
+)
+# Why Keep this one… is not offered elsewhere: each removal would take it from another client.
+KEEP_COSTS = "Keeping one copy would take it from {clients}."
 # docs/clients.md (Cursor, 2026-11-09): `disable-model-invocation` keeps the description out.
 CURSOR_NO_SWITCH_NOTE = (
     f"{CURSOR_NO_SKILL_SWITCH} To keep its description out of the list, add "
@@ -382,7 +391,6 @@ def why_project(folder: str) -> str:
 
 
 # The Library with All projects: a plugin a project's own settings turn off.
-OFF_IN_PROJECT = "It is off in {project}: {project}'s own settings set this plugin."
 
 
 # A Codex plugin that is on and that the last list did not hold.

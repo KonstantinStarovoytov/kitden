@@ -462,8 +462,30 @@ def skill_readers(inventory, item) -> list[str]:
 def _kept_copies(inventory, name: str, gone: str, project: str | None) -> set[str]:
     """The clients that load a skill of this name from outside the folder `gone`: from another
     folder, a plugin that is on, or a folder of the same project."""
-    return {
-        i.client
+    return {i.client for i in _kept_items(inventory, name, gone, project)}
+
+
+def copies_left(inventory, folder: str, name: str, client: str) -> int:
+    """How many copies of the skill `name` the client still loads once `folder` is gone."""
+    gone = os.path.realpath(folder)
+    removed = next(
+        (
+            i
+            for i in inventory.items
+            if i.kind is ItemKind.SKILL
+            and i.source.path is not None
+            and os.path.dirname(os.path.realpath(i.source.path)) == gone
+        ),
+        None,
+    )
+    project = removed.project if removed and removed.scope is Scope.PROJECT else None
+    kept = _kept_items(inventory, name, gone, project)
+    return len({os.path.realpath(str(i.source.path)) for i in kept if i.client == client})
+
+
+def _kept_items(inventory, name: str, gone: str, project: str | None) -> list:
+    return [
+        i
         for i in inventory.items
         if i.kind is ItemKind.SKILL
         and i.name == name
@@ -471,7 +493,7 @@ def _kept_copies(inventory, name: str, gone: str, project: str | None) -> set[st
         and i.source.path is not None
         and not os.path.realpath(i.source.path).startswith(f"{gone}/")
         and (i.scope in (Scope.USER, Scope.PLUGIN) or (project and i.project == project))
-    }
+    ]
 
 
 def skill_keepers(inventory, item, readers: list[str]) -> list[str]:

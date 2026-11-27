@@ -33,7 +33,7 @@ from kitden.model import (
 from kitden.views.effective import client_order
 from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
-from kitden.views.library_map import has_own_rules, library_map
+from kitden.views.library_map import copy_choices, has_own_rules, library_map
 from kitden.views.setup_server import ENABLE_KEYS, kitden_on, setup_server_state
 from kitden.views.words import (
     BACK_BY_APP,
@@ -142,23 +142,37 @@ def _duplicates(inventory, findings) -> list[dict]:
         if not items:
             continue
         key = (str(items[0].kind), base_name(items[0]))
-        group = groups.setdefault(key, {"clients": set(), "copies": 0, "name": items[0].name})
+        group = groups.setdefault(
+            key, {"clients": set(), "copies": 0, "name": items[0].name, "why": [], "keep": False}
+        )
         group["clients"].add(finding.client)
         group["copies"] = max(group["copies"], len(items))
+        # The Library's own rule (copy_choices): Keep one only where no client loses it.
+        if items[0].kind is ItemKind.MCP_SERVER:
+            group["keep"] = True
+        else:
+            choices = copy_choices(inventory, items, finding.client)
+            group["keep"] |= any(row["keep"] for row in choices["list"])
+            if "why" in choices:
+                group["why"].append(choices["why"])
     cards = []
     for (kind, name), group in groups.items():
         clients = sorted(group["clients"], key=client_order)
         copies = group["copies"]
-        text = (
-            f"{'Two' if copies == 2 else copies} copies of one "
-            f"{KIND_WORDS.get(kind, kind)} load; keep one."
-        )
+        many = "Two" if copies == 2 else copies
         server = kind == str(ItemKind.MCP_SERVER)
-        go = {"view": "gateway" if server else "library", "sel": f"{kind}:{group['name']}"}
-        action = {"label": "Keep one…", "go": go}
         block = "gateway" if server else "library"
         icon = KIND_ICONS.get(kind, "puzzle")
         card_id = _hash("duplicate", kind, name)
+        if not group["keep"] and group["why"]:
+            # No copy can go without another client losing it: the reason, nothing to press.
+            where = join_words([CLIENT_WORDS[c] for c in clients])
+            text = f"{many} copies load in {where}. {group['why'][0]}"
+            cards.append(_card(card_id, "improve", icon, name, text, clients, None, block))
+            continue
+        text = f"{many} copies of one {KIND_WORDS.get(kind, kind)} load; keep one."
+        go = {"view": "gateway" if server else "library", "sel": f"{kind}:{group['name']}"}
+        action = {"label": "Keep one…", "go": go}
         cards.append(_card(card_id, "attention", icon, name, text, clients, action, block))
     return sorted(cards, key=lambda c: (c["name"], [client_order(x) for x in c["clients"]]))
 

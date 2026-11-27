@@ -12,11 +12,11 @@ import { FOLD_ABOVE, groupLine, groupsOf, sideOf, turnedOn } from "./context-gro
 import { button, el, icon, reportError } from "./dom.js";
 import { headActions } from "./map-page.js";
 import { animateTo, fold, riseHead } from "./motion.js";
-import { closePanel, openPanel, panelState, whenGone } from "./panel.js";
+import { closePanel, drawQuietly, isPanelOpen, openPanel, panelState, stepTo, whenGone } from "./panel.js";
 import { banner, CLIENT_NAMES, folderName, mark, skeleton, STATE_WORDS, waitsAs } from "./parts.js";
 import { ALL_PROJECTS_SCOPE, skillSwitch } from "./skill-switch.js";
-import { context as libraryContext, OFF_ALL, ON_ALL, pluginSwitches, removeRows, skillProjectSwitches } from "./library-details.js";
-import { current, currentError, data, go, goTo, loadContext, projectPath, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
+import { context as libraryContext, OFF_ALL, ON_ALL, pluginSwitches, skillDetails } from "./library-details.js";
+import { current, currentError, data, go, goTo, loadContext, projectPath, readLibraryMap, render, retry, setContextDraft, setState, state, takeArrival } from "./store.js";
 import { addToTray, CONTEXT_NOTE, keyFor, onTray, ruleState, takeOut, tray, trayRow } from "./tray.js";
 
 const TITLE = "Do your skills fit?";
@@ -397,6 +397,7 @@ const OFF_SHELVES = { going: { head: waitsAs("off"), look: "ctx-off ctx-going" }
 // plugin, how many skills go with it and its one switch (the way back, or the row that waits); the
 // others as pills.
 function shelfFor(card, { head, look }, skills, states, after, heat, result) {
+  if (head === OFF_SHELVES.off.head) head = offWord(card);
   const shelf = el("section", `${look} ctx-apart`);
   shelf.setAttribute("aria-label", head);
   shelf.append(el("p", "ctx-off-head", head));
@@ -577,6 +578,12 @@ function librarySwitches(card, entry) {
   return pluginSwitches(entry, libraryContext(current("libraryMap")), card.client);
 }
 
+// "Off", or "Off in atlas" when the card's chat is in another folder than the picked scope: the
+// state is that project's.
+function offWord(card) {
+  return sameScope(card) ? GROUP.off : `${GROUP.off} in ${folderName(card.fact.folder)}`;
+}
+
 // The card's chat is in the picked scope (no chat in another folder than the picked one).
 function sameScope(card) {
   const folder = card.fact && card.fact.folder;
@@ -648,7 +655,7 @@ function pillFor(card, skill, states, after, heat, result, look = null, whole = 
     size.setAttribute("title", `${part} characters sent`);
     node.append(size);
   } else if (skill.size) node.append(el("u", null, fmt(skill.size)));
-  if ((look === "off" || look === "going") && !whole) node.append(el("i", "ctx-tag", look === "off" ? GROUP.off : GROUP.going));
+  if ((look === "off" || look === "going") && !whole) node.append(el("i", "ctx-tag", look === "off" ? offWord(card) : GROUP.going));
   const changed = skill.name in states && states[skill.name] !== skill.state;
   node.classList.toggle("chg", changed);
   node.classList.toggle("back", Boolean(after && after.gets.includes(skill.name)));
@@ -687,32 +694,33 @@ function markAll() {
 
 // Details and the switch -----------------------------------------------------------------------
 
-// A skill's Details: its size, its source, its switch and the server's sentence on it. Drawn from
-// the page's latest read, so they follow an Apply.
-function openSkill(client, name) {
+// A skill's Details. A skill of its own (one the Library lists) has the Library's Details, the same
+// card, actions and steps (library-details.js skillDetails), with Context's facts added: its size,
+// its use and its description. A built-in skill or a plugin's: its facts, its switch (or its
+// plugin's) and the server's sentence on it. Drawn from the page's latest read, so they follow an
+// Apply; the Library's map is read when it is out of date, and the Details drawn again once.
+function openSkill(client, name, { step = null, again = false } = {}) {
   const model = current("context");
-  const card = model && model.clients.find((c) => c.client === client);
-  const skill = card && card.skills.find((s) => s.name === name);
+  const card = ((model && model.clients) || []).find((c) => c.client === client);
+  const skill = card && (card.skills || []).find((s) => s.name === name);
   if (!skill) return;
+  // A skill of its own: not built in, not a plugin's.
+  const own = Boolean(skill.item && !skill.plugin && !skill.plugin_switch);
   // No size when Kitden could not read the description: 0 would be a claim.
-  const facts = [];
-  // A plugin's skill names its plugin first: its switch is the plugin's, not the skill's.
-  const plugin = !skill.switch.length && skill.plugin_switch ? skill.plugin || pluginName(skill.plugin_switch) : null;
-  if (plugin) facts.push({ label: "Plugin", value: plugin });
-  if (skill.size) facts.push({ label: "Size", value: `${fmt(skill.size)} characters` });
-  if (skill.source) facts.push({ label: "Source", value: skill.source });
+  const ours = [];
+  if (skill.size) ours.push({ label: "Size", value: `${fmt(skill.size)} characters` });
   // Claude Code's own count of its use: what to turn off.
-  if (skill.used) facts.push({ label: "Used", value: skill.used });
-  const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(card, skill.plugin_switch, plugin) : null;
-  // The Library's own project rows and Remove for this skill in this client, where the Library
-  // shows the same scope.
-  const entry = skill.item && sameScope(card) ? libraryEntry(null, skill.item, "skill") : null;
-  const c = entry ? libraryContext(current("libraryMap")) : null;
-  const actions = entry ? skillProjectSwitches(entry, c, card.client).map((one) => ({ label: one.label, node: switchButton(one) })) : [];
-  const more = entry ? removeRows(entry, card.client) : [];
-  const content = detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: plugin ? null : skill.note, text: describe(skill), actions, more });
-  openPanel(content);
-  panelState.current = { type: "context-skill", client, name };
+  if (skill.used) ours.push({ label: "Used", value: skill.used });
+  const shown = { type: "context-skill", client, name };
+  const where = { shown, find: () => ownEntry(skill), show: (opts) => openSkill(client, name, opts) };
+  const content = (own && skillDetails(where, (one) => {
+    one.facts.push(...ours);
+    one.text = describe(skill);
+    if (skill.note) one.why = `${skill.note} ${one.why || ""}`.trim();
+  })) || otherSkill(card, skill, ours);
+  if (step) stepTo(content, step);
+  else openPanel(content);
+  panelState.current = shown;
   keepFrom(() => openSkill(client, name), content);
   page.open = { client, name };
   whenGone(content[0], () => {
@@ -720,6 +728,33 @@ function openSkill(client, name) {
     markAll();
   });
   markAll();
+  const read = own && !again ? readLibraryMap() : null;
+  if (read) {
+    read.then(() => {
+      const now = panelState.current;
+      if (isPanelOpen() && now && now.type === shown.type && now.client === client && now.name === name && !now.step) drawQuietly(() => openSkill(client, name, { again: true }));
+    }).catch(() => {});
+  }
+}
+
+// The Library's entry of a skill of its own, as skillDetails takes it; null with none.
+function ownEntry(skill) {
+  const entry = libraryEntry(null, skill.item, "skill");
+  return entry ? { block: { kind: "skill", item: entry }, answer: current("libraryMap") } : null;
+}
+
+// A built-in skill, a plugin's, or one the Library's map does not hold yet: its facts, its switch
+// (a plugin's skill: its plugin's) and the server's sentence on it.
+function otherSkill(card, skill, ours) {
+  const facts = [];
+  // A plugin's skill names its plugin first: its switch is the plugin's, not the skill's.
+  const plugin = !skill.switch.length && skill.plugin_switch ? skill.plugin || pluginName(skill.plugin_switch) : null;
+  if (plugin) facts.push({ label: "Plugin", value: plugin });
+  facts.push(...ours.filter((one) => one.label === "Size"));
+  if (skill.source) facts.push({ label: "Source", value: skill.source });
+  facts.push(...ours.filter((one) => one.label !== "Size"));
+  const list = skill.switch.length ? switchFor(card, skill) : skill.plugin_switch ? pluginSwitch(card, skill.plugin_switch, plugin) : null;
+  return detailsCard({ kind: "Skill", title: skill.shown, facts, list, why: plugin ? null : skill.note, text: describe(skill) });
 }
 
 // The skill's description from its file, the part the agent did not get in grey (`seen`: how

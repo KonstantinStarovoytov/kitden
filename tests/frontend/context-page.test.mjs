@@ -1230,7 +1230,8 @@ test('a skill that is off stands under Turned off, and its Details turn it on ag
   const late = skill('beta', 1990, 0, { state: 'off' });
   show(answer({ ...TIGHT, skills: [TIGHT.skills[0], late, TIGHT.skills[2], gone] }, CODEX, CURSOR));
   const [off] = byClass(main, 'ctx-off');
-  assert.equal(text(byClass(off, 'ctx-off-head')[0]), 'Off');
+  // The last chat was in a, not the picked scope: the state is a's.
+  assert.equal(text(byClass(off, 'ctx-off-head')[0]), 'Off in a');
   // Off now goes there also where the page shows the last chat's list, which still held beta.
   assert.deepEqual(pills(off).map((p) => p.dataset.skill), ['beta', 'dataviz']);
   assert.deepEqual(sides().map((n) => pills(n).map((p) => p.dataset.skill)), [['alpha'], ['gamma']]);
@@ -1556,7 +1557,7 @@ test('while the plugin\'s switch waits, all of its skills go off together, and i
   syncTray();
   assert.equal(buttonIn(row, 'Turn off plug').getAttribute('aria-pressed'), 'true');
   // An off plugin waits in one place too, with one way back.
-  const off = byClass(shelf('Off'), 'ctx-offplug')[0];
+  const off = byClass(shelf('Off in a'), 'ctx-offplug')[0];
   assert.equal(text(byClass(off, 'ctx-offline')[0]), 'plug2 · 1 skill');
   assert.ok(buttonIn(off, 'Turn on plug2'));
 });

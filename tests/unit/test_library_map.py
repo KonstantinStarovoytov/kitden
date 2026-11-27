@@ -468,7 +468,7 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "local": [],
         "shared": [],
         "copy": [],
-        "now": {"claude_code": "on"},
+        "now": {"claude_code": "on", "cursor": "on"},
     }
     assert items["code-review"]["can"] == {
         "add": ["claude_code"],
@@ -480,7 +480,7 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "local": [],
         "shared": [],
         "copy": [],
-        "now": {"codex": "on"},
+        "now": {"codex": "on", "cursor": "on"},
     }
     assert items["ui-polish"]["can"] == {
         "add": ["claude_code", "codex"],
@@ -492,7 +492,7 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "local": [],
         "shared": [],
         "copy": [],
-        "now": {},
+        "now": {"cursor": "on"},
     }
     # A hook has no switch.
     assert items["PreToolUse: Bash"]["can"] == {}
@@ -529,7 +529,7 @@ def test_a_skill_says_which_clients_can_take_a_copy_cursor_too(tmp_path):
         "local": [],
         "shared": [],
         "copy": [],
-        "now": {"claude_code": "on"},
+        "now": {"claude_code": "on", "cursor": "on"},
     }
     assert items["ui-polish"]["can"] == {
         "add": ["claude_code", "codex"],
@@ -541,7 +541,7 @@ def test_a_skill_says_which_clients_can_take_a_copy_cursor_too(tmp_path):
         "local": [],
         "shared": [],
         "copy": [],
-        "now": {},
+        "now": {"cursor": "on"},
     }
     # A plugin's can stays as it was: never Cursor.
     assert items["superpowers"]["can"]["add"] == ["codex"]

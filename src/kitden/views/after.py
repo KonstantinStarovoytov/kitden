@@ -45,7 +45,7 @@ from kitden.redact import redact
 from kitden.system import secret_store_name
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import is_own_entry, kitden_on, setup_server_state
-from kitden.views.skills import lost_inside
+from kitden.views.skills import copies_left, lost_inside
 from kitden.views.words import (
     AFTER_WORDS,
     CODEX_AFTER_DEFAULT,
@@ -66,6 +66,7 @@ from kitden.views.words import (
     TOKENS,
     join_words,
     percent,
+    times,
 )
 
 CURSOR_IMPORT = {
@@ -187,8 +188,11 @@ def _skill_remove_words(change: Change, inventory) -> list[dict]:
         entry = {"client": client, "state": "off", "word": "Removed"}
         notes = []
         if client in removal.keeps:
-            entry = {"client": client, "state": "on", "word": "Loads once"}
-            notes.append(f"{CLIENT_WORDS[client]} still loads another copy of {step.name}.")
+            left = max(1, copies_left(inventory, removal.path, step.name, client))
+            word = "Loads once" if left == 1 else f"Loads {times(left)}"
+            entry = {"client": client, "state": "on", "word": word}
+            other = "another copy" if left == 1 else f"{left} other copies"
+            notes.append(f"{CLIENT_WORDS[client]} still loads {other} of {step.name}.")
         inside = lost_inside(inventory, removal.path, client, step.name)
         if inside:
             words = INSIDE_GOES if len(inside) == 1 else INSIDE_GO
