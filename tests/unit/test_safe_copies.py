@@ -154,3 +154,23 @@ def test_a_copy_whose_state_kitden_does_not_know_does_not_count_as_kept():
     inventory = Inventory(clients=[], items=[own, read, claude, plugin])
     rows = copy_choices(inventory, [own, read], "cursor")["list"]
     assert rows[0]["keep"] is None
+
+
+def test_a_copy_a_project_turns_off_does_not_count_as_kept_there(tmp_path):
+    """Claude Code also has brainstorming from superpowers, which website's settings turn off:
+    in website, keeping Cursor's own copy would leave Claude Code with none there."""
+    from kitden.demo import build_demo_home, demo_adapters, demo_build
+
+    home = build_demo_home(tmp_path, "medium")
+    for folder in (".cursor/skills", ".claude/skills"):
+        _skill(home, folder, "brainstorming")
+    adapters = {a.id: a for a in demo_adapters(home)}
+
+    def own_keep(project):
+        answer = library_map(demo_build(home)(), adapters, project)
+        items = [i for g in answer["groups"] for i in g["items"] if i["name"] == "brainstorming"]
+        copies = next(i["copies"]["cursor"] for i in items if "cursor" in i.get("copies", {}))
+        return next(c for c in copies["list"] if c["where"] == "~/.cursor/skills")["keep"]
+
+    assert own_keep(None) is not None
+    assert own_keep(str(home / "work/website")) is None
