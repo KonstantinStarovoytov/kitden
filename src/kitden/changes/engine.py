@@ -364,6 +364,11 @@ def _keychain_record(items: list[KeychainItem]) -> list[dict]:
     return [{"server": i.server, "key": i.key, "existed": i.existed} for i in items]
 
 
+# The format of a change record (change.json). A record with no `version`, from an earlier
+# Kitden, reads the same. A new format that older records cannot be read as raises it.
+RECORD_FORMAT = 1
+
+
 def _record(change: Change) -> dict:
     steps = []
     for step in change.steps:
@@ -387,6 +392,7 @@ def _record(change: Change) -> dict:
             }
         )
     return {
+        "version": RECORD_FORMAT,
         "id": change.id,
         "action": change.action,
         "state": str(change.state),

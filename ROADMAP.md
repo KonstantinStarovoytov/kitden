@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-11-26
+Last updated: 2026-11-27
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -45,6 +45,11 @@ What Kitden does today and what comes next. Ideas and bugs:
   change needs. The browser asks before a reload drops the preview; the limit slider takes Home
   and End; texts that said nothing useful are cut or say what to do; findings for agents use the
   page's client names.
+- **Papers that say what the page does:** the guide starts on the Overview, says how to use strict
+  mode and a tool's Calls, and its Context and terminal parts are cut to what you do. The README
+  and Privacy say exactly what Kitden does with secrets, and what it does not. The guide says what
+  stays the same from 1.0. `clients.json` and each change record now say their format
+  (`"version": 1`); older files read the same.
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,
@@ -789,8 +794,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 What is left of the design that followed the two reviews of 2026-10-21 (the reviews, the design
 and its plans are in the git tag `dev-notes-2026-11-09`):
 
-- **Logins in one place,** so OAuth servers move into the gateway too. Its Keychain part
-  is done.
+- **Logins in one place:** a server you signed in to through a client's own sign-in moves into
+  the gateway without that sign-in, so you sign in again on Kitden's page. Kitden's own browser
+  sign-in and its Keychain part are done.
 - **Linux and Windows.** Linux is done (0.5.0) and checked on Ubuntu; reports from
   other systems are welcome ([#16](https://github.com/KonstantinStarovoytov/kitden/issues/16)). Windows is next ([#17](https://github.com/KonstantinStarovoytov/kitden/issues/17)).
 - **A Usage tab** (asked for on 2026-11-05, no design yet): for each MCP server and each of its

@@ -44,10 +44,14 @@ nothing from it.
 ## What stays on your computer
 
 - The page runs at `127.0.0.1` behind a private link.
-- Secrets you type or sign in with are kept in the macOS Keychain or the Linux keyring only,
-  and so are the secrets in a moved server's env, headers and arguments.
-  The page shows no more than their first and last characters.
-- Backups of changed files stay in Kitden's own data folder.
+- Secrets you type or sign in with are kept in the macOS Keychain or the Linux keyring, and so
+  are the secrets in a moved server's env, headers and arguments. The page shows no more than
+  their first and last characters. Moving a server out of the gateway writes its secrets into
+  that client's settings file as plain text; the review says so first.
+- Kitden does not look for tokens that already sit in plain text in a client's own settings
+  files, and does not move them unless you move that server into the gateway.
+- Backups of changed files stay in Kitden's own data folder, readable only by you. A backup keeps
+  the file as it was, with any secrets it held.
 - What each server in the Kitden gateway says it does, in its own words (its description, else
   its instructions), is kept in `gateway-about.json` in the same folder. What a catalog or the
   Official MCP Registry says of a gateway server (its description and the keys it requires) is
@@ -56,7 +60,7 @@ nothing from it.
   Kitden's own data folder. The page and `kitden scan` write it. `kitden scan` changes no
   client settings.
 - Which clients you turned off is kept in one small file, `clients.json`, in the same folder
-  (for example `{"off": ["codex"]}`). It is Kitden's own choice, not a client's settings, and it
+  (for example `{"version": 1, "off": ["codex"]}`). It is Kitden's own choice, not a client's settings, and it
   changes nothing in any client's files.
 - The answer of `codex plugin list` is kept in `codex-plugins.json` in the same folder, so a
   repeat `kitden scan` does not wait for Codex. It holds only each plugin's id and whether it is

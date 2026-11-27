@@ -633,6 +633,21 @@ def test_a_removed_folder_with_a_secret_flags_the_change(tmp_path):
     assert "SENTINEL" not in record + log + page
 
 
+def test_a_change_record_says_its_format_and_one_without_it_still_undoes(tmp_path):
+    folder = tidy_folder(tmp_path)
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    engine.apply(change.id)
+    path = tmp_path / "data/changes" / change.id / "change.json"
+    record = json.loads(path.read_text())
+    assert record["version"] == 1
+    # A record written before the version was there: Undo works the same.
+    del record["version"]
+    path.write_text(json.dumps(record))
+    assert make_engine(tmp_path).undo(change.id).state is ChangeState.UNDONE
+    assert (folder / "SKILL.md").read_text() == "tidy\n"
+
+
 def test_a_removal_survives_a_restart_of_kitden(tmp_path):
     folder = tidy_folder(tmp_path)
     engine = make_engine(tmp_path)

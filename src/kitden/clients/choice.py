@@ -1,7 +1,8 @@
 """Which clients the user turned off in Kitden. An off client is not read at all.
 
-Kept in `clients.json` in Kitden's data folder, as {"off": ["codex"]}. It is Kitden's own
-preference, not a client's settings, so it is written directly.
+Kept in `clients.json` in Kitden's data folder, as {"version": 1, "off": ["codex"]}. It is
+Kitden's own preference, not a client's settings, so it is written directly. A file with no
+`version` (from an earlier Kitden) reads the same.
 """
 
 import json
@@ -13,6 +14,7 @@ from kitden.model import CLIENT_WORDS, CLIENTS
 
 CHOICE_FILE = "clients.json"
 LAST_ON = "Keep at least one client on."
+FORMAT = 1  # the file's format; a new one that old files cannot be read as raises it
 
 
 def off_clients(home: Path) -> frozenset[str]:
@@ -46,7 +48,7 @@ def set_client(home: Path, client: str, on: bool) -> frozenset[str]:
         if not set(CLIENT_WORDS) - off:
             raise ValueError(LAST_ON)
     if off != set(off_clients(home)):
-        text = json.dumps({"off": [c for c in CLIENTS if c in off]}, indent=2)
+        text = json.dumps({"version": FORMAT, "off": [c for c in CLIENTS if c in off]}, indent=2)
         written = write_atomic(private_data_dir(home) / CHOICE_FILE, text.encode())
         written.chmod(0o600)
     return frozenset(off)
