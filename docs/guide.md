@@ -15,7 +15,9 @@ which clients. Under it stand cards in two groups:
   that did not fit in the last chat, then a change that came undone, then a file Kitden could
   not read (its **Copy path** gives the file's path), then a plugin or skill a client loads more
   than once.
-- **Can improve:** something you may want, such as a server that could move into the gateway.
+- **Can improve:** something you may want. Up to three servers outside the gateway get a **Move
+  in…** card ("In the gateway you can turn each of its tools on or off."), and one card stands for
+  the rest; a server outside the gateway is a normal setup, not a fault.
 
 Each card has one button. Most add a change to the preview, which you review and **Apply**; some
 open the page where you fix it. When Context suggests a limit, the skill list card's button adds
@@ -33,6 +35,9 @@ gateway; point at a card to see on it what the card is about.
 
 Open **Library** and choose **All projects** or one project. **List → Differences** shows
 what differs between Claude Code, Codex and Cursor. Click an item for its **Details**.
+The search box at the top says what it finds from the tab you are on: on the **Gateway**,
+"Search servers and tools…" finds on that page; on every other tab, "Search skills, plugins and
+marketplaces…" opens the Library with the matches.
 On the map, a group of two or more starts folded as a stack of cards. Press a stack to open it;
 a big group shows five at a time, with the rest in the stack below. **Collapse** folds it again.
 When you select a client, a stack that holds some of its items shows those in front and says how

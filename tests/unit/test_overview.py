@@ -1,6 +1,7 @@
 """Overview: what needs attention, in plain words (redesign plan, Task 3)."""
 
 import json
+import re
 from dataclasses import replace
 from pathlib import Path
 
@@ -775,10 +776,12 @@ def test_a_codex_list_that_was_cut_gets_a_card(tmp_path):
     _codex_chat(home, "cut")
     [card] = _context_cards(home)
     # Context's suggested limit is the card's one press, with its cost (05-P3).
-    assert card["line"] == (
-        "2 skills were cut short in your last Codex chat. Set to 500 tokens fits them: about 29 "
-        "more tokens in every chat."
-    )
+    # The cost counts the skills' file paths, which differ from one machine to the next.
+    assert re.fullmatch(
+        r"2 skills were cut short in your last Codex chat\. Set to 500 tokens fits them: about "
+        r"\d+ more tokens in every chat\.",
+        card["line"],
+    ), card["line"]
     assert card["clients"] == ["codex"]
     assert card["action"] == {
         "label": "Set to 500 tokens…",

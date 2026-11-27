@@ -182,7 +182,8 @@ test('a server off in one client and on in another says both', () => {
   const shown = block(gatewayTree(view, OPTS), 'outside:local:sqlite');
   assert.deepEqual([shown.meta, shown.state], ['In Cursor · Off in Codex', 'on']);
   // The List says it too, not only the map.
-  assert.equal(listRows(gatewayTree(view, OPTS), new Set()).find((r) => r.id === 'outside:local:sqlite').meta, 'In Cursor · Off in Codex');
+  const listed = listRows(gatewayTree(view, OPTS), new Set()).find((r) => r.id === 'outside:local:sqlite');
+  assert.equal(listed.meta, 'In Cursor · Off in Codex');
   const off = { ...sqlite, off: ['codex', 'cursor'] };
   const all = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, local: [off] } };
   assert.equal(block(gatewayTree(all, OPTS), 'outside:local:sqlite').meta, 'Off in Codex and Cursor');

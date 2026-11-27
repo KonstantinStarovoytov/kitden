@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from kitden.changes import toml_edit
 from kitden.changes.actions import SKILL_SWITCHES
 from kitden.clients.codex import CodexAdapter, skills_off
 from kitden.demo import build_demo_home, demo_adapters
@@ -116,3 +117,19 @@ def test_a_client_entry_that_is_off_does_not_connect_it_to_the_gateway(tmp_path)
     assert view["used"] == []
     inventory.items[at] = replace(docs, via_gateway="kitden")
     assert gateway_view(inventory, None, kitden=[])["connections"]["kitden"]["codex"] == ["docs"]
+
+
+def test_on_with_two_entries_for_one_skill_leaves_it_on_by_the_scans_reading(tmp_path):
+    # The step edits the last entry for the path, the one Codex and the scan go by.
+    home = build_demo_home(tmp_path, "medium")
+    skill = _off_skill(home)
+    config = home / ".codex/config.toml"
+    config.write_text(
+        f'{config.read_text()}\n[[skills.config]]\npath = "{skill}"\nenabled = false\n'
+    )
+    inventory, adapters = _read(home)
+    item = next(i for i in inventory.items if i.client == "codex" and i.name == "code-review")
+    step = adapters["codex"].skill_rule_step(item, on=True)
+    assert step.edit is not None
+    text = toml_edit.set_value(config.read_text(), step.edit.key, step.edit.after)
+    assert skills_off(tomllib.loads(text)) == set()
