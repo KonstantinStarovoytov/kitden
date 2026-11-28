@@ -2772,7 +2772,7 @@ test('the search never matches the "Add a server" card', () => {
 test('the Add a server card is a grey dashed place, never the preview look; it turns accent when pointed at or lit', async () => {
   const { readFileSync } = await import('node:fs');
   const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
-  const rule = (selector) => (css.match(new RegExp(`${selector.replace(/[.()]/g, '\\$&')}[^{]*\\{([^}]*)\\}`)) || [])[1] || '';
+  const rule = (selector) => (css.match(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^{]*\\{([^}]*)\\}`)) || [])[1] || '';
   assert.match(rule('div.map .block.addslot '), /border: 1px dashed var\(--wire-strong\)/);
   assert.match(rule('div.map .block.addslot '), /background: transparent/);
   assert.doesNotMatch(css.match(/div\.map \.block\.addslot[^{]*\{[^}]*\}/g).join(' '), /--preview-(line|fill)/);
