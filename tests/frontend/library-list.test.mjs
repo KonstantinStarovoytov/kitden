@@ -139,15 +139,6 @@ const LIST = {
     ] },
   ],
 };
-const FILES = {
-  columns: COLUMNS, attention: 0, notes: [],
-  groups: [{ key: 'all', name: 'All projects', icon: 'layers', kind: 'files', items: [
-    { id: 'f1', kind: 'file', name: 'CLAUDE.md', flags: [], cells: { claude_code: cell('on', { word: 'Reads it' }), codex: cell('none'), cursor: cell('none') } },
-    { id: 'f2', kind: 'file', name: 'AGENTS.md', flags: [], cells: { claude_code: cell('none'), codex: cell('on', { word: 'Reads it' }), cursor: cell('none') } },
-  ] }, { key: 'commands', name: 'Commands and agents', icon: 'square-terminal', kind: 'files', items: [
-    { id: 'c1', kind: 'file', category: 'command', name: 'review', names: ['review'], flags: [], cells: { claude_code: cell('on', { word: 'Reads it' }), codex: cell('none'), cursor: cell('none') } },
-  ] }],
-};
 const none = { skills: [], commands: [], agents: [], hooks: [], mcp_servers: [] };
 const MAP = {
   clients: [
@@ -164,11 +155,6 @@ const MAP = {
     ] },
   ],
 };
-const INSTRUCTIONS = { clients: MAP.clients, groups: [
-  { key: 'all', name: 'All projects', files: [{ id: 'f1', name: 'CLAUDE.md', by: { claude_code: true }, imports: [], size: 4, technical: { path: '/home/CLAUDE.md', lines: [] } }] },
-  { key: 'commands', name: 'Commands and agents', files: [{ id: 'c1', kind: 'command', name: 'review', names: ['review'], by: { claude_code: true }, imports: [], size: 3, technical: { path: '/home/.claude/commands/review.md', lines: ['# Review'] } }] },
-], imports: [] };
-
 const main = pages['#main'];
 const node = (box, key) => walk(box).find((n) => n.dataset.focus === key) || null;
 // What a row or cell shows; words only a screen reader hears are left out.
@@ -181,13 +167,12 @@ const selected = [];
 const hows = [];
 onLibrarySelect((id, how) => { selected.push(id); hows.push(how); });
 
-// Draw the List of `tab` once its rows are read.
-async function showList({ kind = 'plugin', show = 'mine', attention = false, q = '', project = '', list = kind === 'instructions' ? FILES : LIST } = {}) {
+// Draw the List once its rows are read.
+async function showList({ show = 'mine', attention = false, q = '', project = '', list = LIST } = {}) {
   answers['/api/library-list'] = list;
-  Object.assign(data, { libraryMap: MAP, instructionsMap: INSTRUCTIONS, projects: [{ id: 'a', path: '/home/work/atlas' }] });
+  Object.assign(data, { libraryMap: MAP, projects: [{ id: 'a', path: '/home/work/atlas' }] });
   data.scope.libraryMap = project;
-  data.scope.instructionsMap = project;
-  Object.assign(state, { view: 'library', mode: 'list', kind, show, attention, q, project, selected: null, category: '' });
+  Object.assign(state, { view: 'library', mode: 'list', kind: 'plugin', show, attention, q, project, selected: null, category: '' });
   freshness.reloadStartedAt = performance.now();
   await loadLibrary();
   main.replaceChildren();
@@ -202,14 +187,12 @@ const keyOn = (id, key) => {
   return event;
 };
 
-test('the List has the two tabs and one column per client', async () => {
+test('the List has its head, the lede and one column per client', async () => {
   const box = await showList();
-  const [head, lede, tabs] = main.children;
+  const [head, lede] = main.children;
   assert.equal(head.children[0].textContent, 'Library');
   assert.equal(head.children.at(-1).children.at(-1).children.find((n) => n.textContent === 'List').getAttribute('aria-pressed'), 'true');
-  assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
-  assert.equal(tabs.className, 'seg sm map-tabs');
-  assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Plugins and skills', 'true'], ['Instructions', 'false']]);
+  assert.equal(lede.textContent, 'The plugins and skills your agents load, and where each comes from.');
   // Under All projects no scope line repeats the top bar.
   assert.equal(main.children.some((n) => n.classList.contains('scope-bar')), false);
   // Name, then one column per client, each with its tile and a quiet "−".
@@ -230,18 +213,16 @@ test('the List has the two tabs and one column per client', async () => {
 test('the List has "Choose clients…" in its head, and says which clients are off once, as text only', async () => {
   const was = data.clients;
   try {
-    for (const kind of ['plugin', 'instructions']) {
-      data.clients = [];
-      await showList({ kind });
-      const actions = main.children[0].children.at(-1);
-      assert.deepEqual(actions.children.slice(0, 1).map((n) => n.textContent), ['+ Add']);
-      assert.equal(main.children.filter((n) => n.classList.contains('scope-note')).length, 0);
-      data.clients = [{ id: 'codex', status: 'off' }];
-      main.replaceChildren();
-      renderLibrary(main);
-      const lines = main.children.filter((n) => n.classList.contains('scope-note'));
-      assert.deepEqual(lines.map((n) => [n.textContent, n.children.length]), [['Codex is turned off in Kitden.', 0]]);
-    }
+    data.clients = [];
+    await showList();
+    const actions = main.children[0].children.at(-1);
+    assert.deepEqual(actions.children.slice(0, 1).map((n) => n.textContent), ['+ Add']);
+    assert.equal(main.children.filter((n) => n.classList.contains('scope-note')).length, 0);
+    data.clients = [{ id: 'codex', status: 'off' }];
+    main.replaceChildren();
+    renderLibrary(main);
+    const lines = main.children.filter((n) => n.classList.contains('scope-note'));
+    assert.deepEqual(lines.map((n) => [n.textContent, n.children.length]), [['Codex is turned off in Kitden.', 0]]);
   } finally {
     data.clients = was;
   }
@@ -274,6 +255,41 @@ test('a plugin row says Plugin · n items and folds its parts', async () => {
   assert.ok(!rowIds().includes('part:p2:skills:plan'));
 });
 
+// Drawn here, not in library.test.mjs: only this file's small browser draws the whole page.
+test('the Library has no tab strip and says the new lede', async () => {
+  const LEDE = 'The plugins and skills your agents load, and where each comes from.';
+  const look = () => {
+    assert.equal(walk(main).some((n) => n.classList.contains('map-tabs')), false);
+    assert.equal(walk(main).some((n) => n.tagName === 'BUTTON' && n.textContent === 'Instructions'), false);
+    assert.equal(walk(main).find((n) => n.classList.contains('lede')).textContent, LEDE);
+  };
+  await showList();
+  look();
+  state.mode = 'map';
+  main.replaceChildren();
+  renderLibrary(main);
+  assert.ok(walk(main).some((n) => n.classList.contains('map')), 'the map is drawn');
+  look();
+  state.mode = 'list';
+});
+
+test('a plugin still folds over its skills, commands, agents and hooks', async () => {
+  const part = (key, kind, name) => ({ key, kind, name, source: 'superpowers@demo-market', same_name: false, cells: { claude_code: cell('on'), codex: cell('none'), cursor: cell('on') } });
+  const parts = [part('skills', 'skill', 'brainstorm'), part('commands', 'command', 'ship'), part('agents', 'agent', 'reviewer'), part('hooks', 'hook', 'Stop')];
+  const [market, ...rest] = LIST.groups;
+  const list = { ...LIST, groups: [{ ...market, items: [{ ...market.items[0], parts }, ...market.items.slice(1)] }, ...rest] };
+  tick(5); // a new read: the List's answer changed
+  await showList({ list });
+  const plugin = rowOf('item:p2');
+  plugin.listeners.click[0]({ target: walk(plugin).find((n) => n.classList.contains('caret')) });
+  renderLibrary((main.replaceChildren(), main));
+  const words = rowNodes().filter((n) => n.dataset.row.startsWith('part:p2:')).map((n) => walk(n).find((m) => m.classList.contains('meta')).textContent);
+  assert.deepEqual(words, ['Skill', 'Command', 'Agent', 'Hook']);
+  // Folded again, for the tests after this one.
+  rowOf('item:p2').listeners.click[0]({ target: walk(rowOf('item:p2')).find((n) => n.classList.contains('caret')) });
+  tick(5);
+});
+
 test('cells say On, Off, Via Claude Code, + Add or nothing', async () => {
   await showList();
   const words = (id) => rowOf(id).children.slice(1).map((c) => texts(c).filter((t) => !t.startsWith('Add ')).join(' '));
@@ -287,28 +303,6 @@ test('cells say On, Off, Via Claude Code, + Add or nothing', async () => {
   // "+" is today's add: one client, here for all projects.
   const button = walk(rowOf('item:p2')).find((n) => n.tagName === 'BUTTON' && n.textContent === '+');
   assert.equal(button.getAttribute('aria-label'), 'Add superpowers to Codex');
-});
-
-test('the Instructions List has one row per file', async () => {
-  await showList({ kind: 'instructions' });
-  const tabs = main.children[2];
-  assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.getAttribute('aria-pressed')), ['false', 'true']);
-  assert.deepEqual(rowIds(), ['group:files:all', 'file:f1', 'file:f2', 'group:files:commands', 'file:c1']);
-  assert.deepEqual(rowOf('file:f1').children.slice(1).map((c) => texts(c).join(' ')), ['Reads it', '', '']);
-  // Nothing to filter or add here, and its hint is the map tab's.
-  assert.equal(walk(main).find((n) => n.classList.contains('toolbar')), undefined);
-  assert.equal(hintLine.children.at(-1).textContent, 'Kitden only reads instruction files. It never changes them.');
-  // A press on a file opens the file's Details, as on the map.
-  selected.length = 0;
-  rowOf('file:f1').listeners.click[0]({ target: rowOf('file:f1') });
-  assert.deepEqual(selected, ['file:f1']);
-  assert.equal(libraryThing('file:f1').block.kind, 'file');
-  // The other tab lets go of them, as on the map.
-  answers['/api/library-list'] = LIST;
-  tabs.children.find((n) => n.textContent === 'Plugins and skills').listeners.click[0]();
-  await new Promise((done) => setTimeout(done, 5));
-  assert.deepEqual(selected, ['file:f1', null]);
-  assert.equal(state.kind, 'plugin');
 });
 
 test('hooks sit under Your settings; a marketplace row opens its Details', async () => {
@@ -372,7 +366,7 @@ test('Up, Down, Right, Left and Enter work', async () => {
 
 test('Installed | Differences reads show=diff, and an empty Differences says so', async () => {
   await showList();
-  const seg = walk(main).find((n) => n.getAttribute('aria-label') === 'Show' && n.classList.contains('seg') && !n.classList.contains('map-tabs'));
+  const seg = walk(main).find((n) => n.getAttribute('aria-label') === 'Show' && n.classList.contains('seg'));
   assert.deepEqual(seg.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Installed', 'true'], ['Differences', 'false']]);
   asked.length = 0;
   answers['/api/library-list'] = { ...LIST, groups: [] };
@@ -428,11 +422,9 @@ test('Add missing plugins and skills… is on the List in a project and in All p
     ['/api/changes/preview', 'project.align', { project: 'a', chosen: null }],
     ['/api/changes/preview', 'project.align', { project: null, chosen: null }],
   ]);
-  // Instructions has none: Kitden adds nothing there.
-  await showList({ kind: 'instructions' });
-  assert.equal(node(main, 'add:missing'), null);
   // With nothing to add (one client, or every client has it all) the button is not there: its
   // review would only say "Nothing is missing."
+  tick(5); // a new read: the List's answer changed
   await showList({ list: { ...LIST, missing: false } });
   assert.equal(node(main, 'add:missing'), null);
 });
@@ -445,7 +437,6 @@ test('old show=new and kind=marketplace links land in their new place', () => {
   assert.deepEqual([market.view, market.kind], ['library', 'plugin']);
   const hook = parseHash('#library?kind=hook&sel=hook%3APreToolUse%3A%20Bash');
   assert.deepEqual([hook.view, hook.kind, hook.selected], ['library', 'plugin', { kind: 'hook', name: 'PreToolUse: Bash' }]);
-  assert.equal(parseHash('#library?kind=instructions&view=list').kind, 'instructions');
   assert.equal(parseHash('#library').kind, 'plugin');
   const server = parseHash('#library?kind=mcp_server&sel=mcp_server%3Agithub');
   assert.deepEqual([server.view, server.mode, server.selected], ['gateway', 'list', { kind: 'mcp_server', name: 'github' }]);
@@ -582,45 +573,6 @@ test('a part the map does not draw opens its plugin, an account row opens its ow
   assert.equal(libraryThing('item:acc'), null);
 });
 
-// Final fix wave: commands and agents are rows under their own group, and an Overview link to one
-// lands on its row and opens its Details.
-test('a command is a row under Commands and agents, and an arrival lands on it', async () => {
-  await showList({ kind: 'instructions' });
-  assert.ok(texts(rowOf('group:files:commands')).includes('Commands and agents'));
-  assert.ok(texts(rowOf('file:c1')).includes('Command'));
-  assert.deepEqual(rowOf('file:c1').children.slice(1).map((c) => texts(c).join(' ')), ['Reads it', '', '']);
-  const { arrival } = await import('../../src/kitden/web/static/js/store.js');
-  selected.length = 0;
-  state.selected = { kind: 'instructions', name: 'review' };
-  arrival.pending = true;
-  main.replaceChildren();
-  renderLibrary(main);
-  assert.deepEqual(selected, ['file:c1']);
-  assert.ok(rowOf('file:c1').classList.contains('arrive'));
-  assert.equal(libraryThing('file:c1').block.file.kind, 'command');
-});
-
-// A file's name is in mono, as on the Instructions map; a plugin's, a skill's and a part's stay
-// in Inter.
-test('file names on the Instructions List are in mono; plugin and skill names are not', async () => {
-  const nameOf = (id) => walk(rowOf(id)).find((n) => n.classList.contains('words'));
-  await showList({ kind: 'instructions' });
-  for (const id of ['file:f1', 'file:f2', 'file:c1']) assert.equal(nameOf(id).className, 'words name mono', id);
-  assert.equal(nameOf('group:files:all').className, 'words');
-  await showList();
-  for (const id of ['item:p2', 'item:s1', 'item:h1']) assert.equal(nameOf(id).className, 'words name', id);
-});
-
-// Final fix wave: the two tabs never share a group id, so a group folded on one tab stays as it
-// is on the other.
-test('a fold on the Instructions List is its own, not the Plugins and skills group of that key', () => {
-  const rows = listRows(FILES, new Set(), new Set(['group:all']));
-  assert.ok(rows.some((r) => r.id === 'file:f1'));
-  const folded = listRows(FILES, new Set(), new Set(['group:files:all']));
-  assert.ok(!folded.some((r) => r.id === 'file:f1'));
-  assert.ok(folded.some((r) => r.id === 'file:c1'));
-});
-
 // Final fix wave: a project switch to an empty List (Differences shows nothing there) still moves
 // the Details a row opened on: they let go when the new project's map has no such item.
 test('Details follow a project switch when the new List is empty', async () => {
@@ -660,7 +612,7 @@ test('rows read before the List shows are drawn when they come in late', async (
   };
   setRenderer(() => { main.replaceChildren(); renderLibrary(main); });
   try {
-    Object.assign(data, { libraryMap: MAP, instructionsMap: INSTRUCTIONS, projects: [{ id: 'a', path: '/home/work/atlas' }] });
+    Object.assign(data, { libraryMap: MAP, projects: [{ id: 'a', path: '/home/work/atlas' }] });
     data.scope.libraryMap = '';
     Object.assign(state, { view: 'overview', mode: 'list', kind: 'plugin', show: 'mine', attention: false, q: 'superpowers', project: '', selected: null, category: '' });
     // A reload has started, as after the page's first scan (the test clock may still be at 0).

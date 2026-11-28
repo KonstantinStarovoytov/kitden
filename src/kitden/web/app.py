@@ -169,7 +169,6 @@ from kitden.views.effective import project_views
 from kitden.views.explain import explain, with_page_fields
 from kitden.views.findings import find_findings, finding_dict
 from kitden.views.gateway_view import gateway_view
-from kitden.views.instructions_map import instructions_map
 from kitden.views.inventory import (
     Inventory,
     LastGood,
@@ -178,7 +177,7 @@ from kitden.views.inventory import (
     item_dict,
     keep_last_good,
 )
-from kitden.views.library import KINDS, LIST_SHOWS, LIST_TABS, SHOWS, library, library_list
+from kitden.views.library import KINDS, LIST_SHOWS, SHOWS, library, library_list
 from kitden.views.library_map import cursor_imports, library_map
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
@@ -1168,35 +1167,27 @@ def create_app(
         return JSONResponse({"project": project, **answer})
 
     def _library_list(request, project, path):
-        """One tab of the Library's List: its groups, columns and the lines above them."""
+        """The Library's List: its groups, columns and the lines above them."""
         params = request.query_params
-        tab = params.get("kind")
         show = params.get("show")
         answer = library_list(
             state.inventory,
             adapters,
             path,
-            tab=tab if tab in LIST_TABS else "plugin",
             show=show if show in LIST_SHOWS else "mine",
             **_list_query(params),
         )
         # Whether "Add missing…" has anything to add: its review's own list (none with one client).
-        missing = tab != "instructions"
-        if missing:
-            try:
-                align_steps(state.inventory, adapters, path, _found_clients(), None)
-            except ValueError:  # "Nothing is missing."
-                missing = False
+        missing = True
+        try:
+            align_steps(state.inventory, adapters, path, _found_clients(), None)
+        except ValueError:  # "Nothing is missing."
+            missing = False
         return JSONResponse({"project": project, **answer, "missing": missing})
 
     def _library_map(request, project, path):
         """The Library map: clients, plugins and skills by source, and what each plugin holds."""
         answer = library_map(state.inventory, adapters, path)
-        return JSONResponse({"project": project, **answer})
-
-    def _instructions_map(request, project, path):
-        """The Instructions map: clients, the instruction files they read, and their imports."""
-        answer = instructions_map(state.inventory, adapters, path)
         return JSONResponse({"project": project, **answer})
 
     def _explain(request, project, path):
@@ -2236,7 +2227,6 @@ def create_app(
             Route("/api/library", _read_model(_library)),
             Route("/api/library-list", _read_model(_library_list)),
             Route("/api/library-map", _read_model(_library_map)),
-            Route("/api/instructions-map", _read_model(_instructions_map)),
             Route("/api/market-servers", market_server_list),
             Route("/api/library-offers", library_offer_list),
             Route("/api/discovery/sources", discovery_sources, methods=["GET", "POST"]),

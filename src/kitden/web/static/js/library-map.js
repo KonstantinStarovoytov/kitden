@@ -2,23 +2,21 @@
 // come from, and what an open plugin holds. It is drawn from /api/library-map
 // (views/library_map.py) with the map every map page shares (map.js, map-view.js). Nothing here
 // writes: a press only selects, unfolds and lights a path; Details (library-details.js) hear it. A
-// plugin or a skill drags onto a client (map-drag.js), which only adds a row to the tray. Its
-// Instructions tab (library-notes §6) draws the instruction files the clients read and what they
-// pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
+// plugin or a skill drags onto a client (map-drag.js), which only adds a row to the tray.
 import { offLine } from "./clients-choice.js";
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError } from "./dom.js";
 import { findIn, focusAfter, foldStep, groupsWith, layoutTree, linkKey, litFor, litFrom, newCards, pagesNow, pagesWith, shownFound } from "./map.js";
 import { aimClient, aimWords, covered, dropOnClient, flyGhost, follow, liftGhost, mapArea, moveGhost, pointOf, startDrag } from "./map-drag.js";
-import { drawChip, glidePill, revealMatch } from "./map-page.js";
+import { drawChip, revealMatch } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, rise, riseHead } from "./motion.js";
-import { banner, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
-import { busy, current, currentError, data, projectPath, render, retry, setState, state, viewMode } from "./store.js";
+import { banner, CLIENT_NAMES, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
+import { busy, current, currentError, data, projectPath, retry, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { addToTray, IN_PREVIEW_MARK, inTray, keyFor, LEAVES, linksWait, onTray, rowsAbout, TAKE_OUT, takeOut, toggleInTray, tray } from "./tray.js";
 
-export const LEDE = "The plugins, skills and instruction files your agents load, and where each comes from.";
+export const LEDE = "The plugins and skills your agents load, and where each comes from.";
 const MAP_HINT = "Point at a link: its × removes a plugin from that client, or turns a skill off there · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details";
 // The map's columns at x 0, 300 and 550 (the mockup's 0, 250 and 500, with the client column 50
 // wider so "32 plugins · 127 skills" fits) and sizes (library-notes §2.1): a client 200×54, a
@@ -42,35 +40,9 @@ const INSIDE_KINDS = [
   ["hooks", "Hook", "webhook"], ["mcp_servers", "MCP server", "server"],
 ];
 const ROW_LABELS = { skill: { icon: "sparkles", words: "Skill" }, hook: { icon: "webhook", words: "Hook" } };
-// The clients' lamps: green while it loads something in this view ("5 plugins · 62 skills", "2
-// files", or "Via Claude Code"), none where Kitden could not read it, grey otherwise.
+// The clients' lamps: green while it loads something ("5 plugins · 62 skills", or "Via Claude
+// Code"), none where Kitden could not read it, grey otherwise.
 const CLIENT_LAMPS = { on: "on", via: "on", unreadable: null };
-// The Map's own tabs. The address keeps the tab as the kind (`kind=instructions`), so Map | List
-// keeps it too; Plugins and skills goes by "plugin".
-const TABS = [["plugins", "Plugins and skills"], ["instructions", "Instructions"]];
-const TAB_KINDS = { plugins: "plugin", instructions: "instructions" };
-const mapTab = () => (state.kind === "instructions" ? "instructions" : "plugins");
-// Each tab's answer (store.js), what its banner says it could not load, and its hint line.
-const TAB_READS = { plugins: "libraryMap", instructions: "instructionsMap" };
-const TAB_BANNERS = { plugins: "the library map", instructions: "the instruction files" };
-export const INSTRUCTIONS_HINT = "Kitden only reads instruction files. It never changes them.";
-// The Instructions tab's columns (library-notes §6): the same clients, a file card 190×54 at x 250,
-// grouped by where it applies, and an import 200×40 at x 500.
-export const INSTRUCTION_COLUMNS = [
-  LIBRARY_COLUMNS[0],
-  { id: "files", caption: "Files", w: 190, h: 54, colGap: 100, top: 37, rowGap: 4 },
-  { id: "imports", caption: "Pulls in", w: 200, h: 40, colGap: 60, top: 60, rowGap: 16 },
-];
-const FILE_GROUPS = { all: "layers", project: "folder", commands: "square-terminal" };
-// The words for a block of "Commands and agents" (`file.kind`), and with none here at all.
-const FILE_KINDS = { command: "command", agent: "agent" };
-const NO_FILES = "No instruction files here.";
-// The Instructions tab's group ids carry this, so they never share an id with a group of Plugins
-// and skills (`group:project`).
-export const filesGroup = (key) => `group:files:${key}`;
-const MISSING = { icon: "triangle-alert", words: "Missing" };
-// Another tab's blocks grow from here and shrink back to its x (library-notes §6; map-view.js).
-const TAB_FROM = { x: 200, y: 200 };
 // What drags onto a client, and what a drop adds there for all projects.
 const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };
 // Why a client cannot take a dragged item, before the drop (decisions, in this order).
@@ -207,7 +179,7 @@ export function withWaiting(model, rows, project) {
     const wait = waitOn(block, addsOf(block.item, rows), project, clients, model);
     if (wait.rows.length) Object.assign(block, waitLook(wait));
   }
-  // Any other change to it that waits (a switch, a rule): marked as on every tab. A removal says
+  // Any other change to it that waits (a switch, a rule): marked in preview. A removal says
   // Leaving instead (withLeaving).
   const staying = rows.filter((row) => !LEAVES.test((row.body || {}).action || ""));
   for (const block of model.blocks.filter((b) => b.item && b.item.items && b.state !== "preview")) {
@@ -293,53 +265,6 @@ function marketGroup(model, name) {
   return id;
 }
 
-// The Instructions tab as one tree (decisions "Instructions"): the clients, each group of files
-// ("All projects", "Only this project · <folder>", "Commands and agents") with a link from each
-// client that reads a file, and what the files pull in. Only Claude Code follows imports (spec 6.1,
-// D27): a file links to its imports, nested ones too, only while Claude Code reads it. A group with
-// no file is not drawn.
-export function instructionsTree(answer) {
-  const blocks = answer.clients.map(clientBlock);
-  const clients = new Set(answer.clients.map((client) => client.id));
-  const links = [];
-  for (const group of answer.groups.filter((one) => one.files.length)) {
-    const id = filesGroup(group.key);
-    blocks.push({ id, column: "files", kind: "group", name: group.name, icon: FILE_GROUPS[group.key], before: GROUP_BEFORE, rowGap: INSTRUCTION_COLUMNS[1].rowGap });
-    for (const file of group.files) {
-      const block = fileBlock(file, group, id);
-      blocks.push(block);
-      for (const client of readers(file)) if (clients.has(client)) links.push({ from: `client:${client}`, to: block.id, kind: "on" });
-      for (const to of importsOf(file)) links.push({ from: block.id, to: `import:${to}`, kind: "on" });
-    }
-  }
-  for (const imported of answer.imports || []) {
-    blocks.push({ id: `import:${imported.id}`, column: "imports", kind: "import", name: imported.name, label: imported.missing ? MISSING : undefined, imported, ports: { left: true } });
-  }
-  return { columns: INSTRUCTION_COLUMNS, blocks, links };
-}
-
-// The clients that read a file, in client order; what it pulls in, while Claude Code reads it.
-export const readers = (file) => CLIENT_ORDER.filter((client) => (file.by || {})[client]);
-export const importsOf = (file) => ((file.by || {}).claude_code ? file.imports || [] : []);
-
-// A file card: its name, a green lamp, and who reads it where: "Claude Code · this project",
-// "Codex · all projects", "Claude Code · 2 imports", "Cursor · 2 rules" (a folder of rules),
-// "Claude Code · command". Its title says the meta whole, where the card cuts it.
-function fileBlock(file, group, parent) {
-  const pulls = importsOf(file).length;
-  const meta = fileMeta(file, group);
-  return { id: `file:${file.id}`, column: "files", parent, kind: "file", name: file.name, meta, title: `${file.name} · ${meta}`, lamp: "on", state: "on", stateInMeta: true, file, ports: { left: true, right: pulls > 0 } };
-}
-
-function fileMeta(file, group) {
-  const who = readers(file).map((client) => CLIENT_NAMES[client]).join(", ");
-  const pulls = importsOf(file).length;
-  if (FILE_KINDS[file.kind]) return `${who} · ${FILE_KINDS[file.kind]}`;
-  if (typeof file.count === "number") return `${who} · ${plural(file.count, "rule", "rules")}`;
-  if (pulls) return `${who} · ${plural(pulls, "import", "imports")}`;
-  return `${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS_LOWER}`;
-}
-
 // A link whose removal or turning off waits in the tray is drawn leaving, and names its row: a press
 // on it, or its ×, takes the row out. A plugin's removal from a client takes the faint lines through
 // that client with it (Cursor through Claude Code): they draw leaving too, with no × and no row of
@@ -363,9 +288,8 @@ function withLeaving(model, rows) {
   return model;
 }
 
-// What a block shows before its name: a client's tile, a plugin's puzzle tile, a file's tile, an
-// import's bare icon.
-const TILES = { plugin: ["block-icon", "puzzle", 15], addslot: ["block-icon", "plus", 15], file: ["block-icon", "file-text", 15], import: ["block-icon bare", "scroll-text", 13] };
+// What a block shows before its name: a client's tile, a plugin's puzzle tile.
+const TILES = { plugin: ["block-icon", "puzzle", 15], addslot: ["block-icon", "plus", 15] };
 function tile(block) {
   if (block.kind === "client") return mark(block.client);
   if (!TILES[block.kind]) return null;
@@ -375,13 +299,12 @@ function tile(block) {
   return holder;
 }
 
-// The map of this visit: its view, its tabs and the tab drawn, the answer it was drawn from and the
-// tree, the plugin open (one at a time), the block selected, the pages of the groups that page (and
-// the other tab's, kept for the way back: `tabPages`), what the search found and
-// for which words, and the project it was drawn for.
+// The map of this visit: its view, the answer it was drawn from and the tree, the plugin open (one
+// at a time), the block selected, the pages of the groups that page, what the search found and for
+// which words, and the project it was drawn for.
 // It is the drag engine's map too (map-drag.js): the layout drawn last, the drag that runs, the
 // block held off its place, and how to draw again.
-const onMap = { view: null, tabs: null, tab: "plugins", answer: null, model: null, open: new Set(), selected: null, pages: new Map(), spread: new Set(), tabPages: {}, found: null, searched: "", project: null, unfolds: false, folded: false, layout: null, drag: null, home: null, redraw: () => drawMap() };
+const onMap = { view: null, answer: null, model: null, open: new Set(), selected: null, pages: new Map(), spread: new Set(), found: null, searched: "", project: null, unfolds: false, folded: false, layout: null, drag: null, home: null, redraw: () => drawMap() };
 
 // "+ Add plugins" in the page header: `fn(button)` opens the add panel (library-add.js).
 let addHook = null;
@@ -400,7 +323,7 @@ export function onLibrarySelect(fn) {
   selectHook = fn;
 }
 
-// The List opens the same Details as the map: `id` is a block id of the tab's tree (a row's), or
+// The List opens the same Details as the map: `id` is a block id of the map's tree (a row's), or
 // null to let them go; `how` ({ follow: true }) when another project is drawn in place.
 export function libraryDetails(id, how) {
   if (selectHook) selectHook(id, how);
@@ -408,7 +331,7 @@ export function libraryDetails(id, how) {
 
 // What the map shows now for a selection: `{ block }`, or `{ link, from, to }` for a link's key; null
 // when the map has nothing of that id. `answer` is the /api/library-map answer it is drawn from.
-// While the List shows, the tab's tree is drawn from its answer for Details only.
+// While the List shows, the tree is drawn from the answer for Details only.
 export function libraryThing(id) {
   const { model, answer } = shownTree();
   if (!id) return null;
@@ -429,21 +352,20 @@ export function setListOnly(blocks) {
   for (const block of blocks) listOnly.set(block.id, block);
 }
 
-// The map's tree while it shows; else the shown tab's, kept while its answer stays the same.
+// The map's tree while it shows; else the one drawn from its answer, kept while it stays the same.
 const listed = { answer: null, model: null };
 function shownTree() {
   if (onMap.view) return onMap;
-  const tab = mapTab();
   // An answer with no clients is not a tree (a read that went wrong): nothing to draw from.
-  const read = current(TAB_READS[tab]);
+  const read = current("libraryMap");
   const answer = read && read.clients ? read : null;
-  if (answer && listed.answer !== answer) Object.assign(listed, { answer, model: tab === "instructions" ? instructionsTree(answer) : libraryTree(answer) });
+  if (answer && listed.answer !== answer) Object.assign(listed, { answer, model: libraryTree(answer) });
   return answer ? listed : { model: null, answer: null };
 }
 
 // The List draws: the next Map is a new one, with an entrance.
 export function leaveLibraryMap() {
-  Object.assign(onMap, { view: null, tabs: null });
+  onMap.view = null;
 }
 
 // Map | List lets go of what the map has selected.
@@ -451,46 +373,31 @@ export function letGoLibraryMap() {
   if (onMap.selected) letGo();
 }
 
-// Draws the Map under the page head (`head`, library.js): the lede, the tabs, the scope bar and
-// the map, and the hint line. It returns what the top search lights, for the chip (chipFound), or
+// Draws the Map under the page head (`head`, library.js): the lede, the scope bar and the map, and
+// the hint line. It returns what the top search lights, for the chip (chipFound), or
 // null.
 // `switched`: Map | List brought it, so it comes in as one piece instead of its entrance.
 export function renderLibraryMap(main, { head, again = false, switched = false } = {}) {
   // A new visit starts a new map, also when it first waits for the answer.
   if (!again) leaveLibraryMap();
-  const tab = mapTab();
   const lede = el("p", "lede", LEDE);
-  const tabs = mapTabs(tab);
   // The project goes by its folder name, as in the project picker.
   const scope = scopeBar(folderName(projectPath()));
-  main.append(...[lede, tabs, scope].filter(Boolean));
+  main.append(...[lede, scope].filter(Boolean));
   riseHead(head, lede, scope, { again });
-  glidePill(tabs, tabs.querySelector('[aria-pressed="true"]'), "library-tabs-map");
-  const answer = current(TAB_READS[tab]);
+  const answer = current("libraryMap");
   if (!answer) {
-    main.append(currentError(TAB_READS[tab]) ? banner(TAB_BANNERS[tab], retry) : skeleton("card", 2));
+    main.append(currentError("libraryMap") ? banner("the library map", retry) : skeleton("card", 2));
     return null;
   }
-  setHint(tab === "plugins" ? MAP_HINT : INSTRUCTIONS_HINT);
+  setHint(MAP_HINT);
   const fresh = !onMap.view;
   // A new map opens with no plugin open and nothing selected: a real setup has no first plugin.
-  if (fresh) Object.assign(onMap, { view: newMap(), open: new Set(), selected: null, pages: new Map(), tabPages: {} });
+  if (fresh) Object.assign(onMap, { view: newMap(), open: new Set(), selected: null, pages: new Map() });
   const projectChanged = !fresh && onMap.project !== state.project;
   onMap.project = state.project;
-  // Another tab is drawn in the same map: the clients stay, the rest swaps (library-notes §6).
-  const swap = !fresh && onMap.tab !== tab;
-  // Each tab keeps the pages its groups were turned to, for the way back.
-  if (swap) {
-    onMap.tabPages[onMap.tab] = onMap.pages;
-    onMap.pages = onMap.tabPages[tab] || new Map();
-  }
-  onMap.tab = tab;
   const had = onMap.selected;
-  keepWhatShows(answer, { opens: !fresh && !projectChanged && !swap });
-  // Why a client has no file in the scope shown (the server says it), under the scope line.
-  if (tab === "instructions" && answer.note) main.append(el("p", "muted scope-note", answer.note));
-  // The note says it already when it is there: one line, not two.
-  if (tab === "instructions" && !answer.note && !answer.groups.some((group) => group.files.length)) main.append(el("p", "muted", NO_FILES));
+  keepWhatShows(answer, { opens: !fresh && !projectChanged });
   const off = offLine(data.clients);
   if (off) main.append(off);
   main.append(onMap.view.box);
@@ -502,7 +409,7 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   onMap.pages = pagesWith(onMap.model, pagesNow(onMap.model, onMap.pages), matches);
   onMap.spread = groupsWith(onMap.model, onMap.spread, matches);
   const motion = fresh ? (switched ? "none" : "enter") : projectChanged ? "project" : "move";
-  drawMap({ motion, swap });
+  drawMap({ motion });
   if (switched) rise([onMap.view.box], { delay: afterOldPage() });
   // Details follow the project drawn in place: the same selection, or none.
   if (projectChanged && had && selectHook) selectHook(onMap.selected, { follow: true });
@@ -510,24 +417,18 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
 }
 
 // The tree for a new answer: the open plugin and the selection (a block, or a link) stay while the
-// answer has them, and a card that came with it opens its group (`opens`). The open plugin stays while the Instructions tab shows, for the way back.
+// answer has them, and a card that came with it opens its group (`opens`).
 function keepWhatShows(answer, { opens = true } = {}) {
   onMap.answer = answer;
   const rows = rowsShown(tray);
   const was = onMap.model;
-  onMap.model = treeOf(answer, rows);
+  onMap.model = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows);
   // A card that comes with a change or a rescan opens its group: it never lands inside a stack.
-  // Not on a new map, another project or another tab (`opens` false), where every card is new.
+  // Not on a new map or another project (`opens` false), where every card is new.
   if (was && opens) onMap.spread = groupsWith(onMap.model, onMap.spread, newCards(was, onMap.model));
   const ids = new Set([...onMap.model.blocks.map((block) => block.id), ...onMap.model.links.map(linkKey)]);
-  if (onMap.tab === "plugins") onMap.open = new Set([...onMap.open].filter((id) => ids.has(id)));
+  onMap.open = new Set([...onMap.open].filter((id) => ids.has(id)));
   if (onMap.selected && !ids.has(onMap.selected)) onMap.selected = null;
-}
-
-// The tab's tree, with what waits in the tray on Plugins and skills. Instructions has none.
-function treeOf(answer, rows) {
-  if (onMap.tab === "instructions") return instructionsTree(answer);
-  return withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows);
 }
 
 // What the map lights for a search: its matches, and a folded plugin that holds one (it stays
@@ -548,36 +449,6 @@ function chipFound(found) {
   const parts = new Set(onMap.model.blocks.filter((block) => block.kind === "part").map((block) => block.id));
   const lit = { ...found, matches: new Set([...foundOnMap(found).matches].filter((id) => !parts.has(id))) };
   return shownFound(lit, onMap.layout);
-}
-
-// "Plugins and skills" | "Instructions" (.seg.sm), `tab` pressed. The same node stays while the
-// page draws again in place, so its mark glides on (280 CALM) as the map swaps.
-function mapTabs(tab) {
-  if (!onMap.tabs) {
-    onMap.tabs = el("div", "seg sm map-tabs");
-    onMap.tabs.setAttribute("role", "group");
-    onMap.tabs.setAttribute("aria-label", "Show");
-    for (const [id, label] of TABS) {
-      const choice = el("button", null, label);
-      choice.type = "button";
-      choice.dataset.focus = `map-tab:${id}`;
-      choice.addEventListener("click", () => toTab(id, choice));
-      onMap.tabs.append(choice);
-    }
-  }
-  for (const choice of onMap.tabs.children) if (choice.dataset.focus) choice.setAttribute("aria-pressed", String(choice.dataset.focus === `map-tab:${tab}`));
-  return onMap.tabs;
-}
-
-// A press on the other tab: the mark glides there, the selection lets go, the address keeps the
-// tab, and the page draws it in the same map.
-function toTab(id, choice) {
-  if (id === mapTab()) return;
-  for (const other of onMap.tabs.children) if (other.dataset.focus) other.setAttribute("aria-pressed", String(other === choice));
-  glidePill(onMap.tabs, choice, "library-tabs-map");
-  if (onMap.selected) letGo();
-  setState({ kind: TAB_KINDS[id], selected: null });
-  render();
 }
 
 function newMap() {
@@ -672,14 +543,12 @@ function watchDrawer() {
 
 // Draw the map as it is now. A press that opened a plugin draws its selection first and lights
 // its path once what it holds has come in.
-// `swap`: another tab is drawn, so its blocks grow from TAB_FROM (map-view.js).
-function drawMap({ motion = "move", lightLater = false, swap = false } = {}) {
+function drawMap({ motion = "move", lightLater = false } = {}) {
   const { view, model, selected } = onMap;
   if (!view) return Promise.resolve();
   const layout = layoutNow();
-  if (swap) layout.swap = TAB_FROM;
   onMap.layout = layout;
-  const lit = litOf(model, selected);
+  const lit = litFor(model, selected);
   const later = lightLater && lit.size > 0;
   drawChip(chipFound(onMap.found));
   const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: foundOnMap(onMap.found), open: onMap.open, motion });
@@ -689,15 +558,6 @@ function drawMap({ motion = "move", lightLater = false, swap = false } = {}) {
   // A block dragged while the map draws again stays with the pointer.
   if (onMap.drag) follow(onMap);
   return drawn;
-}
-
-// What a selection lights (map.js litFor). An import lights the files that bring it in, not their
-// clients (library-notes §6).
-function litOf(model, selected) {
-  if (!String(selected || "").startsWith("import:")) return litFor(model, selected);
-  const lit = new Set([selected]);
-  for (const link of model.links.filter((l) => l.to === selected)) lit.add(link.from).add(linkKey(link));
-  return lit;
 }
 
 // The map's layout as it is now: the plugin that is open and the pages turned, always wide.

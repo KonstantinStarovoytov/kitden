@@ -224,8 +224,8 @@ export function fileScopeWords(def) {
 const inClientOrder = (definitions) => [...definitions].sort((a, b) => byClientOrder(a.client, b.client));
 const clientsOf = (definitions) => [...new Set(definitions.map((d) => clientName(d.client)))];
 
-// The evidence under "Technical details", in client order: one row per file, file key,
-// command and first lines, titled with every client that reads it and the file words
+// The evidence under "Technical details", in client order: one row per file, file key and
+// command, titled with every client that reads it and the file words
 // ("Codex and Cursor · Global settings"). A held server's entry is the Kitden gateway's own.
 export function techRows(definitions) {
   const rows = new Map(); // the same evidence -> one row and its definitions
@@ -235,10 +235,9 @@ export function techRows(definitions) {
       path: String(def.source || "").includes("/") ? def.source : null,
       key: def.key || null,
       summary: def.summary || null,
-      preview: def.preview && def.preview.length ? def.preview : null,
     };
-    if (!row.path && !row.key && !row.summary && !row.preview) continue;
-    const id = JSON.stringify([row.path, row.key, row.summary, row.preview]);
+    if (!row.path && !row.key && !row.summary) continue;
+    const id = JSON.stringify([row.path, row.key, row.summary]);
     if (!rows.has(id)) rows.set(id, { row, defs: [] });
     rows.get(id).defs.push(def);
   }
@@ -248,8 +247,8 @@ export function techRows(definitions) {
   });
 }
 
-// The evidence, folded: per definition its file (the whole path in the hover text), file key,
-// command and first lines. It opens like "Show file change" in a review.
+// The evidence, folded: per definition its file (the whole path in the hover text), file key and
+// command. It opens like "Show file change" in a review.
 export function technical(rows) {
   const box = el("details", "tech");
   box.append(el("summary", null, "Technical details"));
@@ -263,8 +262,6 @@ export function technical(rows) {
     }
     if (r.key) part.append(el("div", "mono", r.key));
     if (r.summary) part.append(el("div", "mono", r.summary));
-    // An instruction file's first lines, secrets hidden by the server.
-    if (r.preview) part.append(el("pre", "preview", r.preview.join("\n")));
     box.append(part);
   }
   return fold(box);

@@ -16,8 +16,8 @@ from kitden.demo import build_demo_home
 from kitden.model import FindingType
 from kitden.views.findings import find_findings
 from kitden.views.inventory import LastGood, build_inventory, default_adapters, keep_last_good
+from kitden.views.library import KINDS, differs, library, library_list
 from kitden.views.library import _cell as list_cell
-from kitden.views.library import differs, library, library_list
 from kitden.views.load_map import load_map
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
@@ -379,7 +379,6 @@ def test_show_mine_new_and_all(home):
         "skill",
         "hook",
         "marketplace",
-        "instructions",
     }
     # Tabs without a catalog always show what is on this computer.
     assert _library(home, "hook", show="new")["rows"] == _library(home, "hook")["rows"]
@@ -628,45 +627,35 @@ def test_library_and_its_offers_let_other_requests_run_meanwhile(home, monkeypat
                 assert slow_read.result().status_code == 200, path
 
 
-# Instructions ---------------------------------------------------------------------------------
+# The Instructions tab is gone -----------------------------------------------------------------
 
 
-def test_the_instructions_tab_lists_files_per_client(home):
-    answer = _library(home, "instructions")
-    names = {(r["name"], r["category"]) for r in answer["rows"]}
-    assert {
-        ("CLAUDE.md", "instructions"),
-        ("AGENTS.md", "instructions"),
-        ("review", "command"),
-        ("reviewer", "agent"),
-    } <= names
-    cells = [c for r in answer["rows"] for c in r["cells"].values()]
-    assert all(c["add"] is None for c in cells)
-    # No word of its own: the page says the state word, as on every tab.
-    assert {c["word"] for c in cells if c["state"] != "none"} == {None}
-    assert answer["categories"] == []
+def test_the_instructions_map_is_gone(home):
+    app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
+        page.get("/?token=tok")
+        assert page.get("/api/instructions-map").status_code == 404
 
 
-def test_agents_md_is_one_row_for_codex_and_cursor_without_a_flag(home):
-    site = str(home / "work/site")
+def test_an_old_instructions_kind_gets_the_plugin_list(home):
+    app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
+        page.get("/?token=tok")
+        old = page.get("/api/library-list?kind=instructions").json()
+        assert old["groups"] == page.get("/api/library-list").json()["groups"]
+
+
+def test_a_list_search_for_an_instruction_file_finds_nothing(home):
+    # The fixture home has ~/.claude/CLAUDE.md; no plugin or skill has that name.
+    assert (home / ".claude/CLAUDE.md").is_file()
     inventory = build_inventory(home)
-    assert not [f for f in find_findings(inventory, site) if "AGENTS.md" in f.names]
-    answer = library(
-        inventory,
-        {a.id: a for a in default_adapters(home)},
-        site,
-        kind="instructions",
-    )
-    (row,) = [r for r in answer["rows"] if r["name"] == "AGENTS.md"]
-    assert (row["cells"]["codex"]["word"], row["cells"]["cursor"]["word"]) == (None, None)
-    assert row["flags"] == []
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library_list(inventory, adapters, None, q="CLAUDE.md")
+    assert answer["groups"] == []
 
 
-def test_a_command_and_an_agent_with_one_name_are_two_rows(home):
-    _write(home / ".claude/agents/review.md", "---\nname: review\n---\nReview code.\n")
-    rows = [r for r in _library(home, "instructions")["rows"] if r["name"] == "review"]
-    assert sorted(r["category"] for r in rows) == ["agent", "command"]
-    assert len({r["key"] for r in rows}) == 2
+def test_the_library_kinds_have_no_instructions():
+    assert "instructions" not in KINDS
 
 
 # Unknown: what Kitden could not read ----------------------------------------------------------
@@ -878,16 +867,11 @@ def test_project_items_stay_while_claude_json_is_broken(tmp_path):
 
 
 def test_project_items_stay_while_codex_config_is_broken(tmp_path):
-    # Codex reads a project's skills and AGENTS.md only for projects config.toml trusts.
+    # Codex reads a project's skills only for projects config.toml trusts.
     cell = _after_a_break(tmp_path, ".codex/config.toml")
     style = cell("atlas", "skill", "api-style", "codex")
     assert (style["state"], style["where"]) == ("on", "Only this project")
     assert style["reason"].startswith("From the last good read at ")
-    agents = cell("atlas", "instructions", "AGENTS.md", "codex")
-    assert (agents["where"], agents["stale_at"]) == (
-        "Only this project",
-        "2026-10-22T14:02:00+00:00",
-    )
 
 
 def _toolbox_cell(home: Path, project: Path) -> dict:
@@ -1077,17 +1061,17 @@ def test_a_project_only_server_says_why_it_has_no_add(home):
 # The List (spec 5.4) ---------------------------------------------------------------------------
 
 
-def _list(home: Path, tab: str = "plugin", project: str | None = None, **options) -> dict:
+def _list(home: Path, project: str | None = None, **options) -> dict:
     inventory = build_inventory(home)
     adapters = {a.id: a for a in default_adapters(home)}
-    return library_list(inventory, adapters, project, tab=tab, **options)
+    return library_list(inventory, adapters, project, **options)
 
 
 def _items(answer: dict) -> dict[str, dict]:
     return {i["name"]: i for g in answer["groups"] for i in g["items"]}
 
 
-def test_the_list_has_the_two_tabs_and_one_column_per_client(tmp_path):
+def test_the_list_has_one_column_per_client(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     answer = _list(home)
     assert [c["id"] for c in answer["columns"]] == ["claude_code", "codex", "cursor"]
@@ -1218,48 +1202,20 @@ def test_the_list_search_finds_a_name_or_a_part(tmp_path):
     assert set(_items(_list(home, q="brand"))) == {"brandkit"}
 
 
-def test_the_instructions_list_has_one_row_per_file(tmp_path):
-    home = build_demo_home(tmp_path, "medium")
-    answer = _list(home, "instructions")
-    assert [(g["key"], g["name"], g["icon"]) for g in answer["groups"]] == [
-        ("all", "All projects", "layers"),
-        ("commands", "Commands and agents", "square-terminal"),
-    ]
-    files = answer["groups"][0]["items"]
-    assert [(f["kind"], f["name"]) for f in files] == [("file", "CLAUDE.md"), ("file", "AGENTS.md")]
-    words = {f["name"]: {c: cell["word"] for c, cell in f["cells"].items()} for f in files}
-    assert words["CLAUDE.md"] == {"claude_code": "Reads it", "codex": None, "cursor": None}
-    # The user's commands and agents are rows too, under their own group; an Overview link
-    # selects a row by its item's name.
-    commands = answer["groups"][1]["items"]
-    assert [(f["kind"], f["category"], f["name"], f["names"]) for f in commands] == [
-        ("file", "command", "review", ["review"]),
-        ("file", "agent", "reviewer", ["reviewer"]),
-    ]
-    assert commands[0]["cells"]["claude_code"]["word"] == "Reads it"
-    # A project's own files come in their own group.
-    project = str(home / "work/atlas")
-    groups = _list(home, "instructions", project)["groups"]
-    assert [g["key"] for g in groups] == ["all", "project", "commands"]
-    assert groups[1]["name"] == "Only this project · atlas"
-
-
-def test_api_library_list_takes_a_tab_and_show_diff(tmp_path):
+def test_api_library_list_ignores_an_old_kind_and_takes_show_diff(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as client:
         client.get("/?token=tok")
         answer = client.get("/api/library-list?kind=plugin").json()
         assert set(answer) == {"project", "columns", "groups", "attention", "notes", "missing"}
-        # An old tab or show choice gets Plugins and skills, as installed.
+        # An old kind or show choice gets Plugins and skills, as installed.
         old = client.get("/api/library-list?kind=marketplace&show=new").json()
         assert old == answer
         diff = client.get("/api/library-list?kind=plugin&show=diff").json()
         assert {i["name"] for g in diff["groups"] for i in g["items"]} <= {
             i["name"] for g in answer["groups"] for i in g["items"]
         }
-        files = client.get("/api/library-list?kind=instructions").json()
-        assert [i["kind"] for g in files["groups"] for i in g["items"]] == ["file"] * 4
         hidden = client.get("/api/library-list?kind=plugin&hidden=codex,cursor").json()
         assert [c["id"] for c in hidden["columns"] if c["hidden"]] == ["codex", "cursor"]
 
@@ -1298,20 +1254,6 @@ def test_a_plugin_whose_part_has_a_warning_needs_attention():
     assert not _warns({"flags": [], "parts": [{"flags": []}]})
 
 
-def test_an_instruction_file_cell_is_unknown_for_a_client_kitden_could_not_read(home):
-    inventory = build_inventory(
-        home, adapters=[ClaudeCodeAdapter(home), _BrokenCodex(home), CursorAdapter(home)]
-    )
-    adapters = {a.id: a for a in default_adapters(home)}
-    answer = library_list(inventory, adapters, None, tab="instructions")
-    files = [f for g in answer["groups"] for f in g["items"]]
-    assert files and {f["cells"]["codex"]["state"] for f in files} == {"unk"}
-    assert {f["cells"]["codex"]["reason"] for f in files} == {"Could not read Codex."}
-    # A client Kitden read and that does not read the file: nothing.
-    claude = next(f for f in files if f["name"] == "CLAUDE.md")
-    assert claude["cells"]["cursor"]["state"] == "none"
-
-
 def test_the_account_row_says_why_and_goes_with_its_hidden_column(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     other = next(g for g in _list(home)["groups"] if g["key"] == "account")
@@ -1339,7 +1281,7 @@ def test_cursor_gets_nothing_through_claude_code_when_claude_code_is_not_found(h
     ]
     adapters = {a.id: a for a in default_adapters(home)}
     answer = library(inventory, adapters, None, kind="plugin", show="new")
-    listed = library_list(inventory, adapters, None, tab="plugin", show="new")
+    listed = library_list(inventory, adapters, None, show="new")
     assert "Via Claude Code" not in json.dumps(answer)
     assert "loads Claude Code's plugins" not in json.dumps(answer)
     assert "Via Claude Code" not in json.dumps(listed)

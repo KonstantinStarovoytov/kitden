@@ -16,11 +16,6 @@ def percent(share: float) -> str:
     return f"{share * 100:g}%"
 
 
-# The Instructions map: found clients that read no instruction file in the scope shown.
-NO_FILE_ALL = "{names} {loads} no instruction file for all projects."
-NO_FILE_HERE = "{names} {loads} no instruction file in this project."
-PICK_PROJECT = "Pick a project to see its own files."
-
 # A cell's state, as the Library, Details and the After chips say it.
 STATE_WORDS: dict[str, str] = {
     "on": "On",

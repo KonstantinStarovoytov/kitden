@@ -158,10 +158,10 @@ function showMap(sample = MEDIUM, { q = '', open = true } = {}) {
   return { box: map(), found };
 }
 
-test('the head has the tabs, the lede and Map | List', () => {
+test('the head has the lede and Map | List', () => {
   showMap();
   settle();
-  const [head, lede, tabs] = main.children;
+  const [head, lede] = main.children;
   assert.equal(head.className, 'page-head');
   assert.equal(head.children[0].textContent, 'Library');
   // The add button and Map | List sit together, so a narrow head wraps them as one.
@@ -172,9 +172,7 @@ test('the head has the tabs, the lede and Map | List', () => {
   assert.deepEqual([actions.children[0].textContent, actions.children[0].title], ['+ Add', 'Add plugins, skills or servers from the catalogs']);
   const seg = actions.children.at(-1);
   assert.deepEqual(seg.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Map', 'true'], ['List', 'false']]);
-  assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
-  assert.equal(tabs.className, 'seg sm map-tabs');
-  assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Plugins and skills', 'true'], ['Instructions', 'false']]);
+  assert.equal(lede.textContent, 'The plugins and skills your agents load, and where each comes from.');
   // Under All projects no scope line repeats the top bar.
   assert.equal(main.children.some((n) => n.classList.contains('scope-bar')), false);
   assert.ok(map());
@@ -188,22 +186,21 @@ test('in a project the scope bar names it with a folder', () => {
   Object.assign(state, { view: 'library', mode: 'map', project: 'a', q: '', selected: null });
   main.replaceChildren();
   renderLibrary(main);
-  const scope = main.children[3];
+  const scope = main.children[2];
   assert.equal(scope.className, 'scope-bar project');
   assert.ok(texts(scope).includes('Project atlas'));
   state.project = '';
 });
 
-test('List keeps the head and the tabs, and draws no map', () => {
+test('List keeps the head and the lede, and draws no map', () => {
   Object.assign(state, { view: 'library', mode: 'list', kind: 'plugin', project: '', q: '' });
   main.replaceChildren();
   setHint('');
   assert.equal(renderLibrary(main), null);
-  const [head, lede, tabs] = main.children;
+  const [head, lede] = main.children;
   assert.equal(head.children[0].textContent, 'Library');
   assert.equal(head.children.at(-1).children.at(-1).children.find((n) => n.textContent === 'List').getAttribute('aria-pressed'), 'true');
-  assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
-  assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.textContent), ['Plugins and skills', 'Instructions']);
+  assert.equal(lede.textContent, 'The plugins and skills your agents load, and where each comes from.');
   assert.equal(map(), null);
   assert.equal(hintLine.children.at(-1).textContent, 'One row per item, one column per client. Right opens a plugin, Enter opens Details.');
 });
@@ -402,15 +399,12 @@ test('under reduced motion it lands at once', () => {
   }
 });
 
-test('the address the page writes reads back as the same view and tab', () => {
-  for (const drawn of ['map', 'list']) {
-    libraryShows.mode = drawn;
-    for (const kind of ['plugin', 'instructions']) {
-      const back = parseHash(hashFor({ ...state, view: 'library', kind, mode: '', project: '', q: '', selected: null }));
-      assert.deepEqual([back.view, back.kind, back.mode], ['library', kind, kind === 'plugin' ? '' : drawn], kind);
-    }
+test('the address the page writes reads back as the same view', () => {
+  for (const mode of ['', 'map', 'list']) {
+    const back = parseHash(hashFor({ ...state, view: 'library', kind: 'plugin', mode, project: '', q: '', selected: null }));
+    assert.deepEqual([back.view, back.kind, back.mode], ['library', 'plugin', mode], mode);
   }
-  // After a draw with no choice, the address names the view drawn.
+  // After a draw with no Map or List choice, the page notes that it drew the map.
   showMap();
   state.mode = '';
   assert.equal(libraryShows.mode, 'map');
@@ -1064,267 +1058,18 @@ test('while a change is written the × waits and removes nothing', async () => {
   }
 });
 
-// The Instructions tab (library-notes §6, decisions "Instructions"): /api/instructions-map, cut
-// short (views/instructions_map.py). Only Claude Code's CLAUDE.md files have imports; the Codex
-// file lists one here only to show the map draws none for it.
-const { instructionsTree, INSTRUCTION_COLUMNS } = await import('../../src/kitden/web/static/js/library-map.js');
-const { setRenderer } = await import('../../src/kitden/web/static/js/store.js');
-const INSTR = {
-  clients: MEDIUM.clients,
-  groups: [
-    { key: 'all', name: 'All projects', files: [
-      { id: 'f1', name: 'CLAUDE.md', by: { claude_code: true }, imports: ['i1'], size: 4, technical: { path: '/home/u/.claude/CLAUDE.md', lines: ['# My rules'] } },
-      { id: 'f2', name: 'AGENTS.md', by: { codex: true }, imports: ['i2'], size: 3, technical: { path: '/home/u/.codex/AGENTS.md', lines: ['# Codex'] } },
-    ] },
-    { key: 'project', name: 'Only this project · website', files: [
-      { id: 'f3', name: 'CLAUDE.md', by: { claude_code: true }, imports: ['i2', 'i3', 'i4'], size: 42, technical: { path: '/home/u/work/website/CLAUDE.md', lines: ['# Working on the website', '@docs/design.md'] } },
-      { id: 'f4', name: 'AGENTS.md', by: { claude_code: true, cursor: true }, through: 'CLAUDE.md for Claude Code', imports: [], size: 10, technical: { path: '/home/u/work/website/AGENTS.md', lines: ['# Agents'] } },
-      { id: 'f5', name: '.cursor/rules', by: { cursor: true }, count: 2, imports: [], technical: { path: '/home/u/work/website/.cursor/rules', lines: ['backend:api', 'style'] } },
-    ] },
-    { key: 'commands', name: 'Commands and agents', files: [
-      { id: 'c1', kind: 'command', name: 'review', names: ['review'], by: { claude_code: true }, imports: [], size: 3, technical: { path: '/home/u/.claude/commands/review.md', lines: ['# Review'] } },
-      { id: 'c2', kind: 'agent', name: 'reviewer', names: ['reviewer'], by: { claude_code: true }, imports: [], size: 5, technical: { path: '/home/u/.claude/agents/reviewer.md', lines: ['# Reviewer'] } },
-    ] },
-  ],
-  imports: [
-    { id: 'i1', name: 'notes.md', by_files: ['f1'], outside: false, missing: false, technical: { path: '/home/u/.claude/notes.md' } },
-    { id: 'i2', name: 'docs/design.md', by_files: ['f3'], outside: false, missing: false, technical: { path: '/home/u/work/website/docs/design.md' } },
-    { id: 'i3', name: '~/shared.md', by_files: ['f3'], outside: true, missing: false, technical: { path: '/home/u/shared.md' } },
-    { id: 'i4', name: 'gone.md', by_files: ['f3'], outside: false, missing: true, technical: {} },
-  ],
-};
-
-// The map on a tab; a press on a tab draws the page again, as app.js does.
-function showTab(kind, sample = MEDIUM) {
-  Object.assign(data, { libraryMap: sample, instructionsMap: INSTR, projects: [] });
-  Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
-  Object.assign(state, { view: 'library', mode: 'map', kind, project: '', q: '', selected: null });
-  setRenderer(() => {
-    main.replaceChildren();
-    setHint('');
-    renderLibrary(main, { again: true });
-  });
-  main.replaceChildren();
-  setHint('');
-  renderLibrary(main);
-  if (map()) spreadAll(map());
-  return map();
-}
-const pressTab = (id) => walk(main).find((n) => n.dataset.focus === `map-tab:${id}`).listeners.click[0]();
-const done = () => setRenderer(() => {});
-
-test('the Instructions tab draws Clients, Files and Pulls in', () => {
-  try {
-    const box = showTab('instructions');
-    settle();
-    const tabs = main.children.find((n) => n.className === 'seg sm map-tabs');
-    assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.getAttribute('aria-pressed')), ['false', 'true']);
-    assert.deepEqual(INSTRUCTION_COLUMNS.map((c) => [c.id, c.caption, c.w, c.h]), [['clients', 'Clients', 200, 54], ['files', 'Files', 190, 54], ['imports', 'Pulls in', 200, 40]]);
-    const layout = layoutTree(instructionsTree(INSTR), { narrow: false });
-    assert.deepEqual(layout.columns.map((c) => c.x), [0, 300, 550]);
-    for (const words of ['Clients', 'Files', 'Pulls in', 'All projects', 'Only this project', ' · website', 'CLAUDE.md', 'docs/design.md']) assert.ok(texts(box).includes(words), words);
-    // No path on the main page: only file names.
-    assert.ok(!texts(main).some((t) => t.includes('/home/')));
-    assert.equal(hintLine.children.at(-1).textContent, 'Kitden only reads instruction files. It never changes them.');
-  } finally {
-    done();
-  }
-});
-
-test('a file block names its clients and its imports', () => {
-  const blocks = byId(instructionsTree(INSTR));
-  const meta = (id) => blocks.get(`file:${id}`).meta;
-  assert.deepEqual(['f1', 'f2', 'f3', 'f4', 'f5'].map(meta), ['Claude Code · 1 import', 'Codex · all projects', 'Claude Code · 3 imports', 'Claude Code, Cursor · this project', 'Cursor · 2 rules']);
-  const file = blocks.get('file:f3');
-  assert.deepEqual([file.kind, file.name, file.lamp, file.parent, file.h], ['file', 'CLAUDE.md', 'on', 'group:files:project', undefined]);
-  assert.deepEqual(['all', 'project', 'commands'].map((key) => blocks.get(`group:files:${key}`).icon), ['layers', 'folder', 'square-terminal']);
-  // Its title says the meta whole, where the card cuts it.
-  assert.equal(file.title, 'CLAUDE.md · Claude Code · 3 imports');
-  // Commands and agents: one block each, read by Claude Code.
-  assert.deepEqual(['c1', 'c2'].map(meta), ['Claude Code · command', 'Claude Code · agent']);
-  assert.equal(blocks.get('file:c1').parent, 'group:files:commands');
-  // The Instructions tab's group ids are its own: none is a Plugins and skills group's.
-  assert.ok(!blocks.has('group:project'));
-  const imported = blocks.get('import:i2');
-  assert.deepEqual([imported.kind, imported.name, imported.column, imported.label], ['import', 'docs/design.md', 'imports', undefined]);
-  assert.deepEqual(blocks.get('import:i4').label, { icon: 'triangle-alert', words: 'Missing' });
-  // Its tile: a file's file-text tile, an import's bare scroll-text.
-  const box = showTab('instructions');
-  settle();
-  done();
-  assert.ok(walk(node(box, 'block:file:f1')).some((n) => n.className === 'block-icon'));
-  assert.ok(walk(node(box, 'block:import:i1')).some((n) => n.className === 'block-icon bare'));
-});
-
-test('only Claude Code files have import links', () => {
-  const model = instructionsTree(INSTR);
-  const into = (id) => model.links.filter((l) => l.from === `file:${id}`).map((l) => l.to).sort();
-  assert.deepEqual(into('f1'), ['import:i1']);
-  assert.deepEqual(into('f2'), []);
-  assert.deepEqual(into('f3'), ['import:i2', 'import:i3', 'import:i4']);
-  assert.deepEqual(into('f5'), []);
-  // Each client that reads a file has a link to it.
-  const from = (id) => model.links.filter((l) => l.to === `file:${id}`).map((l) => l.from);
-  assert.deepEqual(from('f4'), ['client:claude_code', 'client:cursor']);
-  assert.ok(model.links.every((l) => l.kind === 'on'));
-});
-
-test('no link here has a ×, nothing drags and nothing enters the tray', async () => {
-  try {
-    const box = showTab('instructions');
-    settle();
-    for (const id of ['client:claude_code>file:f3', 'file:f3>import:i2']) {
-      const hit = node(box, `link:${id}`);
-      assert.ok(hit, id);
-      assert.equal(hit.getAttribute('aria-description'), null, id);
-      assert.equal(hit.getAttribute('aria-keyshortcuts'), null, id);
-      hit.listeners.pointerover[0]();
-      assert.ok(walk(box).filter((n) => n.classList.contains('link-x')).every((n) => n.hidden), id);
-      hit.listeners.click[0]();
-    }
-    assert.ok(!walk(box).some((n) => n.classList.contains('drags')));
-    assert.equal(node(box, 'add:files'), null);
-    assert.equal(tray.rows.length, 0);
-  } finally {
-    done();
-    await cancelTray();
-  }
-});
-
-test('the tab switch moves clients and swaps the columns', async () => {
-  try {
-    const box = showTab('plugin');
-    settle();
-    // An open plugin is kept for the way back.
-    node(box, 'block:item:p2').listeners.click[0]();
-    await flush();
-    const client = node(box, 'block:client:codex');
-    const card = node(box, 'block:item:p2');
-    const home = card.style.translate.split(' ')[1];
-    pressTab('instructions');
-    assert.deepEqual([state.kind, map(), node(box, 'block:client:codex')], ['instructions', box, client]);
-    // What arrives starts small and unseen at x 200, y 200, and grows to its place 15 ms apart.
-    const files = ['f1', 'f2', 'f3'].map((id) => node(box, `block:file:${id}`));
-    assert.ok(files.every((n) => n.style.translate === '200px 200px' && n.style.transform === 'scale(0.4)' && n.style.opacity === '0'));
-    // What leaves shrinks to x 200 at its own y in 160 ms, with no Tab stop and no leaving look.
-    assert.deepEqual([card.getAttribute('tabindex'), card.className.split(' ').includes('leaving')], ['-1', false]);
-    tick(100);
-    const seen = files.map((n) => Number(n.style.opacity || 1));
-    assert.ok(seen[0] > seen[1] && seen[1] > seen[2], seen.join(' '));
-    // On its way to x 200, at its own y.
-    const [x, y] = card.style.translate.split(' ');
-    assert.ok(card.parentNode && Number(x.replace('px', '')) > 200 && Number(x.replace('px', '')) < 300 && y === home, card.style.translate);
-    tick(70);
-    assert.equal(node(box, 'block:item:p2'), null);
-    await flush();
-    assert.ok(files.every((n) => !n.style.opacity && !n.style.transform));
-    assert.equal(files[0].style.translate.split(' ')[0], '300px');
-    assert.equal(client.style.translate, '0px 212px');
-    // And back: the plugin is open again.
-    pressTab('plugins');
-    await flush();
-    assert.equal(state.kind, 'plugin');
-    assert.equal(node(box, 'block:item:p2').getAttribute('aria-expanded'), 'true');
-    assert.equal(node(box, 'block:file:f1'), null);
-  } finally {
-    done();
-  }
-});
-
-test('under reduced motion the tab switch lands at once', () => {
-  reducedMotion.matches = true;
-  try {
-    const box = showTab('plugin');
-    pressTab('instructions');
-    assert.equal(frames.length, 0);
-    assert.ok(node(box, 'block:file:f1'));
-    assert.equal(node(box, 'block:item:p2'), null);
-    assert.ok(walk(box).every((n) => n.style.opacity === undefined || n.style.opacity === ''));
-  } finally {
-    reducedMotion.matches = false;
-    done();
-  }
-});
-
-// Final fix wave: a cut file meta reads whole on hover; a tab with no file says so; each tab keeps
-// the pages its groups were turned to.
-test('a file card says its meta whole in its title', () => {
-  try {
-    const box = showTab('instructions');
-    settle();
-    assert.equal(node(box, 'block:file:f2').title, 'AGENTS.md · Codex · all projects');
-    assert.equal(node(box, 'block:file:c1').title, 'review · Claude Code · command');
-  } finally {
-    done();
-  }
-});
-
-test('the Instructions tab says why a client has no file, under the tabs', () => {
-  const note = 'Cursor loads no instruction file for all projects. Pick a project to see its own files.';
-  try {
-    Object.assign(data, { libraryMap: MEDIUM, instructionsMap: { ...INSTR, note }, projects: [] });
-    Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
-    Object.assign(state, { view: 'library', mode: 'map', kind: 'instructions', project: '', q: '', selected: null });
-    main.replaceChildren();
-    renderLibrary(main);
-    settle();
-    const line = walk(main).find((n) => n.classList.contains('scope-note'));
-    assert.equal(line.textContent, note);
-    const kids = main.children;
-    assert.ok(kids[kids.indexOf(line) - 1].classList.contains('map-tabs'), 'right under the tabs');
-    // No sentence: no line. The plugins tab never has one.
-    Object.assign(data, { instructionsMap: { ...INSTR, note: null } });
-    main.replaceChildren();
-    renderLibrary(main);
-    settle();
-    assert.equal(walk(main).filter((n) => n.classList.contains('scope-note')).length, 0);
-  } finally {
-    done();
-  }
-});
-
-test('with no instruction files the tab says No instruction files here.', () => {
-  const empty = { ...INSTR, groups: [{ key: 'all', name: 'All projects', files: [] }], imports: [] };
-  try {
-    Object.assign(data, { libraryMap: MEDIUM, instructionsMap: empty, projects: [] });
-    Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
-    Object.assign(state, { view: 'library', mode: 'map', kind: 'instructions', project: '', q: '', selected: null });
-    main.replaceChildren();
-    renderLibrary(main);
-    settle();
-    assert.ok(texts(main).includes('No instruction files here.'));
-    // No empty group caption is drawn.
-    assert.equal(node(map(), 'block:group:files:all'), null);
-    // The server's note alone says it: not twice.
-    Object.assign(data, { instructionsMap: { ...empty, note: 'Cursor loads no instruction file for all projects. Pick a project to see its own files.' } });
-    main.replaceChildren();
-    renderLibrary(main);
-    settle();
-    assert.ok(!texts(main).includes('No instruction files here.'));
-    assert.ok(texts(main).some((t) => t.startsWith('Cursor loads no instruction file')));
-    // With files, it is not said.
-    showTab('instructions');
-    settle();
-    assert.ok(!texts(main).includes('No instruction files here.'));
-  } finally {
-    done();
-  }
-});
-
-test('each tab of the Map says which clients are off, as text only, once', () => {
+test('the Map says which clients are off, as text only, once', () => {
   const was = data.clients;
   try {
-    Object.assign(data, { libraryMap: MEDIUM, instructionsMap: INSTR, projects: [], clients: [{ id: 'codex', status: 'off' }] });
-    Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
-    for (const kind of ['instructions', 'plugin']) {
-      Object.assign(state, { view: 'library', mode: 'map', kind, project: '', q: '', selected: null });
-      main.replaceChildren();
-      renderLibrary(main);
-      settle();
-      const lines = walk(main).filter((n) => n.classList.contains('scope-note') && n.textContent === 'Codex is turned off in Kitden.');
-      assert.equal(lines.length, 1);
-      assert.equal(lines[0].children.length, 0);
-    }
+    Object.assign(data, { libraryMap: MEDIUM, projects: [], clients: [{ id: 'codex', status: 'off' }] });
+    data.scope.libraryMap = '';
+    Object.assign(state, { view: 'library', mode: 'map', kind: 'plugin', project: '', q: '', selected: null });
+    main.replaceChildren();
+    renderLibrary(main);
+    settle();
+    const lines = walk(main).filter((n) => n.classList.contains('scope-note') && n.textContent === 'Codex is turned off in Kitden.');
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].children.length, 0);
     data.clients = [{ id: 'codex', status: 'found' }];
     main.replaceChildren();
     renderLibrary(main);
@@ -1332,26 +1077,6 @@ test('each tab of the Map says which clients are off, as text only, once', () =>
     assert.equal(walk(main).filter((n) => n.classList.contains('scope-note')).length, 0);
   } finally {
     data.clients = was;
-    done();
-  }
-});
-
-test('each tab keeps the pages its groups were turned to', async () => {
-  try {
-    const box = showTab('plugin', LARGE);
-    settle();
-    const more = () => node(box, 'block:stack:group:marketplace:bench-market:after');
-    more().listeners.click[0]({ target: more() });
-    await flush();
-    const caption = () => walk(box).find((n) => n.dataset.focus === 'block:group:marketplace:bench-market' || (n.title || '').startsWith('bench-market ·'));
-    assert.equal(caption().title, 'bench-market · 6–10 of 30');
-    pressTab('instructions');
-    await flush();
-    pressTab('plugins');
-    await flush();
-    assert.equal(caption().title, 'bench-market · 6–10 of 30');
-  } finally {
-    done();
   }
 });
 
@@ -1363,7 +1088,7 @@ test('an online drag keeps the discovery identity and chooses only the drop clie
   });
 });
 
-test('the Library map starts with every source folded; Inside and Instructions do not fold', () => {
+test('the Library map starts with every source folded; Inside does not fold', () => {
   const { box } = showMap(MEDIUM, { open: false });
   settle();
   for (const g of ['group:marketplace:demo-market', 'group:skills']) assert.ok(node(box, `block:stack:${g}:all`), g);
@@ -1375,7 +1100,6 @@ test('the Library map starts with every source folded; Inside and Instructions d
   assert.equal(inside.blocks.filter((b) => b.kind === 'part').length, 8);
   assert.ok(!inside.blocks.some((b) => b.id === 'collapse:inside:item:b0'));
   assert.equal(inside.blocks.find((b) => b.id === 'stack:inside:item:b0:after').holds.length, 12);
-  assert.ok(instructionsTree(INSTR).blocks.filter((b) => b.kind === 'group').every((b) => !b.folds));
   spreadAll(box);
   settle();
 });

@@ -24,7 +24,6 @@ from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Item, ItemKind, Sc
 from kitden.views.catalog import catalog, search
 from kitden.views.effective import effective_view
 from kitden.views.findings import group_of
-from kitden.views.instructions_map import instructions_map
 from kitden.views.library_map import ACCOUNT, cursor_imports, library_map
 from kitden.views.load_map import MARKS, Row, load_map
 from kitden.views.match import Copies, catalog_keys, plugin_copies, plugin_keys, source_keys
@@ -46,7 +45,7 @@ from kitden.views.words import (
     STATE_WORDS,
 )
 
-KINDS = ("mcp_server", "plugin", "skill", "hook", "marketplace", "instructions")
+KINDS = ("mcp_server", "plugin", "skill", "hook", "marketplace")
 # Tabs with something to add; the others show only what is on this computer.
 CATALOG_KINDS = ("plugin", "skill")
 SHOWS = ("mine", "new", "all")
@@ -878,9 +877,6 @@ def _tables(inventory, adapters, project: str | None, *, hidden: frozenset[str])
         # Kitden adds no hooks, and reads none of Codex's: a hook's dash says which.
         "hook": _map_rows(map_rows, "hook", found, _hook_why),
         "marketplace": _map_rows(map_rows, "marketplace", found, _marketplace_why(offers)),
-        # Instruction files, commands and agents: Details says when each client reads a file.
-        # Kitden adds none, so a dash has no reason.
-        "instructions": _map_rows(map_rows, "instructions", found),
     }
     by_key = {r.key: r for r in map_rows}
     # A shown client Kitden could not read makes a row visible only with items kept from its
@@ -976,9 +972,8 @@ def library(
 
 # The List ------------------------------------------------------------------------------------
 
-# The List's tabs (spec 5.4): every plugin, skill and hook by where it comes from, or the
-# instruction files. It shows what is installed, or only what differs between the clients.
-LIST_TABS = ("plugin", "instructions")
+# The List (spec 5.4): every plugin, skill and hook by where it comes from. It shows what is
+# installed, or only what differs between the clients.
 LIST_SHOWS = ("mine", "diff")
 # A cell for Differences: the client has it, has it off, or lacks it. Unknown, Needs review and a
 # cell kept from the last good read always differ.
@@ -1001,8 +996,6 @@ PART_KINDS = {
     "hooks": "hook",
     "mcp_servers": "mcp_server",
 }
-READS_IT = "Reads it"
-FILE_ICONS = {"all": "layers", "project": "folder", "commands": "square-terminal"}
 # A map client's link, as a cell when the tables have no row for the item.
 BY_STATES = {"on": "on", "off": "off", "unknown": "unk", "via": "via"}
 
@@ -1149,50 +1142,6 @@ def _item_groups(
     return out
 
 
-def _file_cell(file: dict, client: str, found: list[str]) -> dict:
-    if file["by"].get(client):
-        return _cell("on", word=READS_IT)
-    if client not in found:
-        return _cell("unk", reason=CLIENT_UNREAD.format(CLIENT_WORDS[client]))
-    return _cell()
-
-
-def _file_groups(answer: dict, t: _Tables) -> list[dict]:
-    """The instruction files by where they apply, then the commands and agents, one cell per
-    client: "Reads it", nothing, or Unknown for a client Kitden could not read. `category` is a
-    command's or an agent's ("command", "agent"); `names` the items an Overview link selects it
-    by."""
-    out = []
-    for group in answer["groups"]:
-        items = []
-        for file in group["files"]:
-            if not set(file["by"]).intersection(t.visible) and set(file["by"]) & t.hidden:
-                continue
-            cells = {c: _file_cell(file, c, t.found) for c in t.columns}
-            items.append(
-                {
-                    "id": file["id"],
-                    "kind": "file",
-                    "category": file.get("kind"),
-                    "name": file["name"],
-                    "names": file["names"],
-                    "flags": [],
-                    "cells": cells,
-                }
-            )
-        icon = FILE_ICONS[group["key"]]
-        out.append(
-            {
-                "key": group["key"],
-                "name": group["name"],
-                "icon": icon,
-                "kind": "files",
-                "items": items,
-            }
-        )
-    return out
-
-
 def _named(item: dict, q: str) -> bool:
     """The item's name, or one of its parts', holds the search text."""
     text = q.strip().lower()
@@ -1217,31 +1166,22 @@ def library_list(
     adapters,
     project: str | None,
     *,
-    tab: str,
     show: str = "mine",
     q: str = "",
     hidden: frozenset[str] = frozenset(),
     attention: bool = False,
 ) -> dict:
-    """The List (spec 5.4): one tab's groups, each with its items, one cell per client.
-
-    "plugin": the Library map's groups (marketplaces, Other plugins, Your skills, Your settings,
-    Only this project) with their plugins, skills and hooks, each with the cells of the plugin,
-    skill and hook tables, and a plugin's parts. "instructions": the instruction files by where
-    they apply. `show` "diff" keeps the items that differ (`differs`); `attention` keeps those
-    with a warning, and `attention` in the answer counts them; `q` keeps an item whose name, or
-    a part's, holds the text. A group with no item left is left out.
+    """The List (spec 5.4): the Library map's groups (marketplaces, Other plugins, Your skills,
+    Your settings, Only this project) with their plugins, skills and hooks, each with the cells
+    of the plugin, skill and hook tables, and a plugin's parts. `show` "diff" keeps the items
+    that differ (`differs`); `attention` keeps those with a warning, and `attention` in the
+    answer counts them; `q` keeps an item whose name, or a part's, holds the text. A group with
+    no item left is left out.
     """
     t = _tables(inventory, adapters, project, hidden=hidden)
-    if tab == "instructions":
-        groups = _file_groups(instructions_map(inventory, adapters, project), t)
-        show = "mine"
-    else:
-        tables = {
-            k: _finish(t, k, inventory, adapters, project) for k in ("plugin", "skill", "hook")
-        }
-        answer = library_map(inventory, adapters, project)
-        groups = _item_groups(answer, tables, t, inventory.items)
+    tables = {k: _finish(t, k, inventory, adapters, project) for k in ("plugin", "skill", "hook")}
+    answer = library_map(inventory, adapters, project)
+    groups = _item_groups(answer, tables, t, inventory.items)
     matched = []
     for group in groups:
         kept = [i for i in group["items"] if not q.strip() or _named(i, q)]

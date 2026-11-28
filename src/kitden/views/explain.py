@@ -1,13 +1,11 @@
 """Every definition of one name, which one loads, and why (page side panel and MCP server)."""
 
 import json
-from pathlib import Path
 from typing import Any
 
 from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.local_gateway.views import tool_count
 from kitden.model import Enabled, Item, ItemKind
-from kitden.redact import redact_lines
 from kitden.views.affects import affects
 from kitden.views.effective import effective_view, in_project
 from kitden.views.findings import base_name
@@ -53,34 +51,6 @@ def brief(item: Item) -> dict[str, Any]:
     if item.skill_state:
         out["skill_state"] = item.skill_state
     return out
-
-
-# Details shows this many first lines of an instruction file, each cut at this many characters.
-PREVIEW_LINES = 12
-PREVIEW_WIDTH = 200
-PREVIEW_READ = 64_000
-
-
-def preview(item: Item) -> list[str] | None:
-    """The first lines of an instruction file, secrets hidden; None when it cannot be read."""
-    if item.kind is not ItemKind.INSTRUCTIONS or not item.source.path:
-        return None
-    try:
-        with Path(item.source.path).open(encoding="utf-8-sig", errors="replace") as file:
-            text = file.read(PREVIEW_READ)  # a file with no line breaks is not read whole
-    except OSError:
-        return None
-    return head(text, cut=len(text) == PREVIEW_READ)
-
-
-def head(text: str, cut: bool = False) -> list[str]:
-    """The first lines of a file's text, secrets hidden. With `cut` the read stopped inside the
-    text, so a last line without its end is left out."""
-    lines = text.splitlines()
-    if cut and not text.endswith(("\n", "\r")):
-        lines = lines[:-1]  # the read stopped inside this line
-    # Hide secrets before cutting, so a cut never leaves part of a secret behind.
-    return [line[:PREVIEW_WIDTH] for line in redact_lines(lines[:PREVIEW_LINES])]
 
 
 def reads(item: Item, items: list[Item]) -> str:
@@ -183,9 +153,6 @@ def explain(
                 "merged": beaten.get(item.id) == "merged",
                 # Kept from the last good read of a file that now fails: Details says when.
                 "stale_at": item.stale_at,
-                # With no project picked, only global files show their first lines; a project's
-                # files show theirs when that project is picked.
-                "preview": preview(item) if item.project is None or project else None,
                 "tools": (
                     tool_count(tools, item.name) if item.via_gateway == KITDEN_GATEWAY else None
                 ),

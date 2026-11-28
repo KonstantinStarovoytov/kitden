@@ -9,6 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **The Library shows plugins and skills only:** the Instructions tab is gone and no note names
+  an instruction file, while `kitden scan` still counts them and your agent can still ask Kitden
+  about one (#242).
 - **Calmer top bar and page changes:** the search box has room around its icon and "/", and
   going from one page to another no longer flashes the old page at a wrong size (#241).
 - **Safer changes:** moving a server into the gateway no longer replaces a different server of
@@ -784,7 +787,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   runs no client, uses no Keychain and stays offline.
 - **Secrets in the Keychain:** a server moved into the Kitden gateway keeps its secrets in your
   macOS Keychain, and a backup or a change record says when it holds a secret.
-- **Instructions:** CLAUDE.md, AGENTS.md, Cursor rules, and Claude Code's commands and agents.
+- **Instructions:** read for `kitden scan` and the MCP tools: CLAUDE.md, AGENTS.md, Cursor rules,
+  and Claude Code's commands and agents.
 - **Tool counts:** a server in the gateway shows how many tools it has.
 
 ### 0.2.0

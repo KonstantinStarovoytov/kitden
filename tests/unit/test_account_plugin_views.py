@@ -106,7 +106,7 @@ def test_the_list_puts_the_accounts_rows_in_that_group(home):
     settings = {"enabledPlugins": {"old@synced": True}}
     (home / ".claude/settings.json").write_text(json.dumps(settings))
     inventory, adapters = read(home)
-    answer = library_list(inventory, adapters, None, tab="plugin")
+    answer = library_list(inventory, adapters, None)
     (group,) = [g for g in answer["groups"] if g["key"] == "account"]
     names = [i["name"] for i in group["items"]]
     assert names[:3] == ["garden", "nimbus", "tower"]

@@ -352,3 +352,30 @@ def test_one_claude_md_read_by_claude_code_and_cursor_is_not_a_finding():
     claude = item("claude_code", ItemKind.INSTRUCTIONS, "CLAUDE.md", "/h/p/CLAUDE.md")
     cursor = item("cursor", ItemKind.INSTRUCTIONS, "CLAUDE.md", "/h/p/CLAUDE.md")
     assert find_findings(Inventory(items=[claude, cursor])) == []
+
+
+def _old(client_id, name):
+    return Client(
+        id=client_id,
+        display_name=name,
+        status=ClientStatus.FOUND,
+        version="0.100.0",
+        version_supported=False,
+    )
+
+
+def test_no_finding_names_an_instruction_file():
+    agents = item(
+        "codex", ItemKind.INSTRUCTIONS, "AGENTS.md", "/h/.codex/AGENTS.md", enabled=Enabled.UNKNOWN
+    )
+    inventory = Inventory(clients=[_old("codex", "Codex")], items=[agents])
+    assert [f for f in find_findings(inventory) if "instructions" in f.kinds] == []
+    assert find_findings(inventory) == []
+
+
+def test_an_old_version_note_leaves_instruction_files_out():
+    skill = item("claude_code", ItemKind.SKILL, "x", "/h/.claude/skills/x/SKILL.md")
+    claude_md = item("claude_code", ItemKind.INSTRUCTIONS, "CLAUDE.md", "/h/.claude/CLAUDE.md")
+    inventory = Inventory(clients=[_old("claude_code", "Claude Code")], items=[skill, claude_md])
+    (old,) = [f for f in find_findings(inventory) if f.type is FindingType.VERSION_UNSUPPORTED]
+    assert old.kinds == ("skill",)

@@ -1,46 +1,37 @@
 // Library: what each client loads, as a Map (library-map.js) or a List. The List (spec 5.4, frame
-// L3) has the Map's two tabs. Plugins and skills: one row per source, then its plugins, skills and
-// hooks; a plugin folds over what it holds. Instructions: one row per file. There is one column per
-// client found on this computer, and a cell says On, Off, Via Claude Code, + Add, or nothing. The
-// server builds the rows and cells (views/library.py library_list). A row opens the same Details as
-// the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
+// L3) has one row per source, then its plugins, skills and hooks; a plugin folds over what it
+// holds. There is one column per client found on this computer, and a cell says On, Off, Via
+// Claude Code, + Add, or nothing. The server builds the rows and cells (views/library.py
+// library_list). A row opens the same Details as the map (library-details.js); a cell's "+ Add"
+// only adds a row to the tray.
 import { getJson, query } from "./api.js";
 import { chooseButton, offLine, showChoice } from "./clients-choice.js";
 import { button, el, focusTreeRow, gridCell, gridKeys, icon, joinWords, plural, treeRow } from "./dom.js";
-import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, pressLibraryAdd, renderLibraryMap, setListOnly } from "./library-map.js";
+import { LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, pressLibraryAdd, renderLibraryMap, setListOnly } from "./library-map.js";
 import { addHeadButton, headActions, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterDrawn, afterOldPage, animate, entrance, glide, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { isPanelOpen, openInfo, panelState, previewButton, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, shownClients, skeleton, socket, sourceLines, staleNote } from "./parts.js";
-import { afterShared, arrival, current, currentError, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { afterShared, arrival, current, currentError, data, freshness, go, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 import { cellWaits, markedRows, onTray } from "./tray.js";
 
-// The List's tabs, as on the Map, and what it shows of Plugins and skills.
-const TABS = [["plugin", "Plugins and skills"], ["instructions", "Instructions"]];
+// What the List shows: what is installed, or only what differs between the clients.
 const SHOW = [["mine", "Installed"], ["diff", "Differences"]];
 const LIST_HINT = "One row per item, one column per client. Right opens a plugin, Enter opens Details.";
 // The quiet word after a row's name, and after a part's: what kind of thing it is.
 const KIND_WORDS = { skill: "Skill", hook: "Hook" };
-// A row of "Commands and agents" (its `category`).
-const COMMAND_WORDS = { command: "Command", agent: "Agent" };
 const PART_WORDS = { skill: "Skill", command: "Command", agent: "Agent", hook: "Hook", mcp_server: "MCP server" };
 // A client's column is this wide; the name takes the rest.
 const CELL_W = 150;
 const NO_DIFFERENCES = "No differences between your clients";
 const ADD_MISSING = "Add missing plugins and skills…";
 const ADD_WORDS = "Add plugins, skills or servers from the catalogs";
-// An empty tab: what is missing, and where it comes from.
-const NOTHING = {
-  plugin: ["No plugins or skills in any client", "Plugins and skills you add in Claude Code, Codex or Cursor will show up here."],
-  instructions: ["No instruction files in any client", "Instruction files you add for Claude Code, Codex or Cursor will show up here."],
-};
-// Tabs where Kitden adds nothing: no "Add missing plugins and skills…" and no line about where
-// an add goes.
-export const hasAdds = (kind) => libraryKind(kind) !== "instructions";
+// An empty Library: what is missing, and where it comes from.
+const NOTHING = ["No plugins or skills in any client", "Plugins and skills you add in Claude Code, Codex or Cursor will show up here."];
 // Typing waits this long after the last key before asking the server.
 const TYPING_MS = 200;
-// A tab or filter waits this long for its rows before it changes the page; a slower answer
+// A filter waits this long for its rows before it changes the page; a slower answer
 // dims the old list while it waits, so a skeleton never flashes between two lists.
 const SWAP_WAIT_MS = 300;
 // Rows on screen that move when the list changes; the rest just appear.
@@ -119,9 +110,9 @@ export function addName(row, client, add, project) {
   return `${to}${project ? " for all projects" : ""}`;
 }
 
-// A quiet line above the List: in a project, where an Add goes. Null on a tab with no adds.
-export function scopeLine(project, rows, kind = null) {
-  if (!project || rows.length === 0 || !hasAdds(kind)) return null;
+// A quiet line above the List: in a project, where an Add goes.
+export function scopeLine(project, rows) {
+  if (!project || rows.length === 0) return null;
   const adds = rows.flatMap((r) => Object.values(r.cells || {}).map((c) => c.add).filter(Boolean));
   const own = "This project's own skills add into this project.";
   if (adds.length && adds.every((add) => add.project_only)) return own;
@@ -226,16 +217,11 @@ export function setHidden(list) {
   }
 }
 
-// The tab shown: Instructions, or Plugins and skills for any other kind.
-const currentKind = () => libraryKind(state.kind);
-
-// The question for the server, for the shown tab or (`choice`) one about to show. Instructions has
-// no Differences.
+// The question for the server, for the List shown or (`choice`) one about to show.
 function asking(choice = state) {
-  const kind = libraryKind(choice.kind);
   return {
-    project: choice.project, kind, show: kind === "plugin" && choice.show === "diff" ? "diff" : "mine",
-    q: choice.q, attention: kind === "plugin" && choice.attention,
+    project: choice.project, kind: "plugin", show: choice.show === "diff" ? "diff" : "mine",
+    q: choice.q, attention: Boolean(choice.attention),
     // Sorted, so the same choice made in another order is the same question.
     hidden: hiddenClients().sort().join(","),
   };
@@ -259,7 +245,7 @@ function needsLoad(key) {
   return !(cache.key === key && cache.at >= since);
 }
 
-// Ask the server (`asked`: the shown tab unless given). A newer request wins: only the answer to
+// Ask the server (`asked`: the List shown unless given). A newer request wins: only the answer to
 // the last request sent is kept, and never over a newer answer. `draw` redraws the page when the
 // answer is in; a caller that draws itself passes false.
 function load(asked = asking(), draw = true) {
@@ -299,7 +285,7 @@ function schedule(key) {
   timer = setTimeout(() => { timer = null; if (state.view === "library") load(); }, TYPING_MS);
 }
 
-// Read a tab (`choice`: state keys such as kind and show over the current state) without drawing,
+// Read a List (`choice`: state keys such as show over the current state) without drawing,
 // unless its answer is fresh already. Never rejects.
 function read(choice) {
   const asked = asking({ ...state, ...choice });
@@ -315,17 +301,16 @@ export function raceSlow(promise, ms) {
   ]);
 }
 
-// The pressed tab or Installed / Differences choice is marked at once, and its mark slides there,
-// so the press answers right away; the list follows when its rows are in.
+// The pressed Installed / Differences choice is marked at once, and its mark slides there, so the
+// press answers right away; the list follows when its rows are in.
 function markChoice(node) {
   const box = node && node.parentElement;
   if (!box) return;
   for (const choice of box.children) if (choice.tagName === "BUTTON") choice.setAttribute("aria-pressed", String(choice === node));
-  if (box.classList.contains("map-tabs")) glidePill(box, node, "library-tabs-map");
-  else glide(box, node, "library-show", { duration: 280 });
+  glide(box, node, "library-show", { duration: 280 });
 }
 
-// A tab or filter: read its rows first, so the list changes once, already full. The last
+// A filter: read its rows first, so the list changes once, already full. The last
 // choice wins when several are pressed before their rows are in.
 let choosing = 0;
 async function choose(params, pressed = null) {
@@ -340,7 +325,7 @@ async function choose(params, pressed = null) {
   if (mine === choosing) go("library", params);
 }
 
-// For a caller that draws the page itself once the shown tab is read (a reload, a change or a
+// For a caller that draws the page itself once the List is read (a reload, a change or a
 // project switch), so the cells morph then and not before. Call it right after reload() starts.
 // Nothing is read for a project no longer on the list (afterShared).
 export function loadLibrary() {
@@ -349,7 +334,7 @@ export function loadLibrary() {
   return afterShared(() => read({}));
 }
 
-// Read the tab another place is about to open, so it is drawn inside the place change (an
+// Read the List another place is about to open, so it is drawn inside the place change (an
 // Overview card or note).
 export function loadLibraryFor(choice) {
   return afterShared(() => read(choice));
@@ -361,8 +346,7 @@ export function loadLibraryFor(choice) {
 export function renderLibrary(main, { again = false } = {}) {
   const switched = switchedNow();
   const mode = libraryMode();
-  // The view drawn, so a switch that lands late draws nothing; with no choice in the address, the
-  // address names it with the tab (hashFor), so a reload or Back shows the same view.
+  // The view drawn, so a switch that lands late draws nothing.
   libraryShows.mode = mode;
   if (!state.mode) setState({});
   const head = el("div", "page-head");
@@ -386,25 +370,22 @@ export function renderLibrary(main, { again = false } = {}) {
   return found;
 }
 
-// The List: the Map's lede, tabs and scope bar, then the filters and the rows.
+// The List: the Map's lede and scope bar, then the filters and the rows.
 function renderList(main) {
-  const kind = currentKind();
-  const tabs = listTabs(kind);
-  main.append(...[el("p", "lede", LEDE), tabs, scopeBar(folderName(projectPath()))].filter(Boolean));
-  glidePill(tabs, tabs.querySelector('[aria-pressed="true"]'), "library-tabs-map");
-  setHint(kind === "plugin" ? LIST_HINT : INSTRUCTIONS_HINT);
+  main.append(...[el("p", "lede", LEDE), scopeBar(folderName(projectPath()))].filter(Boolean));
+  setHint(LIST_HINT);
 
   const key = cacheKey();
   // The page's first reload reads the rows with everything else (app.js refresh).
   if (freshness.reloadStartedAt) schedule(key);
   const sameProject = cache.answer && cache.asked.project === state.project;
-  // Rows of another tab or project are never shown under this one; other filters wait in place.
-  const answer = sameProject && cache.asked.kind === kind ? cache.answer : null;
+  // Rows of another project are never shown under this one; other filters wait in place.
+  const answer = sameProject ? cache.answer : null;
   const asked = answer ? cache.asked : asking();
   const fresh = cache.key === key && cache.at >= freshness.reloadStartedAt;
   const failed = cache.errorKey === key ? cache.error : null;
   // Before any early return: an empty List after a project switch still moves its Details on.
-  followProject(kind);
+  followProject();
   if (answer && !answer.columns.length) {
     main.append(noClients());
     return;
@@ -412,9 +393,9 @@ function renderList(main) {
   // The Map's line (library-map.js): here too, once rows or none are read.
   const off = answer ? offLine(data.clients) : null;
   if (off) main.append(off);
-  const tools = toolbar(kind, answer);
-  if (tools) main.append(tools);
-  const show = tools && tools.querySelector(".seg");
+  const tools = toolbar(answer);
+  main.append(tools);
+  const show = tools.querySelector(".seg");
   if (show) glide(show, show.querySelector('[aria-pressed="true"]'), "library-show", { duration: 280 });
 
   if (!answer) {
@@ -428,18 +409,18 @@ function renderList(main) {
   main.append(sourceBox());
   // A selection that arrived (from another place, Back, Forward or a link) opens once its rows
   // and the map read its Details are drawn from are in; its group unfolds for it.
-  const arrived = fresh && mapRead(kind) ? arrivalIn(answer) : null;
+  const arrived = fresh && mapRead() ? arrivalIn(answer) : null;
   const rows = listRows(answer, searchOpen(answer, asked.q), onList.folded);
   if (!rows.length) {
     main.append(emptyState(asked));
     finish(rows);
     return;
   }
-  const line = scopeLine(state.project, rows.filter((r) => r.cells), asked.kind);
+  const line = scopeLine(state.project, rows.filter((r) => r.cells));
   if (line) main.append(el("p", "group-note", line));
   // A hidden column is still in `columns`, marked; it is not drawn.
   const columns = answer.columns.filter((c) => !c.hidden);
-  const grid = listGrid(rows, columns, kind);
+  const grid = listGrid(rows, columns);
   const scroller = el("div", "table-scroll");
   scroller.append(grid);
   main.append(scroller);
@@ -448,19 +429,17 @@ function renderList(main) {
   if (arrived) showArrived(arrived);
 }
 
-// The tab's map read is in, or failed: Details can be drawn from it, or say it failed.
-function mapRead(kind) {
-  const read = kind === "plugin" ? "libraryMap" : "instructionsMap";
-  return Boolean(current(read) || currentError(read));
+// The map read is in, or failed: Details can be drawn from it, or say it failed.
+function mapRead() {
+  return Boolean(current("libraryMap") || currentError("libraryMap"));
 }
 
 // Another project drawn in place: Details a row opened follow the same item, drawn for that
-// project, or close when it is gone (library-details.js). It waits for the tab's map read of that
+// project, or close when it is gone (library-details.js). It waits for the map read of that
 // project, which the Details are drawn from (app.js reads it beside the List's rows).
-function followProject(kind) {
-  const read = kind === "plugin" ? "libraryMap" : "instructionsMap";
-  const failed = Boolean(currentError(read));
-  if (onList.project === state.project || (!current(read) && !failed)) return;
+function followProject() {
+  const failed = Boolean(currentError("libraryMap"));
+  if (onList.project === state.project || (!current("libraryMap") && !failed)) return;
   const had = onList.project !== null && onList.selected;
   onList.project = state.project;
   if (!had) return;
@@ -470,30 +449,9 @@ function followProject(kind) {
   libraryDetails(id, { follow: true });
 }
 
-// "Plugins and skills" | "Instructions", as on the Map: a press lets go of the row whose Details
-// show, and reads the other tab first.
-function listTabs(kind) {
-  const box = el("div", "seg sm map-tabs");
-  box.setAttribute("role", "group");
-  box.setAttribute("aria-label", "Show");
-  for (const [id, label] of TABS) {
-    const choice = button(label, () => id !== currentKind() && toTab(id, choice), "");
-    choice.setAttribute("aria-pressed", String(kind === id));
-    choice.dataset.focus = `tab:${id}`;
-    box.append(choice);
-  }
-  return box;
-}
-
-function toTab(id, choice) {
-  letGoList();
-  return choose({ kind: id, selected: null }, choice);
-}
-
-// Plugins and skills: Installed | Differences, "Needs attention" when something does (Overview
-// links use it), and "Add missing plugins and skills…". Instructions has none of these.
-function toolbar(kind, answer) {
-  if (kind !== "plugin") return null;
+// Installed | Differences, "Needs attention" when something does (Overview links use it), and
+// "Add missing plugins and skills…".
+function toolbar(answer) {
   const bar = el("div", "toolbar");
   const seg = el("div", "seg");
   seg.setAttribute("role", "group");
@@ -591,22 +549,21 @@ function showLookFor() {
 // line shows with that line and after the same wait, so a quick start never blinks one here.
 let sources = null;
 
-// The sources still read that change this tab (parts.js), one quiet line each above the List,
-// after the files Kitden could not read.
+// The sources still read that change the List (parts.js), one quiet line each above it, after the
+// files Kitden could not read.
 function sourceBox() {
   const box = el("div", "source-lines");
-  for (const line of sourceLines(sources, currentKind())) box.append(el("p", "note", line));
+  for (const line of sourceLines(sources, "plugin")) box.append(el("p", "note", line));
   return box;
 }
 
-// The top bar's line shows, changes or goes (app.js showScan). When this tab's lines change,
-// only they are drawn again, so no row slides. A line that goes fades and keeps its place until
-// the page next draws (a rescan comes with every source that ends), so the List does not jump
-// for it. True when this tab's lines changed.
+// The top bar's line shows, changes or goes (app.js showScan). When the List's lines change, only
+// they are drawn again, so no row slides. A line that goes fades and keeps its place until the
+// page next draws (a rescan comes with every source that ends), so the List does not jump for it.
+// True when its lines changed.
 export function showSources(progress) {
-  const kind = currentKind();
-  const before = sourceLines(sources, kind);
-  const after = sourceLines(progress, kind);
+  const before = sourceLines(sources, "plugin");
+  const after = sourceLines(progress, "plugin");
   sources = progress;
   if (state.view !== "library" || after.join("\n") === before.join("\n")) return false;
   const box = document.querySelector("#main .source-lines");
@@ -616,7 +573,7 @@ export function showSources(progress) {
 }
 
 // Nothing to show: a search, a filter or Differences that found nothing says how to go back;
-// an empty tab says what shows up here.
+// an empty Library says what shows up here.
 export function emptyState(asked) {
   const box = el("div", "empty");
   if (asked.q) {
@@ -626,7 +583,7 @@ export function emptyState(asked) {
   } else if (asked.show === "diff") {
     box.append(el("strong", null, NO_DIFFERENCES), button("Show installed", () => go("library", { show: "mine" })));
   } else {
-    const [title, line] = NOTHING[libraryKind(asked.kind)];
+    const [title, line] = NOTHING;
     box.append(el("strong", null, title), el("p", null, line));
   }
   return box;
@@ -647,10 +604,10 @@ export function listRows(answer, open = new Set(), folded = new Set()) {
     rows.push({ id, key: id, parent: null, depth: 0, kind: "group", name: group.name, meta: null, flags: [], cells: null, sel: details ? { kind: "marketplace", name: group.name } : null, expanded, group: !details, icon: group.icon });
     if (!expanded) continue;
     for (const item of group.items) {
-      const itemId = `${item.kind === "file" ? "file" : "item"}:${item.id}`;
+      const itemId = `item:${item.id}`;
       const parts = item.parts || [];
       const opened = parts.length ? open.has(itemId) : undefined;
-      const sel = item.lookup ? { kind: item.kind, name: item.lookup } : (item.names || []).length ? { kind: "instructions", name: item.names[0] } : null;
+      const sel = item.lookup ? { kind: item.kind, name: item.lookup } : null;
       rows.push({ id: itemId, key: itemId, parent: id, depth: 1, kind: item.kind, name: item.name, meta: itemWords(item), flags: item.flags || [], cells: item.cells, sel, expanded: opened, group: false, source: item.source, same_name: item.same_name, account: Boolean(item.account), reason: item.reason || null });
       if (!opened) continue;
       for (const part of parts) {
@@ -664,16 +621,14 @@ export function listRows(answer, open = new Set(), folded = new Set()) {
   return rows;
 }
 
-// "Plugin · 4 items" (what Kitden read inside it; "Plugin" when it read nothing), "Skill", "Hook",
-// "Command" or "Agent"; an instruction file has none.
+// "Plugin · 4 items" (what Kitden read inside it; "Plugin" when it read nothing), "Skill" or "Hook".
 function itemWords(item) {
   if (item.kind === "plugin") return item.count ? `Plugin · ${plural(item.count, "item", "items")}` : "Plugin";
-  return KIND_WORDS[item.kind] || COMMAND_WORDS[item.category] || null;
+  return KIND_WORDS[item.kind] || null;
 }
 
-// A group row's id: the map's (a group of files is the Instructions tab's own: library-map.js
-// filesGroup), so folds stay per tab.
-const groupId = (group) => (group.kind === "files" ? filesGroup(group.key) : `group:${group.key}`);
+// A group row's id: the map's.
+const groupId = (group) => `group:${group.key}`;
 
 // The plugins open for this draw: the person's, and while searching, every plugin a part of which
 // the search found (it stays as the person left it once the search ends).
@@ -697,13 +652,13 @@ function letGoList() {
 
 // The tree grid: a head row with Name and the clients, then a row each. The arrows move, Right
 // opens and Left folds, Enter opens Details (dom.js gridKey).
-function listGrid(rows, columns, kind) {
+function listGrid(rows, columns) {
   if (!rows.some((r) => r.id === onList.current)) onList.current = rows[0].id;
   const showing = isPanelOpen() && panelState.current && panelState.current.type === "library" ? panelState.current.id : null;
   if (onList.selected !== showing) onList.selected = null;
   const grid = el("div", "treegrid library-list");
   grid.setAttribute("role", "treegrid");
-  grid.setAttribute("aria-label", kind === "plugin" ? "Plugins and skills by client" : "Instruction files by client");
+  grid.setAttribute("aria-label", "Plugins and skills by client");
   grid.style.setProperty("--tg-cols", `minmax(0, 1fr) repeat(${columns.length}, ${CELL_W}px)`);
   grid.append(headRow(columns));
   onList.nodes = new Map();
@@ -742,8 +697,7 @@ function headRow(columns) {
 // Details folds.
 function listRow(row, columns, { current, selected }) {
   const { node, name } = treeRow(row.kind === "group" ? "tg-row group" : `tg-row ${row.kind === "part" ? "part" : "item"}`, row, { current, selected });
-  // A file's name is in mono, as on the Instructions map.
-  const words = el("span", row.kind === "group" ? "words" : row.kind === "file" ? "words name mono" : "words name", row.name);
+  const words = el("span", row.kind === "group" ? "words" : "words name", row.name);
   words.title = row.name;
   name.append(words);
   // One flag per wording: three clients with the same note make one flag, not three.
@@ -845,8 +799,6 @@ export function arrivalIn(answer) {
   const arrived = takeArrival();
   if (!arrived || isPanelOpen()) return null;
   const named = (kind, name) => Boolean(name) && sameSel({ kind, name }, arrived);
-  // A file, a command or an agent goes by the names of the items it stands for.
-  const isItem = (item) => named(item.kind, item.lookup) || (item.names || []).some((name) => named("instructions", name));
   for (const group of answer.groups) {
     const fold = groupId(group);
     if (group.kind === "marketplace" && named("marketplace", group.name)) {
@@ -855,9 +807,9 @@ export function arrivalIn(answer) {
     }
     for (const item of group.items) {
       const part = (item.parts || []).find((p) => named(p.kind, p.lookup));
-      if (!isItem(item) && !part) continue;
+      if (!named(item.kind, item.lookup) && !part) continue;
       onList.folded.delete(fold);
-      if (!part) return `${item.kind === "file" ? "file" : "item"}:${item.id}`;
+      if (!part) return `item:${item.id}`;
       onList.open.add(`item:${item.id}`);
       return `part:${item.id}:${part.key}:${part.name}`;
     }
@@ -881,10 +833,9 @@ function showArrived(id) {
 }
 
 // Smooth changes of the List. Before the page draws again it notes where each row on screen is;
-// after, rows that stay slide from there to their new place, new rows rise in, and the other
-// tab's list slides in from its side. Only transform and opacity move; with reduced motion
-// nothing does.
-let drawnKind = null;
+// after, rows that stay slide from there to their new place, and new rows rise in. Only transform
+// and opacity move; with reduced motion nothing does. `listDrawn`: the last draw drew the List.
+let listDrawn = false;
 
 function rowsOnScreen() {
   const rows = [];
@@ -908,29 +859,17 @@ export function rowMoves(before, after) {
   return { moved, entered };
 }
 
-// 1 when `to` is a tab to the right of `from`, -1 to the left, 0 for the same tab.
-export function tabDirection(from, to) {
-  const order = TABS.map(([id]) => id);
-  return Math.sign(order.indexOf(libraryKind(to)) - order.indexOf(libraryKind(from)));
-}
-
 const listShown = () => document.querySelector("#main .table-scroll");
 
 export function snapshotRows() {
-  if (!listShown()) return null;
-  return { kind: drawnKind, tops: new Map(rowsOnScreen().map(([id, , top]) => [id, top])) };
+  if (!listShown() || !listDrawn) return null;
+  return { tops: new Map(rowsOnScreen().map(([id, , top]) => [id, top])) };
 }
 
 export function settleRows(before) {
   const scroller = listShown();
-  drawnKind = scroller ? currentKind() : null;
-  if (!before || !before.kind || !scroller || reducedMotion.matches) return;
-  const direction = tabDirection(before.kind, drawnKind);
-  if (direction) {
-    const frames = [{ opacity: 0, transform: `translateX(${8 * direction}px)` }, { opacity: 1, transform: "none" }];
-    animate(scroller, frames, { duration: 220 });
-    return;
-  }
+  listDrawn = Boolean(scroller);
+  if (!before || !scroller || reducedMotion.matches) return;
   const rows = rowsOnScreen();
   const byId = new Map(rows.map(([id, node]) => [id, node]));
   const { moved, entered } = rowMoves(before.tops, new Map(rows.map(([id, , top]) => [id, top])));

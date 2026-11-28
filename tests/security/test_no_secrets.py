@@ -159,26 +159,19 @@ def _page_outputs(home) -> list[str]:
             "/api/map",
             "/api/gateway-view",
             "/api/library-map",
-            "/api/instructions-map",
             "/api/market-servers",
             "/api/library-offers",
         ]:
             outputs.append(page.get(path).text)
         for item in page.get("/api/items?kind=mcp_server").json():
             outputs.append(page.get(f"/api/explain?name={item['name']}&kind=mcp_server").text)
-        # Instruction files: Details shows their first lines.
-        outputs.append(page.get("/api/library?kind=instructions").text)
-        for tab in ("plugin", "instructions"):
-            outputs.append(page.get(f"/api/library-list?kind={tab}").text)
+        outputs.append(page.get("/api/library-list?kind=plugin").text)
         projects = [f"&project={p['id']}" for p in page.get("/api/projects").json()]
         for query in ["", *projects]:
-            explained = page.get(f"/api/explain?name=CLAUDE.md&kind=instructions{query}").text
-            assert "[secret]" in explained  # the preview is there, masked
-            outputs.append(explained)
+            outputs.append(page.get(f"/api/explain?name=CLAUDE.md&kind=instructions{query}").text)
         for project in page.get("/api/projects").json():
             outputs.append(page.get(f"/api/projects/{project['id']}/effective").text)
             outputs.append(page.get(f"/api/library-map?project={project['id']}").text)
-            outputs.append(page.get(f"/api/instructions-map?project={project['id']}").text)
             outputs.append(page.get(f"/api/findings?project={project['path']}").text)
         for item in page.get("/api/items").json():
             if item["kind"] in ("plugin", "marketplace"):
@@ -211,15 +204,7 @@ async def _mcp_outputs(build, home, names) -> list[str]:
 
 @pytest.mark.anyio
 async def test_no_secret_in_any_output_and_no_network(home, network_attempts, capsys):
-    # An imported file holds a secret: the Instructions map names the import, never its text.
-    # A token written after `@` is hidden in the name and the path, found or missing.
-    claude = home / ".claude/CLAUDE.md"
-    named = "ghp_SENTINEL_SECRET_IN_A_FILE_NAME"
-    claude.write_text(claude.read_text() + f"@notes.md @{named}.md @ghp_SENTINEL_SECRET_MISSING\n")
-    (home / ".claude/notes.md").write_text("api_key = SENTINEL_SECRET_IMPORTED\n")
-    (home / f".claude/{named}.md").write_text("# Named\n")
     outputs = _page_outputs(home)
-    assert any('"name":"notes.md"' in text for text in outputs)
     store = data_dir(home)
     outputs.append((store / "changes.log").read_text())
     outputs += [p.read_text() for p in store.glob("changes/*/manifest.json")]
@@ -284,17 +269,15 @@ def _demo_outputs(home) -> list[str]:
                 "/api/map",
                 "/api/gateway-view",
                 "/api/library-map",
-                "/api/instructions-map",
             ]:
                 get(path + query)
             get("/api/findings" + (f"?project={quote(project['path'])}" if project else ""))
         for kind in KINDS:
             for project in [None, projects[0]]:
                 get(f"/api/library?kind={kind}" + (f"&project={project['id']}" if project else ""))
-        for tab in ("plugin", "instructions"):
-            for project in [None, projects[0]]:
-                where = f"&project={project['id']}" if project else ""
-                get(f"/api/library-list?kind={tab}&show=diff{where}")
+        for project in [None, projects[0]]:
+            where = f"&project={project['id']}" if project else ""
+            get(f"/api/library-list?kind=plugin&show=diff{where}")
         items = page.get("/api/items").json()
         explained = {
             (i["name"], i["kind"])

@@ -1,5 +1,5 @@
 // Page state, data cache and navigation. The URL hash keeps the state, so links and Back work:
-// #library?kind=<plugin|instructions>&show=<mine|diff>&attention=1&view=<map|list>&project=<id>&q=<text>&sel=<kind>:<name>
+// #library?kind=plugin&show=<mine|diff>&attention=1&view=<map|list>&project=<id>&q=<text>&sel=<kind>:<name>
 import { getJson, query } from "./api.js";
 import { transition } from "./motion.js";
 
@@ -15,22 +15,19 @@ const MODE_PLACES = ["gateway", "library"];
 const MODES = ["map", "list"];
 // An old Library address names a kind and no view (`#library?kind=hook`): the Library had one
 // table then. Each kind now lives here: MCP servers on the Gateway's List, hooks and marketplaces on
-// the Library's map, the rest on its List. The Library's tabs are Plugins and skills ("plugin", for
-// every kind but instructions) and Instructions (libraryKind).
+// the Library's map, the rest on its List. The Library shows plugins and skills: its kind is always
+// "plugin". An old Instructions address (`kind=instructions`) opens it on its List.
 const OLD_KINDS = { mcp_server: { view: "gateway", mode: "list" }, hook: { mode: "map" }, marketplace: { mode: "map" } };
 // The kinds of item the address can select: `sel=mcp_server:github`, `sel=tool:github/push_files`,
 // `sel=client:codex`, `sel=group:outside` (a map's group block, its id without `group:`), and
 // `sel=direct:pencil`: a server's entries outside the gateway, also when the gateway holds a
 // server of the same name (an Overview card about entries an app wrote back).
-const SEL_KINDS = ["mcp_server", "direct", "plugin", "skill", "hook", "marketplace", "instructions", "tool", "client", "group"];
+const SEL_KINDS = ["mcp_server", "direct", "plugin", "skill", "hook", "marketplace", "tool", "client", "group"];
 // `selected` is the item picked on any page, { kind, name }, or null. `mode`: "map", "list" or
 // "" (no choice).
 export const state = {
   view: "overview", kind: "plugin", show: "mine", category: "", attention: false, mode: "", project: "", q: "", selected: null,
 };
-
-// The Library's tab for a kind: Instructions, or Plugins and skills for any other.
-export const libraryKind = (kind) => (kind === "instructions" ? "instructions" : "plugin");
 
 // What a page shows: the choice in the address, else its map, at any size: big groups fold into
 // stacks there.
@@ -41,7 +38,7 @@ export function viewMode(s) {
 // Map or List, as the Gateway page drew it last ("" before it drew either): Details and the
 // effect of an Apply ask which one shows.
 export const gatewayShows = { mode: "" };
-// The same for the Library: its address names that view with a kind (hashFor).
+// The same for the Library.
 export const libraryShows = { mode: "" };
 
 // A change is being applied or undone: live rescans wait so the result can morph in.
@@ -69,7 +66,7 @@ export const freshness = { reloadStartedAt: 0, lastGoodRead: null, lastReadFaile
 // that began before a change was applied may not show it yet).
 // errorScope: the project each failed read was for.
 export const data = {
-  clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, context: null, setupServer: null, libraryMap: null, instructionsMap: null,
+  clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, context: null, setupServer: null, libraryMap: null,
   progress: null, // where the first scan is, from /api/progress and its events
   errors: {}, scope: {}, readAt: {}, errorScope: {},
 };
@@ -143,7 +140,7 @@ export function parseHash(hash) {
   const mode = moved ? moved.mode : params.get("view");
   return {
     view,
-    kind: libraryKind(params.get("kind")),
+    kind: "plugin",
     show: !old && SHOWS.includes(show) ? show : "mine",
     category: params.get("category") || "",
     attention: params.get("attention") === "1" || (place === "map" && params.get("only") === "problems"),
@@ -166,22 +163,19 @@ export function isOldAddress(hash) {
   return Boolean(OLD_VIEWS.includes(place) || oldLibraryLink(place, new URLSearchParams(rest || "")));
 }
 
-// The Library's address reads back as it is: a kind with no view is an old address, so a kind
-// always comes with a view. With no choice made, the first tab (Plugins and skills) is left out,
-// and Instructions names the view the page drew last (the List before it drew either).
+// The Library's address reads back as it is: a kind with no view is an old address, so the kind
+// is written only with the List.
 export function hashFor(s) {
   const library = s.view === "library" ? libraryWords(s) : {};
-  const mode = MODE_PLACES.includes(s.view) ? s.mode || library.view || "" : "";
+  const mode = MODE_PLACES.includes(s.view) ? s.mode || "" : "";
   return `#${s.view}${query({ ...library, view: mode, project: s.project, q: s.q, sel: selFor(s.selected) })}`;
 }
 
 function libraryWords(s) {
-  const kind = s.kind === "plugin" && s.mode !== "list" ? "" : s.kind;
-  const view = kind && !s.mode ? libraryShows.mode || "list" : "";
-  return { kind, show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "", view };
+  return { kind: s.mode === "list" ? s.kind : "", show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "" };
 }
 
-// A new place or project gets its own history entry, so Back returns to it; tabs, filters
+// A new place or project gets its own history entry, so Back returns to it; filters
 // and search only replace the current one.
 function writeHash(addEntry = false) {
   try {
@@ -220,7 +214,7 @@ export function go(view, params = {}) {
   place(view, params);
 }
 
-// The Library tab and choice that show a selected item: its kind (place() turns it into its tab,
+// The Library choice that shows a selected item: its kind (place() turns it into the Library's,
 // or the Gateway for an MCP server), under Installed, no search, on the List.
 export function libraryChoice(selected) {
   return { kind: selected.kind, show: "mine", category: "", attention: false, q: "", mode: "list" };
@@ -248,11 +242,11 @@ function place(view, params) {
 }
 
 // Where a place change lands: the Library's MCP servers are on the Gateway's List now, and any
-// other kind opens its Library tab.
+// other kind opens the Library.
 function newPlace(view, params) {
   if (view !== "library" || params.kind === undefined) return { view, params };
   if (params.kind === "mcp_server") return { view: "gateway", params: { ...params, kind: "plugin", mode: "list" } };
-  return { view, params: { ...params, kind: libraryKind(params.kind) } };
+  return { view, params: { ...params, kind: "plugin" } };
 }
 
 export function setState(params) {
@@ -415,22 +409,19 @@ function markGatewayData() {
   }
 }
 
-// The Library's maps (its tabs: plugins and skills, and instruction files) are read only while the
-// Library shows (reload) and when it opens. `fresh`: no reload ran without them since they were
-// last read, and both reads worked. `turn` counts the reads and the reloads that skip them: an
-// answer to an older turn is dropped, so it never replaces or marks newer data.
+// The Library's map is read only while the Library shows (reload) and when it opens. `fresh`: no
+// reload ran without it since it was last read, and the read worked. `turn` counts the reads and
+// the reloads that skip it: an answer to an older turn is dropped, so it never replaces or marks
+// newer data.
 const libraryMapRead = { fresh: false, running: null, turn: 0 };
-const LIBRARY_READS = ["libraryMap", "instructionsMap"];
+const LIBRARY_READS = ["libraryMap"];
 
 export async function loadLibraryMap() {
   const { project } = state;
   const turn = ++libraryMapRead.turn;
   const outdated = () => turn !== libraryMapRead.turn;
-  const worked = await Promise.all([
-    guarded("libraryMap", `/api/library-map${query({ project })}`, (v) => { data.libraryMap = v; }, project, outdated),
-    guarded("instructionsMap", `/api/instructions-map${query({ project })}`, (v) => { data.instructionsMap = v; }, project, outdated),
-  ]);
-  if (!outdated()) libraryMapRead.fresh = worked.every(Boolean);
+  const worked = await guarded("libraryMap", `/api/library-map${query({ project })}`, (v) => { data.libraryMap = v; }, project, outdated);
+  if (!outdated()) libraryMapRead.fresh = worked;
 }
 
 // Read the Library's map when it may be out of date (one read at a time); null when it is not.
@@ -494,7 +485,7 @@ export async function reload() {
   const reads = projectGone() ? [] : [loadOverview().then(early), loadMap(), loadGateway().then(early), ...(maps ? [loadLibraryMap()] : []), ...(state.view === "context" ? [loadContext()] : [])];
   await Promise.all([...reads, loadSetupServer().then(early)]);
   firstLoad = false;
-  // The Library's maps count only while the Library shows: they are not read elsewhere.
+  // The Library's map counts only while the Library shows: it is not read elsewhere.
   freshness.lastReadFailed = Object.keys(data.errors).some((name) => !LIBRARY_READS.includes(name) || state.view === "library");
   if (!freshness.lastReadFailed) freshness.lastGoodRead = Date.now();
 }
