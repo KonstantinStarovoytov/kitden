@@ -26,7 +26,6 @@ from kitden.system import watched
 from kitden.views.after import after_words
 from kitden.views.answers import context_answer
 from kitden.views.explain import reads
-from kitden.views.instructions_map import instructions_map
 from kitden.views.inventory import build_inventory
 from kitden.views.library_map import cursor_imports
 from tests.conftest import make_home, rows
@@ -324,26 +323,6 @@ def test_a_rule_taken_out_follows_the_moved_shared_settings(home, moved):
     assert said[0]["state"] == "off"
 
 
-def _agents_through(home: Path) -> list[str]:
-    """The AGENTS.md files the Instructions map says Claude Code reads in a project under home
-    that has no CLAUDE.md of its own."""
-    project = home / "work/agents-only"
-    project.mkdir()
-    (project / "AGENTS.md").write_text("Rules.")
-    adapters = {"claude_code": _adapter(home)}
-    inventory = build_inventory(home, [ClaudeCodeAdapter(home, lambda: "2.1.311")], apps=[])
-    groups = instructions_map(inventory, adapters, str(project))["groups"]
-    return [f["name"] for g in groups for f in g["files"] if f.get("through")]
-
-
-def test_the_user_s_claude_md_does_not_stop_agents_md(home):
-    assert _agents_through(home) == ["AGENTS.md"]
-
-
-def test_a_claude_md_left_in_the_home_folder_stops_agents_md_when_the_folder_moved(home, moved):
-    assert _agents_through(home) == []
-
-
 def test_a_rule_in_the_moved_folder_is_told_as_a_rule(home, moved):
     (moved / "rules").mkdir()
     (moved / "rules/style.md").write_text("Style.")
@@ -408,7 +387,7 @@ def real(tmp_path, monkeypatch):
 def test_the_demo_ignores_both_variables(tmp_path, real):
     before = {p: p.read_bytes() for p in real.rglob("*") if p.is_file()}
     with demo_page(tmp_path / "demo") as open_page:
-        for path in ("/api/items", "/api/context", "/api/library-map", "/api/instructions-map"):
+        for path in ("/api/items", "/api/context", "/api/library-map"):
             answer = open_page.get(path)
             assert answer.status_code == 200, path
             assert "from-real" not in answer.text, path

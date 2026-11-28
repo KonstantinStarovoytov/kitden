@@ -85,8 +85,7 @@ def item_answer(
     inventory: Inventory, folder: str, name: str, kind: str | None = None
 ) -> dict[str, Any]:
     project, path = _where(inventory, folder)
-    # An agent's answer leaves this computer: a file's first lines stay on the local page.
-    definitions = [{**d, "preview": None} for d in explain(inventory, name, kind, path)]
+    definitions = explain(inventory, name, kind, path)
     return {"project": _project_dict(project), "name": name, "definitions": definitions}
 
 

@@ -755,7 +755,7 @@ def test_sibling_projects_in_one_repository_each_have_their_own_copy_of_a_root_r
         # Details name the folder that holds the file: the repository's, not the project's.
         assert item["can"]["local_in"] == {"claude_code": "atlas"}, project
         # The List shows it off there too.
-        listed = library_list(inventory, adapters, path, tab="plugin")
+        listed = library_list(inventory, adapters, path)
         row = next(i for g in listed["groups"] for i in g["items"] if i["name"] == "superpowers")
         assert row["cells"]["claude_code"]["state"] == "off", project
     # In atlas itself the file is its own: no other folder to name.

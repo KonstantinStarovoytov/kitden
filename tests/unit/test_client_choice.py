@@ -235,8 +235,7 @@ def test_the_agents_page_leaves_an_off_client_out(off_page):
     assert _ids(off_page.get("/api/setup-server").json(), "client") == ["claude_code", "cursor"]
 
 
-def test_the_instructions_map_and_context_leave_an_off_client_out(off_page):
-    assert "codex" not in off_page.get("/api/instructions-map").text.lower()
+def test_context_leaves_an_off_client_out(off_page):
     assert "codex" not in _ids(off_page.get("/api/context").json()["clients"], "client")
 
 
