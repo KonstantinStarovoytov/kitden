@@ -74,6 +74,8 @@ def project_rows(inventory: Inventory, ruled: Collection[str] = ()) -> list[Proj
         main = _real(str(main_checkout(Path(real)))) if head.exists else real
         if main != real and main in heads and heads[main].exists:
             into[real] = main
+    # A hand-made `.git` can chain worktrees; fold only into a group that does not fold itself.
+    into = {real: main for real, main in into.items() if main not in into}
     # 3. A group whose row does not exist is no row. 4. A holder is always a row of its own.
     folded: dict[str, list[str]] = {}
     own_rows: list[Project] = []

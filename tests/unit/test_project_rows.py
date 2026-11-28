@@ -103,6 +103,13 @@ def test_an_entry_with_a_setting_under_its_own_path_stays_a_row(tmp_path):
     assert ids(link)[0] not in rows[0].folded
     assert rows[1].folded == ()
 
+    # An existing worktree with a local server of its own.
+    wt2 = worktree(app, app / ".claude/worktrees/wt2", "wt2")
+    local = item("db", wt2, kind=ItemKind.MCP_SERVER, scope=Scope.LOCAL)
+    rows = rows_of([app, wt2], [local])
+    assert [r.project.path for r in rows] == [str(app), str(wt2)]
+    assert ids(wt2)[0] not in rows[0].folded
+
 
 def test_own_is_servers_skills_plugins_hooks_or_gateway_rules(tmp_path):
     app = folder(tmp_path / "app")
@@ -113,10 +120,30 @@ def test_own_is_servers_skills_plugins_hooks_or_gateway_rules(tmp_path):
     assert own([item("CLAUDE.md", app, kind=ItemKind.INSTRUCTIONS)]) is False
     assert own([item("demo", app)]) is True
     assert own(ruled={str(app)}) is True
+    user = item(
+        "search",
+        kind=ItemKind.MCP_SERVER,
+        scope=Scope.USER,
+        project_rules=((str(app), Enabled.OFF, Scope.LOCAL, "off"),),
+    )
+    assert own([user]) is True
     gateway = item("db", app, kind=ItemKind.MCP_SERVER, via_gateway=KITDEN_GATEWAY)
     assert own([gateway]) is False
     wt = worktree(app, app / ".claude/worktrees/wt", "wt")
     assert own([item("demo", wt)], paths=(app, wt)) is False
+
+
+def test_a_worktree_of_a_worktree_folds_into_no_folded_entry(tmp_path):
+    # A hand-made `.git` file: x points into m, and m is itself a worktree of n.
+    n = folder(tmp_path / "n")
+    m = worktree(n, tmp_path / "m", "m")
+    x = folder(tmp_path / "x")
+    (x / ".git").write_text(f"gitdir: {m}/.git/worktrees/x\n")
+    rows = rows_of([n, m, x])
+    # m folds into n; x stays a row, since m is no row to fold into.
+    assert [r.project.path for r in rows] == [str(n), str(x)]
+    assert rows[0].folded == ids(m)
+    assert rows[1].folded == ()
 
 
 def test_a_symlink_loop_is_a_gone_folder(tmp_path):
