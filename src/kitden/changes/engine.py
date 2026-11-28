@@ -359,6 +359,7 @@ def _edit_record(edit: FileEdit | None) -> dict | None:
         "after_hash": edit.after_hash,
         "backup_path": edit.backup_path,
         "masked_diff": edit.masked_diff,
+        "version": edit.version,
     }
 
 
@@ -438,6 +439,7 @@ def _from_record(record: dict) -> Change:
                 after_hash=e["after_hash"],
                 backup_path=e["backup_path"],
                 masked_diff=e["masked_diff"],
+                version=e.get("version"),  # a record from before this field has none
             )
         c = raw.get("copy")
         copy = FolderCopy(**c) if c is not None else None

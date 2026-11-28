@@ -496,3 +496,23 @@ def test_a_rule_change_adds_the_version_only_when_missing_and_undo_puts_the_file
     engine.undo(change.id)
     assert str(change.state) == "undone", change.error
     assert path.read_bytes() == before
+
+
+def test_a_change_read_back_from_its_record_still_adds_the_version(tmp_path):
+    """The change record keeps the format version (Lantern on #239): a change read back from
+    its record writes the "version": 1 its preview showed. An older record without it loads."""
+    from kitden.changes.engine import _from_record, _record
+
+    path = write_settings(tmp_path, {"servers": SERVERS, "rules": {"global": {}, "projects": {}}})
+    engine = engine_for(tmp_path)
+    change = engine.preview("gateway.rule", [rule_step(tmp_path, "/p", "github", None, "off")])
+    record = _record(change)
+    again = _from_record(record)
+    assert again.steps[0].edit.version == 1
+    engine.changes[change.id] = again
+    engine.apply(change.id)
+    assert str(again.state) == "verified", again.error
+    assert json.loads(path.read_text())["version"] == 1
+    old = {**record, "steps": [{**s, "edit": {**s["edit"]}} for s in record["steps"]]}
+    del old["steps"][0]["edit"]["version"]
+    assert _from_record(old).steps[0].edit.version is None
