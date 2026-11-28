@@ -90,9 +90,11 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
 
     for client in clients:
         view = effective_view(inventory, client, project)
+        # The page has no place to open an instruction file, so no note names one.
+        items = [i for i in view.items if i.kind is not ItemKind.INSTRUCTIONS]
 
         groups: dict[tuple[ItemKind, str], list[Item]] = defaultdict(list)
-        for item in view.items:
+        for item in items:
             if item.kind in DUPLICATE_KINDS:
                 groups[(item.kind, base_name(item))].append(item)
         for (kind, name), same in groups.items():
@@ -110,6 +112,8 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                 )
 
         for winner, loser, mode in view.shadowed:
+            if winner.kind is ItemKind.INSTRUCTIONS:
+                continue
             # A Kitden gateway server's project item replaces its global one by design.
             if KITDEN_GATEWAY in (winner.via_gateway, loser.via_gateway):
                 continue
@@ -125,7 +129,7 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                 )
             )
 
-        for item in view.items:
+        for item in items:
             if item.source.kind is SourceKind.OTHER_CLIENT_FOLDER:
                 findings.append(
                     _finding(
@@ -138,17 +142,12 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                     )
                 )
             elif item.source.owner_client == client:
-                # Kitden's own entry and servers it holds are meant to be in every client, and
-                # one AGENTS.md read by two clients is expected.
-                if (
-                    is_own_entry(item)
-                    or item.via_gateway == KITDEN_GATEWAY
-                    or item.kind is ItemKind.INSTRUCTIONS
-                ):
+                # Kitden's own entry and servers it holds are meant to be in every client.
+                if is_own_entry(item) or item.via_gateway == KITDEN_GATEWAY:
                     continue
                 own[(item.kind, item.name)][client] = item
 
-        unknown = [i for i in view.items if i.enabled is Enabled.UNKNOWN]
+        unknown = [i for i in items if i.enabled is Enabled.UNKNOWN]
         if unknown:
             findings.append(
                 _finding(
@@ -201,7 +200,11 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
 
     for client in inventory.clients:
         if client.status is ClientStatus.FOUND and client.version and not client.version_supported:
-            items = [i for i in inventory.items if i.client == client.id]
+            items = [
+                i
+                for i in inventory.items
+                if i.client == client.id and i.kind is not ItemKind.INSTRUCTIONS
+            ]
             if items:
                 findings.append(
                     _finding(

@@ -117,6 +117,11 @@ async def test_findings_include_gateway_bypasses(home):
     assert all(f["clients"] for f in data["findings"])
 
 
+async def test_list_findings_names_no_instruction_file(home):
+    data = await call(server_for(home), "list_findings")
+    assert all("instructions" not in f["kinds"] for f in data["findings"])
+
+
 async def test_explain_item_lists_every_definition_and_the_winner(home):
     data = await call(
         server_for(home),
