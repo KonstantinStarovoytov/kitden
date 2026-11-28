@@ -34,7 +34,7 @@ Your agents' settings were not changed: scan only reads them.
 To make the skills fit, press Set to 1.1% for Claude Code: kitden open
 ```
 
-<p align="center">One local page for their MCP servers, plugins, skills and instruction files.<br>
+<p align="center">One local page for their MCP servers, plugins, skills and hooks.<br>
 It changes nothing until you press Apply, and every change can be undone.</p>
 
 <p align="center">
@@ -59,9 +59,9 @@ used it (Claude Code). Cursor gets no verdict: Kitden cannot see what it sends.
 ### Everything your agents load, on one map
 
 Claude Code, Codex and Cursor each keep their own settings. Kitden puts their plugins, skills,
-MCP servers and instruction files on one map, so what one agent has and another lacks shows
+MCP servers and hooks on one map, so what one agent has and another lacks shows
 at a glance. Add a plugin, skill or server an agent is missing, turn one off or remove it, on the
-same page. Instruction files and hooks are shown, not changed.
+same page. Hooks are shown, not changed.
 
 <img src="docs/images/readme/library-light.png#gh-light-mode-only" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
 <img src="docs/images/readme/library-dark.png#gh-dark-mode-only" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin. Codex and Cursor load four skills, folded as a stack: frontend-design, pdf, skill-creator and one more.">
@@ -108,7 +108,7 @@ Add only servers and plugins you trust: they run with your permissions.
 | --- | --- |
 | **Per project** | Turn a gateway server or tool, or a Claude Code skill or plugin, on or off for one project only. |
 | **See what runs** | For tools in the gateway: how often each is called, and which only read. |
-| **Instructions in view** | Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each client loads, and where they come from. |
+| **Ask about instruction files** | Your agent can ask Kitden (`kitden mcp`) which CLAUDE.md, AGENTS.md, rules, commands and agents each client loads, and where they come from. `kitden scan` counts them. |
 | **MCP server** | `kitden mcp` lets any agent read your setup, so "show my setup" or "why does this load twice" gets a true answer. Its own tools only read. |
 | **Plugin** | For Claude Code and Codex. `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` adds six skills and no server. `/kitden:audit` lists what to turn off in the project you are in, and `/kitden:context` says whether your skills fit. The skills only read, and offer to install Kitden when it is missing; you change things on the page. [More](https://github.com/KonstantinStarovoytov/kitden/blob/main/plugins/kitden/README.md). <!-- Checked 2026-11-05: https://code.claude.com/docs/en/discover-plugins --> |
 

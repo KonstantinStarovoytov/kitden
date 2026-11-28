@@ -55,7 +55,7 @@ many are that client's ("3 of 55"). The Gateway's groups work the same way.
 | --- | --- |
 | **Plugins and skills** | Use **+ Add**, or drag an item onto another client. Turn it on or off, choose its scope, or remove a copy in **Details**, where the client supports it. A Claude Code skill can also be off in one project only. A plugin that a project turns on, but that is not installed on this computer, shows as unknown. **Add missing plugins and skills…** fills gaps across clients. |
 | **Marketplaces** | Browse their plugins and skills. **+ Add → On this computer → Add a marketplace…** adds one from a GitHub repository or a folder. **Details → More → Commands…** has update and remove commands to copy. |
-| **Hooks and instruction files** | See which client loads them and where they come from. **Library → Instructions** shows files and imports, plus commands and agents; pick a project to see its own files. Kitden only reads these; edit them in your editor. |
+| **Hooks** | See which client loads them and where they come from, in the Library. Kitden only reads hooks; edit them in your editor. Instruction files (CLAUDE.md, AGENTS.md, rules) are not on the page: `kitden scan` counts them, and your agent can ask Kitden about one through `kitden mcp`. |
 
 A thing has the same switch wherever it shows, with a line that says where it holds ("Claude
 Code · all projects"). A skill has **On**, **Name only** (Claude Code) and **Off**. A plugin has
