@@ -11,14 +11,14 @@ const asked = []; // every url read, in order
 globalThis.fetch = async (url) => {
   asked.push(url);
   if (url === failing) throw new Error(`${url}: offline`);
-  const body = url === '/api/projects' ? [{ id: 'a' }, { id: 'b' }] : (answers[url] ?? {});
+  const body = url === '/api/projects' ? (answers['/api/projects'] ?? [{ id: 'a' }, { id: 'b' }]) : (answers[url] ?? {});
   return { ok: true, status: 200, json: async () => body };
 };
 function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadLibraryMap, loadMap, parseHash, parseSel, projectGone, readForSearch, readLibraryMap, reload, retry, searchPlace, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, foldedInto, followHash, freshness, go, goTo, hashFor, isOldAddress, loadLibraryMap, loadMap, parseHash, parseSel, projectGone, readForSearch, readLibraryMap, reload, retry, searchPlace, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -100,6 +100,29 @@ test('a project no longer on the list stays picked and is said', async () => {
   assert.equal(current('overview'), null);
   state.project = 'a';
   assert.equal(projectGone(), false);
+});
+
+test('a link with a folded project opens the row it folded into', async () => {
+  const rows = [{ id: 'main', folded: ['wt'] }];
+  fetchAnswers({ '/api/projects': rows });
+  const entries = [];
+  globalThis.history = { pushState: (_, __, hash) => entries.push(['push', hash]), replaceState: (_, __, hash) => entries.push(['replace', hash]) };
+  try {
+    asked.length = 0;
+    state.project = 'wt';
+    await reload();
+    assert.equal(state.project, 'main');
+    assert.equal(projectGone(), false);
+    assert.ok(!asked.some((url) => url.includes('project=wt')));
+    // The address is replaced, so Back does not return to the folded id.
+    assert.deepEqual(entries.map(([how]) => how), ['replace']);
+    assert.ok(entries[0][1].includes('project=main'));
+  } finally {
+    delete globalThis.history;
+  }
+  assert.equal(foldedInto(rows, 'wt'), 'main');
+  assert.equal(foldedInto(rows, 'x'), null);
+  assert.equal(foldedInto(rows, ''), null);
 });
 
 test('parseSel takes only kind:name', () => {

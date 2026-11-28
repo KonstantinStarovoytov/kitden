@@ -20,3 +20,6 @@ export const gatewayWords = (on, missing = false) => (missing ? STATE_WORDS.miss
 export const possessive = (name) => (String(name).endsWith("s") ? `${name}'` : `${name}'s`);
 // The twin of views/words.py SKILL_STATE_WORDS: a skill's own state beyond On and Off.
 export const SKILL_STATE_WORDS = { "name-only": "Name only", "user-invocable-only": "Only when you ask", "only-asked": "Only when you ask" };
+// The Project menu's label over the folders with nothing of their own, and gone folders: the
+// twin of views/words.py OTHER_FOLDERS.
+export const OTHER_FOLDERS = "Other folders";

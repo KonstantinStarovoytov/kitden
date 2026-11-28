@@ -1,7 +1,7 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
 import { $, button, byKeys, el, icon, joinWords, plural, secretsWord, shortPath } from "./dom.js";
 import { animateTo, D, reducedMotion, rise, rollTo } from "./motion.js";
-import { gatewayWords, possessive, SKILL_STATE_WORDS, STATE_WORDS, WAITING, waitsAs } from "./words.js";
+import { gatewayWords, OTHER_FOLDERS, possessive, SKILL_STATE_WORDS, STATE_WORDS, WAITING, waitsAs } from "./words.js";
 
 // The page's words for a state live in words.js; the other modules take them from here too.
 export { gatewayWords, possessive, SKILL_STATE_WORDS, STATE_WORDS, WAITING, waitsAs };
@@ -31,25 +31,30 @@ export function targetWords(target, folder = folderName(target && target.project
 export const FIND_PROJECT = "Find a project…";
 
 // The menu's rows: "All projects" first and always there, then each project by its folder name
-// (no path), narrowed by `text`. `count`: "3 own rules" when the project has rules of its own.
-// A picked project that left the list stays as a row of its own, so the menu never shows All
+// (no path), narrowed by `text`. A project with something of its own (`own`) is in the top part;
+// the rest, and every gone folder, are `other`: the menu draws them under OTHER_FOLDERS. The
+// sub line says "Folder missing", "in <parent>" when another row has the same name, or both.
+// `count`: "3 own rules" when the project has rules of its own. A picked project that left the
+// list stays as a row of its own, at the end of the top part, so the menu never shows All
 // projects for it.
 export function menuItems(projects, picked, text = "") {
   const find = text.trim().toLowerCase();
-  const all = { id: "", name: ALL_PROJECTS, sub: "What applies in every project", count: null, picked: picked === "" };
+  const all = { id: "", name: ALL_PROJECTS, sub: "What applies in every project", count: null, picked: picked === "", other: false };
   const named = projects
     .map((p) => ({
       id: p.id,
       name: folderName(p.path),
-      sub: p.exists ? null : "Folder missing",
+      sub: [p.exists ? null : "Folder missing", p.parent ? `in ${p.parent}` : null].filter(Boolean).join(" · ") || null,
       count: p.own_rules ? plural(p.own_rules, "own rule", "own rules") : null,
       picked: p.id === picked,
+      other: !p.own || p.exists === false,
     }))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   if (picked && !projects.some((p) => p.id === picked)) {
-    named.push({ id: picked, name: "No longer on the list", sub: null, count: null, picked: true });
+    named.push({ id: picked, name: "No longer on the list", sub: null, count: null, picked: true, other: false });
   }
-  return [all, ...named.filter((item) => item.name.toLowerCase().includes(find))];
+  const shown = named.filter((item) => item.name.toLowerCase().includes(find));
+  return [all, ...shown.filter((item) => !item.other), ...shown.filter((item) => item.other)];
 }
 
 // The option an arrow, Home or End moves to from option `at` of `count` (-1: none yet), or null
@@ -125,6 +130,7 @@ export function projectMenu(projects, picked, onPick, from = null) {
   root.append(trigger, menu);
 
   let shown = [];
+  let options = []; // the option nodes, in the order of `shown`: the heading is not one
   let active = -1;
   let isOpen = false;
   const row = (item, at) => {
@@ -138,8 +144,8 @@ export function projectMenu(projects, picked, onPick, from = null) {
   };
   function mark(at) {
     active = at;
-    [...list.children].forEach((node, i) => node.classList.toggle("active", i === at));
-    const node = list.children[at];
+    options.forEach((node, i) => node.classList.toggle("active", i === at));
+    const node = options[at];
     if (node) {
       find.setAttribute("aria-activedescendant", node.id);
       node.scrollIntoView({ block: "nearest" });
@@ -149,9 +155,19 @@ export function projectMenu(projects, picked, onPick, from = null) {
   }
   // Typed text makes the first match active (All projects stays first but is not a match), and
   // Enter has nothing to pick when none matches. With no text, the picked project is active.
+  // OTHER_FOLDERS stands over the first other row: a label, not an option, so the keys and
+  // `aria-activedescendant` pass it by.
   function draw() {
     shown = menuItems(projects, picked, find.value);
-    list.replaceChildren(...shown.map(row));
+    options = shown.map(row);
+    const nodes = [...options];
+    const first = shown.findIndex((item) => item.other);
+    if (first >= 0) {
+      const group = el("div", "where-group", OTHER_FOLDERS);
+      group.setAttribute("role", "presentation");
+      nodes.splice(first, 0, group);
+    }
+    list.replaceChildren(...nodes);
     mark(find.value.trim() ? (shown.length > 1 ? 1 : -1) : shown.findIndex((item) => item.picked));
   }
   // The menu shows first: a hidden list cannot scroll the picked project into view. The active
