@@ -168,9 +168,12 @@ async def test_list_projects_gives_the_short_list(home):
     gone = str(home / "work/deleted-project")
     data = await call(server_for(home), "list_projects")
     paths = {p["path"] for p in data["projects"]}
-    assert str(website) in paths
-    assert str(wt) not in paths
-    assert gone not in paths
+    assert {p.removeprefix(str(home.resolve()) + "/") for p in paths} == {
+        "work/api",
+        "work/site",
+        "work/untrusted",
+        "work/website",
+    }
     # A gone folder with a gateway rule of its own stays on the list.
     server = create_server(lambda: build_inventory(home), ruled=lambda: {gone})
     data = await call(server, "list_projects")

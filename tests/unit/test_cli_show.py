@@ -128,6 +128,7 @@ def test_show_projects_lists_the_short_list(home, capsys):
     (home / ".claude.json").write_text(json.dumps(config))
     code, out = show(capsys, home, "projects")
     assert code == 0
-    paths = [p["path"] for p in json.loads(out.out)["projects"]]
-    assert str(website) in paths
-    assert str(wt) not in paths
+    paths = {
+        p["path"].removeprefix(str(home.resolve()) + "/") for p in json.loads(out.out)["projects"]
+    }
+    assert paths == {"work/api", "work/site", "work/untrusted", "work/website"}

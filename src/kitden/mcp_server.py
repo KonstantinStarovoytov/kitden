@@ -133,9 +133,10 @@ def create_server(
     @server.tool(
         annotations=READ_ONLY,
         description=(
-            "List the projects the clients know, which clients know each one, and whether the "
-            "folder still exists. Use it to find a project_path for show_setup, list_findings "
-            "and explain_item. " + NO_CHANGES
+            "List each project once, with the clients that know it and whether its folder "
+            "exists: a git worktree is part of its main checkout, and a folder that is gone is "
+            "left out unless it still holds a setting. Use it to find a project_path for "
+            "show_setup, list_findings and explain_item. " + NO_CHANGES
         ),
     )
     def list_projects() -> dict[str, Any]:

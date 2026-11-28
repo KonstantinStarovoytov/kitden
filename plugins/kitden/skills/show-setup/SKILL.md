@@ -11,7 +11,7 @@ from, and what loads twice. Its command `kitden show` changes no settings and pr
      `cursor`). Without `--client` the answer is every client's and is large.
    - `kitden show findings`: problems, such as an item that loads twice.
    - `kitden show item NAME`: every place a name is set, which one loads, and `why`.
-   - `kitden show projects`: the projects the clients know.
+   - `kitden show projects`: each project once (a git worktree is part of its main checkout).
 2. If `kitden` is not found or the command fails as unknown, follow the kitden `install` skill.
 3. Do not edit client settings files to change the setup. Run `kitden open` and send the user to
    the page: it previews, backs up and can undo every change.

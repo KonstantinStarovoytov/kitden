@@ -1065,14 +1065,14 @@ def create_app(
         return JSONResponse(
             [
                 {**row_dict(r), "own_rules": own_rules(settings, chains.get(r.project.path, []))}
-                for r in _rows()
+                for r in _rows(settings)
             ]
         )
 
-    def _rows() -> list[ProjectRow]:
+    def _rows(settings) -> list[ProjectRow]:
         """The short project list. Only a gateway rule stored under an entry's own path keeps
         that entry a row of its own."""
-        rules_under_own_path = own_rule_paths(load_settings(home)) if home is not None else ()
+        rules_under_own_path = own_rule_paths(settings) if home is not None else ()
         return project_rows(state.inventory, rules_under_own_path)
 
     async def problems(request: Request) -> JSONResponse:
@@ -1220,9 +1220,9 @@ def create_app(
         held, problem = _kitden(path)
         # The known projects with gateway rules of their own, for the "Your setup" map's foot. A
         # worktree counts when its main checkout has a rule (its chain); not the same as `_rows`.
+        settings = load_settings(home) if home is not None else {}
         ruled_in_chain = set()
         if home is not None and not problem:
-            settings = load_settings(home)
             ruled_in_chain = {p for p, chain in _chains().items() if own_rules(settings, chain)}
         # A server a change took out that something wrote back since.
         back = came_back(engine.store.entries(), engine, state.inventory) if engine else []
@@ -1240,8 +1240,8 @@ def create_app(
             problem=problem,
             came_back=back,
             context_cards=context,
-            setups=held_setups(load_settings(home)) if home is not None else None,
-            rows=_rows(),
+            setups=held_setups(settings) if home is not None else None,
+            rows=_rows(settings),
         )
         return JSONResponse(answer)
 
