@@ -8,7 +8,7 @@ from starlette.testclient import TestClient
 
 from kitden.changes.engine import writable, writable_roots
 from kitden.demo import build_demo_home, demo_adapters, demo_build
-from kitden.model import Scope
+from kitden.model import Project, Scope
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.library import library_list
 from kitden.views.library_map import library_map, map_clients, plugin_skill_words
@@ -407,8 +407,10 @@ def test_the_route_answers_for_a_project_that_is_gone(tmp_path):
     app = create_app(demo_build(home), token="tok", port=47800, home=home, demo=True)
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
         page.get("/?token=tok")
-        gone = next(p for p in page.get("/api/projects").json() if p["path"].endswith("old-app"))
-        assert not gone["exists"]
+        # A gone folder is no row of the short list; its id from the inner list still reads.
+        listed = page.get("/api/projects").json()
+        assert not any(p["path"].endswith("old-app") for p in listed)
+        gone = {"id": Project(str(home / "work/old-app"), False).id}
         for path in ["/api/library-map", "/api/gateway-view"]:
             response = page.get(f"{path}?project={gone['id']}")
             assert response.status_code == 200, path

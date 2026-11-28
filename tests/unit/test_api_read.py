@@ -1,11 +1,16 @@
+import json
+
 import pytest
 from starlette.testclient import TestClient
 
+from kitden.model import Project
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
+from tests.unit.test_project_rows import worktree
 
 ORIGIN = "http://127.0.0.1:47800"
+POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
 
 
 @pytest.fixture
@@ -42,13 +47,39 @@ def test_clients_and_projects_are_listed(client):
     paths = {
         p["path"].removeprefix(str(client.home) + "/") for p in client.get("/api/projects").json()
     }
-    assert paths == {
-        "work/website",
-        "work/deleted-project",
-        "work/api",
-        "work/untrusted",
-        "work/site",
-    }
+    # A gone folder with nothing of its own is no row.
+    assert paths == {"work/website", "work/api", "work/untrusted", "work/site"}
+
+
+def _fold_a_worktree_and_a_link(home):
+    """A worktree of work/website and a link to it, both recorded by Claude Code."""
+    website = home / "work/website"
+    feature = worktree(website, website / ".claude/worktrees/feature", "feature")
+    link = home / "work/web-link"
+    link.symlink_to(website)
+    config = json.loads((home / ".claude.json").read_text())
+    config["projects"].update({str(feature): {}, str(link): {}})
+    (home / ".claude.json").write_text(json.dumps(config))
+    return feature, link
+
+
+def test_api_projects_fold_a_worktree_and_a_link(client):
+    feature, link = _fold_a_worktree_and_a_link(client.home)
+    client.post("/api/rescan", headers=POST)
+    rows = client.get("/api/projects").json()
+    paths = {r["path"].removeprefix(str(client.home) + "/") for r in rows}
+    assert paths == {"work/website", "work/api", "work/untrusted", "work/site"}
+    website = next(r for r in rows if r["path"].endswith("work/website"))
+    assert set(website["folded"]) == {Project(str(feature), True).id, Project(str(link), True).id}
+    assert website["own"] is True  # its local-db server
+    assert all({"folded", "own", "parent", "own_rules"} <= r.keys() for r in rows)
+
+
+def test_a_folded_id_still_reads(client):
+    feature, _ = _fold_a_worktree_and_a_link(client.home)
+    client.post("/api/rescan", headers=POST)
+    folded = Project(str(feature), True).id
+    assert client.get(f"/api/overview?project={folded}").status_code == 200
 
 
 def test_api_responses_never_contain_secrets(client):

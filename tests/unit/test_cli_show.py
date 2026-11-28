@@ -9,6 +9,7 @@ from kitden.cli import main
 from kitden.mcp_server import create_server
 from kitden.views.answers import read_setup
 from tests.conftest import make_home, write_cursor_fixture_state
+from tests.unit.test_project_rows import worktree
 
 pytestmark = pytest.mark.anyio
 
@@ -117,3 +118,16 @@ def test_show_says_it_asks_codex_and_a_second_run_does_not(home, capsys, monkeyp
         notes.append(out.err)
     assert len(runs) == 1
     assert notes == ["Asking Codex which plugins are on (up to 15 s)…\n", ""]
+
+
+def test_show_projects_lists_the_short_list(home, capsys):
+    website = home / "work/website"
+    wt = worktree(website, website / ".claude/worktrees/wt", "wt")
+    config = json.loads((home / ".claude.json").read_text())
+    config["projects"][str(wt)] = {}
+    (home / ".claude.json").write_text(json.dumps(config))
+    code, out = show(capsys, home, "projects")
+    assert code == 0
+    paths = [p["path"] for p in json.loads(out.out)["projects"]]
+    assert str(website) in paths
+    assert str(wt) not in paths

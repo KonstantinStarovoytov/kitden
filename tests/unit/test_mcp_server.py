@@ -14,6 +14,7 @@ from kitden.mcp_server import create_server
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import all_text, fake_client_command, make_home, write_cursor_fixture_state
+from tests.unit.test_project_rows import worktree
 
 TOOLS = {"show_setup", "list_findings", "explain_item", "list_projects"}
 pytestmark = pytest.mark.anyio
@@ -156,6 +157,24 @@ async def test_list_projects(home):
     assert str(home / "work/website") in paths
     # The page's count of each project's own rules is for the project menu only.
     assert all("own_rules" not in p for p in data["projects"])
+
+
+async def test_list_projects_gives_the_short_list(home):
+    website = home / "work/website"
+    wt = worktree(website, website / ".claude/worktrees/wt", "wt")
+    config = json.loads((home / ".claude.json").read_text())
+    config["projects"][str(wt)] = {}
+    (home / ".claude.json").write_text(json.dumps(config))
+    gone = str(home / "work/deleted-project")
+    data = await call(server_for(home), "list_projects")
+    paths = {p["path"] for p in data["projects"]}
+    assert str(website) in paths
+    assert str(wt) not in paths
+    assert gone not in paths
+    # A gone folder with a gateway rule of its own stays on the list.
+    server = create_server(lambda: build_inventory(home), ruled=lambda: {gone})
+    data = await call(server, "list_projects")
+    assert {"path": gone, "exists": False, "known_by": ["claude_code"]} in data["projects"]
 
 
 async def test_no_secret_values_in_any_answer_and_no_file_changes(home):

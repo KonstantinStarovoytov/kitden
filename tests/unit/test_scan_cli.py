@@ -32,6 +32,7 @@ from tests.unit.test_context_view import (
     write_json,
 )
 from tests.unit.test_findings import KITDEN, add_entry, hold_github
+from tests.unit.test_project_rows import folder, worktree
 
 ALL = ("claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
 
@@ -347,6 +348,22 @@ def test_scan_counts_an_item_reached_twice_once(home, capsys, monkeypatch):
     monkeypatch.setattr(answers, "read_setup", twice)
     lines = _summary(home, capsys)
     assert any("4 skills" in line for line in lines)
+
+
+def test_scan_counts_leave_out_a_folded_worktree(bare, capsys):
+    app = folder(bare / "work/app")
+    wt = worktree(app, app / ".claude/worktrees/wt", "wt")
+    server = {"mcpServers": {"db": {"command": "db-server"}}}
+    for path in (app, wt):
+        (path / ".mcp.json").write_text(json.dumps(server))
+    write_json(bare / ".claude.json", {"projects": {str(app): {}, str(wt): {}}})
+    lines = _summary(bare, capsys)
+    assert any("1 MCP server" in line for line in lines), lines
+    assert not any("2 MCP servers" in line for line in lines)
+    main(["scan", "--json", "--home", str(bare)])
+    data = json.loads(capsys.readouterr().out)
+    assert [p["path"] for p in data["projects"]] == [str(app)]
+    assert not any(i["project"] == str(wt) for i in data["items"])
 
 
 def test_scan_says_a_client_is_not_found_in_plain_words(tmp_path, capsys):

@@ -2,6 +2,7 @@
 
 import argparse
 import contextlib
+import dataclasses
 import json
 import os
 import secrets
@@ -16,12 +17,16 @@ import webbrowser
 from collections import Counter
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from kitden import __version__, page, system
 from kitden.clients.choice import clients_on
 from kitden.clients.version_cache import refresh_versions
 from kitden.model import Client, ClientStatus, ItemKind
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
+
+if TYPE_CHECKING:
+    from kitden.views.project_rows import ProjectRow
 
 HOST = page.HOST
 DEFAULT_PORT = 47800
@@ -308,7 +313,8 @@ def _print_summary(
     from kitden.views.effective import column_of
     from kitden.views.overview import READ_PROBLEMS
 
-    counts = _have_counts(inventory)
+    # A folded worktree's copies of the repo's files are not counted: the main checkout has them.
+    counts = _have_counts(_listed(inventory, _rows(inventory, home)))
     misfits = False
     fixes: list[str] = []
     blocks = []
@@ -377,6 +383,21 @@ def _print_summary(
     else:
         unread = words.SCAN_FIX_UNREAD[len(inventory.problems) > 1]
         print(words.SCAN_FIX if warned else unread if inventory.problems else words.SCAN_OPEN)
+
+
+def _rows(inventory: Inventory, home: Path) -> "list[ProjectRow]":
+    """The short project list, as the page and the MCP server list it."""
+    from kitden.local_gateway.settings import load_settings
+    from kitden.views.project_rows import own_rule_paths, project_rows
+
+    return project_rows(inventory, own_rule_paths(load_settings(home)))
+
+
+def _listed(inventory: Inventory, rows: "list[ProjectRow]") -> Inventory:
+    """The inventory with only the items of the user and of the short list's rows."""
+    from kitden.views.project_rows import listed_items
+
+    return dataclasses.replace(inventory, items=listed_items(inventory, rows))
 
 
 def _have_counts(inventory: Inventory) -> Counter:
@@ -512,8 +533,14 @@ def _scan(args: argparse.Namespace) -> int:
     # A one-off scan waits for the versions, of the clients that are on.
     refresh_versions(home or Path.home(), clients_on(home or Path.home()))
     if args.json:
+        from kitden.views.project_rows import row_dict
+
         inventory = build_inventory(home)
-        json.dump(inventory_dict(inventory), sys.stdout, indent=2)
+        rows = _rows(inventory, home or Path.home())
+        # The short project list, and only the items of the user and of its rows.
+        data = inventory_dict(_listed(inventory, rows))
+        data["projects"] = [row_dict(row) for row in rows]
+        json.dump(data, sys.stdout, indent=2)
         print()
     else:
         from kitden.views import answers
@@ -557,7 +584,10 @@ def _show_answer(args: argparse.Namespace) -> int:
         elif args.what == "item":
             answer = answers.item_answer(inventory, folder, args.name, args.kind)
         elif args.what == "projects":
-            answer = answers.projects_answer(inventory)
+            from kitden.local_gateway.settings import load_settings
+            from kitden.views.project_rows import own_rule_paths
+
+            answer = answers.projects_answer(inventory, own_rule_paths(load_settings(home)))
         else:
             # No --project: as the scan does, a client's last chat in another folder, named in
             # the card's fact. With --project the answer stays with that folder.

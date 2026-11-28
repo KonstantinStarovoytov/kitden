@@ -18,6 +18,7 @@ from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.views.load_map import load_map
 from kitden.views.overview import FOLD_FROM, GATEWAY_IS, note_count, overview
+from kitden.views.project_rows import project_rows
 from kitden.views.setup_server import kitden_on, setup_server_state
 from tests.conftest import cursor_db, make_home, write_cursor_fixture_state
 from tests.unit.test_context_view import (
@@ -37,6 +38,7 @@ from tests.unit.test_context_view import (
 )
 from tests.unit.test_demo_mode import demo_page
 from tests.unit.test_local_gateway_views import page_for
+from tests.unit.test_project_rows import folder, worktree
 
 
 @pytest.fixture
@@ -510,7 +512,10 @@ def test_the_map_counts_servers_tools_plugins_skills_and_own_rules(tmp_path):
             if i["kind"] in ("plugin", "skill")
         )
 
-    ruled = [p for p in inventory.projects if own(p)]
+    # The map counts the short project list: the gone old-app is no row.
+    shown = [row.project for row in project_rows(inventory)]
+    assert len(shown) == len(inventory.projects) - 1
+    ruled = [p for p in shown if own(p)]
     assert str(atlas) in [p.path for p in ruled]
     found = [c for c in inventory.clients if str(c.status) == "found"]
     assert data["map"] == {
@@ -530,7 +535,7 @@ def test_the_map_counts_servers_tools_plugins_skills_and_own_rules(tmp_path):
             "skills": sum(i["kind"] == "skill" for i in items),
         },
         "links": data["map"]["links"],
-        "projects": len(inventory.projects),
+        "projects": len(shown),
         "own_rules": len(ruled),
     }
     # A client links to the Library when it loads a plugin or skill, and to the gateway while
@@ -544,12 +549,25 @@ def test_the_map_counts_servers_tools_plugins_skills_and_own_rules(tmp_path):
     assert data["counts"] == {
         "attention": len(_cards(data, "attention")),
         "clients": len(found),
-        "projects": len(inventory.projects),
+        "projects": len(shown),
     }
     # A project with gateway rules of its own has its own rules too.
-    other = next(p for p in inventory.projects if p not in ruled)
+    other = next(p for p in shown if p not in ruled)
     more = overview(inventory, None, held=held, adapters=adapters, gateway_rules={other.path})
     assert more["map"]["own_rules"] == len(ruled) + 1
+
+
+def test_the_overview_counts_only_project_rows(tmp_path):
+    home = tmp_path / "home"
+    (home / ".claude").mkdir(parents=True)
+    app = folder(home / "work/app")
+    wt = worktree(app, app / ".claude/worktrees/wt", "wt")
+    gone = home / "work/gone"
+    projects = {str(p): {} for p in (app, wt, gone)}
+    (home / ".claude.json").write_text(json.dumps({"projects": projects}))
+    data = overview(build_inventory(home), None)
+    assert data["counts"]["projects"] == 1
+    assert data["map"]["projects"] == 1
 
 
 def test_the_map_links_a_connected_client_to_the_gateway(connected):

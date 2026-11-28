@@ -181,6 +181,7 @@ from kitden.views.library import KINDS, LIST_SHOWS, SHOWS, library, library_list
 from kitden.views.library_map import cursor_imports, library_map
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
+from kitden.views.project_rows import ProjectRow, own_rule_paths, project_rows, row_dict
 from kitden.views.restarts_view import pending_restarts
 from kitden.views.review import app_notes, change_target, mark_reach, undo_note
 from kitden.views.setup_server import (
@@ -1057,16 +1058,22 @@ def create_app(
         return JSONResponse(found)
 
     async def projects(request: Request) -> JSONResponse:
-        """The known projects, each with how many gateway rules of its own differ from the
-        shared setup, for the project menu."""
+        """The short project list, each row with how many gateway rules of its own differ from
+        the shared setup, for the project menu."""
         settings = load_settings(home) if home is not None else {}
         chains = _chains()  # with no home, none: every count is 0
         return JSONResponse(
             [
-                {**p, "own_rules": own_rules(settings, chains.get(p["path"], []))}
-                for p in state.data["projects"]
+                {**row_dict(r), "own_rules": own_rules(settings, chains.get(r.project.path, []))}
+                for r in _rows()
             ]
         )
+
+    def _rows() -> list[ProjectRow]:
+        """The short project list. Only a gateway rule stored under an entry's own path keeps
+        that entry a row of its own."""
+        rules_under_own_path = own_rule_paths(load_settings(home)) if home is not None else ()
+        return project_rows(state.inventory, rules_under_own_path)
 
     async def problems(request: Request) -> JSONResponse:
         return JSONResponse(state.data["problems"])
@@ -1211,11 +1218,12 @@ def create_app(
 
     def _overview(request, project, path):
         held, problem = _kitden(path)
-        # The known projects with gateway rules of their own, for the "Your setup" map's foot.
-        ruled = set()
+        # The known projects with gateway rules of their own, for the "Your setup" map's foot. A
+        # worktree counts when its main checkout has a rule (its chain); not the same as `_rows`.
+        ruled_in_chain = set()
         if home is not None and not problem:
             settings = load_settings(home)
-            ruled = {p for p, chain in _chains().items() if own_rules(settings, chain)}
+            ruled_in_chain = {p for p, chain in _chains().items() if own_rules(settings, chain)}
         # A server a change took out that something wrote back since.
         back = came_back(engine.store.entries(), engine, state.inventory) if engine else []
         # A chat log Kitden cannot read must not break the Overview: then no context cards.
@@ -1228,11 +1236,12 @@ def create_app(
             path,
             held,
             adapters,
-            ruled,
+            ruled_in_chain,
             problem=problem,
             came_back=back,
             context_cards=context,
             setups=held_setups(load_settings(home)) if home is not None else None,
+            rows=_rows(),
         )
         return JSONResponse(answer)
 
