@@ -38,7 +38,7 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { addChoiceButtons, addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, noClients, noteFor, showSources, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
+const { addChoiceButtons, addChoices, addName, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, noClients, noteFor, showSources, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
 const { data, freshness, hashFor, loadShared, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const { cancelTray, keyFor, onTray, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { syncTray } = await import('../../src/kitden/web/static/js/details.js');
@@ -117,9 +117,9 @@ test("a cell's route is in its hover text, not beside the state", () => {
   assert.equal(cellHint({}), '');
 });
 
-test('one word for a cell that has it, on every tab', () => {
+test('one word for a cell that has it, for every kind', () => {
   const word = (kind) => cellNode({ key: 'k', kind, name: 'x', cells: { codex: cell({ state: 'on' }) } }, 'codex').children[1].textContent;
-  assert.equal(word('instructions'), 'On');
+  assert.equal(word('skill'), 'On');
   assert.equal(word('mcp_server'), 'On');
 });
 
@@ -175,7 +175,7 @@ test('no clients: the Library says what Kitden looks for, the folders and the de
   assert.equal(noClients().className, 'empty');
 });
 
-test('a source line shows with the top bar line, on its own tab, and fades in place when it goes', () => {
+test('a source line shows with the top bar line, and fades in place when it goes', () => {
   const LINE = "Codex plugins are still being read, so Codex's column may change.";
   const progress = (done) => ({ ready: true, steps: [{ name: 'Codex plugins', done, later: true }] });
   const saved = { view: state.view, kind: state.kind };
@@ -196,9 +196,6 @@ test('a source line shows with the top bar line, on its own tab, and fades in pl
     assert.equal(showSources(progress(true)), true);
     assert.equal(drawnBox, null);
     assert.ok(box.classList.contains('gone'));
-    // Another tab has no line for it.
-    state.kind = 'instructions';
-    assert.equal(showSources(progress(false)), false);
   } finally {
     showSources(null);
     Object.assign(state, saved);
@@ -206,10 +203,9 @@ test('a source line shows with the top bar line, on its own tab, and fades in pl
   }
 });
 
-test('an empty tab names what it shows, and an empty search or filter says how to go back', () => {
+test('an empty Library names what it shows, and an empty search or filter says how to go back', () => {
   const words = (asked) => emptyState({ kind: 'plugin', show: 'mine', q: '', attention: false, ...asked }).children.map((c) => c.textContent);
   assert.deepEqual(words({}), ['No plugins or skills in any client', 'Plugins and skills you add in Claude Code, Codex or Cursor will show up here.']);
-  assert.deepEqual(words({ kind: 'instructions' }), ['No instruction files in any client', 'Instruction files you add for Claude Code, Codex or Cursor will show up here.']);
   assert.deepEqual(words({ q: 'figma' }), ['Nothing matches “figma”', 'Clear search']);
   assert.deepEqual(words({ attention: true }), ['Nothing to show with this filter', 'Show all']);
   assert.deepEqual(words({ show: 'diff' }), ['No differences between your clients', 'Show installed']);
@@ -406,20 +402,14 @@ test('a hide button saves the choice, asks again, then focuses the next column o
   assert.deepEqual(focused, ['hide:cursor', 'hidden:show', 'hide:codex']);
 });
 
-// Smooth changes: rows that stay slide from where they were, new rows rise in, a tab slides.
-const { raceSlow, rowMoves, tabDirection } = await import('../../src/kitden/web/static/js/library.js');
+// Smooth changes: rows that stay slide from where they were, new rows rise in.
+const { raceSlow, rowMoves } = await import('../../src/kitden/web/static/js/library.js');
 
 test('rows that stay move from their old place; new rows are the ones that rise in', () => {
   const before = new Map([['a', 100], ['b', 140], ['c', 180]]);
   const after = new Map([['b', 100], ['d', 140], ['c', 180.4]]);
   assert.deepEqual(rowMoves(before, after), { moved: [['b', 40]], entered: ['d'] });
   assert.deepEqual(rowMoves(new Map(), after), { moved: [], entered: ['b', 'd', 'c'] });
-});
-
-test('a tab to the right slides in from the right, one to the left from the left', () => {
-  assert.equal(tabDirection('plugin', 'instructions'), 1);
-  assert.equal(tabDirection('instructions', 'skill'), -1);
-  assert.equal(tabDirection('skill', 'plugin'), 0);
 });
 
 test('a quick answer is waited for; a slow one is not', async () => {
@@ -547,13 +537,6 @@ test('the scope line needs a project and rows', () => {
   assert.equal(scopeLine('p1', [{}]), 'Adding puts an item in all projects.');
   assert.equal(scopeLine('p1', []), null);
   assert.equal(scopeLine(null, [{}]), null);
-});
-
-test('the Instructions tab has no adds and no scope line', () => {
-  assert.equal(hasAdds('instructions'), false);
-  assert.equal(hasAdds('skill'), true);
-  assert.equal(scopeLine('p1', [{}], 'instructions'), null);
-  assert.equal(scopeLine('p1', [{}], 'skill'), 'Adding puts an item in all projects.');
 });
 
 test('a cell kept from the last good read is marked and says when', () => {

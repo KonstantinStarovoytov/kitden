@@ -175,11 +175,11 @@ test('Back to another project on the Gateway waits for the read: the page draws 
 
 test('old kind links land in their new place', () => {
   // MCP servers moved to the Gateway's List; hooks and marketplaces are on the Library's map; the
-  // other kinds keep the List. Every kind but instructions is on Plugins and skills. An address
+  // other kinds keep the List. Every kind lands on the Library's plugins and skills. An address
   // with a view is not old.
   assert.deepEqual([parseHash('#library?kind=mcp_server&sel=mcp_server%3Agithub')].map((s) => [s.view, s.mode, s.selected.name]), [['gateway', 'list', 'github']]);
   assert.deepEqual(['hook', 'marketplace', 'plugin', 'skill', 'instructions'].map((kind) => parseHash(`#library?kind=${kind}`).mode), ['map', 'map', 'list', 'list', 'list']);
-  assert.equal(parseHash('#library?kind=hook').kind, 'plugin');
+  for (const kind of ['hook', 'marketplace', 'plugin', 'skill', 'instructions']) assert.equal(parseHash(`#library?kind=${kind}`).kind, 'plugin', kind);
   assert.equal(parseHash('#library?kind=mcp_server&view=map').view, 'library');
   assert.equal(parseHash('#library').mode, '');
   assert.equal(isOldAddress('#library?kind=skill'), true);
@@ -187,7 +187,18 @@ test('old kind links land in their new place', () => {
   assert.equal(isOldAddress('#library'), false);
   assert.equal(isOldAddress('#map'), true);
   // What the page writes back reads back the same.
-  for (const hash of ['#library', '#library?view=map', '#library?kind=plugin&view=list', '#library?kind=instructions&view=map']) assert.equal(hashFor(parseHash(hash)), hash);
+  for (const hash of ['#library', '#library?view=map', '#library?kind=plugin&view=list']) assert.equal(hashFor(parseHash(hash)), hash);
+});
+
+test('an old Instructions address opens the Library', () => {
+  const plain = parseHash('#library?kind=instructions');
+  assert.deepEqual([plain.view, plain.kind, plain.mode], ['library', 'plugin', 'list']);
+  const map = parseHash('#library?kind=instructions&view=map');
+  assert.deepEqual([map.view, map.kind, map.mode], ['library', 'plugin', 'map']);
+  assert.equal(hashFor(map), '#library?view=map');
+  const picked = parseHash('#library?sel=instructions:CLAUDE.md');
+  assert.equal(picked.view, 'library');
+  assert.equal(picked.selected, null);
 });
 
 test('Back switches Map and List, and a mode passed to go wins over the clear', () => {
@@ -280,7 +291,9 @@ test("the Library's map is read only while the Library shows, and when it opens"
     go('library');
     assert.deepEqual(drawn, ['library']);
     await new Promise((done) => setImmediate(done));
-    assert.ok(asked.includes('/api/library-map'));
+    // One read, of the one map: the Library has no other.
+    assert.equal(asked.filter((url) => url === '/api/library-map').length, 1);
+    assert.ok(!asked.some((url) => url.includes('instructions')));
     assert.deepEqual([current('libraryMap'), drawn], [{ groups: ['g'] }, ['library', 'library']]);
     // Back again with no reload since: nothing to read.
     go('gateway');

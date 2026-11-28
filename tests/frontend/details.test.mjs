@@ -34,15 +34,15 @@ test('a section title names only a known client as the owner of a folder', () =>
   assert.equal(fileScopeWords({ scope: 'project', client: 'claude_code', owner_client: 'claude_code', project: site }), 'Project website');
 });
 
-test('technical details keep the path, the key, the command and the first lines', () => {
+test('technical details keep the path, the key and the command', () => {
   const rows = techRows([
-    { client: 'cursor', scope: 'user', project: null, source: '/Users/me/.cursor/mcp.json', key: 'mcpServers.github', summary: 'npx -y github-mcp', preview: null },
-    { client: 'claude_code', scope: 'user', project: null, source: '/Users/me/.claude/CLAUDE.md', key: null, summary: null, preview: ['# rules'] },
-    { client: 'claude_code', scope: 'account', project: null, source: 'account', key: null, summary: null, preview: null },
+    { client: 'cursor', scope: 'user', project: null, source: '/Users/me/.cursor/mcp.json', key: 'mcpServers.github', summary: 'npx -y github-mcp' },
+    { client: 'claude_code', scope: 'user', project: null, source: '/Users/me/.claude/CLAUDE.md', key: null, summary: null },
+    { client: 'claude_code', scope: 'account', project: null, source: 'account', key: null, summary: null },
   ]);
-  assert.deepEqual(rows.map((r) => [r.client, r.path, r.key, r.summary, r.preview]), [
-    ['claude_code', '/Users/me/.claude/CLAUDE.md', null, null, ['# rules']],
-    ['cursor', '/Users/me/.cursor/mcp.json', 'mcpServers.github', 'npx -y github-mcp', null],
+  assert.deepEqual(rows.map((r) => [r.client, r.path, r.key, r.summary]), [
+    ['claude_code', '/Users/me/.claude/CLAUDE.md', null, null],
+    ['cursor', '/Users/me/.cursor/mcp.json', 'mcpServers.github', 'npx -y github-mcp'],
   ]);
   assert.equal(rows[1].title, 'Cursor · Global settings');
   assert.deepEqual(techRows([{ client: 'claude_code', scope: 'account', source: 'account' }]), []);
@@ -50,8 +50,8 @@ test('technical details keep the path, the key, the command and the first lines'
 
 test('technical details show one file once, for every client that reads it', () => {
   const gateway = '/Users/me/Library/Application Support/kitden/gateway.json';
-  const held = (client) => ({ client, scope: 'user', project: null, owner_client: 'kitden', via_gateway: 'kitden', source: gateway, key: 'servers.files', summary: 'npx files-mcp', preview: null });
-  const own = { client: 'cursor', scope: 'user', project: null, owner_client: 'cursor', source: '/Users/me/.cursor/mcp.json', key: 'mcpServers.files', summary: 'npx files-mcp', preview: null };
+  const held = (client) => ({ client, scope: 'user', project: null, owner_client: 'kitden', via_gateway: 'kitden', source: gateway, key: 'servers.files', summary: 'npx files-mcp' });
+  const own = { client: 'cursor', scope: 'user', project: null, owner_client: 'cursor', source: '/Users/me/.cursor/mcp.json', key: 'mcpServers.files', summary: 'npx files-mcp' };
   assert.deepEqual(techRows([held('cursor'), held('claude_code'), held('codex'), own]).map((r) => [r.title, r.path, r.key]), [
     ['Kitden gateway · Global settings', gateway, 'servers.files'],
     ['Cursor · Global settings', '/Users/me/.cursor/mcp.json', 'mcpServers.files'],

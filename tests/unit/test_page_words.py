@@ -971,7 +971,7 @@ def test_apply_turns_green_only_after_verified_and_only_ok_toasts_get_a_check():
 def test_one_mark_slides_between_the_choices_of_a_group():
     assert 'glide($(".nav")' in script("app.js")
     text = script("library.js")
-    assert '"library-tabs-map"' in text and '"library-show"' in text
+    assert '"library-show"' in text
     assert "tab-ink" not in CSS and "tab-ink" not in text
 
 
@@ -1014,7 +1014,7 @@ def test_reduced_motion_turns_every_animation_off():
 def test_library_lede_names_the_project_folder_not_its_path():
     # The List has the Map's lede, and its scope bar names the project's folder.
     text = script("library.js")
-    assert 'el("p", "lede", LEDE), tabs, scopeBar(folderName(projectPath()))' in text
+    assert 'el("p", "lede", LEDE), scopeBar(folderName(projectPath()))' in text
     assert "shortPath" not in text
 
 
@@ -1090,9 +1090,8 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
 # Skills beside Plugins ---------------------------------------------------------------------
 
 
-def test_library_tabs_share_one_grid_and_the_add_flow():
+def test_library_list_has_one_grid_and_the_add_flow():
     text = script("library.js")
-    assert '[["plugin", "Plugins and skills"], ["instructions", "Instructions"]]' in text
     # One row builder for every row, one grid.
     assert text.count("listRow(") == 2 and text.count('el("div", "treegrid library-list")') == 1
     assert 'show: s.show === "mine" ? "" : s.show' in script("store.js")
@@ -1245,7 +1244,6 @@ def test_focus_returns_to_the_control_and_the_review_reaches_its_summary():
 def test_every_control_a_render_replaces_names_itself_for_focus():
     for name, keys in {
         "library.js": (
-            "`tab:${id}`",
             "`show:${id}`",
             '"filter:attention"',
             "`add:${row.key}:${client}`",
@@ -1357,7 +1355,8 @@ def test_library_replaces_load_map_and_discover():
         'const SHOWS = ["mine", "diff"];' in store
         and 'show: !old && SHOWS.includes(show) ? show : "mine"' in store
     )
-    assert 'libraryKind = (kind) => (kind === "instructions" ? "instructions" : "plugin");' in store
+    # The Library shows plugins and skills: an old Instructions address opens it too.
+    assert 'kind: "plugin",' in store
     assert (
         'params.kind === "mcp_server") return { view: "gateway", params: { ...params, kind:'
         in store
@@ -1459,7 +1458,6 @@ def test_tabs_and_filters_read_first_then_the_list_settles():
     # The pressed tab or choice is marked at once; the list follows when its rows are in.
     assert "markChoice(pressed);" in library.split("async function choose")[1]
     for call in (
-        "choose({ kind: id,",
         "choose({ show: id,",
         "choose({ attention:",
     ):
@@ -2148,20 +2146,15 @@ def test_a_change_whose_backup_holds_a_secret_says_so():
     assert "backupNote(entry)" in script("changes.js")
 
 
-def test_library_has_an_instructions_tab():
-    text = script("library.js")
-    assert '["instructions", "Instructions"]' in text
-
-
-def test_details_shows_an_instruction_files_first_lines():
-    assert 'el("pre", "preview"' in panel()
-    assert "pre.preview" in (STATIC / "style.css").read_text()
+def test_library_has_no_instructions_tab():
+    for name in ("library.js", "library-map.js", "store.js"):
+        assert '"Instructions"' not in script(name), name
+    assert "map-tabs" not in CSS and "pre.preview" not in CSS
 
 
 def test_details_answer_in_order_and_fold_the_evidence():
     details = script("details.js")
     assert '"Technical details"' in details and "fold(" in details
-    assert 'el("pre", "preview"' in details  # the first lines, inside the fold
     assert "details.tech" in CSS
     # The route words are Part 2's.
     assert "ROUTE_WORDS.folder" in details
@@ -2735,11 +2728,10 @@ def test_gateway_forms_say_in_preview_while_their_row_waits():
 def test_the_library_map_words_and_looks():
     text = script("library-map.js")
     for words in (
-        '"The plugins, skills and instruction files your agents load, and where each comes from."',
+        '"The plugins and skills your agents load, and where each comes from."',
         '"Point at a link: its × removes a plugin from that client, or turns a skill off there · '
         "drag a plugin onto a client to add it there · + adds it for all projects · "
         'click anything for its Details"',
-        '[["plugins", "Plugins and skills"], ["instructions", "Instructions"]]',
         'caption: "Clients"',
         'caption: "Plugins and skills"',
         'caption: "Inside"',
@@ -2760,7 +2752,6 @@ def test_the_library_map_words_and_looks():
     assert "color: var(--ink-3); font-size: 10.5px;" in rule("div.map .block-label")
     unk = ".lamp.unk, .mark.unk { background: transparent; border: 1.5px dashed var(--lamp-warn); }"
     assert unk in CSS
-    assert ".seg.map-tabs { margin: -6px 0 18px; }" in CSS
     assert 'const MAP_PAGES = ["gateway", "library"];' in script("app.js")
 
 
@@ -2974,16 +2965,13 @@ def test_commands_in_library_details_say_the_page_never_runs_them():
 
 def test_the_library_list_words_and_looks():
     text = script("library.js")
-    # The Map's tabs, Installed | Differences, and the hint line, verbatim.
-    assert (
-        'const TABS = [["plugin", "Plugins and skills"], ["instructions", "Instructions"]];' in text
-    )
+    # Installed | Differences, and the hint line, verbatim.
     assert 'const SHOW = [["mine", "Installed"], ["diff", "Differences"]];' in text
     assert (
         'const LIST_HINT = "One row per item, one column per client. Right opens a plugin, '
         'Enter opens Details.";' in text
     )
-    assert 'setHint(kind === "plugin" ? LIST_HINT : INSTRUCTIONS_HINT);' in text
+    assert "setHint(LIST_HINT);" in text
     # A plugin row says what Kitden read inside it; a part says what kind it is.
     assert 'item.count ? `Plugin · ${plural(item.count, "item", "items")}` : "Plugin"' in text
     assert 'const KIND_WORDS = { skill: "Skill", hook: "Hook" };' in text
@@ -2991,12 +2979,10 @@ def test_the_library_list_words_and_looks():
         'const PART_WORDS = { skill: "Skill", command: "Command", agent: "Agent", hook: "Hook", '
         'mcp_server: "MCP server" };' in text
     )
-    # An empty tab, and an empty cell, say so plainly.
+    # An empty Library, and an empty cell, say so plainly.
     for words in (
         '"No plugins or skills in any client"',
         '"Plugins and skills you add in Claude Code, Codex or Cursor will show up here."',
-        '"No instruction files in any client"',
-        '"Instruction files you add for Claude Code, Codex or Cursor will show up here."',
         'cell.reason || "Not added"',
     ):
         assert words in text, words
@@ -3005,7 +2991,7 @@ def test_the_library_list_words_and_looks():
     assert "export function libraryDetails(id, how)" in script("library-map.js")
     # The look: the Gateway List's grid, a sticky 30 px head, a 34 px part row.
     assert ".tg-row.part { min-height: 34px; }" in CSS
-    # A part's name is quiet (400), as a Gateway tool's, under its plugin's 600; a file's is mono.
+    # A part's name is quiet (400), as a Gateway tool's, under its plugin's 600.
     assert "font-weight: 400" in rule(".tg-row.tool .words.name, .tg-row.part .words.name")
     assert '`tg-row ${row.kind === "part" ? "part" : "item"}`' in text
     assert ".words.mono" not in CSS
