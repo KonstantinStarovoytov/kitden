@@ -16,3 +16,11 @@ private until that release is out.
 ## Which version gets fixes
 
 The latest release only. Update before you report.
+
+## AI review infrastructure
+
+Fork PRs are currently excluded from automatic AI review. The
+[proposed fork boundary](https://github.com/KonstantinStarovoytov/kitden-sdlc/blob/main/docs/fork-review-design.md)
+requires trusted run/commit verification, inert source access, credential isolation and
+validated publication. It is not deployed or certified by this document. Report bypasses
+of review isolation through the private reporting route above, without posting secrets.

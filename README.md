@@ -148,6 +148,7 @@ Want to help? [Pick a good first issue](https://github.com/KonstantinStarovoytov
 [Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) ·
 [Releases](https://github.com/KonstantinStarovoytov/kitden/releases) ·
 [Issues](https://github.com/KonstantinStarovoytov/kitden/issues) ·
+[AI review policy](AI_POLICY.md) ·
 [Contributing](https://github.com/KonstantinStarovoytov/kitden/blob/main/CONTRIBUTING.md) ·
 [Apache-2.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE)
 

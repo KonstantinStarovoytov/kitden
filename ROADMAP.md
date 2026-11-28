@@ -5,6 +5,12 @@ Last updated: 2026-11-27
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
+## Planned development work
+
+- **Safe AI review for fork PRs:** preserve both reviewers and source context while separating
+  untrusted PR data from credentials and publication. [Design and rollout](https://github.com/KonstantinStarovoytov/kitden-sdlc/blob/main/docs/fork-review-plan.md).
+  Planned only; security tests and paired quality evals must pass before activation.
+
 ## Done
 
 ### Not yet released
