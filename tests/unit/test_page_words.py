@@ -1477,6 +1477,12 @@ def test_tabs_and_filters_read_first_then_the_list_settles():
     assert 'if (view === "library" && state.view !== "library") await raceSlow(' in app
 
 
+def test_the_search_box_has_ten_pixels_of_room_inside():
+    css = (STATIC / "style.css").read_text()
+    rule = next(line for line in css.splitlines() if line.startswith(".search {"))
+    assert "padding: 0 10px;" in rule and "padding: 0;" not in rule
+
+
 # The Kitden gateway (2026-10-21) ----------------------------------------------------------
 
 
