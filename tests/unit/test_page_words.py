@@ -1473,6 +1473,10 @@ def test_tabs_and_filters_read_first_then_the_list_settles():
     assert 'RISES_ON_ITS_OWN(state) ? "map-entrance" : "place-change");' in store
     assert '(s.view === "library" && s.mode !== "list")' in store
     assert "html.place-change #main, html.map-entrance #main { view-transition-name: page; }" in css
+    assert (
+        "::view-transition-old(page) { animation: 120ms ease both fade-out;"
+        " inline-size: auto; block-size: auto; }"
+    ) in css
     assert "::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }" in css
     assert 'if (view === "library" && state.view !== "library") await raceSlow(' in app
 

@@ -1308,7 +1308,8 @@ html.place-change #main, html.map-entrance #main { view-transition-name: page; }
 html.place-change::view-transition-old(root), html.place-change::view-transition-new(root),
 html.map-entrance::view-transition-old(root), html.map-entrance::view-transition-new(root) { animation: none; }
 ::view-transition-group(page) { animation: none; }
-::view-transition-old(page) { animation: 120ms ease both fade-out; }
+/* The old picture keeps its own size while it fades, so a wide page does not shrink onto a narrow one. */
+::view-transition-old(page) { animation: 120ms ease both fade-out; inline-size: auto; block-size: auto; }
 ::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }
 html.map-entrance::view-transition-new(page) { animation: none; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
