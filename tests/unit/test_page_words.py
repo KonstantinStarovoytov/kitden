@@ -943,8 +943,8 @@ def test_controls_press_and_the_switch_waits_in_the_tray():
     assert 'node.classList.toggle("pending", waiting);' in text and "onTray(syncTray);" in text
 
 
-def test_an_overview_item_opens_after_its_library_tab_is_read():
-    # The tab is read before the place changes, so the Library draws its rows inside the change.
+def test_an_overview_item_opens_after_its_library_list_is_read():
+    # The list is read before the place changes, so the Library draws its rows inside the change.
     overview = script("overview.js")
     card = overview.split("async function follow")[1].split("\n}\n")[0]
     assert card.index("await loadLibraryFor(libraryChoice(sel));") < card.index('goTo("library"')
@@ -1348,15 +1348,13 @@ def test_library_replaces_load_map_and_discover():
     assert 'OLD_VIEWS = ["map", "discover"]' in script("store.js")
     overview = script("overview.js")
     assert 'kind: selected.kind, show: "mine"' in script("store.js")
-    # An old New or All, and an old kind, land on their tab, as installed; the Library's MCP
+    # An old New or All, and an old kind, open Plugins and skills, as installed; the Library's MCP
     # servers are on the Gateway's List.
     store = script("store.js")
     assert (
         'const SHOWS = ["mine", "diff"];' in store
         and 'show: !old && SHOWS.includes(show) ? show : "mine"' in store
     )
-    # The Library shows plugins and skills: an old Instructions address opens it too.
-    assert 'kind: "plugin",' in store
     assert (
         'params.kind === "mcp_server") return { view: "gateway", params: { ...params, kind:'
         in store
@@ -1450,12 +1448,12 @@ def test_the_start_says_what_it_still_reads_and_fills_a_line_as_steps_end():
     assert ".topbar.progress::after { transition: none; }" in css
 
 
-def test_tabs_and_filters_read_first_then_the_list_settles():
+def test_choices_and_filters_read_first_then_the_list_settles():
     library, app, store = script("library.js"), script("app.js"), script("store.js")
     css = (STATIC / "style.css").read_text()
-    # Tabs and filters read their rows before the page changes; a slow answer dims the old list.
+    # Choices and filters read their rows before the page changes; a slow answer dims the old list.
     assert "const SWAP_WAIT_MS = 300;" in library
-    # The pressed tab or choice is marked at once; the list follows when its rows are in.
+    # The pressed choice is marked at once; the list follows when its rows are in.
     assert "markChoice(pressed);" in library.split("async function choose")[1]
     for call in (
         "choose({ show: id,",

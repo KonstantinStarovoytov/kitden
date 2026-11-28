@@ -627,7 +627,7 @@ def test_library_and_its_offers_let_other_requests_run_meanwhile(home, monkeypat
                 assert slow_read.result().status_code == 200, path
 
 
-# Instructions ---------------------------------------------------------------------------------
+# The Instructions tab is gone -----------------------------------------------------------------
 
 
 def test_the_instructions_map_is_gone(home):
@@ -1202,14 +1202,14 @@ def test_the_list_search_finds_a_name_or_a_part(tmp_path):
     assert set(_items(_list(home, q="brand"))) == {"brandkit"}
 
 
-def test_api_library_list_takes_a_tab_and_show_diff(tmp_path):
+def test_api_library_list_ignores_an_old_kind_and_takes_show_diff(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as client:
         client.get("/?token=tok")
         answer = client.get("/api/library-list?kind=plugin").json()
         assert set(answer) == {"project", "columns", "groups", "attention", "notes", "missing"}
-        # An old tab or show choice gets Plugins and skills, as installed.
+        # An old kind or show choice gets Plugins and skills, as installed.
         old = client.get("/api/library-list?kind=marketplace&show=new").json()
         assert old == answer
         diff = client.get("/api/library-list?kind=plugin&show=diff").json()

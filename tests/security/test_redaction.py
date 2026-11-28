@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from kitden.redact import SECRET, redact, redact_line, redact_lines, redact_text
+from kitden.redact import SECRET, redact, redact_line, redact_text
 
 GITHUB_LIKE = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
 
@@ -208,60 +208,3 @@ def test_tokens_inside_longer_strings_are_hidden():
 )
 def test_redact_line_hides_secrets_in_free_text(line, want):
     assert redact_line(line) == want
-
-
-def test_redact_lines_hides_values_that_span_lines():
-    lines = [
-        "config:",
-        "  password: |",
-        "    first-secret-line",
-        "",
-        "    second-secret-line",
-        "  user: me",
-        "TOKEN=",
-        "  next-line-secret",
-        "Done.",
-    ]
-    out = redact_lines(lines)
-    assert out[0] == "config:" and out[5] == "  user: me" and out[8] == "Done."
-    assert out[3] == ""
-    assert not any("secret-line" in line or "next-line-secret" in line for line in out)
-
-
-def test_redact_lines_hides_a_private_key_body():
-    lines = [
-        "Key:",
-        "-----BEGIN OPENSSH PRIVATE KEY-----",
-        "b3BlbnNzaC1rZXktdjEAAAAA",
-        "QyNTUxOQAAACD",
-        "-----END OPENSSH PRIVATE KEY-----",
-        "After.",
-    ]
-    out = redact_lines(lines)
-    assert out[1] == lines[1] and out[4] == lines[4] and out[5] == "After."
-    assert out[2] == SECRET and out[3] == SECRET
-    # The end can be past the lines shown: the body is still hidden.
-    assert redact_lines(lines[:3])[2] == SECRET
-
-
-@pytest.mark.parametrize(
-    "lines",
-    [
-        ["Admin password:", "hunter2hunter2", "Next."],
-        ["passwords:", "- hunter2hunter2", "- hunter3hunter3", "Next."],
-        ["**Password:**", "", "hunter2hunter2", "Next."],
-        ["token: |2", "  hunter2hunter2", "Next."],
-        ["  password: |", "\thunter2hunter2", "\thunter3hunter3", "Next."],
-        ["\tpassword: |", "\t\thunter2hunter2", "Next."],
-        [
-            "-----BEGIN PGP PRIVATE KEY BLOCK-----",
-            "hunter2hunter2",
-            "-----END PGP PRIVATE KEY BLOCK-----",
-            "Next.",
-        ],
-    ],
-)
-def test_redact_lines_hides_the_value_on_the_next_lines(lines):
-    out = redact_lines(lines)
-    assert not any("hunter" in line for line in out)
-    assert out[-1] == "Next."

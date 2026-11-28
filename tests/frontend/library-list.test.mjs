@@ -573,6 +573,8 @@ test('a part the map does not draw opens its plugin, an account row opens its ow
   assert.equal(libraryThing('item:acc'), null);
 });
 
+// Final fix wave: a project switch to an empty List (Differences shows nothing there) still moves
+// the Details a row opened on: they let go when the new project's map has no such item.
 test('Details follow a project switch when the new List is empty', async () => {
   await showList({ show: 'diff' });
   selected.length = 0;

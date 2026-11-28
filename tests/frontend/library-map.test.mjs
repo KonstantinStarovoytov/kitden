@@ -404,7 +404,7 @@ test('the address the page writes reads back as the same view', () => {
     const back = parseHash(hashFor({ ...state, view: 'library', kind: 'plugin', mode, project: '', q: '', selected: null }));
     assert.deepEqual([back.view, back.kind, back.mode], ['library', 'plugin', mode], mode);
   }
-  // After a draw with no choice, the address names the view drawn.
+  // After a draw with no Map or List choice, the page notes that it drew the map.
   showMap();
   state.mode = '';
   assert.equal(libraryShows.mode, 'map');

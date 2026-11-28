@@ -211,7 +211,7 @@ test('an empty Library names what it shows, and an empty search or filter says h
   assert.deepEqual(words({ show: 'diff' }), ['No differences between your clients', 'Show installed']);
 });
 
-test('an older answer never replaces a newer one for the same tab', async () => {
+test('an older answer never replaces a newer one for the same list', async () => {
   Object.assign(state, { view: 'library', kind: 'plugin', show: 'mine', category: '', attention: false, project: '', q: '' });
   freshness.reloadStartedAt = performance.now();
   requests.length = 0;
@@ -230,7 +230,7 @@ test('an older answer never replaces a newer one for the same tab', async () => 
   assert.equal(requests.length, 2);
 });
 
-test('a tab read before the Library shows is kept for it', async () => {
+test('a list read before the Library shows is kept for it', async () => {
   Object.assign(state, { view: 'overview', kind: 'mcp_server', show: 'new', category: 'Design', attention: true, project: '', q: 'x' });
   freshness.reloadStartedAt = performance.now();
   requests.length = 0;
@@ -239,7 +239,7 @@ test('a tab read before the Library shows is kept for it', async () => {
   assert.match(requests[0].url, /^\/api\/library-list\?kind=plugin&show=mine$/);
   requests[0].answer({ rows: [] });
   await read;
-  // Reading it again, or showing that tab, asks nothing new (a request starts at once).
+  // Reading it again, or showing the Library, asks nothing new (a request starts at once).
   loadLibraryFor({ kind: 'skill', show: 'mine', category: '', attention: false, q: '' });
   Object.assign(state, { view: 'library', kind: 'skill', show: 'mine', category: '', attention: false, q: '' });
   loadLibrary();
