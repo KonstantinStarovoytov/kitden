@@ -350,7 +350,7 @@ test("a skill's switch for all projects is Context's: one per client that can, a
   await reset();
   const skill = MEDIUM.groups[1].items[0];
   const card = details.skillCard(skill, c());
-  assert.deepEqual(facts(card), [['Plugin', 'None, a skill on its own'], ['State', 'On'], ['Comes from', 'All projects'], ['Source', 'Your skills'], ['Clients', '3 clients']]);
+  assert.deepEqual(facts(card), [['Plugin', 'None, a skill on its own'], ['State', 'On'], ['Source', 'Your skills'], ['Clients', '3 clients']]);
   assert.deepEqual(labels(card), [['Turn off in some projects…', false]]);
   assert.match(card.why, /Codex has no switch for one project; turn it off for all projects\. Cursor has no switch to turn off one skill\. To keep its description out of the list, add disable-model-invocation: true to its SKILL\.md; then the agent uses it only when you ask\.$/);
   assert.match(texts(card.list).join(' '), /Claude Code · all projects On Name only Off Codex · all projects On Off Codex has no Name only setting\./);
@@ -419,7 +419,7 @@ test('Turn off in some projects… uses the project checklist', async () => {
 test('a hook, a client, a link and a marketplace have their own Details', async () => {
   await reset();
   const hook = details.hookCard(MEDIUM.groups[2].items[0], c());
-  assert.deepEqual([hook.kind, facts(hook), hook.actions], ['Hook', [['State', 'On'], ['Comes from', 'All projects'], ['Source', 'Your settings'], ['Clients', '1 client']], undefined]);
+  assert.deepEqual([hook.kind, facts(hook), hook.actions], ['Hook', [['State', 'On'], ['Source', 'Your settings'], ['Clients', '1 client']], undefined]);
   // It has no action, and says so.
   assert.equal(hook.why, 'Kitden only shows hooks; it does not add or turn them off. Edit it in the settings file under Technical details.');
   const client = details.clientCard('claude_code', c());
@@ -834,8 +834,8 @@ test("another client's project copy does not offer Turn off in this project… f
   const skill = { ...MEDIUM.groups[1].items[0], here: { claude_code: false, codex: true, cursor: false } };
   assert.equal(details.skillHereBody(skill, atlas), null);
   assert.ok(!labels(details.skillCard(skill, atlas)).some(([label]) => label === 'Turn off in this project…'));
-  // Still "This project" under Comes from: a client's state there comes from the project.
-  assert.deepEqual(facts(details.skillCard(skill, atlas))[2], ['Comes from', 'This project · atlas']);
+  // Still "This project" in its one Source row: a client's state there comes from the project.
+  assert.deepEqual(facts(details.skillCard(skill, atlas))[2], ['Source', 'Your skills · This project · atlas']);
   // Claude Code decided there: offered.
   const decided = { ...skill, here: { claude_code: true } };
   assert.ok(details.skillHereBody(decided, atlas));

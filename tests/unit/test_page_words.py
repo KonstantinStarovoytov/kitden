@@ -117,8 +117,7 @@ def test_overview_says_your_setup_connected():
         '"Library"',
         "STATE_WORDS.missing",
         '"Could not read its settings"',
-        '"All projects"',
-        "`Project ${folder}`",
+        "scopeBar(folderName(projectPath()))",
         '"has its own rules" : "have their own rules"',
     ):
         assert words in overview, words
@@ -1033,7 +1032,10 @@ def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
 def test_overview_notes_are_sentences_with_an_info_icon():
     text = script("overview.js")
     assert 'node.append(icon("info", 13), el("span", null, noteSentence(group)));' in text
-    assert "`${group.name} ${joinWords(group.notes.map((words) => words.one))}.`" in text
+    assert (
+        "`${group.label || group.name} ${joinWords(group.notes.map((words) => words.one))}.`"
+        in text
+    )
     assert "(nothing to fix)" in text and "`Hide ${plural(count" in text
     assert "shortPaths" not in text and "flag(" not in text
     assert '.ov-fold[aria-expanded="true"] svg { rotate: 90deg; }' in CSS
@@ -1074,7 +1076,8 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
         "socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason, "
         "stale: Boolean(cell.stale_at) })" in text
     )
-    assert "button(cell.add.label" in text and '"btn small add"' in text
+    assert 'button(worded ? cell.add.label : "+"' in text
+    assert '"btn small add"' in text
     assert 'via: "Via Claude Code", done: "Has its skills"' in script("words.js")
     # The List is a tree grid; the category filter went with New and All (the add panel).
     assert 'el("div", "treegrid library-list")' in text
@@ -1218,14 +1221,15 @@ def test_rows_say_they_open_details_and_search_names_its_scope():
     assert re.search(r"\n\.opens \{[^}]*color: var\(--ink-3\)", CSS)
     assert re.search(r"\.tg-row:hover \.opens[^{]*\{ color: var\(--route\)", CSS)
     assert ".tg-row:focus-visible .opens" in CSS
-    # The search promises what it finds from the place (02-N02): the Gateway its servers and
-    # tools, every other place the Library's. The placeholder trails off; the accessible name
-    # does not repeat the dots.
-    assert 'placeholder="Search skills, plugins and marketplaces…"' in INDEX
-    assert 'aria-label="Search skills, plugins and marketplaces"' in INDEX
-    assert 'gateway: "Search servers and tools"' in script("app.js")
+    # One box searches the whole setup, with the same words on every place (02-R03). The
+    # placeholder trails off; the accessible name does not repeat the dots.
+    assert 'placeholder="Search skills, plugins, servers and tools…"' in INDEX
+    assert 'aria-label="Search skills, plugins, servers and tools"' in INDEX
+    assert 'SEARCH_WORDS = "Search skills, plugins, servers and tools"' in script("app.js")
     assert "Search plugins and skills to add" not in script("app.js")
-    assert 'go("library", { q })' in script("app.js")
+    assert "searchPlace(state.view, q)" in script("app.js")
+    # Lantern on #239: a read that ends after the person went elsewhere moves nothing.
+    assert 'if ($("#q").value.trim() !== q || state.view !== from) return;' in script("app.js")
     assert "Find an item" not in INDEX
 
 
@@ -2235,7 +2239,8 @@ def test_the_gateway_says_what_it_could_not_read():
 
 def test_search_on_a_map_page_finds_on_that_page():
     app = script("app.js")
-    assert 'MAP_PAGES = ["gateway", "library"]' in app and 'go("library", { q })' in app
+    assert 'MAP_PAGES = ["gateway", "library"]' in app
+    assert "go(searchPlace(state.view, q), { q });" in app
     # The chip's words are shared by every map page, so they live in map.js.
     assert '"match", "matches"' in script("map.js") and '"No matches"' in script("map.js")
     assert '<span class="find-chip" id="find-chip" role="status"></span>' in INDEX
@@ -2875,11 +2880,12 @@ def test_the_library_add_panel_says_the_decided_words():
         for w in ("LIBRARY_STATUS.added, off", "LIBRARY_STATUS.every", "line: row.refusal")
     ]
     assert order == sorted(order)
-    # The page header carries "+ Add plugins", the map ends with an "Add a plugin" card, and a row
-    # of the panel drags onto a client.
+    # The page header carries "+ Add" (the one door: the map has no "Add a plugin" card), and a
+    # row of the panel drags onto a client.
     lib_map = script("library-map.js")
-    assert 'addHeadButton("+ Add plugins", "add:plugins", pressLibraryAdd)' in script("library.js")
-    assert 'name: "Add a plugin", meta: "From the catalog"' in lib_map
+    assert 'addHeadButton("+ Add", "add:plugins", pressLibraryAdd)' in script("library.js")
+    assert '"Add plugins, skills or servers from the catalogs"' in script("library.js")
+    assert 'name: "Add a plugin"' not in lib_map
     assert "row: { still: true, begin: beginRow, over: overRow, drop: dropRow }," in lib_map
     assert "liftGhost" in script("gateway-drag.js") and "export function liftGhost(" in script(
         "map-drag.js"
@@ -3132,7 +3138,7 @@ def test_the_changes_page_says_the_mockups_words():
     )
     assert f'"{lede}"' in text
     assert 'plural(weekCount(entries), "change", "changes")} this week`' in text
-    assert 'HINT = "Click a row · Undo · See it on the map"' in text
+    assert 'HINT = "Click a row for its steps · Undo puts a change back"' in text
     # Day groups: Today, Yesterday, then a short date in the person's language.
     assert '"Today"' in text and '"Yesterday"' in text
     assert '{ weekday: "short", day: "numeric", month: "short" }' in text

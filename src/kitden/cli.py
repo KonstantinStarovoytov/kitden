@@ -384,13 +384,16 @@ def _have_counts(inventory: Inventory) -> Counter:
     a skill counts once by name, as the Library lists it: a project's own entry for it, or another
     copy, is the same one (copies get a warning of their own). A plugin's skills count with their
     plugin. Any other item counts once, also when reached twice (a project listed by its path and
-    by a symlink to it)."""
+    by a symlink to it). The row that stands for the Claude account is not a plugin: "plugins"
+    are the ones installed, as the Library and the Overview count them."""
     from kitden.clients.base import from_plugin
+    from kitden.clients.claude_code import ACCOUNT_ROW
 
     seen = {
         (i.client, str(i.kind), i.name if i.kind in (ItemKind.PLUGIN, ItemKind.SKILL) else i.id)
         for i in inventory.items
         if not (i.kind is ItemKind.SKILL and from_plugin(i))
+        and not (i.kind is ItemKind.PLUGIN and i.name == ACCOUNT_ROW)
     }
     return Counter((client, kind) for client, kind, _ in seen)
 
@@ -463,7 +466,9 @@ def _findings_lines(findings: list[dict], by_id: dict) -> list[str]:
     warnings = [_warning(f, by_id) for f in findings if f["severity"] == "warning"]
     # The notes as the Overview counts them: items with the same words fold into one row.
     infos = [f for f in findings if f["severity"] != "warning"]
-    notes = note_count([SimpleNamespace(names=f["names"], type=f["type"]) for f in infos])
+    notes = note_count(
+        [SimpleNamespace(names=f["names"], type=f["type"], kinds=f.get("kinds", [])) for f in infos]
+    )
     command = _whole(words.SCAN_FINDINGS)
     parts = []
     if warnings:
@@ -573,7 +578,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kitden")
     parser.add_argument("--version", action="store_true", help="print the version and exit")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
-    parser.add_argument("--home", help="read clients under this home folder (for testing)")
+    # --home reads clients under another home folder. It is for tests, so help leaves it out.
+    parser.add_argument("--home", help=argparse.SUPPRESS)
     commands = parser.add_subparsers(dest="command")
     # SUPPRESS keeps an option given before the command (`kitden --home X open`).
     keep = argparse.SUPPRESS
@@ -607,9 +613,7 @@ def main(argv: list[str] | None = None) -> int:
             "--no-browser", action="store_true", default=keep, help="only print the link"
         )
     for sub in (opener, serve, scan, show, mcp):
-        sub.add_argument(
-            "--home", default=keep, help="read clients under this home folder (for testing)"
-        )
+        sub.add_argument("--home", default=keep, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     args.background = getattr(args, "background", False)
     args.take_over = getattr(args, "take_over", False)

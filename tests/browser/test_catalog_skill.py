@@ -18,7 +18,7 @@ def test_a_skill_from_the_catalog_is_added_to_claude_code_and_removed(sample_pag
     skill_file = sample.home / f".claude/skills/{SKILL}/SKILL.md"
     assert not skill_file.exists()
     page.get_by_role("link", name="Library", exact=True).click()
-    page.get_by_role("button", name="+ Add plugins").click()
+    page.get_by_role("button", name="Add plugins, skills or servers from the catalogs").click()
     panel = page.get_by_role("complementary", name="Details")
     panel.get_by_role("searchbox", name="Search catalogs").fill("mcp")
     panel.get_by_role("button", name="Search").click()

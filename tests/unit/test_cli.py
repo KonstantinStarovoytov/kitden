@@ -25,6 +25,19 @@ def test_version_prints_name_and_version_and_exits_zero(capsys):
     assert capsys.readouterr().out.strip() == f"kitden {kitden.__version__}"
 
 
+@pytest.mark.parametrize(
+    "command", [[], ["open"], ["serve"], ["demo"], ["scan"], ["show"], ["mcp"]]
+)
+def test_help_does_not_show_the_test_option_home(command, capsys):
+    with pytest.raises(SystemExit) as done:
+        main([*command, "--help"])
+    assert done.value.code == 0
+    out = capsys.readouterr().out
+    assert "usage: kitden" in out
+    assert "--home" not in out
+    assert ("--size" in out) == (command == ["demo"])
+
+
 def _busy(port):
     sock = socket.socket()
     sock.bind(("127.0.0.1", port))

@@ -22,6 +22,9 @@ from kitden.gateways import data_dir, private_data_dir
 from kitden.model import Change, FileEdit, Scope, Step
 
 SETTINGS_FILE = "gateway.json"
+# The settings file's format, kept in it as "version". A file with no version (from an earlier
+# Kitden) reads the same. A new format that older files cannot be read as raises it.
+FORMAT = 1
 TOOLS_FILE = "gateway-tools.json"
 CALLS_FILE = "gateway-calls.json"
 # Which server each bare tool name belongs to, so a server added later cannot take it.
@@ -404,7 +407,12 @@ def moved_in(change: Change) -> list[str]:
 def settings_step(home: Path, key: tuple[str, ...], value: Any, name: str) -> Step:
     """One entry of the settings file as a change step; ABSENT removes it."""
     edit = FileEdit(
-        path=str(data_dir(home) / SETTINGS_FILE), fmt="json", key=key, after=value, check="entry"
+        path=str(data_dir(home) / SETTINGS_FILE),
+        fmt="json",
+        key=key,
+        after=value,
+        check="entry",
+        version=FORMAT,
     )
     return Step(client=CLIENT, scope=Scope.USER, name=name, edit=edit)
 

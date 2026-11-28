@@ -102,7 +102,7 @@ def test_a_skill_turned_off_after_the_chat_can_make_everything_fit(home):
     # 6 x (1 + 4 + 1,200) + 5 = 7,235 characters of 8,000.
     assert cc["now"]["room"] == "Estimate: about 765 characters left before the limit."
     assert cc["windows"][0]["result"]["short"] == "1 of 7 showed only a name"
-    assert cc["limit"]["why"] == words.LIMIT_NOT_NEEDED
+    assert cc["limit"]["why"] is None
 
 
 def test_a_cut_skill_set_to_name_only_after_the_chat_is_said(home):
@@ -307,7 +307,7 @@ def test_the_line_keeps_its_places_when_the_preview_makes_everything_fit(home):
     cc = claude(home, {"a": "off"})
     assert cc["after"]["say"].startswith("After Apply, estimate: On a 200K window, every skill")
     # Nothing to raise any more; the line can still be moved until Apply.
-    assert cc["limit"]["offer"] is None and cc["limit"]["why"] == words.LIMIT_NOT_NEEDED
+    assert cc["limit"]["offer"] is None and cc["limit"]["why"] is None
     assert places(cc)[0.01] == "1% now · all 6 fit"
     assert places(cc)[0.011] == "1.1% · all 6 fit"
     assert "default" not in places(cc)
@@ -407,7 +407,7 @@ def test_codex_places_count_the_skills_turned_off_in_the_preview(home):
 def test_codex_keeps_its_places_when_the_preview_makes_everything_fit(home):
     codex_cut_chat(home)
     cx = view(home, draft={"codex": {"alpha": "off", "beta": "off"}})["codex"]
-    assert cx["limit"]["offer"] is None and cx["limit"]["why"] == words.LIMIT_NOT_NEEDED
+    assert cx["limit"]["offer"] is None and cx["limit"]["why"] is None
     assert cx["limit"]["steps"][0]["say"].endswith("tokens now · all 1 fit")
     assert [s["value"] for s in cx["limit"]["steps"]][1] == 500
 
@@ -530,7 +530,7 @@ def test_a_codex_skill_turned_off_after_the_chat_is_said_and_leaves_the_estimate
     assert cx["now"]["room"].endswith(" tokens left before the limit.")
     # The last chat's fact stays, and the limit line counts the two.
     assert cx["windows"][0] == before["windows"][0] and cx["lamp"] == "warn"
-    assert cx["limit"]["why"] == words.LIMIT_NOT_NEEDED
+    assert cx["limit"]["why"] is None
     rows = {s["name"]: s for s in cx["skills"]}
     assert (rows["gamma"]["state"], rows["gamma"]["side"]) == ("off", 0)
     # Off, it keeps its switch: On turns it on again.
@@ -903,7 +903,7 @@ def test_a_skill_removed_after_the_chat_is_gone_like_one_turned_off(home, name):
     assert cc["checked"] is True
     assert cc["changed"] == [CHANGED, KEEPS]
     assert len(cc["now"]["sent"]) == 6 and cc["now"]["over"] == {}
-    assert cc["limit"]["why"] == words.LIMIT_NOT_NEEDED
+    assert cc["limit"]["why"] is None
     # Not on the page, and not a skill Kitden cannot place.
     assert name not in {s["name"] for s in cc["skills"]}
     assert "unknown" not in {g["key"] for g in cc["groups"]}

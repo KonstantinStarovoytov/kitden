@@ -167,7 +167,7 @@ from kitden.views.commands import commands_for
 from kitden.views.context_view import context_view
 from kitden.views.effective import project_views
 from kitden.views.explain import explain, with_page_fields
-from kitden.views.findings import find_bypasses, find_findings, finding_dict
+from kitden.views.findings import find_findings, finding_dict
 from kitden.views.gateway_view import gateway_view
 from kitden.views.instructions_map import instructions_map
 from kitden.views.inventory import (
@@ -1092,7 +1092,9 @@ def create_app(
 
     async def findings(request: Request) -> JSONResponse:
         project = request.query_params.get("project") or None
-        found = find_findings(state.inventory, project) + find_bypasses(state.inventory, project)
+        # The Overview's notes. A server outside the gateway is not a note: the Overview's card
+        # counts the servers that can move in, and the Gateway shows every one outside.
+        found = find_findings(state.inventory, project)
         return JSONResponse([finding_dict(f) for f in found])
 
     # Read models for the redesigned page ------------------------------------------------
@@ -1178,7 +1180,14 @@ def create_app(
             show=show if show in LIST_SHOWS else "mine",
             **_list_query(params),
         )
-        return JSONResponse({"project": project, **answer})
+        # Whether "Add missing…" has anything to add: its review's own list (none with one client).
+        missing = tab != "instructions"
+        if missing:
+            try:
+                align_steps(state.inventory, adapters, path, _found_clients(), None)
+            except ValueError:  # "Nothing is missing."
+                missing = False
+        return JSONResponse({"project": project, **answer, "missing": missing})
 
     def _library_map(request, project, path):
         """The Library map: clients, plugins and skills by source, and what each plugin holds."""

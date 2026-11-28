@@ -96,10 +96,11 @@ def map_clients(inventory, cursor_imports: bool, loads: dict[str, str | None]) -
 
 
 def plugin_skill_words(groups: list[dict]) -> dict[str, str | None]:
-    """Per client, what it loads of the items in `groups`: its plugins and skills ("5 plugins ·
-    62 skills"); with none of those, its hooks ("1 hook"), so a client whose only item is a hook
-    never says it loads nothing; None where it loads none. An item another client's folder brings
-    in counts, since the client loads it."""
+    """Per client, what it loads of the items in `groups`: its plugins and skills that are on
+    ("On: 5 plugins · 62 skills"); with none of those, its hooks ("On: 1 hook"), so a client whose
+    only item is a hook never says it loads nothing; None where it loads none. An item another
+    client's folder brings in counts, since the client loads it. "On" says the set: "plugins"
+    alone means every one installed, on or off (the Overview's Library box, the scan)."""
     kinds = ("plugin", "skill", "hook")
     found: dict[str, dict[str, int]] = {c: dict.fromkeys(kinds, 0) for c in CLIENTS}
     for group in groups:
@@ -113,10 +114,8 @@ def plugin_skill_words(groups: list[dict]) -> dict[str, str | None]:
     def words(n: dict[str, int], shown: tuple[str, ...]) -> str:
         return " · ".join(f"{n[k]} {k}{'' if n[k] == 1 else 's'}" for k in shown if n[k])
 
-    return {
-        client: words(n, ("plugin", "skill")) or words(n, ("hook",)) or None
-        for client, n in found.items()
-    }
+    said = {c: words(n, ("plugin", "skill")) or words(n, ("hook",)) for c, n in found.items()}
+    return {client: f"On: {text}" if text else None for client, text in said.items()}
 
 
 def _present(inventory, project: str | None) -> dict[str, list[Item]]:
@@ -350,24 +349,32 @@ def copy_choices(
 
 def _costs(inventory, gone: list[Item], rows: list[dict], project: str | None) -> set[str]:
     """The clients that would have none of the item once the copies `gone` are removed: they
-    lose a copy (`also`) and load no other one in the picked project, its settings applied, or
+    lose a copy (`also`) and load no other one in the picked project (with All projects, in some
+    project), its settings applied, or
     lose another skill that sits inside a removed folder."""
     lose = {c for row in rows for c in row["also"]}
     if not gone or gone[0].kind is not ItemKind.SKILL:
         return lose
     name = gone[0].name
-    # What each client loads in the picked project (or in every project), its settings there
-    # applied. A copy whose state Kitden does not know may not load.
+    # What each client loads in the picked project, its settings there applied. With All
+    # projects picked the removal reaches every project, so a client must keep a copy in each.
+    # A copy whose state Kitden does not know may not load.
+    scopes = [project] if project else [None, *(p.path for p in inventory.projects)]
     kept = {
         c
         for c in lose
-        for i in effective_view(inventory, c, project).items
-        if i.kind is ItemKind.SKILL
-        and i.name == name
-        and i.enabled is Enabled.ON
-        and i.source.path is not None
-        # A copy inside a removed folder (a nested skill of the same name) goes too.
-        and not _inside(i, gone)
+        if all(
+            any(
+                i.kind is ItemKind.SKILL
+                and i.name == name
+                and i.enabled is Enabled.ON
+                and i.source.path is not None
+                # A copy inside a removed folder (a nested skill of the same name) goes too.
+                and not _inside(i, gone)
+                for i in effective_view(inventory, c, scope).items
+            )
+            for scope in scopes
+        )
     }
     # A skill folder can hold other skills (Codex and Cursor read sub-folders): they go with it.
     inside = {

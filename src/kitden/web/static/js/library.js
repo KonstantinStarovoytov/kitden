@@ -29,6 +29,7 @@ const PART_WORDS = { skill: "Skill", command: "Command", agent: "Agent", hook: "
 const CELL_W = 150;
 const NO_DIFFERENCES = "No differences between your clients";
 const ADD_MISSING = "Add missing plugins and skills…";
+const ADD_WORDS = "Add plugins, skills or servers from the catalogs";
 // An empty tab: what is missing, and where it comes from.
 const NOTHING = {
   plugin: ["No plugins or skills in any client", "Plugins and skills you add in Claude Code, Codex or Cursor will show up here."],
@@ -135,8 +136,13 @@ export function scopeLine(project, rows, kind = null) {
 export function cellNode(row, client) {
   const cell = row.cells[client];
   if (cell.add) {
-    const node = button(cell.add.label, () => startAdd(cell.add, client, row), "btn small add");
-    node.setAttribute("aria-label", addName(row, client, cell.add, state.project));
+    // "+" alone; the sentence is its hover, its focus tip and its spoken name. Differences, where
+    // the cells are what you read, keeps the words ("+ Add skills").
+    const words = addName(row, client, cell.add, state.project);
+    const worded = state.show === "diff";
+    const node = button(worded ? cell.add.label : "+", () => startAdd(cell.add, client, row), worded ? "btn small add" : "btn small add plus");
+    node.setAttribute("aria-label", words);
+    node.title = words;
     node.dataset.focus = `add:${row.key}:${client}`;
     watch(node, row, client);
     return node;
@@ -363,7 +369,11 @@ export function renderLibrary(main, { again = false } = {}) {
   head.append(el("h1", null, "Library"));
   const letGo = () => { letGoLibraryMap(); letGoList(); };
   const seg = modeSwitch("library", mode, { old: () => main.querySelector(mode === "map" ? ":scope > div.map" : ":scope > .table-scroll"), letGo, shows: () => libraryShows.mode });
-  head.append(headActions(chooseButton(), addHeadButton("+ Add plugins", "add:plugins", pressLibraryAdd), seg));
+  // "+ Add" opens the catalogs of plugins, skills and servers; its hover and spoken name say so.
+  const add = addHeadButton("+ Add", "add:plugins", pressLibraryAdd);
+  add.title = ADD_WORDS;
+  add.setAttribute("aria-label", ADD_WORDS);
+  head.append(headActions(chooseButton(), add, seg));
   main.append(head);
   let found = null;
   if (mode === "map") found = renderLibraryMap(main, { head, again, switched });
@@ -380,7 +390,7 @@ export function renderLibrary(main, { again = false } = {}) {
 function renderList(main) {
   const kind = currentKind();
   const tabs = listTabs(kind);
-  main.append(el("p", "lede", LEDE), tabs, scopeBar(folderName(projectPath())));
+  main.append(...[el("p", "lede", LEDE), tabs, scopeBar(folderName(projectPath()))].filter(Boolean));
   glidePill(tabs, tabs.querySelector('[aria-pressed="true"]'), "library-tabs-map");
   setHint(kind === "plugin" ? LIST_HINT : INSTRUCTIONS_HINT);
 
@@ -502,7 +512,9 @@ function toolbar(kind, answer) {
     bar.append(toggle);
   }
   // One review that adds what one client loads in the project and another lacks; under All
-  // projects, what one client has for all projects and another lacks.
+  // projects, what one client has for all projects and another lacks. Only when it has something
+  // to add (the server asks the review: none with one client).
+  if (!answer || !answer.missing) return bar;
   const missing = button(ADD_MISSING, () => review({ action: "project.align", targets: [], params: { project: state.project || null, chosen: null } }), "btn small");
   missing.dataset.focus = "add:missing";
   bar.append(missing);

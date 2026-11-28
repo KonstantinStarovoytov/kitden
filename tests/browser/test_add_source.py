@@ -16,7 +16,7 @@ REPO = "anthropics/skills"  # tests/offline.py answers for its tree and its mcp-
 def test_an_added_github_source_is_listed_and_kept(sample_page, sample):
     page = sample_page
     page.get_by_role("link", name="Library", exact=True).click()
-    page.get_by_role("button", name="+ Add plugins").click()
+    page.get_by_role("button", name="Add plugins, skills or servers from the catalogs").click()
     panel = page.get_by_role("complementary", name="Details")
     panel.get_by_role("button", name="Sources").click()
     panel.get_by_role("textbox", name="GitHub source").fill(REPO)

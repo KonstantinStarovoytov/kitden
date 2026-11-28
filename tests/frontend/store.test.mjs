@@ -18,7 +18,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadLibraryMap, loadMap, parseHash, parseSel, projectGone, readLibraryMap, reload, retry, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadLibraryMap, loadMap, parseHash, parseSel, projectGone, readForSearch, readLibraryMap, reload, retry, searchPlace, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -358,5 +358,56 @@ test('an older read never marks newer data fresh', async () => {
   } finally {
     globalThis.fetch = plain;
     go('overview', { project: '', selected: null });
+  }
+});
+
+test('one search box: a search goes where something of that name is, the Gateway for a server', () => {
+  // 02-R03: from the Overview, "filesystem" (a server) went to the Library and found nothing.
+  const was = { libraryMap: data.libraryMap, gateway: data.gateway };
+  try {
+    data.libraryMap = { groups: [{ name: 'demo-market', items: [{ kind: 'plugin', name: 'superpowers', inside: { skills: ['brainstorming'] } }, { kind: 'skill', name: 'playwright' }] }] };
+    data.gateway = { groups: { move: [{ name: 'filesystem' }], local: [{ name: 'playwright' }] }, gateways: [{ servers: [{ name: 'files', tool_list: [{ name: 'read_file' }] }] }] };
+    Object.assign(data.scope, { libraryMap: state.project, gateway: state.project });
+    // From a page with no search of its own: where the name is, the Library first.
+    assert.equal(searchPlace('overview', 'filesystem'), 'gateway');
+    assert.equal(searchPlace('context', 'read_file'), 'gateway');
+    assert.equal(searchPlace('overview', 'playwright'), 'library');
+    assert.equal(searchPlace('changes', 'brainstorm'), 'library');
+    assert.equal(searchPlace('overview', 'nothing-here'), 'library');
+    // A page that searches itself keeps the search while it finds something; with none there
+    // and a match on the other, the search goes there.
+    assert.equal(searchPlace('library', 'filesystem'), 'gateway');
+    assert.equal(searchPlace('gateway', 'superpowers'), 'library');
+    assert.equal(searchPlace('gateway', 'brainstorm'), 'library'); // a plugin's own skill
+    assert.equal(searchPlace('gateway', 'playwright'), 'gateway');
+    assert.equal(searchPlace('library', 'nothing-here'), 'library');
+    assert.equal(searchPlace('gateway', ''), 'gateway');
+    // Read for another project (Lantern on #239): it does not count, so the search stays.
+    data.scope.gateway = 'other';
+    assert.equal(searchPlace('library', 'filesystem'), 'library');
+    data.scope.gateway = state.project;
+    // Not read yet: the search stays.
+    data.gateway = null;
+    assert.equal(searchPlace('library', 'filesystem'), 'library');
+  } finally {
+    Object.assign(data, was);
+  }
+});
+
+test('a search reads what it looks in, and joins the Library map read that runs', async () => {
+  // Lantern on #239: a second Library map read undid the Library's own, which then never drew.
+  const was = { view: state.view, libraryMap: data.libraryMap, gateway: data.gateway };
+  try {
+    Object.assign(data, { libraryMap: null, gateway: null });
+    state.view = 'library';
+    asked.length = 0;
+    const own = readLibraryMap(); // the Library's own read, still running
+    await readForSearch();
+    await own;
+    assert.ok(asked.some((url) => url.startsWith('/api/gateway-view')));
+    assert.equal(asked.filter((url) => url.startsWith('/api/library-map')).length, 1);
+  } finally {
+    state.view = was.view;
+    Object.assign(data, { libraryMap: was.libraryMap, gateway: was.gateway });
   }
 });

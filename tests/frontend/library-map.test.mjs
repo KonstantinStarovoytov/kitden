@@ -158,24 +158,25 @@ function showMap(sample = MEDIUM, { q = '', open = true } = {}) {
   return { box: map(), found };
 }
 
-test('the head has the tabs, the lede, the scope bar and Map | List', () => {
+test('the head has the tabs, the lede and Map | List', () => {
   showMap();
   settle();
-  const [head, lede, tabs, scope] = main.children;
+  const [head, lede, tabs] = main.children;
   assert.equal(head.className, 'page-head');
   assert.equal(head.children[0].textContent, 'Library');
   // The add button and Map | List sit together, so a narrow head wraps them as one.
   const actions = head.children.at(-1);
   assert.equal(actions.className, 'head-actions');
-  assert.deepEqual(actions.children.map((n) => n.className), ['btn', 'btn add', 'seg']);
-  assert.deepEqual(actions.children.slice(0, 2).map((n) => n.textContent), ['Choose clients…', '+ Add plugins']);
-  assert.equal(actions.children[0].dataset.focus, 'choose:clients');
+  assert.deepEqual(actions.children.map((n) => n.className), ['btn add', 'seg']);
+  // It opens the catalogs of plugins, skills and servers: its hover and spoken name say so.
+  assert.deepEqual([actions.children[0].textContent, actions.children[0].title], ['+ Add', 'Add plugins, skills or servers from the catalogs']);
   const seg = actions.children.at(-1);
   assert.deepEqual(seg.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Map', 'true'], ['List', 'false']]);
   assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
   assert.equal(tabs.className, 'seg sm map-tabs');
   assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Plugins and skills', 'true'], ['Instructions', 'false']]);
-  assert.ok(texts(scope).includes('All projects'));
+  // Under All projects no scope line repeats the top bar.
+  assert.equal(main.children.some((n) => n.classList.contains('scope-bar')), false);
   assert.ok(map());
   assert.equal(hintLine.hidden, false);
   assert.equal(hintLine.children.at(-1).textContent, 'Point at a link: its × removes a plugin from that client, or turns a skill off there · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details');
@@ -1258,7 +1259,7 @@ test('a file card says its meta whole in its title', () => {
   }
 });
 
-test('the Instructions tab says why a client has no file, under the scope line', () => {
+test('the Instructions tab says why a client has no file, under the tabs', () => {
   const note = 'Cursor loads no instruction file for all projects. Pick a project to see its own files.';
   try {
     Object.assign(data, { libraryMap: MEDIUM, instructionsMap: { ...INSTR, note }, projects: [] });
@@ -1270,7 +1271,7 @@ test('the Instructions tab says why a client has no file, under the scope line',
     const line = walk(main).find((n) => n.classList.contains('scope-note'));
     assert.equal(line.textContent, note);
     const kids = main.children;
-    assert.ok(kids[kids.indexOf(line) - 1].classList.contains('scope-bar'), 'right under the scope line');
+    assert.ok(kids[kids.indexOf(line) - 1].classList.contains('map-tabs'), 'right under the tabs');
     // No sentence: no line. The plugins tab never has one.
     Object.assign(data, { instructionsMap: { ...INSTR, note: null } });
     main.replaceChildren();

@@ -329,7 +329,7 @@ def scene_library(page: Page, film: Film, pointer: Pointer) -> None:
 
 def open_find(page: Page, link: str) -> None:
     open_library(page, link)
-    page.locator("button:has-text('Add plugins')").first.click()
+    page.locator('.head-actions [data-focus="add:plugins"]').first.click()
     page.locator(".discovery-results .res").first.wait_for()
 
 

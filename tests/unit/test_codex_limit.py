@@ -120,7 +120,7 @@ def test_after_a_raise_the_codex_chat_keeps_its_own_limit_and_says_it_changed(ho
         f"Estimate: On a {window} window, every skill would keep its full description.",
     ]
     limit = cx["limit"]
-    assert limit["offer"] is None and limit["why"] == words.LIMIT_NOT_NEEDED
+    assert limit["offer"] is None and limit["why"] is None
     assert limit["back"] == {"tokens": "default", "label": "Back to the default"}
     assert limit["now"] == "Set in config.toml: 500 tokens"
     assert [s["value"] for s in limit["steps"]] == ["default", 500]
@@ -131,8 +131,8 @@ def test_not_offered_when_everything_fits_or_there_is_no_estimate(home):
     paths = codex_home(home, window=272_000)
     codex_chat(home, [f"- alpha: {CODEX_A} (file: {paths['alpha']})"])
     cx = view(home)["codex"]
-    assert cx["limit"]["why"] == words.LIMIT_NOT_NEEDED and cx["limit"]["steps"] == []
-    assert cx["how"][-1] == "Kitden does not offer a new skill list limit: every description fits."
+    assert cx["limit"]["why"] is None and cx["limit"]["steps"] == []
+    assert not any("every description fits" in line for line in cx["how"])
     codex_home(home)  # the model cache gives no window: no estimate
     cx = view(home)["codex"]
     assert cx["limit"]["why"] == words.LIMIT_NOT_ESTIMATED
@@ -261,7 +261,7 @@ def test_a_limit_above_the_default_has_the_steps_of_500_between_them(home):
     # Everything fits: the places below are there too, with Back.
     few = [CodexSkill(f"s{i}", "Does a thing.", f"/s{i}/SKILL.md") for i in range(3)]
     fits = _card(7_000, few)
-    assert fits["why"] == words.LIMIT_NOT_NEEDED
+    assert fits["why"] is None
     assert [s["value"] for s in fits["steps"]] == ["default", 5_500, 6_000, 6_500, 7_000]
     assert fits["steps"][1]["say"] == "5,500 tokens · all 3 fit"
     # With no estimate the places stand, and say nothing of what fits.

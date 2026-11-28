@@ -417,14 +417,25 @@ export function partCard(block, c) {
   return { kind: block.label.words, title: block.name, id: plugin.name, tile: iconTile(block.label.icon), facts, why: actions.length ? `${FOLLOWS} Its switch is ${plugin.name}'s, for the whole plugin.` : FOLLOWS, actions };
 }
 
-// A skill on its own: Plugin ("None, a skill on its own"), State, Comes from, Source and Clients;
+// A skill's or a hook's one Source row: where it comes from ("Your skills"), and, where the picked
+// project's own settings decide it, that project ("Your skills · This project · atlas").
+function sourceFact(item, c, mark = null) {
+  const here = c.project && (decidedHere(item) || item.source === ORIGIN_WORDS.project);
+  const where = item.source === ORIGIN_WORDS.project ? c.folder : `${ORIGIN_WORDS.override} · ${c.folder}`;
+  const text = here ? `${item.source} · ${where}` : item.source;
+  if (!mark) return { label: "Source", value: text, accent: Boolean(here) };
+  const value = el("span", "fact-mark");
+  value.append(icon(mark, 13), el("span", null, text));
+  return { label: "Source", value, text, accent: Boolean(here) };
+}
+
+// A skill on its own: Plugin ("None, a skill on its own"), State, Source and Clients;
 // where it loads, and which clients have no switch; "Turn off for all projects…", "Turn off in
 // this project…" where the project decides, and "Turn off in some projects…" (the project
 // checklist, `someStep`); its file under Technical details.
 export function skillCard(item, c, { someStep = () => {}, addStep = () => {} } = {}) {
-  const source = el("span", "fact-mark");
-  source.append(icon(item.source === ORIGIN_WORDS.project ? "folder" : "user-round", 13), el("span", null, item.source));
-  const facts = [{ label: "Plugin", value: NO_PLUGIN, quiet: true }, stateFact(item, c), comesFrom(item, c), { label: "Source", value: source, text: item.source }, clientsFact(item, { count: true })];
+  const mark = item.source === ORIGIN_WORDS.project ? "folder" : "user-round";
+  const facts = [{ label: "Plugin", value: NO_PLUGIN, quiet: true }, stateFact(item, c), sourceFact(item, c, mark), clientsFact(item, { count: true })];
   const actions = [];
   // Add to a client: the same step as a plugin's, for a skill the skill catalog can copy (the List's
   // "+ Add" and a drag do the same).
@@ -480,7 +491,7 @@ export function accountCard(block) {
 export const HOOKS_ONLY_SHOWN = "Kitden only shows hooks; it does not add or turn them off.";
 const EDIT_HOOK = "Edit it in the settings file under Technical details.";
 export function hookCard(item, c) {
-  const facts = [stateFact(item), comesFrom(item, c), { label: "Source", value: item.source }, clientsFact(item, { count: true })];
+  const facts = [stateFact(item), sourceFact(item, c), clientsFact(item, { count: true })];
   return { kind: KIND_WORDS.hook, title: item.name, id: item.source, tile: kindTile("hook"), facts, why: `${HOOKS_ONLY_SHOWN} ${EDIT_HOOK}`, technical: techOf([{ title: "Settings file", path: (item.technical || {}).path }]) };
 }
 

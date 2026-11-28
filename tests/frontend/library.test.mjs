@@ -48,10 +48,11 @@ const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, a
 const add = (fields) => ({ action: 'plugin.install', label: '+ Add', plugin: null, skill: null, marketplace: null, item: null, warn: null, project_place: false, project_hint: null, ...fields });
 const row = (cells, fields = {}) => ({ key: 'plugin:1', kind: 'plugin', name: 'figma', source: 'openai-curated', same_name: false, cells, ...fields });
 
-test('a cell with an add shows its label and nothing else', () => {
+test('a cell with an add shows "+" alone; its hover, focus tip and spoken name say the sentence', () => {
   const plugin = cellNode(row({ codex: cell({ add: add({ plugin: 'figma@openai-curated' }) }) }), 'codex');
   assert.equal(plugin.tag, 'button');
-  assert.equal(plugin.textContent, '+ Add');
+  assert.equal(plugin.textContent, '+');
+  assert.equal(plugin.title, 'Add figma to Codex');
   assert.deepEqual(plugin.children, []);
   // A screen reader hears the button's words first, then what and where; twin rows name their source.
   assert.equal(plugin.attributes['aria-label'], 'Add figma to Codex');
@@ -59,13 +60,23 @@ test('a cell with an add shows its label and nothing else', () => {
   assert.equal(twin.attributes['aria-label'], 'Add figma (openai-curated) to Codex');
 
   const skills = cellNode(row({ claude_code: cell({ add: add({ action: 'plugin.skills', label: '+ Add skills', plugin: 'figma@openai-curated' }) }) }), 'claude_code');
-  assert.equal(skills.textContent, '+ Add skills');
+  assert.equal(skills.textContent, '+');
+  assert.equal(skills.title, 'Add skills from figma to Claude Code');
   assert.deepEqual(skills.children, []);
   assert.equal(skills.attributes['aria-label'], 'Add skills from figma to Claude Code');
 
   const plugin2 = cellNode(row({ cursor: cell({ add: add({ label: '+ Add the plugin', plugin: 'glean@cursor-public' }) }) }, { kind: 'skill', name: 'find-owner' }), 'cursor');
-  assert.equal(plugin2.textContent, '+ Add the plugin');
+  assert.equal(plugin2.textContent, '+');
   assert.equal(plugin2.attributes['aria-label'], 'Add the plugin with find-owner to Cursor');
+  // The Differences view keeps the words: there the cells are what you read.
+  const was = state.show;
+  state.show = 'diff';
+  try {
+    const worded = cellNode(row({ claude_code: cell({ add: add({ action: 'plugin.skills', label: '+ Add skills', plugin: 'figma@openai-curated' }) }) }), 'claude_code');
+    assert.equal(worded.textContent, '+ Add skills');
+  } finally {
+    state.show = was;
+  }
 });
 
 test('a cell with nothing to do shows nothing and says why', () => {

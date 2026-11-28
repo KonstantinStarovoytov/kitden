@@ -14,7 +14,7 @@ import { mapView } from "./map-view.js";
 import { headActions } from "./map-page.js";
 import { animateTo, countUp, D, rise, riseHead, rollTo } from "./motion.js";
 import { toast } from "./panel.js";
-import { banner, folderName, mark, setHint, skeleton, STATE_WORDS, staleNote, versionWords } from "./parts.js";
+import { banner, folderName, mark, scopeBar, setHint, skeleton, STATE_WORDS, staleNote, versionWords } from "./parts.js";
 import { current, currentError, data, go, goTo, libraryChoice, loadMap, parseSel, projectPath, retry, state } from "./store.js";
 import { CONTEXT_NOTE, keyFor, onTray } from "./tray.js";
 
@@ -76,10 +76,9 @@ export function renderOverview(main, { again = false } = {}) {
     page.need = model.counts.attention;
     main.append(lede);
   }
-  const folder = folderName(projectPath());
-  const scope = el("p", folder ? "scope-bar project" : "scope-bar");
-  scope.append(icon(folder ? "folder" : "layers", 14), el("span", null, folder ? `Project ${folder}` : "All projects"));
-  main.append(scope);
+  // The picked project, under the lede; under All projects the top bar says it already.
+  const scope = scopeBar(folderName(projectPath()));
+  if (scope) main.append(scope);
   const off = offLine(data.clients);
   if (off) main.append(off);
   riseHead(head, lede, scope, { again });
@@ -230,16 +229,17 @@ function cardNode(card, group) {
   return node;
 }
 
-// A row for many cards of one kind ("35 skills load more than once"): its "Show…" opens and closes
-// its cards right under it, as a note row of many does. It stays open across draws.
+// A row for many cards of one kind ("35 skills load more than once"): its "Show" opens and closes
+// its cards right under it, as a note row of many does. It stays open across draws. The cards
+// inside have plain buttons: only the row's own button is primary in Needs attention.
 function foldCardNode(card, group, shown, section) {
   const box = el("div", "ov-card-fold");
   const head = cardNode(card, group);
-  const toggle = head.querySelector("button[aria-expanded]");
+  const toggle = [...head.children].at(-1); // the card's one button, its fold
   const list = el("div", "ov-cards ov-fold-cards");
   list.hidden = !page.openRows.has(card.id);
   list.append(...card.cards.map((inner) => {
-    const node = cardNode(inner, group);
+    const node = cardNode(inner, { ...group, look: "btn" });
     shown.set(inner.id, { card: inner, node, list, group: section, at: 0 });
     return node;
   }));
@@ -260,9 +260,10 @@ function foldCardNode(card, group, shown, section) {
   return box;
 }
 
-// A change for the tray ("Move in…", "Connect…", "Update…", a new skill list limit: the button says
-// "In preview" while it waits there), a page to open ("Keep one…", "Show…"), a fold to open, or a
-// path to copy ("Copy path": the card shows no path).
+// A change for the tray ("Connect", "Update", a new skill list limit: the button says "In
+// preview" while it waits there), a page to open ("Keep one…", "Open in Gateway"), a fold to open,
+// or a path to copy ("Copy path": the card shows no path). "…" only on a button that opens
+// something to choose in.
 function actionButton({ id, action }, look) {
   if (!action) return null;
   const notes = { setup_server: SETUP_NOTE, skill: CONTEXT_NOTE };
@@ -277,7 +278,7 @@ function actionButton({ id, action }, look) {
   return node;
 }
 
-// Keep one… opens the item; Show… the Gateway's List at the outside group.
+// Keep one… opens the item; Open in Gateway the Gateway's List at the outside group.
 async function openPlace({ view, sel, mode }) {
   const selected = parseSel(sel);
   if (view === "library" && selected) await follow({ view: "map", ...selected });
@@ -393,7 +394,6 @@ const NOTE_WORDS = {
   same_name_other_source: { one: "has the same name as an entry from another source", many: "have the same name as an entry from another source" },
   scope_override: { one: "has one definition that replaces another", many: "have one definition that replaces another" },
   unknown_state: { one: "may be on or off; Kitden cannot read which", many: "may be on or off; Kitden cannot read which" },
-  bypasses_gateway: { one: "is not connected to the gateway", many: "are not connected to the gateway" },
 };
 const noteWords = (type) => NOTE_WORDS[type] || { one: `has a note: ${type.replaceAll("_", " ")}`, many: `have a note: ${type.replaceAll("_", " ")}` };
 
@@ -466,26 +466,34 @@ function fillNotes(list, lift) {
   });
 }
 
-// The notes by item: one group per name, in the order first seen. A note about several names
-// (unknown on/off state) joins each name's group. A group has the clients of all its notes, the
-// distinct note words, and its first note for opening its item.
+// The notes by item: one group per name and kind (a skill and a server of one name are two), in
+// the order first seen. A note about several names (unknown on/off state) joins each name's group.
+// A group has the clients of all its notes, the distinct note words, and its first note for
+// opening its item. Where one name has two kinds, each group's `label` names its kind.
+const KIND_NAMES = { skill: "skill", mcp_server: "MCP server", plugin: "plugin", hook: "hook" };
 export function noteGroups(findings) {
   const groups = new Map();
   for (const finding of findings) {
     const words = noteWords(finding.type);
-    for (const name of new Set(finding.names)) {
-      if (!groups.has(name)) groups.set(name, { name, clients: [], notes: [], first: finding });
-      const group = groups.get(name);
+    const kinds = finding.kinds || [];
+    const keys = new Map((finding.names || []).map((name, at) => [`${kinds[at] || ""}:${name}`, [name, kinds[at] || ""]]));
+    for (const [key, [name, kind]] of keys) {
+      if (!groups.has(key)) groups.set(key, { name, kind, label: name, clients: [], notes: [], first: finding });
+      const group = groups.get(key);
       for (const client of finding.clients || []) if (!group.clients.includes(client)) group.clients.push(client);
       if (!group.notes.includes(words)) group.notes.push(words);
     }
   }
-  return [...groups.values()];
+  const all = [...groups.values()];
+  for (const group of all) {
+    if (all.some((other) => other !== group && other.name === group.name)) group.label = `${group.name} (${KIND_NAMES[group.kind] || group.kind})`;
+  }
+  return all;
 }
 
-// "docs has the same name as an entry from another source and is not connected to the gateway."
+// "docs has the same name as an entry from another source and is set up in more than one client."
 export function noteSentence(group) {
-  return `${group.name} ${joinWords(group.notes.map((words) => words.one))}.`;
+  return `${group.label || group.name} ${joinWords(group.notes.map((words) => words.one))}.`;
 }
 
 // The rows of the fold: items with exactly the same words (FOLD_FROM or more of them) are one
@@ -555,11 +563,12 @@ function noteNode(group) {
   return node;
 }
 
-// The Library row a note names: the row that holds one of its note's items of that name. A note
-// about several names (unknown on/off state) opens each name's own row.
+// The Library row a note names: the row that holds one of its note's items of that name and kind.
+// A note about several names (unknown on/off state) opens each name's own row.
 export function noteItemRow(group, rows) {
   const { items, names } = group.first;
-  const mine = items.filter((_, i) => names[i] === group.name);
+  const kinds = group.first.kinds || [];
+  const mine = items.filter((_, i) => names[i] === group.name && (kinds[i] || "") === (group.kind || ""));
   return rows.find((r) => Object.values(r.cells).some((cell) => (cell.items || []).some((id) => mine.includes(id)))) || null;
 }
 

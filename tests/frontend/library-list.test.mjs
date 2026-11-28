@@ -204,13 +204,14 @@ const keyOn = (id, key) => {
 
 test('the List has the two tabs and one column per client', async () => {
   const box = await showList();
-  const [head, lede, tabs, scope] = main.children;
+  const [head, lede, tabs] = main.children;
   assert.equal(head.children[0].textContent, 'Library');
   assert.equal(head.children.at(-1).children.at(-1).children.find((n) => n.textContent === 'List').getAttribute('aria-pressed'), 'true');
   assert.equal(lede.textContent, 'The plugins, skills and instruction files your agents load, and where each comes from.');
   assert.equal(tabs.className, 'seg sm map-tabs');
   assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Plugins and skills', 'true'], ['Instructions', 'false']]);
-  assert.ok(texts(scope).includes('All projects'));
+  // Under All projects no scope line repeats the top bar.
+  assert.equal(main.children.some((n) => n.classList.contains('scope-bar')), false);
   // Name, then one column per client, each with its tile and a quiet "−".
   const columns = box.children[0];
   assert.equal(columns.getAttribute('role'), 'row');
@@ -233,7 +234,7 @@ test('the List has "Choose clients…" in its head, and says which clients are o
       data.clients = [];
       await showList({ kind });
       const actions = main.children[0].children.at(-1);
-      assert.deepEqual(actions.children.slice(0, 2).map((n) => n.textContent), ['Choose clients…', '+ Add plugins']);
+      assert.deepEqual(actions.children.slice(0, 1).map((n) => n.textContent), ['+ Add']);
       assert.equal(main.children.filter((n) => n.classList.contains('scope-note')).length, 0);
       data.clients = [{ id: 'codex', status: 'off' }];
       main.replaceChildren();
@@ -276,15 +277,15 @@ test('a plugin row says Plugin · n items and folds its parts', async () => {
 test('cells say On, Off, Via Claude Code, + Add or nothing', async () => {
   await showList();
   const words = (id) => rowOf(id).children.slice(1).map((c) => texts(c).filter((t) => !t.startsWith('Add ')).join(' '));
-  assert.deepEqual(words('item:p2'), ['On', '+ Add', 'On']);
+  assert.deepEqual(words('item:p2'), ['On', '+', 'On']);
   assert.deepEqual(words('item:p1'), ['Off', '', 'Via Claude Code']);
   // Nothing to do: the cell is empty, and its hover says why.
   const empty = rowOf('item:s1').children[2];
   assert.equal(texts(empty).filter((t) => t !== '—').length <= 1, true);
   assert.ok(!texts(empty).includes('—'));
   assert.equal(walk(empty).find((n) => n.classList.contains('socket')).title, 'Codex has its own copy.');
-  // "+ Add" is today's add: one client, here for all projects.
-  const button = walk(rowOf('item:p2')).find((n) => n.tagName === 'BUTTON' && n.textContent === '+ Add');
+  // "+" is today's add: one client, here for all projects.
+  const button = walk(rowOf('item:p2')).find((n) => n.tagName === 'BUTTON' && n.textContent === '+');
   assert.equal(button.getAttribute('aria-label'), 'Add superpowers to Codex');
 });
 
@@ -408,7 +409,7 @@ test('Add missing plugins and skills… is on the List in a project and in All p
   const sent = [];
   const before = globalThis.fetch;
   const asks = async (project) => {
-    await showList({ project });
+    await showList({ project, list: { ...LIST, missing: true } });
     const missing = node(main, 'add:missing');
     assert.equal(missing.textContent, 'Add missing plugins and skills…');
     globalThis.fetch = (url, init = {}) => { sent.push([url, JSON.parse(init.body)]); return new Promise(() => {}); };
@@ -429,6 +430,10 @@ test('Add missing plugins and skills… is on the List in a project and in All p
   ]);
   // Instructions has none: Kitden adds nothing there.
   await showList({ kind: 'instructions' });
+  assert.equal(node(main, 'add:missing'), null);
+  // With nothing to add (one client, or every client has it all) the button is not there: its
+  // review would only say "Nothing is missing."
+  await showList({ list: { ...LIST, missing: false } });
   assert.equal(node(main, 'add:missing'), null);
 });
 

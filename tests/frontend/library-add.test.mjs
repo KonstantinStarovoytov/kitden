@@ -681,28 +681,11 @@ test('MCP sources exclude the built-in plugin catalog but keep personal GitHub s
   assert.equal(sourceFitsPage({ id: 'owner/servers', kind: 'github' }, 'mcp'), true);
 });
 
-test('the map ends Plugins and skills with an Add a plugin card that opens the catalog', async () => {
+test('the map has no Add a plugin card: "+ Add" in the head is the one door to the catalog', () => {
   offers = OFFERS;
   const box = showMap();
-  const card = node(box, 'block:addslot:plugins');
-  assert.ok(card, 'the card is on the map');
-  assert.deepEqual([card.className.split(' ').slice(0, 2).join(' '), text(card).includes('Add a plugin'), text(card).includes('From the catalog')], ['block addslot', true, true]);
-  // Its "+" tile, as the Gateway's card has.
-  assert.ok(walk(card).some((n) => n.className === 'block-icon'), 'the card has its + tile');
-  // No caption holds a button any more.
-  assert.equal(walk(box).some((n) => n.dataset.focus === 'add:plugins'), false);
-  try {
-    await press(card);
-    await wait(10);
-    assert.equal(panelState.current.type, 'discovery');
-    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this computer')[0]);
-    await wait(10);
-    // Closed, focus goes back to the card that opened it.
-    closePanel({ instant: true });
-    assert.equal(document.activeElement, card);
-  } finally {
-    await done();
-  }
+  assert.equal(node(box, 'block:addslot:plugins'), null);
+  assert.equal(walk(box).some((n) => n.className && String(n.className).includes('addslot')), false);
 });
 
 test('Library discovery keeps its plugin and skill filters', async () => {

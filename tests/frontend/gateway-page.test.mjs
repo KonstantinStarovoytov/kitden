@@ -184,15 +184,15 @@ test('the head has "Choose clients…" before "+ Add servers", and the page says
       main.replaceChildren();
       renderGateway(main);
       const actions = main.children[0].children.at(-1);
-      assert.deepEqual(actions.children.slice(0, 2).map((n) => [n.textContent, n.className]), [['Choose clients…', 'btn'], ['+ Add servers', 'btn add']]);
-      assert.equal(actions.children[0].dataset.focus, 'choose:clients');
+      // Every client is installed: the rail's "Clients" opens the choice, the head has none.
+      assert.deepEqual(actions.children[0] && [actions.children[0].textContent, actions.children[0].className], ['+ Add servers', 'btn add']);
       assert.equal(main.children.filter((n) => n.classList.contains('scope-note')).length, 0);
       data.clients = [{ id: 'codex', status: 'off' }];
       main.replaceChildren();
       renderGateway(main);
       const lines = main.children.filter((n) => n.classList.contains('scope-note'));
       assert.deepEqual(lines.map((n) => [n.textContent, n.children.length]), [['Codex is turned off in Kitden.', 0]]);
-      assert.equal(main.children.indexOf(lines[0]), main.children.findIndex((n) => n.classList.contains('scope-bar')) + 1);
+      assert.equal(main.children.indexOf(lines[0]), main.children.findIndex((n) => n.classList.contains('lede')) + 1);
     }
   } finally {
     data.clients = was;
@@ -1074,8 +1074,8 @@ test('the skeleton, the error banner and "No gateway yet" rise when they come', 
       main.replaceChildren();
       renderGateway(main, { again: i > 0 });
       assert.ok(is(under()), name);
-      // The head has "Choose clients…" on each of them, and only that.
-      assert.deepEqual(main.children[0].children.at(-1).children.map((n) => n.textContent), ['Choose clients…'], name);
+      // The head has nothing on each of them: every client is installed.
+      assert.deepEqual(main.children[0].children.at(-1).children.map((n) => n.textContent), [], name);
       if (calm) assert.equal(under().animations.length, 0, name);
       else assert.deepEqual(lastMotion(under()), IN, name);
       // Drawn again as it is, it stays still.
@@ -1108,12 +1108,13 @@ test('data that comes while the head rises keeps it rising', (t) => {
     data.gateway = VIEW;
     main.replaceChildren();
     renderGateway(main, { again: true });
-    assert.deepEqual(delays(), calm ? [null, null, null] : [-200, -80, 0]);
+    // Under All projects there is no scope line: the title and the lede.
+    assert.deepEqual(delays().slice(0, 2), calm ? [null, null] : [-200, -80]);
     settle();
     now += 1000;
     main.replaceChildren();
     renderGateway(main, { again: true });
-    assert.deepEqual(delays(), [null, null, null]);
+    assert.deepEqual(delays().slice(0, 2), [null, null]);
   }
 });
 

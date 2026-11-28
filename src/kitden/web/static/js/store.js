@@ -338,6 +338,43 @@ export function afterShared(read) {
   return sharedRead ? sharedRead.then(run) : Promise.resolve(run());
 }
 
+// One search box for the setup (02-R03): where a search goes from the `view` shown. The Library
+// and the Gateway search themselves; while the page shown finds nothing of that name and the other
+// does (a server, a tool; a plugin, a skill, a marketplace), the search goes there. Any other
+// place sends it where the name is, the Library first. What Kitden has not read yet matches
+// nothing, so the search stays (readForSearch reads it), and so does what was read for another
+// project than the one picked.
+const readHere = (name) => Boolean(data[name]) && data.scope[name] === state.project;
+function hits(place, words) {
+  const has = (name) => String(name || "").toLowerCase().includes(words);
+  if (place === "library") {
+    const map = readHere("libraryMap") ? data.libraryMap : null;
+    if (!map) return null;
+    // A plugin's own skills, commands and agents are in `inside`, by kind.
+    return (map.groups || []).some((g) => has(g.name) || (g.items || []).some((i) => has(i.name) || Object.values(i.inside || {}).flat().some(has)));
+  }
+  const view = readHere("gateway") ? data.gateway : null;
+  if (!view) return null;
+  const outside = Object.values(view.groups || {}).flat();
+  const held = (view.gateways || []).flatMap((g) => g.servers || []);
+  return outside.some((row) => has(row.name)) || held.some((s) => has(s.name) || (s.tool_list || []).some((t) => has(t.name)));
+}
+export function searchPlace(view, q) {
+  const words = String(q || "").trim().toLowerCase();
+  const own = view === "library" || view === "gateway";
+  if (!words) return view;
+  if (!own) return hits("library", words) === false && hits("gateway", words) ? "gateway" : "library";
+  const other = view === "library" ? "gateway" : "library";
+  return hits(view, words) === false && hits(other, words) ? other : view;
+}
+// What a search looks in, read for the picked project if it is not yet. Resolves when both are.
+// The Library's map joins a read that runs (a second one would undo the Library's own, Lantern on
+// #239).
+export function readForSearch() {
+  const library = readHere("libraryMap") || readLibraryMap();
+  return Promise.all([readHere("gateway") || loadGateway(), library]).catch(() => {});
+}
+
 export async function loadOverview() {
   const { project } = state;
   await guarded("overview", `/api/overview${query({ project })}`, (v) => { data.overview = v; }, project);

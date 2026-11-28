@@ -972,7 +972,7 @@ class _Fits:
     # The fit at a limit of this many characters. A count gives one only where everything fits:
     # it cannot say which descriptions a lower limit keeps.
     at: Callable[[int], ClaudeFit | None]
-    not_needed: str  # why there is nothing to raise when everything fits already
+    not_needed: str | None  # why there is nothing to raise (None: everything fits already)
     lines: list[str]  # Details' quiet lines on what was counted
     counted: bool  # by a count, not by the rule
     # By a count, when the chat was sent under today's limit and the next chat adds no skill: how
@@ -1300,7 +1300,8 @@ def _claude_counted(
         lines.append(line.format(n=earlier))
     lines += _added_lines(extras, states)
     all_sent = wanted & listed <= {r.name for r in rows if r.sent is not None}
-    why = words.LIMIT_NOT_NEEDED if changed or all_sent else words.LIMIT_NOT_WHY
+    # Everything fits: nothing to say (no "no new limit" line).
+    why = None if changed or all_sent else words.LIMIT_NOT_WHY
     # The chat's own list says how many show only a name at today's limit, while no skill joins.
     short_now = None
     if same_limit and not any(states[r.name] != "off" for r in extras):
@@ -1768,7 +1769,7 @@ def _claude(
                 run[0],
                 run[1].used,
                 lambda limit: claude_rule(run[0], limit, cap),
-                words.LIMIT_NOT_NEEDED,
+                None,
                 _added_lines(new, states),
                 False,
             )
@@ -2357,7 +2358,7 @@ def _codex_limit_card(
     shows = back is not None or keep
     if names <= _codex_full(now, lengths):
         same = [(n, now) for n in above] if keep else []
-        return card | {"why": words.LIMIT_NOT_NEEDED, "steps": steps(same) if shows else []}
+        return card | {"why": None, "steps": steps(same) if shows else []}
     ups: list[tuple[int, CodexFit]] = []
     found = None
     for n in above:

@@ -1053,10 +1053,10 @@ def test_codex_one_skill_and_a_bad_timestamp_read_plainly(home):
     assert cx["how"][0] == (
         "Last chat: the list Codex 0.163.0-alpha.11 sent, read from its chat log."
     )
-    assert cx["how"][-3] == (
+    assert cx["how"][-2] == (
         "Full sizes come from your skill files today. They may have changed since the chat."
     )
-    assert cx["how"][-1] == words.LIMIT_NOT_NEEDED
+    assert not any("every description fits" in line for line in cx["how"])
 
 
 def test_codex_check_that_never_ran_is_not_called_a_mismatch(home):

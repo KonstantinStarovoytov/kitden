@@ -158,7 +158,8 @@ def test_a_copy_whose_state_kitden_does_not_know_does_not_count_as_kept():
 
 def test_a_copy_a_project_turns_off_does_not_count_as_kept_there(tmp_path):
     """Claude Code also has brainstorming from superpowers, which website's settings turn off:
-    in website, keeping Cursor's own copy would leave Claude Code with none there."""
+    in website, keeping Cursor's own copy would leave Claude Code with none there. With All
+    projects picked the removal reaches website too, so it is not offered there either."""
     from kitden.demo import build_demo_home, demo_adapters, demo_build
 
     home = build_demo_home(tmp_path, "medium")
@@ -172,5 +173,6 @@ def test_a_copy_a_project_turns_off_does_not_count_as_kept_there(tmp_path):
         copies = next(i["copies"]["cursor"] for i in items if "cursor" in i.get("copies", {}))
         return next(c for c in copies["list"] if c["where"] == "~/.cursor/skills")["keep"]
 
-    assert own_keep(None) is not None
+    assert own_keep(None) is None
     assert own_keep(str(home / "work/website")) is None
+    assert own_keep(str(home / "work/atlas")) is not None

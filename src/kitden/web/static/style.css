@@ -314,9 +314,14 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .hint-dock { z-index: 22; }
 .hint-line { position: absolute; left: 0; right: 0; bottom: 14px; margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; }
 .hint-line svg { flex: none; }
+/* A hint seen before folds behind its "i": the words show while the "i" is pointed at or focused. */
+.hint-line .hint-i { pointer-events: auto; display: inline-flex; padding: 2px; margin: -2px; border: 0; border-radius: 4px; background: none; color: inherit; cursor: help; }
+.hint-line.folded .hint-words { visibility: hidden; }
+.hint-line.folded:has(.hint-i:hover, .hint-i:focus-visible) .hint-words { visibility: visible; }
 /* A strip under the hint's words that fades from clear to the page colour, so page text that scrolls
    under the hint never shows through them. It takes no room and no clicks. */
 .hint-band:has(> #hint:not([hidden]))::before { content: ""; position: absolute; left: -22px; right: -22px; bottom: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--canvas) 40%); pointer-events: none; }
+.hint-band:has(> #hint.folded)::before { content: none; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }
 
 /* Controls */
@@ -330,6 +335,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .btn.ghost:hover:not(:disabled) { background: var(--wire-soft); border-color: transparent; color: var(--ink); }
 /* A small button has less padding and 11 px text, but stays 24 px tall to press. */
 .btn.small { min-height: 24px; padding: 4px 9px; font-size: 11px; }
+/* A List cell's add is "+" alone: a mark the size of the words beside it. */
+.btn.small.plus { min-width: 28px; justify-content: center; padding: 2px 8px; font-size: 15px; line-height: 1; }
 /* Busy: a small spinner takes the words' place after a short wait; the words keep the size. */
 .btn.busy { color: transparent; }
 .btn.busy > * { visibility: hidden; }

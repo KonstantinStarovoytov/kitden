@@ -126,16 +126,13 @@ const { applyTray, cancelTray, endApplied, keyFor, tray } = await import('../../
 const MOVE = (item) => ({ action: 'gateway.move', targets: [{ item }], params: { gateway: 'kitden' } });
 const UPDATE = { action: 'setup_server.update', targets: [{ item: 'old1' }], params: {} };
 const CONNECT = { action: 'setup_server.register', targets: [{ client: 'cursor' }], params: {} };
-const SKIPS = "Skips the gateway, so Kitden's rules don't reach it.";
+const GATEWAY_IS = 'The Kitden gateway is one entry in each client that reaches these servers for it: your agents keep their tools, and you turn each tool on or off once, for every agent.';
 const CARDS = [
   { id: 'unread', group: 'attention', icon: 'file-text', name: 'Could not read mcp.json', line: 'The file has a syntax error, so items from Cursor may be missing or wrong.', clients: ['cursor'], action: null, focus: { clients: ['cursor'], block: null } },
-  { id: 'old', group: 'attention', icon: 'house', name: 'Old Kitden entry in Codex', line: 'The working version, agentsetup, made it; update it so Codex starts kitden.', clients: ['codex'], action: { label: 'Update…', body: UPDATE }, focus: { clients: ['codex'], block: 'gateway' } },
+  { id: 'old', group: 'attention', icon: 'house', name: 'Old Kitden entry in Codex', line: 'The working version, agentsetup, made it; update it so Codex starts kitden.', clients: ['codex'], action: { label: 'Update', body: UPDATE }, focus: { clients: ['codex'], block: 'gateway' } },
   { id: 'dup', group: 'attention', icon: 'puzzle', name: 'superpowers', line: 'Two copies of one plugin load; keep one.', clients: ['cursor'], action: { label: 'Keep one…', go: { view: 'library', sel: 'plugin:superpowers' } }, focus: { clients: ['cursor'], block: 'library' } },
-  { id: 'm1', group: 'improve', icon: 'globe', name: 'analytics', line: SKIPS, clients: ['codex'], action: { label: 'Move in…', body: MOVE('a1') }, focus: { clients: ['codex'], block: 'gateway' } },
-  { id: 'm2', group: 'improve', icon: 'globe', name: 'github', line: SKIPS, clients: ['claude_code'], action: { label: 'Move in…', body: MOVE('g1') }, focus: { clients: ['claude_code'], block: 'gateway' } },
-  { id: 'm3', group: 'improve', icon: 'hard-drive', name: 'notes', line: SKIPS, clients: ['cursor'], action: { label: 'Move in…', body: MOVE('n1') }, focus: { clients: ['cursor'], block: 'gateway' } },
-  { id: 'more', group: 'improve', icon: 'server', name: '4 more servers can move in', line: "Kitden's rules don't reach them.", clients: ['claude_code', 'codex', 'cursor'], action: { label: 'Show…', go: { view: 'gateway', sel: 'group:outside', mode: 'list' } }, focus: { clients: ['claude_code', 'codex', 'cursor'], block: 'gateway' } },
-  { id: 'conn', group: 'improve', icon: { client: 'cursor' }, name: 'Cursor', line: 'Not connected to the gateway yet.', clients: ['cursor'], action: { label: 'Connect…', body: CONNECT }, focus: { clients: ['cursor'], block: 'gateway' } },
+  { id: 'move', group: 'improve', icon: 'server', name: '7 servers can move into the gateway', line: GATEWAY_IS, clients: ['claude_code', 'codex', 'cursor'], action: { label: 'Open in Gateway', go: { view: 'gateway', sel: 'group:outside', mode: 'list' } }, focus: { clients: ['claude_code', 'codex', 'cursor'], block: 'gateway' } },
+  { id: 'conn', group: 'improve', icon: { client: 'cursor' }, name: 'Cursor', line: 'Not connected to the gateway yet.', clients: ['cursor'], action: { label: 'Connect', body: CONNECT }, focus: { clients: ['cursor'], block: 'gateway' } },
 ];
 const MAP = {
   clients: [
@@ -179,9 +176,8 @@ test('the head says Overview and the lede counts, naming the clients', () => {
   assert.equal(head.className, 'page-head');
   assert.equal(head.children[0].tagName, 'H1');
   assert.equal(head.children[0].textContent, 'Overview');
-  // "Choose clients…" is at the head's right, in the same place as on the Library.
-  const choose = head.children[1].children[0];
-  assert.deepEqual([head.children[1].className, choose.textContent, choose.className, choose.dataset.focus], ['head-actions', 'Choose clients…', 'btn', 'choose:clients']);
+  // Every client is installed: "Choose clients…" is not in the head; the rail's "Clients" opens it.
+  assert.deepEqual([head.children[1].className, head.children[1].children.length], ['head-actions', 0]);
   // The first visit counts the numbers up from 0; the frames bring them to their values.
   assert.equal(text(lede()), '0 things need your attention in Claude Code, Codex and Cursor.');
   settle();
@@ -199,10 +195,8 @@ test('the head says Overview and the lede counts, naming the clients', () => {
   settle();
   assert.equal(text(lede()), '3 things need your attention in Claude Code and Cursor.');
   show(MODEL, { again: true });
-  // The scope bar: All projects with the layers icon, or the project in the accent.
-  const scope = byClass(main, 'scope-bar')[0];
-  assert.equal(text(scope), 'All projects');
-  assert.equal(scope.children[0].dataset.icon, 'layers');
+  // Under All projects there is no scope bar: the top bar's project button says it already.
+  assert.equal(byClass(main, 'scope-bar').length, 0);
   assert.equal(hintLine.hidden, false);
   assert.equal(hintLine.children.at(-1).textContent, 'Hover a card to see it on the map · a button adds a preview · click Kitden gateway or Library to open it');
 });
@@ -227,13 +221,13 @@ test('a picked project shows its name in the scope bar', () => {
 
 test('a card shows its icon, name, line, client tiles and one button', () => {
   show(MODEL, { again: true });
-  const move = card('m1');
+  const move = card('move');
   const [tile, words_, who, action] = move.children;
   assert.ok(tile.classList.contains('itile'));
-  assert.equal(tile.children[0].dataset.icon, 'globe');
-  assert.deepEqual(words_.children.map((n) => n.textContent), ['analytics', SKIPS]);
-  assert.deepEqual(who.children.map((n) => n.title), ['Codex']);
-  assert.equal(words(action), 'Move in…');
+  assert.equal(tile.children[0].dataset.icon, 'server');
+  assert.deepEqual(words_.children.map((n) => n.textContent), ['7 servers can move into the gateway', GATEWAY_IS]);
+  assert.deepEqual(who.children.map((n) => n.title), ['Claude Code', 'Codex', 'Cursor']);
+  assert.equal(words(action), 'Open in Gateway');
   // A plain button where it can improve, the primary one where it needs attention.
   assert.equal(action.className, 'btn');
   assert.equal(cardButton('dup').className, 'btn primary');
@@ -250,6 +244,17 @@ test('a card shows its icon, name, line, client tiles and one button', () => {
   assert.equal(can.children[0].dataset.icon, 'sparkles');
 });
 
+test('the copies fold opens to plain buttons; only its own Show is primary', () => {
+  const inner = (id) => ({ id, group: 'attention', icon: 'sparkles', name: id, line: '2 copies of one skill load; keep one.', clients: ['cursor'], action: { label: 'Keep one…', go: { view: 'library', sel: `skill:${id}` } }, focus: { clients: ['cursor'], block: 'library' } });
+  const fold = { id: 'fold', group: 'attention', icon: 'sparkles', name: '2 skills load more than once', line: 'Open the list to keep one copy of each.', clients: ['cursor'], action: { label: 'Show', fold: true }, focus: { clients: ['cursor'], block: 'library' }, cards: [inner('a'), inner('b')] };
+  show({ ...MODEL, cards: [fold] }, { again: true });
+  const toggle = cardButton('fold');
+  assert.deepEqual([words(toggle), toggle.className], ['Show', 'btn primary']);
+  fire(toggle, 'click');
+  assert.equal(words(toggle), 'Hide');
+  assert.deepEqual(['a', 'b'].map((id) => [words(cardButton(id)), cardButton(id).className]), [['Keep one…', 'btn'], ['Keep one…', 'btn']]);
+});
+
 test('a group with no card hides its caption', async () => {
   show({ ...MODEL, cards: CARDS.filter((c) => c.group === 'improve'), counts: { ...MODEL.counts, attention: 0 } }, { again: true });
   assert.deepEqual(byClass(main, 'ov-group').filter((n) => !n.hidden).map((n) => text(n.children[0])), ['Can improve']);
@@ -258,31 +263,22 @@ test('a group with no card hides its caption', async () => {
   assert.equal(text(lede()), 'Nothing needs your attention in Claude Code, Codex and Cursor.');
 });
 
-test('Move in… adds its row; the button says In preview while it waits', async () => {
-  show(MODEL, { again: true });
-  queue(PREVIEW, batch('c1'));
-  fire(cardButton('m1'), 'click');
-  await flush();
-  assert.deepEqual(tray.rows.map((row) => row.key), [keyFor(MOVE('a1'))]);
-  assert.equal(words(cardButton('m1')), 'In preview');
-  assert.equal(cardButton('m1').getAttribute('aria-disabled'), 'true');
-  // Nothing is written: only the preview was asked for.
-  assert.ok(!asked.some((url) => url.includes('/apply')));
-  // A card drawn again while it waits still says so.
-  show(MODEL, { again: true });
-  assert.equal(words(cardButton('m1')), 'In preview');
-  await cancelTray();
-  assert.equal(words(cardButton('m1')), 'Move in…');
-  assert.equal(cardButton('m1').getAttribute('aria-disabled'), null);
-});
-
-test('Connect… adds the connect row with the kitden entry note', async () => {
+test('Connect adds the connect row with the kitden entry note; the button says In preview while it waits', async () => {
   show(MODEL, { again: true });
   queue(PREVIEW, batch('c2'));
   fire(cardButton('conn'), 'click');
   await flush();
   assert.deepEqual(tray.rows.map((row) => [row.key, Boolean(row.note)]), [[keyFor(CONNECT), true]]);
+  assert.equal(words(cardButton('conn')), 'In preview');
+  assert.equal(cardButton('conn').getAttribute('aria-disabled'), 'true');
+  // Nothing is written: only the preview was asked for.
+  assert.ok(!asked.some((url) => url.includes('/apply')));
+  // A card drawn again while it waits still says so.
+  show(MODEL, { again: true });
+  assert.equal(words(cardButton('conn')), 'In preview');
   await cancelTray();
+  assert.equal(words(cardButton('conn')), 'Connect');
+  assert.equal(cardButton('conn').getAttribute('aria-disabled'), null);
 });
 
 // Update… on the Old Kitden card, applied and checked. Resolves when the tray says "applied".
@@ -411,13 +407,12 @@ test('the lede rolls at 1 → 0 and 0 → 1 too', async () => {
   show(MODEL, { again: true });
 });
 
-test('three server cards and one more card', async () => {
-  // Review Focus: past three servers that skip the gateway, one card says how many more.
+test('one card for the servers that can move in, and a button that says where it goes', async () => {
   show(MODEL, { again: true });
   const can = CARDS.filter((c) => c.group === 'improve').map((c) => [card(c.id).children[1].children[0].textContent, words(cardButton(c.id))]);
-  assert.deepEqual(can, [['analytics', 'Move in…'], ['github', 'Move in…'], ['notes', 'Move in…'], ['4 more servers can move in', 'Show…'], ['Cursor', 'Connect…']]);
-  // Show… opens the Gateway's List at the outside group.
-  fire(cardButton('more'), 'click');
+  assert.deepEqual(can, [['7 servers can move into the gateway', 'Open in Gateway'], ['Cursor', 'Connect']]);
+  // Open in Gateway opens the Gateway's List at the outside group.
+  fire(cardButton('move'), 'click');
   await flush();
   assert.deepEqual([state.view, state.mode, state.selected], ['gateway', 'list', { kind: 'group', name: 'outside' }]);
   state.view = 'overview';
@@ -428,10 +423,10 @@ test('three server cards and one more card', async () => {
 test('hover or focus on a card focuses the setup map on its path', () => {
   show(MODEL, { again: true });
   const box = setupBox();
-  fire(card('m1'), 'pointerenter');
+  fire(card('move'), 'pointerenter');
   assert.ok(box.classList.contains('focus'));
-  assert.deepEqual(['client:codex', 'gateway', 'client:cursor', 'library'].map((id) => block(id).classList.contains('lit')), [true, true, false, false]);
-  fire(card('m1'), 'pointerleave');
+  assert.deepEqual(['client:codex', 'gateway', 'client:cursor', 'library'].map((id) => block(id).classList.contains('lit')), [true, true, true, false]);
+  fire(card('move'), 'pointerleave');
   assert.ok(!box.classList.contains('focus'));
   // Keyboard focus does the same.
   fire(card('dup'), 'focusin');
@@ -447,7 +442,7 @@ test('hover or focus on a card focuses the setup map on its path', () => {
 test('the notes fold opens and closes and is hidden at 0', async () => {
   queue('/api/findings', { status: 200, json: [
     { type: 'same_name_other_source', severity: 'info', names: ['docs'], items: ['i1'], clients: ['codex'] },
-    { type: 'bypasses_gateway', severity: 'info', names: ['docs'], items: ['i1'], clients: ['codex'] },
+    { type: 'same_in_other_clients', severity: 'info', names: ['docs'], items: ['i1'], clients: ['codex'] },
     { type: 'cross_loaded', severity: 'info', names: ['tidy'], items: ['i2'], clients: ['cursor'] },
     { type: 'duplicate_in_client', severity: 'warning', names: ['x'], items: ['i3'], clients: ['cursor'] },
   ] });
@@ -466,7 +461,7 @@ test('the notes fold opens and closes and is hidden at 0', async () => {
   assert.equal(box.animations[0].options.duration, 280);
   await flush();
   // One plain sentence per item, with the info icon; a warning is no note.
-  assert.deepEqual(box.children.map(text), ['docs has the same name as an entry from another source and is not connected to the gateway.', 'tidy loads from another client.']);
+  assert.deepEqual(box.children.map(text), ['docs has the same name as an entry from another source and is set up in more than one client.', 'tidy loads from another client.']);
   assert.equal(box.children[0].children[0].dataset.icon, 'info');
   assert.ok(box.children.every((n) => n.animations.length === 1 && n.animations[0].options.duration === 260));
   fire(fold, 'click');
@@ -486,7 +481,7 @@ test('the setup map draws no block for a client that is off, and the lede does n
   assert.equal(ledeText({ attention: 3 }, map.clients.filter((c) => c.on).map((c) => c.name)), '3 things need your attention in Claude Code and Cursor.');
 });
 
-test('the Overview says which clients are off, as text only, under the scope bar and above the cards', () => {
+test('the Overview says which clients are off, as text only, under the lede and above the cards', () => {
   show();
   assert.equal(byClass(main, 'scope-note').length, 0);
   main.replaceChildren();
@@ -497,7 +492,7 @@ test('the Overview says which clients are off, as text only, under the scope bar
   assert.equal(notes[0].textContent, 'Codex is turned off in Kitden.');
   assert.equal(notes[0].children.length, 0);
   const at = (node) => main.children.indexOf(node);
-  assert.equal(at(notes[0]), at(byClass(main, 'scope-bar')[0]) + 1);
+  assert.equal(at(notes[0]), at(byClass(main, 'lede')[0]) + 1);
   assert.equal(at(notes[0]) + 1, at(byClass(main, 'ov-grid')[0]));
 });
 
@@ -561,14 +556,23 @@ test('a note opens its item, as before', () => {
   assert.equal(noteItemRow(second, rows.slice(0, 1)), null);
   assert.deepEqual(targetSel({ view: 'map', kind: 'skill', name: 'tidy' }), { kind: 'skill', name: 'tidy' });
   assert.equal(noteSentence(first), 'a may be on or off; Kitden cannot read which.');
+  // Lantern on #239: one note about a skill and a server of one name opens each one's own row.
+  const both = { type: 'unknown_state', names: ['sentry', 'sentry'], kinds: ['skill', 'mcp_server'], items: ['s', 'm'], clients: ['codex'], severity: 'info' };
+  const twins = [
+    { key: 'server', kind: 'mcp_server', name: 'sentry', lookup: 'sentry', cells: { codex: { items: ['m'] } } },
+    { key: 'skill', kind: 'skill', name: 'sentry', lookup: 'sentry', cells: { codex: { items: ['s'] } } },
+  ];
+  const [skillNote, serverNote] = noteGroups([both]);
+  assert.equal(noteItemRow(skillNote, twins).key, 'skill');
+  assert.equal(noteItemRow(serverNote, twins).key, 'server');
 });
 
 test('notes are grouped by item, each with its clients', () => {
   const note = (type, names, clients) => ({ type, names, clients, items: ['i'], severity: 'info' });
   const groups = noteGroups([
     note('same_name_other_source', ['docs', 'docs'], ['claude_code', 'codex']),
-    note('bypasses_gateway', ['docs'], ['claude_code']),
-    note('bypasses_gateway', ['docs'], ['codex']),
+    note('same_in_other_clients', ['docs'], ['claude_code']),
+    note('same_in_other_clients', ['docs'], ['codex']),
     note('unknown_state', ['a', 'b'], ['codex']),
   ]);
   assert.deepEqual(groups.map((g) => [g.name, g.clients, g.notes.length]), [
@@ -579,6 +583,20 @@ test('notes are grouped by item, each with its clients', () => {
   assert.equal(groups[0].first.type, 'same_name_other_source');
 });
 
+test('a skill and a server of one name are two notes, each naming its kind', () => {
+  // 02-R07: sentry the skill loads from another client; sentry the server is in two clients.
+  const groups = noteGroups([
+    { type: 'cross_loaded', names: ['sentry'], kinds: ['skill'], clients: ['cursor'], items: ['s'], severity: 'info' },
+    { type: 'same_in_other_clients', names: ['sentry'], kinds: ['mcp_server'], clients: ['claude_code', 'codex'], items: ['m'], severity: 'info' },
+    { type: 'cross_loaded', names: ['tidy'], kinds: ['skill'], clients: ['cursor'], items: ['t'], severity: 'info' },
+  ]);
+  assert.deepEqual(groups.map(noteSentence), [
+    'sentry (skill) loads from another client.',
+    'sentry (MCP server) is set up in more than one client.',
+    'tidy loads from another client.',
+  ]);
+});
+
 // The same example as tests/unit/test_overview.py `test_note_count_folds_repeats`: five items that
 // load from another client (one row), three with an unreadable state (three rows), and "docs" with
 // two notes (one row). Five rows in all.
@@ -586,7 +604,7 @@ const REPEATS = [
   ...['a', 'b', 'c', 'd', 'e'].map((name) => ({ type: 'cross_loaded', names: [name], clients: ['codex'], items: ['i'], severity: 'info' })),
   ...['u1', 'u2', 'u3'].map((name) => ({ type: 'unknown_state', names: [name], clients: ['cursor'], items: ['i'], severity: 'info' })),
   { type: 'same_name_other_source', names: ['docs'], clients: ['codex'], items: ['i'], severity: 'info' },
-  { type: 'bypasses_gateway', names: ['docs'], clients: ['codex'], items: ['i'], severity: 'info' },
+  { type: 'same_in_other_clients', names: ['docs'], clients: ['codex'], items: ['i'], severity: 'info' },
 ];
 
 test('items with the same words fold into one row from four on', () => {
@@ -598,14 +616,14 @@ test('items with the same words fold into one row from four on', () => {
     'u1 may be on or off; Kitden cannot read which.',
     'u2 may be on or off; Kitden cannot read which.',
     'u3 may be on or off; Kitden cannot read which.',
-    'docs has the same name as an entry from another source and is not connected to the gateway.',
+    'docs has the same name as an entry from another source and is set up in more than one client.',
   ]);
   // Exactly four fold; three stay single.
   const four = (n) => noteRows(noteGroups(REPEATS.slice(0, n)));
   assert.equal(four(4).length, 1);
   assert.equal(four(3).length, 3);
   // Every kind of note has its plural words.
-  const types = ['cross_loaded', 'same_in_other_clients', 'same_name_other_source', 'scope_override', 'unknown_state', 'bypasses_gateway'];
+  const types = ['cross_loaded', 'same_in_other_clients', 'same_name_other_source', 'scope_override', 'unknown_state'];
   const many = types.map((type) => rowSentence(noteRows(noteGroups(['a', 'b', 'c', 'd'].map((name) => ({ type, names: [name], clients: [], items: ['i'], severity: 'info' }))))[0]));
   assert.deepEqual(many, [
     '4 items load from another client.',
@@ -613,7 +631,6 @@ test('items with the same words fold into one row from four on', () => {
     '4 items have the same name as an entry from another source.',
     '4 items have one definition that replaces another.',
     '4 items may be on or off; Kitden cannot read which.',
-    '4 items are not connected to the gateway.',
   ]);
 });
 

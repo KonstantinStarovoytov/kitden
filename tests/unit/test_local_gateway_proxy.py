@@ -239,7 +239,9 @@ async def test_kitdens_own_tools_see_the_servers_in_the_gateway(home, monkeypatc
     with TestClient(app, base_url="http://127.0.0.1:47800") as page:
         page.get("/?token=tok")
         shown = page.get("/api/findings", params={"project": str(website)}).json()
-    assert [f["id"] for f in found.structured_content["findings"]] == [f["id"] for f in shown]
+    # The page's notes leave out a server outside the gateway; an agent still hears of it.
+    every = found.structured_content["findings"]
+    assert [f["id"] for f in every if f["type"] != "bypasses_gateway"] == [f["id"] for f in shown]
 
 
 async def test_a_server_with_a_start_folder_starts_there(home):

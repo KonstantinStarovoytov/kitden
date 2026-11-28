@@ -253,20 +253,57 @@ export function scopeText(folder, count) {
   return `Project ${folder} · no rules of its own`;
 }
 
-// The icon says the scope too: layers for every project, a folder for one.
+// The line under a page's lede when a project is picked: its folder and, on the Gateway, its own
+// rules. Under All projects it would only repeat the top bar's project button: null.
 export function scopeBar(folder, count) {
-  const bar = el("p", folder ? "scope-bar project" : "scope-bar");
-  bar.append(folder ? icon("folder", 14) : icon("layers", 14), el("span", null, scopeText(folder, count)));
+  if (!folder) return null;
+  const bar = el("p", "scope-bar project");
+  bar.append(icon("folder", 14), el("span", null, scopeText(folder, count)));
   return bar;
 }
 
 // The line at the bottom of the page (`.hint-line`, found by its id): an info icon and a few
-// words. The words change at once; empty words hide the line.
+// words. The words change at once; empty words hide the line. A hint shows its words the first
+// time a place draws it (drawn again there it stays open), then stays behind its "i"
+// (`folded`): a button whose hover and focus show the words, and whose name is the words for a
+// screen reader. This browser keeps the hints seen.
+const SEEN_HINTS = "kitden-hints-seen";
+const openNow = new Set();
+function seenHints() {
+  try {
+    const seen = JSON.parse(localStorage.getItem(SEEN_HINTS) || "[]");
+    return Array.isArray(seen) ? seen : [];
+  } catch {
+    return [];
+  }
+}
+function foldsNow(text) {
+  if (openNow.has(text)) return false;
+  const seen = seenHints();
+  if (seen.includes(text)) return true;
+  openNow.add(text);
+  try { localStorage.setItem(SEEN_HINTS, JSON.stringify([...seen, text].slice(-40))); } catch { /* private window */ }
+  return false;
+}
+// Another place opens: the hints shown open so far fold from now on (app.js, on a place change).
+export function foldShownHints() {
+  openNow.clear();
+}
 export function setHint(text, actions = []) {
   const line = document.getElementById("hint");
   line.replaceChildren();
   line.hidden = !text;
-  if (text) line.append(icon("info", 13), el("span", null, text));
+  // A hint with buttons (picked tools: "2 tools picked", Turn off, Clear) is about what you do
+  // now: it never folds, and is not kept as seen.
+  const folded = Boolean(text) && !actions.length && foldsNow(text);
+  line.classList.toggle("folded", folded);
+  if (folded) {
+    const info = el("button", "hint-i");
+    info.type = "button";
+    info.setAttribute("aria-label", text);
+    info.append(icon("info", 13));
+    line.append(info, el("span", "hint-words", text));
+  } else if (text) line.append(icon("info", 13), el("span", null, text));
   // Buttons the hint offers (picked tools: Turn off, Turn on, Clear) come after its words.
   if (text && actions.length) {
     const acts = el("span", "hint-acts");

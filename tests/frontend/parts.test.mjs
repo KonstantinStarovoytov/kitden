@@ -44,7 +44,7 @@ globalThis.window = { addEventListener: (type, fn) => { heard[type] = fn; } };
 // or a key sets it itself.
 beforeEach(() => { media.matches = false; heard.pointerdown?.({}); });
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
-const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, menuItems, morphSocket, opens, optionAfter, originText, pastTitle, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, foldShownHints, menuItems, morphSocket, opens, optionAfter, originText, pastTitle, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 // details.js builds the switch and loads with the same stand-in.
 const { switchNode } = await import('../../src/kitden/web/static/js/details.js');
@@ -473,16 +473,15 @@ test('the scope bar says what the page shows', () => {
   assert.equal(scopeText('api', null), 'Project api · rules not known');
   assert.equal(scopeText('', 4), 'All projects');
   assert.equal(scopeText('', null), 'All projects');
-  const shared = scopeBar('', 0);
-  assert.equal(shared.querySelector('span').textContent, 'All projects');
-  assert.equal(shared.classList.contains('project'), false);
+  // Under All projects there is no line: the top bar's project button says it already.
+  assert.equal(scopeBar('', 0), null);
   const project = scopeBar('api', 2);
   assert.equal(project.querySelector('span').textContent, 'Project api · 2 rules differ from the shared setup');
   assert.equal(project.classList.contains('project'), true);
 });
 
-test('the scope bar leads with the layers icon, or folder in a project', () => {
-  assert.equal(scopeBar(null).querySelector('svg').dataset.icon, 'layers');
+test('the scope bar leads with the folder icon, and is not there under All projects', () => {
+  assert.equal(scopeBar(null), null);
   assert.equal(scopeBar('website').querySelector('svg').dataset.icon, 'folder');
   assert.equal(Number(scopeBar('website').querySelector('svg').attributes.width), 14);
 });
@@ -517,6 +516,45 @@ test('the hint line shows its words with an info icon, and an empty text hides i
     assert.equal(line.children.length, 0);
   } finally {
     globalThis.document.getElementById = find;
+  }
+});
+
+test('a hint seen on an earlier visit folds behind its "i": the words show on hover, on focus and to a screen reader', () => {
+  const line = globalThis.document.createElement('p');
+  const find = globalThis.document.getElementById;
+  const had = globalThis.localStorage;
+  const stored = { 'kitden-hints-seen': JSON.stringify(['Seen before.']) };
+  globalThis.localStorage = { getItem: (key) => stored[key] ?? null, setItem: (key, value) => { stored[key] = value; } };
+  globalThis.document.getElementById = (id) => (id === 'hint' ? line : null);
+  try {
+    // A new hint shows its words, and is kept as seen.
+    setHint('New words.');
+    assert.equal(line.classList.contains('folded'), false);
+    assert.ok(JSON.parse(stored['kitden-hints-seen']).includes('New words.'));
+    // Drawn again on the same place it stays open; after another place, coming back shows only
+    // the "i" (Lantern on #239).
+    setHint('New words.');
+    assert.equal(line.classList.contains('folded'), false);
+    setHint('');
+    setHint('New words.');
+    assert.equal(line.classList.contains('folded'), false);
+    foldShownHints();
+    setHint('New words.');
+    assert.equal(line.classList.contains('folded'), true);
+    // One seen on an earlier visit folds: the "i" is a button that names the words.
+    setHint('Seen before.');
+    assert.equal(line.classList.contains('folded'), true);
+    const info = line.children[0];
+    assert.deepEqual([info.tag, info.getAttribute('aria-label')], ['button', 'Seen before.']);
+    assert.equal(line.children.at(-1).textContent, 'Seen before.');
+    // A hint with buttons (picked tools) never folds and is not kept (Lantern on #239).
+    const before = stored['kitden-hints-seen'];
+    setHint('2 tools picked', [globalThis.document.createElement('button')]);
+    assert.equal(line.classList.contains('folded'), false);
+    assert.equal(stored['kitden-hints-seen'], before);
+  } finally {
+    globalThis.document.getElementById = find;
+    globalThis.localStorage = had;
   }
 });
 

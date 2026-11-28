@@ -11,8 +11,6 @@ from pathlib import Path
 from typing import Any
 
 from kitden.changes.actions import (
-    GATEWAY_MOVE,
-    KITDEN_GATEWAY,
     SETUP_SERVER_ENABLE,
     SETUP_SERVER_UPDATE,
     SKILL_LIMIT,
@@ -31,7 +29,7 @@ from kitden.model import (
     _hash,
 )
 from kitden.views.effective import client_order
-from kitden.views.findings import base_name, find_bypasses, find_findings
+from kitden.views.findings import base_name, find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.library_map import copy_choices, has_own_rules, library_map
 from kitden.views.setup_server import ENABLE_KEYS, kitden_on, setup_server_state
@@ -54,16 +52,15 @@ READ_PROBLEMS = {
 KIND_WORDS = {"mcp_server": "MCP server", "plugin": "plugin", "skill": "skill"}
 # A card's icon: lucide names the page has (icons.js), or a client's mark.
 KIND_ICONS = {"mcp_server": "server", "plugin": "puzzle", "skill": "sparkles"}
-GROUP_ICONS = {"move": "globe", "local": "hard-drive"}
-# The group's word, as the Gateway says it, before the line of two cards with one name.
-GROUP_WORDS = {"move": "Remote", "local": "Local"}
-# Server cards before one card says how many more there are.
-SERVER_CARDS = 3
 # Items with exactly the same words fold into one row from this many on (overview.js, FOLD_FROM,
 # has the same number).
 FOLD_FROM = 4
-# What a move gives, not a fault: a server outside the gateway is a normal setup.
-SKIPS = "In the gateway you can turn each of its tools on or off."
+# What the gateway is and what a move changes for the agents, not a fault: a server outside the
+# gateway is a normal setup.
+GATEWAY_IS = (
+    "The Kitden gateway is one entry in each client that reaches these servers for it: your "
+    "agents keep their tools, and you turn each tool on or off once, for every agent."
+)
 NOT_CONNECTED = "Not connected to the gateway yet."
 
 
@@ -179,7 +176,7 @@ def _duplicates(inventory, findings) -> list[dict]:
 
 def _old_entries(inventory) -> list[dict]:
     """One card for entries the working version (agentsetup) added (feature 002), or `kitden`
-    entries whose program is gone. "Update…"
+    entries whose program is gone. "Update"
     adds the Agents page's update of all of them (agents.js `update`) to the tray."""
     old = [s for s in setup_server_state(inventory) if s["item"]]
     if not old:
@@ -203,14 +200,14 @@ def _old_entries(inventory) -> list[dict]:
         )
     targets = [{"item": s["item"]} for s in old]
     body = {"action": SETUP_SERVER_UPDATE, "targets": targets, "params": {}}
-    action = {"label": "Update…", "body": body}
+    action = {"label": "Update", "body": body}
     card_id = _hash("old-entries", where)
     return [_card(card_id, "attention", "house", title, text, ids, action, "gateway")]
 
 
 def _came_back(back: list[dict]) -> list[dict]:
     """A card per server a change took out of a client that is back there now (changes_view.py
-    `came_back`): an app, or something else, wrote it again. "Show…" opens it on the Gateway."""
+    `came_back`): an app, or something else, wrote it again. "Open in Gateway" opens it there."""
     cards = []
     for server in back:
         name, client, app = server["name"], server["client"], server["app"]
@@ -218,7 +215,7 @@ def _came_back(back: list[dict]) -> list[dict]:
         line = BACK_BY_APP.format(app=app) if app else BACK_BY_OTHER
         # Its entries outside the gateway, also when the gateway holds a server of that name.
         go = {"view": "gateway", "sel": f"direct:{name}"}
-        action = {"label": "Show…", "go": go}
+        action = {"label": "Open in Gateway", "go": go}
         card_id = _hash("came-back", client, name)
         cards.append(
             _card(card_id, "attention", "server", title, line, [client], action, "gateway")
@@ -229,7 +226,7 @@ def _came_back(back: list[dict]) -> list[dict]:
 def _context(clients: list[dict]) -> list[dict]:
     """A card per client whose last chat did not fit its skill list (the Context page's lamp is
     "warn"; Cursor never is). Its button is Context's suggested limit, for the tray, with its
-    cost in the line; with none, "Show…" opens Context on that client."""
+    cost in the line; with none, "Open in Context" opens Context on that client."""
     cards = []
     for card in clients:
         misfit = card["lamp"] == "warn" and card["windows"][0]["result"]["misfit"]
@@ -240,7 +237,7 @@ def _context(clients: list[dict]) -> list[dict]:
         skills = "1 skill" if n == 1 else f"{n} skills"
         were = "was" if n == 1 else "were"
         line = CONTEXT_CARD_LINES[misfit["kind"]].format(skills=skills, were=were, client=word)
-        action = {"label": "Show…", "go": {"view": "context", "sel": f"client:{client}"}}
+        action = {"label": "Open in Context", "go": {"view": "context", "sel": f"client:{client}"}}
         title = SKILL_LIST_IN.format(client=word)
         card_id = _hash("context", client)
         # Changed since that chat, and by Kitden's estimate everything fits now (a new limit was
@@ -262,7 +259,7 @@ def _context(clients: list[dict]) -> list[dict]:
             param = card["limit"].get("param") or "fraction"
             params = {param: offer[param]}
             body = {"action": SKILL_LIMIT, "targets": [{"client": client}], "params": params}
-            action = {"label": f"{offer['label']}…", "body": body}
+            action = {"label": offer["label"], "body": body}
             cost = offer["cost"][0].lower() + offer["cost"][1:]
             # The largest share, when none fits them all, says what it still leaves.
             leaves = offer.get("leaves")
@@ -280,7 +277,7 @@ FOLDS = {
 
 
 def _fold(cards: list[dict], kind: str) -> list[dict]:
-    """FOLD_FROM or more cards of one kind are one row that holds them (`cards`): its "Show…"
+    """FOLD_FROM or more cards of one kind are one row that holds them (`cards`): its "Show"
     opens and closes the list right under it, so one kind cannot push the rest down."""
     if len(cards) < FOLD_FROM:
         return cards
@@ -293,54 +290,33 @@ def _fold(cards: list[dict], kind: str) -> list[dict]:
     block = blocks.pop() if len(blocks) == 1 else None
     title = name.format(n=len(cards), things=thing)
     icon = cards[0]["icon"] if len(icons) == 1 else "layers"
-    action = {"label": "Show…", "fold": True}
+    action = {"label": "Show", "fold": True}
     row = _card(_hash("fold", kind), "attention", icon, title, line, clients, action, block)
     return [row | {"cards": cards}]
 
 
 def _move_ins(groups: dict) -> list[dict]:
-    """A card per server outside the Kitden gateway that a move can take, as the Gateway's
-    "Move in…" offers it (gateway-details.js `movesTo`): its row has entries
-    Kitden can remove and nothing that makes the move refuse it. "Move in…" adds the same
-    change (details.js `moveBody`). Two cards with one name (a remote and a local server) start
-    their line with the group's word. Past SERVER_CARDS, one card says how many more and opens
-    the Gateway's List at the outside group."""
-    rows = [
-        (group, row)
+    """One card for the servers outside the Kitden gateway that a move can take, as the
+    Gateway's "Move in…" offers them (gateway-details.js `movesTo`): rows with entries Kitden
+    can remove and nothing that makes the move refuse them. A server is its name: a remote and
+    a local server of one name count once. Its line says what the gateway is; its button opens
+    the Gateway's List at the outside group, where each server has its Move in…"""
+    names = {
+        row["name"]
         for group in ("move", "local")
         for row in groups[group]
         if row["items"] and not row["stays"]
-    ]
-    rows.sort(key=lambda pair: pair[1]["name"].lower())
-    names = [row["name"] for _, row in rows[:SERVER_CARDS]]
-    cards = []
-    for group, row in rows[:SERVER_CARDS]:
-        targets = [{"item": i} for i in row["items"]]
-        params = {"gateway": KITDEN_GATEWAY}
-        action = {
-            "label": "Move in…",
-            "body": {"action": GATEWAY_MOVE, "targets": targets, "params": params},
-        }
-        icon = GROUP_ICONS[group]
-        card_id = _hash("move-in", group, row["name"])
-        line = f"{GROUP_WORDS[group]} · {SKIPS}" if names.count(row["name"]) > 1 else SKIPS
-        cards.append(
-            _card(card_id, "improve", icon, row["name"], line, row["columns"], action, "gateway")
-        )
-    rest = rows[SERVER_CARDS:]
-    if rest:
-        clients = sorted({c for _, row in rest for c in row["columns"]}, key=client_order)
-        n = len(rest)
-        # The same set as the cards above: servers a move can take, not every one outside.
-        name = f"{n} more {'server' if n == 1 else 'servers'} can move in"
-        line = (
-            f"In the gateway you can turn each of {'its' if n == 1 else 'their'} tools on or off."
-        )
-        go = {"view": "gateway", "sel": "group:outside", "mode": "list"}
-        action = {"label": "Show…", "go": go}
-        card_id = _hash("move-in", "more")
-        cards.append(_card(card_id, "improve", "server", name, line, clients, action, "gateway"))
-    return cards
+    }
+    if not names:
+        return []
+    rows = [r for g in ("move", "local") for r in groups[g] if r["name"] in names]
+    clients = sorted({c for row in rows for c in row["columns"]}, key=client_order)
+    n = len(names)
+    name = f"{n} {'server' if n == 1 else 'servers'} can move into the gateway"
+    go = {"view": "gateway", "sel": "group:outside", "mode": "list"}
+    action = {"label": "Open in Gateway", "go": go}
+    card_id = _hash("move-in")
+    return [_card(card_id, "improve", "server", name, GATEWAY_IS, clients, action, "gateway")]
 
 
 def _connects(inventory) -> list[dict]:
@@ -357,7 +333,7 @@ def _connects(inventory) -> list[dict]:
             body = {"action": SETUP_SERVER_ENABLE, "targets": [{"client": client}], "params": {}}
         else:
             continue
-        action = {"label": "Connect…", "body": body}
+        action = {"label": "Connect", "body": body}
         name, icon, card_id = CLIENT_WORDS[client], {"client": client}, _hash("connect", client)
         card = _card(card_id, "improve", icon, name, NOT_CONNECTED, [client], action, "gateway")
         cards.append(card)
@@ -421,13 +397,16 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
 
 def note_count(findings: Sequence[Any]) -> int:
     """The rows the folded notes draw, of findings or anything with their `names` and `type`.
-    An item is one name; the words of its notes are its distinct note types, in the order they
-    come. Items with the same words (FOLD_FROM or more of them) are one row; every other item
-    has a row of its own (overview.js `noteRows`)."""
-    words: dict[str, list[str]] = {}
+    An item is one name of one kind (a skill and a server of one name are two items); the
+    words of its notes are its distinct note types, in the order they come. Items with the same
+    words (FOLD_FROM or more of them) are one row; every other item has a row of its own
+    (overview.js `noteRows`)."""
+    words: dict[tuple[str, str], list[str]] = {}
     for finding in findings:
-        for name in dict.fromkeys(finding.names):
-            seen = words.setdefault(name, [])
+        kinds = getattr(finding, "kinds", ()) or ()
+        keys = [(kinds[at] if at < len(kinds) else "", n) for at, n in enumerate(finding.names)]
+        for key in dict.fromkeys(keys):
+            seen = words.setdefault(key, [])
             if str(finding.type) not in seen:
                 seen.append(str(finding.type))
     same = Counter(tuple(w) for w in words.values())
@@ -475,8 +454,9 @@ def overview(
     if held and not problem:
         cards += _connects(inventory)
 
-    # The notes the page lists: the info findings of /api/findings, gateway bypasses too.
-    info = [f for f in findings + find_bypasses(inventory, project) if f.severity is Severity.INFO]
+    # The notes the page lists: the info findings of /api/findings. A server outside the gateway
+    # is not a note: the card above counts the ones that can move in.
+    info = [f for f in findings if f.severity is Severity.INFO]
     setup = _setup_map(inventory, adapters or {}, project, held, gateway_rules, bool(problem))
     return {
         "cards": cards,

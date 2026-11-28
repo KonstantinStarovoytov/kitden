@@ -210,7 +210,7 @@ test('the page draws the title, the lede, the clients, the windows and the verdi
   assert.equal(main.children[0].className, 'page-head');
   assert.equal(main.children[0].children[0].tagName, 'H1');
   assert.equal(text(main.children[0].children[0]), 'Do your skills fit?');
-  assert.deepEqual(byClass(main.children[0], 'head-actions')[0].children.map((n) => text(n)), ['Choose clients…']);
+  assert.deepEqual(byClass(main.children[0], 'head-actions')[0].children.map((n) => text(n)), []);
   // Codex is the first client whose lamp is amber, so it shows.
   assert.equal(text(byClass(main, 'lede')[0]), CODEX.lede);
   assert.deepEqual(chips().map((n) => text(n)), ['Claude Code', 'Codex', 'Cursor']);
@@ -806,7 +806,7 @@ test('with a share above the default, the line drags back to 1% and adds the Bac
   const changed = ['The limit was changed after this chat: it is 1.5% now. Start a new chat to see the new list.', 'Estimate: On a 200K window, every skill would keep its description.'];
   const backOnly = {
     ...LIMIT, now: '1.5% of the context window: 12,000 characters', offer: null, back: { fraction: 'default', label: 'Back to 1%' }, note: null,
-    why: 'Kitden does not offer a new skill list limit: every description fits.',
+    why: null,
     steps: [
       { value: 'default', limit: 8000, short: 1, say: '1%, the default · 1 of 3 show only a name · about 3,000 fewer characters per chat' },
       { value: 0.015, limit: 12000, short: 0, say: '1.5% now · all 3 fit', now: true },
@@ -842,7 +842,7 @@ test('with a share above the default, the line drags back to 1% and adds the Bac
 // 1.2%, 1.1% and the default. Nothing is suggested: only Back.
 const LOWER = {
   ...LIMIT, now: '1.3% of the context window: 10,400 characters', offer: null, back: { fraction: 'default', label: 'Back to 1%' }, note: null,
-  why: 'Kitden does not offer a new skill list limit: every description fits.',
+  why: null,
   steps: [
     { value: 'default', limit: 8000, short: 1, say: '1%, the default · 1 of 3 show only a name · about 3,000 fewer characters per chat' },
     { value: 0.011, limit: 8800, short: 1, say: '1.1% · 1 of 3 show only a name · about 3,000 fewer characters per chat' },

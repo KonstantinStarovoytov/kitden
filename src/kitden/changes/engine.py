@@ -248,6 +248,14 @@ def _edited(edit: FileEdit, text: str, value: Any) -> str:
     return editor.set_value(text, edit.key, value)
 
 
+def _with_version(edit: FileEdit, text: str) -> str:
+    """The text with the file's format version (FileEdit.version) added when it has none.
+    A version already there, newer ones too, is left as it is."""
+    if edit.version is None or json_splice.get_value(text, ("version",)) is not ABSENT:
+        return text
+    return json_splice.set_value(text, ("version",), edit.version)
+
+
 def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
     """Put back each entry of one file, last step first. None if any entry is no longer ours."""
     try:
@@ -351,6 +359,7 @@ def _edit_record(edit: FileEdit | None) -> dict | None:
         "after_hash": edit.after_hash,
         "backup_path": edit.backup_path,
         "masked_diff": edit.masked_diff,
+        "version": edit.version,
     }
 
 
@@ -430,6 +439,7 @@ def _from_record(record: dict) -> Change:
                 after_hash=e["after_hash"],
                 backup_path=e["backup_path"],
                 masked_diff=e["masked_diff"],
+                version=e.get("version"),  # a record from before this field has none
             )
         c = raw.get("copy")
         copy = FolderCopy(**c) if c is not None else None
@@ -556,6 +566,10 @@ class Engine:
                 )
             edit.before_hash = _sha(data)
             edit.masked_diff = masked_diff(edit)
+            # Apply also adds the file's format version where it has none: the preview says so.
+            text = (data or b"").decode()
+            if _with_version(edit, text) != text:
+                edit.masked_diff += f'\nversion\n+"version": {edit.version}'
         change = Change(action=action, steps=steps)
         self.changes[change.id] = change
         return change
@@ -690,7 +704,7 @@ class Engine:
                 raise _ClientRefusedError(step.client, f"`{shown}` failed: {result.output}")
             self.on_write(edit.path, _sha(_read(edit.path)))
             return None
-        new = _edited(edit, (data or b"").decode(), edit.after)
+        new = _edited(edit, _with_version(edit, (data or b"").decode()), edit.after)
         self._write(edit.path, new.encode())
         return new.encode()
 

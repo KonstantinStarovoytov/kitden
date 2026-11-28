@@ -201,6 +201,7 @@ class Finding:
     names: tuple[str, ...] = ()
     client: str | None = None
     clients: tuple[str, ...] = ()  # every client the finding is about; not part of the id
+    kinds: tuple[str, ...] = ()  # each item's kind, beside `names` ("skill", "mcp_server")
 
     def __post_init__(self) -> None:
         if not self.items:
@@ -238,6 +239,8 @@ class FileEdit:
     after_hash: str | None = None
     backup_path: str | None = None
     masked_diff: str = ""
+    # The file's format version (JSON only). Apply adds it as "version" when the file has none.
+    version: int | None = None
 
 
 COPY_FOLDER = "copy_folder"  # the mechanism of a step that copies a skill folder

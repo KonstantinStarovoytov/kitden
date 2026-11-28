@@ -2,6 +2,8 @@
 sample, with four skills that Cursor loads twice each (`~/.claude/skills` and `~/.cursor/skills`,
 so keeping Claude Code's copy costs no client the skill)."""
 
+import re
+
 import pytest
 from playwright.sync_api import expect
 
@@ -29,7 +31,7 @@ def test_the_first_card_is_the_skill_list_with_its_fix(page, demo):
     first = page.locator(".ov-group[data-group=attention] .ov-cards > *").first
     expect(first).to_contain_text("Skill list in Claude Code")
     expect(first).to_contain_text("Set to 1.1% fits them: about")
-    first.get_by_role("button", name="Set to 1.1%…").click()
+    first.get_by_role("button", name="Set to 1.1%", exact=True).click()
     expect(first.get_by_role("button", name="In preview")).to_be_visible()
 
 
@@ -39,9 +41,11 @@ def test_many_copy_cards_fold_into_one_row(page, demo):
     expect(row).to_contain_text("4 skills load more than once")
     cards = row.locator(".ov-fold-cards")
     expect(cards).to_be_hidden()
-    row.get_by_role("button", name="Show…").click()
+    row.get_by_role("button", name="Show", exact=True).click()
     expect(cards.locator("[data-card]")).to_have_count(4)
     expect(cards.get_by_role("button", name="Keep one…")).to_have_count(4)
+    # Plain buttons inside the fold: only the row's own button is primary.
+    expect(cards.locator(".btn.primary")).to_have_count(0)
     row.get_by_role("button", name="Hide").click()
     expect(cards).to_be_hidden()
 
@@ -65,10 +69,11 @@ def test_context_shows_the_fix_under_the_problem(page, demo):
     expect(page.locator(".ctx-zoom")).to_contain_text("not measured (system prompt, MCP tools")
 
 
-def test_the_search_says_what_it_finds_on_each_tab(page, demo):
-    # 02-N02: from the Overview the search went to the Library, which has no servers.
-    expect(
-        page.get_by_role("searchbox", name="Search skills, plugins and marketplaces")
-    ).to_be_visible()
-    page.evaluate("location.hash = '#gateway'")
-    expect(page.get_by_role("searchbox", name="Search servers and tools")).to_be_visible()
+def test_one_search_box_finds_a_server_from_the_overview(page, demo):
+    # 02-R03: from the Overview the search went to the Library, which has no servers.
+    box = page.get_by_role("searchbox", name="Search skills, plugins, servers and tools")
+    expect(box).to_be_visible()
+    box.focus()
+    box.press_sequentially("github")
+    expect(page).to_have_url(re.compile(r"#gateway"))
+    expect(box).to_be_focused()

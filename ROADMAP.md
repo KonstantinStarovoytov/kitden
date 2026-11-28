@@ -66,6 +66,17 @@ What Kitden does today and what comes next. Ideas and bugs:
   **Name only** reads Name only in the List. A waiting add or move is marked **in preview** too, in
   every client's cell it reaches, and Context lists what the preview adds. The Library map's hint
   says what × does; a Codex copy in one project has one control.
+- **A lighter page and honest numbers:** **Clients** in the left bar opens Choose clients (the
+  page heads keep it only while a client is not installed); the Library List adds with **+**; **Add
+  missing…** shows only when something is missing; **+ Add** in the Library is the one door to the
+  catalogs. The Overview has one card for the servers that can move into the gateway, plain
+  buttons in its folds, and buttons that say where they go. Foot hints show once, then sit behind
+  their "i"; the scope line shows only for a picked project; a skill's Details have one Source row.
+  One search box finds servers too. Counts mean one thing: the Overview's notes no longer count
+  servers outside the gateway, a skill and a server of one name get a note each, the Library's
+  client cards say **On:**, and `kitden scan` no longer counts the Claude account as a plugin.
+  `gateway.json` says its format; `--home` is no longer in the help. Keep this one… with **All
+  projects** keeps a copy in every project.
 - **Context groups your skills by where they come from:** for Claude Code and Codex the skills
   stand in one group per plugin, your own skills, a project's, the plugins of your Claude account
   and the built-in ones, with the Library's names, largest first. Each header says how many skills,
@@ -877,7 +888,8 @@ Left for later in the alignment plan's phase notes:
 
 - The terminal's own copies of the Claude account's plugins (`~/.claude/plugins/synced`), once
   a real install shows how that folder holds them.
-- Skills per project: turn skills on or off for one project, as tools are today.
+- Skills per project in Codex and Cursor, once their settings can turn one skill off in one
+  project (Claude Code has it now).
 - A living map with connected comparison and access views, as designed in `design/kitden.pen`;
   prototype and test it before implementation.
 - A shared setup for a small team.
