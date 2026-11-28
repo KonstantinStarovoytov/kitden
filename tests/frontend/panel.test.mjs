@@ -915,7 +915,7 @@ test('under 1024 px Details are the modal drawer, with the dock above it', () =>
   // above the window with an empty dock, and 8 px above what the dock shows (its height and 46 px,
   // measured from the frame's content, which ends 17 px inside the window).
   const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
-  const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.#]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))[1];
+  const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))[1];
   assert.match(rule('.hint-dock'), /z-index: 22;/);
   // The hint line is under them: open Details cover it, so its words never run over the panel.
   assert.match(rule('.hint-band'), /z-index: 2;/);
@@ -933,7 +933,7 @@ test('under 1024 px Details are the modal drawer, with the dock above it', () =>
 // opacity change over time, so it lands at once.
 test("the modal drawer's bottom follows the dock in 200 ms and keeps 240 px", () => {
   const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
-  const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.#()>:]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))[1];
+  const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))[1];
   assert.match(rule('.drawer'), /min-height: 240px;/);
   for (const selector of ['.drawer', '.drawer.open']) assert.match(rule(selector), /transition: [^;]*bottom 200ms var\(--calm\)/, selector);
   assert.match(css, /transition-property: opacity, color, background-color !important;/);
@@ -943,7 +943,7 @@ test("the modal drawer's bottom follows the dock in 200 ms and keeps 240 px", ()
 // panel (240 ms CALM) and closes with it (180 ms ease-in), not at once. Reduced motion: at once.
 test('the list room opens and closes with the floating panel', () => {
   const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
-  const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.#()>:]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))[1];
+  const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))[1];
   assert.match(rule('#main.floats:not(:has(> div.map))'), /transition: [^;]*padding-right 240ms var\(--calm\)/);
   assert.match(rule('.page'), /transition: [^;]*padding-right 180ms ease-in/);
 });

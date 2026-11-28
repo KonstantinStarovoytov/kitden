@@ -80,7 +80,7 @@ def read_json(url: str) -> dict:
 def popular_skills() -> list[dict]:
     """Read the public all-time leaderboard (checked 2026-10-29)."""
     page = download("https://skills.sh/").decode("utf-8")
-    for script in re.findall(r"<script[^>]*>(.*?)</script>", page, re.S):
+    for script in re.findall(r"<script\b[^>]*>(.*?)</script\b[^>]*>", page, re.S | re.I):
         prefix = "self.__next_f.push("
         if not script.startswith(prefix):
             continue

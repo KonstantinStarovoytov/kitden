@@ -9,8 +9,9 @@ Say what you did, what happened and which version you run (`kitden --version`).
 
 ## What happens next
 
-Kitden has one maintainer. You get an answer as soon as they can read the report. A confirmed
-problem is fixed in a new release, and the release notes say so.
+Kitden has one maintainer. You get an answer within 7 days. A confirmed problem is fixed in a
+new release, usually within 30 days, and the release notes say so. Please keep the problem
+private until that release is out.
 
 ## Which version gets fixes
 
