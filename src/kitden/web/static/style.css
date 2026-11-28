@@ -380,6 +380,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .where-tx { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .where-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 12px; font-weight: 600; }
 .where-sub { color: var(--ink-3); font-size: 11px; }
+/* "Other folders": a quiet label over the rest of the list, not an option. */
+.where-group { flex: none; padding: 8px 10px 4px; border-top: 1px solid var(--wire); color: var(--ink-3); font-size: 11px; }
 .where-count { flex: none; color: var(--route); font-size: 11px; white-space: nowrap; }
 .where-check { color: var(--route); }
 /* Under a page head: the shared setup, or a project and how much of it differs. */

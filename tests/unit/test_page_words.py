@@ -3170,3 +3170,9 @@ def test_the_hint_line_has_a_strip_that_hides_what_scrolls_under_it():
     assert "::before" in rule and "linear-gradient(to bottom, transparent, var(--canvas)" in rule
     assert "pointer-events: none" in rule and "position: absolute" in rule
     assert "bottom: 14px" in CSS  # the hint line keeps its place
+
+
+def test_the_project_menu_says_other_folders():
+    assert said.OTHER_FOLDERS == "Other folders"
+    assert 'export const OTHER_FOLDERS = "Other folders";' in script("words.js")
+    assert '"Other folders"' not in script("parts.js")

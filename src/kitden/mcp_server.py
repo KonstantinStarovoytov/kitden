@@ -7,7 +7,7 @@ When servers are moved into the Kitden gateway, it also offers their tools (loca
 
 import os
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -25,6 +25,7 @@ from kitden.update import install
 from kitden.views import answers
 from kitden.views.answers import NO_CHANGES, NO_EDITS, read_setup, resolve_project
 from kitden.views.inventory import Inventory, build_inventory
+from kitden.views.project_rows import own_rule_paths
 
 READ_ONLY = ToolAnnotations(
     read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False
@@ -61,6 +62,7 @@ def create_server(
     build: Callable[[], Inventory],
     cwd: Callable[[], str] = os.getcwd,
     instructions: str = INSTRUCTIONS,
+    ruled: Callable[[], Collection[str]] = frozenset,
 ) -> MCPServer:
     server = MCPServer(name="kitden", instructions=instructions)
 
@@ -131,13 +133,14 @@ def create_server(
     @server.tool(
         annotations=READ_ONLY,
         description=(
-            "List the projects the clients know, which clients know each one, and whether the "
-            "folder still exists. Use it to find a project_path for show_setup, list_findings "
-            "and explain_item. " + NO_CHANGES
+            "List each project once, with the clients that know it and whether its folder "
+            "exists: a git worktree is part of its main checkout, and a folder that is gone is "
+            "left out unless it still holds a setting. Use it to find a project_path for "
+            "show_setup, list_findings and explain_item. " + NO_CHANGES
         ),
     )
     def list_projects() -> dict[str, Any]:
-        return answers.projects_answer(build())
+        return answers.projects_answer(build(), ruled())
 
     return server
 
@@ -154,7 +157,9 @@ def run(home: Path | None = None, read_only: bool = False) -> None:
 
     def make() -> MCPServer:
         return create_server(
-            lambda: read_setup(root), instructions=GATEWAY_INSTRUCTIONS if held else INSTRUCTIONS
+            lambda: read_setup(root),
+            instructions=GATEWAY_INSTRUCTIONS if held else INSTRUCTIONS,
+            ruled=lambda: own_rule_paths(load_settings(root)),
         )
 
     # Only a uv tool or Homebrew install is updated in place, so only such a gateway watches

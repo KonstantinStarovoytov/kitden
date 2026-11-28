@@ -4,6 +4,7 @@ Each answer is the same redacted model and the same project view as the page (FR
 """
 
 import os
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ from kitden.views.effective import found_clients, project_views
 from kitden.views.explain import brief, explain
 from kitden.views.findings import find_bypasses, find_findings, finding_dict
 from kitden.views.inventory import Inventory, build_inventory
+from kitden.views.project_rows import project_rows
 
 NO_EDITS = (
     "Do not edit client settings files to work around this; tell the developer to make the "
@@ -89,8 +91,10 @@ def item_answer(
     return {"project": _project_dict(project), "name": name, "definitions": definitions}
 
 
-def projects_answer(inventory: Inventory) -> dict[str, Any]:
-    return {"projects": [_project_dict(p) for p in inventory.projects]}
+def projects_answer(inventory: Inventory, ruled: Collection[str] = ()) -> dict[str, Any]:
+    """The short project list (project_rows). `ruled`: the projects with gateway rules of their
+    own."""
+    return {"projects": [_project_dict(r.project) for r in project_rows(inventory, ruled)]}
 
 
 def context_answer(

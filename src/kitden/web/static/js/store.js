@@ -83,6 +83,14 @@ export function projectGone() {
   return Boolean(state.project) && data.projects !== null && !data.projects.some((p) => p.id === state.project);
 }
 
+// The row a folded entry went into (a worktree into its main checkout, a link into its target),
+// or null: for "" and for an id no row folded.
+export function foldedInto(projects, id) {
+  if (!id) return null;
+  const row = (projects || []).find((p) => (p.folded || []).includes(id));
+  return row ? row.id : null;
+}
+
 // The same for a failed read: another project's error is not this project's.
 export function currentError(name) {
   return data.errorScope[name] === state.project ? data.errors[name] || null : null;
@@ -314,10 +322,20 @@ async function guarded(name, url, apply, scope, outdated = () => false) {
 // the project is still on the list.
 let sharedRead = null;
 
+// A link saved with a folded entry's id opens the row it folded into, as soon as the list is in,
+// so no later read asks for the old id. The address is replaced: Back does not return to it.
+function takeProjects(rows) {
+  data.projects = rows;
+  const row = foldedInto(rows, state.project);
+  if (row === null) return;
+  state.project = row;
+  writeHash(false);
+}
+
 export async function loadShared() {
   const read = Promise.all([
     guarded("clients", "/api/clients", (v) => { data.clients = v; }),
-    guarded("projects", "/api/projects", (v) => { data.projects = v; }),
+    guarded("projects", "/api/projects", takeProjects),
     guarded("changes", "/api/changes", (v) => { data.changes = v; }),
   ]);
   sharedRead = read;

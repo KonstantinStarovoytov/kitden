@@ -179,6 +179,9 @@ def test_read_only_keeps_the_plain_instructions_and_starts_no_gateway(home, monk
     monkeypatch.setattr(proxy, "run", lambda *args: made.update(gateway=True))
     mcp_server.run(home, read_only=True)
     assert made.pop("instructions", mcp_server.INSTRUCTIONS) == mcp_server.INSTRUCTIONS
+    assert (
+        made.pop("ruled")() == frozenset()
+    )  # read-only mode still reads the rules; this home has none
     assert made == {"ran": True}
 
 

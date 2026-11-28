@@ -120,7 +120,7 @@ function drawPicker() {
   box.classList.toggle("project", Boolean(state.project));
   if (data.projects === null && state.project) return;
   const projects = data.projects || [];
-  const signature = JSON.stringify([projects.map(({ id, path, exists, own_rules }) => [id, path, exists, own_rules]), state.project]);
+  const signature = JSON.stringify([projects.map(({ id, path, exists, own_rules, own, parent }) => [id, path, exists, own_rules, own, parent]), state.project]);
   if (box.dataset.projects === signature) return;
   box.dataset.projects = signature;
   const name = $("#where-picked");

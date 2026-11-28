@@ -446,21 +446,51 @@ test('a source still being read says so on the tab it changes, not in the top ba
 // The project menu ----------------------------------------------------------------------------
 
 const PROJECTS = [
-  { id: 'w', path: '/u/work/website', exists: true, own_rules: 3 },
-  { id: 'a', path: '/u/work/api', exists: false, own_rules: 0 },
-  { id: 'm', path: '/u/mcp-gateway', exists: true, own_rules: 1 },
+  { id: 'w', path: '/u/work/website', exists: true, own: true, own_rules: 3 },
+  { id: 'a', path: '/u/work/api', exists: false, own: true, own_rules: 0 },
+  { id: 'm', path: '/u/mcp-gateway', exists: true, own: true, own_rules: 1 },
 ];
 
 test('the project menu lists All projects first, then projects by name with their own rules', () => {
   assert.deepEqual(menuItems(PROJECTS, 'm').map((i) => [i.name, i.count, i.sub, i.picked]), [
-    ['All projects', null, 'What applies in every project', false], ['api', null, 'Folder missing', false],
-    ['mcp-gateway', '1 own rule', null, true], ['website', '3 own rules', null, false]]);
+    ['All projects', null, 'What applies in every project', false], ['mcp-gateway', '1 own rule', null, true],
+    ['website', '3 own rules', null, false], ['api', null, 'Folder missing', false]]);
   assert.deepEqual(menuItems(PROJECTS, '').map((i) => i.picked), [true, false, false, false]);
   assert.deepEqual(menuItems(PROJECTS, '', 'WEB').map((i) => i.name), ['All projects', 'website']);
   assert.deepEqual(menuItems([], 'gone').map((i) => i.name), ['All projects', 'No longer on the list']);
   assert.deepEqual(menuItems([], 'gone').map((i) => [i.id, i.picked]), [['', false], ['gone', true]]);
   // No path reaches the menu.
   assert.ok(!JSON.stringify(menuItems(PROJECTS, 'm')).includes('/u/'));
+});
+
+test('the menu puts folders with nothing of their own under Other folders, and the find box searches both', () => {
+  const rows = [
+    { id: 'k', path: '/u/work/kitden', exists: true, own: true, own_rules: 0, parent: null },
+    { id: 'h', path: '/u/amandawoodward', exists: true, own: false, own_rules: 0, parent: null },
+    { id: 'c', path: '/u/work/chat', exists: true, own: false, own_rules: 0, parent: null },
+  ];
+  assert.deepEqual(menuItems(rows, '').map((i) => [i.name, i.other]), [['All projects', false], ['kitden', false], ['amandawoodward', true], ['chat', true]]);
+  assert.deepEqual(menuItems(rows, '', 'chat').map((i) => i.name), ['All projects', 'chat']);
+  // A picked id that no row has stays above Other folders.
+  assert.deepEqual(menuItems(rows, 'gone').map((i) => [i.name, i.other]), [['All projects', false], ['kitden', false], ['No longer on the list', false], ['amandawoodward', true], ['chat', true]]);
+});
+
+test('a gone folder with something of its own is under Other folders', () => {
+  const [, gone] = menuItems([{ id: 'g', path: '/u/old', exists: false, own: true, own_rules: 2, parent: null }], '');
+  assert.equal(gone.other, true);
+  assert.equal(gone.sub, 'Folder missing');
+});
+
+test('rows whose names clash say their parent folder', () => {
+  const rows = [
+    { id: 'n1', path: '/u/a/notes', exists: true, own: false, parent: 'a' },
+    { id: 'n2', path: '/u/b/notes', exists: false, own: false, parent: 'b' },
+  ];
+  const subs = Object.fromEntries(menuItems(rows, '').map((i) => [i.id, i.sub]));
+  assert.equal(subs.n1, 'in a');
+  assert.equal(subs.n2, 'Folder missing · in b');
+  // No path reaches the menu.
+  assert.ok(!JSON.stringify(menuItems(rows, '')).includes('/u/'));
 });
 
 test('the scope bar says what the page shows', () => {
@@ -575,7 +605,7 @@ test('arrows, Home and End move through the options and stop at the ends', () =>
 // A project menu on the stub page: `press` sends a key to the find box; `type` fills it. Motion is
 // off (reduced) unless `motion` is set, so a closed menu is hidden at once; `from` is the name the
 // button showed before a pick. The menu's animations are recorded in `moves`.
-function menuOn(picked = 'm', { motion = false, from = null } = {}) {
+function menuOn(picked = 'm', { motion = false, from = null, projects = PROJECTS } = {}) {
   media.matches = !motion;
   const document = globalThis.document;
   const outside = {};
@@ -583,7 +613,7 @@ function menuOn(picked = 'm', { motion = false, from = null } = {}) {
   document.addEventListener = (type, listener) => { outside[type] = listener; };
   document.removeEventListener = (type) => { delete outside[type]; };
   const picks = [];
-  const root = projectMenu(PROJECTS, picked, (id) => picks.push(id), from);
+  const root = projectMenu(projects, picked, (id) => picks.push(id), from);
   const [trigger, menu] = root.children;
   const find = menu.querySelector('.where-find');
   const options = () => menu.querySelectorAll('.where-option');
@@ -667,14 +697,14 @@ test('opening the menu moves focus into the find box, with the picked option act
   assert.equal(m.trigger.attributes['aria-expanded'], 'true');
   assert.equal(globalThis.document.activeElement, m.find);
   assert.deepEqual(m.options().map((o) => o.attributes.role), ['option', 'option', 'option', 'option']);
-  assert.deepEqual(m.options().map((o) => o.attributes['aria-selected']), ['false', 'false', 'true', 'false']);
-  assert.equal(m.active(), 2);
-  assert.equal(m.find.attributes['aria-activedescendant'], m.options()[2].id);
+  assert.deepEqual(m.options().map((o) => o.attributes['aria-selected']), ['false', 'true', 'false', 'false']);
+  assert.equal(m.active(), 1);
+  assert.equal(m.find.attributes['aria-activedescendant'], m.options()[1].id);
   assert.equal(m.menu.querySelector('.where-list').attributes.role, 'listbox');
   // A row says its count and its sub line, never a path.
-  assert.deepEqual(words(m.options()[3]), ['website', '3 own rules']);
+  assert.deepEqual(words(m.options()[2]), ['website', '3 own rules']);
   assert.deepEqual(words(m.options()[0]), ['All projects', 'What applies in every project']);
-  assert.deepEqual(words(m.options()[1]), ['api', 'Folder missing']);
+  assert.deepEqual(words(m.options()[3]), ['api', 'Folder missing']);
 });
 
 // The mockup has no ring when the menu opens by mouse: the ring marks the option for a keyboard.
@@ -683,7 +713,7 @@ test('the project menu opened by mouse shows no active ring; an arrow key shows 
   const ring = () => m.menu.classList.contains('keys');
   heard.pointerdown({});
   m.trigger.listeners.click({ detail: 1 });
-  assert.equal(m.active(), 2);
+  assert.equal(m.active(), 1);
   assert.equal(ring(), false);
   m.press('ArrowDown');
   assert.equal(ring(), true);
@@ -723,8 +753,11 @@ test('Down, Up, Home and End move the active option, and Enter picks it', () => 
   const m = menuOn('m');
   m.open();
   assert.equal(m.press('ArrowDown'), true);
+  assert.equal(m.active(), 2);
+  assert.equal(m.find.attributes['aria-activedescendant'], m.options()[2].id);
+  // Past the Other folders heading to the gone api, and no further.
+  m.press('ArrowDown');
   assert.equal(m.active(), 3);
-  assert.equal(m.find.attributes['aria-activedescendant'], m.options()[3].id);
   m.press('ArrowDown');
   assert.equal(m.active(), 3);
   m.press('Home');
@@ -734,7 +767,8 @@ test('Down, Up, Home and End move the active option, and Enter picks it', () => 
   m.press('End');
   assert.equal(m.active(), 3);
   m.press('ArrowUp');
-  assert.equal(m.active(), 2);
+  m.press('ArrowUp');
+  assert.equal(m.active(), 1);
   assert.equal(m.press('Enter'), true);
   assert.deepEqual(m.picks, ['m']);
   assert.equal(m.menu.hidden, true);
@@ -813,7 +847,7 @@ test('pressing the open button closes the menu, and Down on the button opens it'
 test('a press on an option picks it', () => {
   const m = menuOn('');
   m.open();
-  m.options()[1].listeners.click();
+  m.options()[3].listeners.click();
   assert.deepEqual(m.picks, ['a']);
   assert.equal(m.menu.hidden, true);
 });
@@ -848,9 +882,40 @@ test('an option leads with layers for All projects and with a folder for a proje
 test('the own-rules count is a part of its own, the sub line sits under the name', () => {
   const m = menuOn('m');
   m.open();
-  assert.deepEqual(m.options().map((o) => (o.querySelector('.where-count') || {}).textContent), [undefined, undefined, '1 own rule', '3 own rules']);
-  const tx = m.options()[1].querySelector('.where-tx');
+  assert.deepEqual(m.options().map((o) => (o.querySelector('.where-count') || {}).textContent), [undefined, '1 own rule', '3 own rules', undefined]);
+  const tx = m.options()[3].querySelector('.where-tx');
   assert.deepEqual(tx.children.map((c) => c.className), ['where-label', 'where-sub']);
+});
+
+test('the drawn menu shows Other folders once and the arrows skip it', () => {
+  const rows = [
+    { id: 'k', path: '/u/work/kitden', exists: true, own: true, own_rules: 0, parent: null },
+    { id: 'h', path: '/u/amandawoodward', exists: true, own: false, own_rules: 0, parent: null },
+    { id: 'c', path: '/u/work/chat', exists: true, own: false, own_rules: 0, parent: null },
+  ];
+  const m = menuOn('k', { projects: rows });
+  m.open();
+  const list = m.menu.querySelector('.where-list');
+  const groups = list.children.filter((node) => node.classList.contains('where-group'));
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].textContent, 'Other folders');
+  assert.equal(groups[0].attributes.role, 'presentation');
+  assert.equal(groups[0].id, undefined);
+  const at = list.children.indexOf(groups[0]);
+  assert.equal(words(list.children[at + 1])[0], 'amandawoodward');
+  assert.deepEqual(m.options().map((o) => o.attributes.role), ['option', 'option', 'option', 'option']);
+  assert.equal(words(m.options()[m.active()])[0], 'kitden');
+  m.press('ArrowDown');
+  assert.equal(m.find.attributes['aria-activedescendant'], list.children[at + 1].id);
+  // A find with no other row shown draws no heading; with only other rows it stays above them.
+  m.type('kit');
+  assert.equal(list.children.filter((node) => node.classList.contains('where-group')).length, 0);
+  m.type('chat');
+  assert.deepEqual(list.children.map((node) => node.className), ['where-option', 'where-group', 'where-option active']);
+  assert.equal(m.active(), 1);
+  assert.equal(words(m.options()[1])[0], 'chat');
+  m.press('Enter');
+  assert.deepEqual(m.picks, ['c']);
 });
 
 test('the menu items rise 6 px over 260 ms as it opens, all at once (mockup M6)', () => {
@@ -959,7 +1024,7 @@ test('while the menu fades out, a press on an option picks nothing more', () => 
   try {
     const m = menuOn('', { motion: true });
     m.open();
-    const [, api] = m.options();
+    const api = m.options()[3];
     api.listeners.click();
     api.listeners.click();
     assert.deepEqual(m.picks, ['a']);

@@ -9,6 +9,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **A short project list:** the Project menu shows each project once, with a git worktree inside
+  its main checkout and projects with nothing of their own under **Other folders** (#243).
 - **The Library shows plugins and skills only:** the Instructions tab is gone and no note names
   an instruction file, while `kitden scan` still counts them and your agent can still ask Kitden
   about one (#242).

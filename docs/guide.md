@@ -40,6 +40,12 @@ gateway; point at a card to see on it what the card is about.
 
 ## See what each agent loads
 
+The Project menu lists each project once: a git worktree is part of its main checkout, and a
+folder that is gone leaves the list. Projects with servers, skills, plugins, hooks or gateway
+rules come first and the rest are under **Other folders**; two folders with one name show their
+parent folder. A worktree or a gone folder with a setting of its own stays on the list.
+`kitden show projects`, `kitden scan` and `list_projects` give the same list.
+
 Open **Library** and choose **All projects** or one project. **List → Differences** shows
 what differs between Claude Code, Codex and Cursor. Click an item for its **Details**.
 The search box at the top, "Search skills, plugins, servers and tools…", searches your whole

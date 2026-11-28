@@ -52,6 +52,10 @@ KEPT_UNREAD = "Kitden can't change this until it reads {} again."
 NOT_SAME = "Same name, another source."
 NO_ADD_REVIEW = "Same name, another source: decide first."
 
+# The Project menu's label over the folders with nothing of their own, and gone folders. The twin
+# of words.js OTHER_FOLDERS.
+OTHER_FOLDERS = "Other folders"
+
 # What only one project has. Its skill adds into that project; its MCP server has no add (a
 # project MCP write needs each client's project file, checked with a date: Later).
 NO_PROJECT_SERVER = "Kitden adds MCP servers for all projects only."

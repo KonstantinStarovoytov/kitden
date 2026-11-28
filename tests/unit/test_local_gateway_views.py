@@ -41,6 +41,7 @@ from kitden.local_gateway.views import (
     tool_hint,
     tools_view,
 )
+from kitden.model import Project
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
@@ -955,7 +956,8 @@ def test_the_library_and_the_card_follow_enclosing_projects(home):
     add_kitden(home, "cursor")
 
     def cell(page, folder):
-        pid = project_id(page, str(folder))
+        # The worktree folds into its main checkout's row; its own id still reads.
+        pid = Project(str(folder), True).id
         rows = page.get(f"/api/library?kind=mcp_server&project={pid}").json()["rows"]
         return next(r for r in rows if r["name"] == "files")["cells"]["cursor"]["state"]
 
@@ -1234,8 +1236,10 @@ def test_the_tools_api_says_each_rule_in_every_known_project(tmp_path):
     with demo_page(tmp_path) as page:  # medium
         ids = {Path(p["path"]).name: p["id"] for p in page.get("/api/projects").json()}
         answer = page.get("/api/gateway/tools?server=files").json()
+        gone = Project(str(page.home / "work/old-app"), False).id
+    # Every known project, also the gone old-app that the short list leaves out.
     states = {p["id"]: p for p in answer["projects"]}
-    assert set(states) == set(ids.values())
+    assert set(states) == {*ids.values(), gone}
     # atlas turns write_file off; atlas/web follows atlas; website follows all projects.
     write = {name: states[ids[name]]["tools"]["write_file"] for name in ("atlas", "web", "website")}
     assert write == {"atlas": "off", "web": "off", "website": "on"}

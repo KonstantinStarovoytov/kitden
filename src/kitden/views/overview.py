@@ -32,6 +32,7 @@ from kitden.views.effective import client_order
 from kitden.views.findings import base_name, find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.library_map import copy_choices, has_own_rules, library_map
+from kitden.views.project_rows import ProjectRow, project_rows
 from kitden.views.setup_server import ENABLE_KEYS, kitden_on, setup_server_state
 from kitden.views.words import (
     BACK_BY_APP,
@@ -350,11 +351,12 @@ def _ruled_projects(inventory) -> set[str]:
     return {p for p in known if has_own_rules(inventory, p)}
 
 
-def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) -> dict:
+def _setup_map(inventory, adapters, project, held, gateway_rules, rows, unread=False) -> dict:
     """The small "Your setup" map: the clients (`on`: found on this Mac), the Kitden gateway's
     servers and tools, the Library's plugins and skills, which client reaches which, and how
-    many projects have rules of their own (for the gateway, or for a plugin or skill). While
-    the gateway settings cannot be read (`unread`) its counts are not known (None)."""
+    many projects have rules of their own (for the gateway, or for a plugin or skill). Only the
+    project `rows` count. While the gateway settings cannot be read (`unread`) its counts are not
+    known (None)."""
     clients = [c for c in inventory.clients if c.id in CLIENTS and c.status is not ClientStatus.OFF]
     found = found_clients(inventory)
     shown = library_map(inventory, adapters, project)
@@ -366,9 +368,8 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
             links.append({"client": client, "to": "gateway"})
         if any(i["by"].get(client) == "on" for i in items):
             links.append({"client": client, "to": "library"})
-    ruled = _ruled_projects(inventory) | {
-        p.path for p in inventory.projects if p.path in gateway_rules
-    }
+    shown_paths = {row.project.path for row in rows}
+    ruled = (_ruled_projects(inventory) | set(gateway_rules)) & shown_paths
     return {
         "clients": [
             {
@@ -390,7 +391,7 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
             "skills": sum(i["kind"] == "skill" for i in items),
         },
         "links": links,
-        "projects": len(inventory.projects),
+        "projects": len(rows),
         "own_rules": len(ruled),
     }
 
@@ -423,6 +424,7 @@ def overview(
     came_back: list[dict] | None = None,
     context_cards: list[dict] | None = None,
     setups: dict[str, str] | None = None,
+    rows: list[ProjectRow] | None = None,
 ) -> dict:
     """The Overview page's `cards`, `notes` (how many rows the folded notes draw), `map` (the
     "Your setup" map) and `counts` (for the lede). `held` are the servers the Kitden gateway
@@ -431,7 +433,8 @@ def overview(
     why the Kitden gateway settings could not be read (None: they could), and `came_back` the
     servers a change took out of a client that are back there now (changes_view.py), and
     `context_cards` the Context page's client cards (context_view.py), and `setups` which
-    server each held name is (held_setups)."""
+    server each held name is (held_setups), and `rows` the short project list (None: the
+    project_rows of the inventory)."""
     findings = find_findings(inventory, project)
     # What hurts most comes first: a skill list that cut skills costs every chat; a change that
     # came undone, Kitden not starting in a client, and files it cannot read come next; a copy
@@ -457,7 +460,9 @@ def overview(
     # The notes the page lists: the info findings of /api/findings. A server outside the gateway
     # is not a note: the card above counts the ones that can move in.
     info = [f for f in findings if f.severity is Severity.INFO]
-    setup = _setup_map(inventory, adapters or {}, project, held, gateway_rules, bool(problem))
+    if rows is None:
+        rows = project_rows(inventory)
+    setup = _setup_map(inventory, adapters or {}, project, held, gateway_rules, rows, bool(problem))
     return {
         "cards": cards,
         "notes": note_count(info),
@@ -469,6 +474,6 @@ def overview(
             ),
             # The map's clients: the Desktop Code tab counts as Claude Code.
             "clients": sum(c["on"] for c in setup["clients"]),
-            "projects": len(inventory.projects),
+            "projects": len(rows),
         },
     }
