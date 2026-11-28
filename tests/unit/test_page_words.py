@@ -1473,8 +1473,18 @@ def test_tabs_and_filters_read_first_then_the_list_settles():
     assert 'RISES_ON_ITS_OWN(state) ? "map-entrance" : "place-change");' in store
     assert '(s.view === "library" && s.mode !== "list")' in store
     assert "html.place-change #main, html.map-entrance #main { view-transition-name: page; }" in css
+    assert (
+        "::view-transition-old(page) { animation: 120ms ease both fade-out;"
+        " inline-size: auto; block-size: auto; }"
+    ) in css
     assert "::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }" in css
     assert 'if (view === "library" && state.view !== "library") await raceSlow(' in app
+
+
+def test_the_search_box_has_ten_pixels_of_room_inside():
+    css = (STATIC / "style.css").read_text()
+    rule = next(line for line in css.splitlines() if line.startswith(".search {"))
+    assert "padding: 0 10px;" in rule and "padding: 0;" not in rule
 
 
 # The Kitden gateway (2026-10-21) ----------------------------------------------------------

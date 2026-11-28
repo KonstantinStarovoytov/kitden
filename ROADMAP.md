@@ -9,6 +9,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not yet released
 
+- **Calmer top bar and page changes:** the search box has room around its icon and "/", and
+  going from one page to another no longer flashes the old page at a wrong size (#241).
 - **Safer changes:** moving a server into the gateway no longer replaces a different server of
   the same name, the review says when a client keeps its own server of that name, Undo out of
   order is refused instead of ending wrong, and a failed **Apply all** names the change and why (#227).

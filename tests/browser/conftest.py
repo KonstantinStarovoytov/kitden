@@ -227,12 +227,9 @@ def sample(tmp_path, monkeypatch, fake_keychain):
         next(guard, None)  # fails the test when it tried to connect outside
 
 
-@contextlib.contextmanager
-def open_tab(browser, url: str):
-    """A 1280 by 800 tab at url, once the page's first scan is ready. A console error or an
-    uncaught error on the page fails the test: only a real browser shows a break of the page's
-    Content-Security-Policy."""
-    context = browser.new_context(viewport={"width": 1280, "height": 800})
+def new_tab(context, url: str):
+    """A tab of context at url, once the page's first scan is ready, and the list that collects
+    its console errors and uncaught errors."""
     tab = context.new_page()
     errors: list[str] = []
     tab.on("console", lambda message: message.type == "error" and errors.append(message.text))
@@ -243,6 +240,16 @@ def open_tab(browser, url: str):
     while not tab.request.get(progress).json()["ready"]:
         assert time.monotonic() < deadline, "the first scan was not ready in 30 seconds"
         time.sleep(0.1)
+    return tab, errors
+
+
+@contextlib.contextmanager
+def open_tab(browser, url: str):
+    """A 1280 by 800 tab at url, once the page's first scan is ready. A console error or an
+    uncaught error on the page fails the test: only a real browser shows a break of the page's
+    Content-Security-Policy."""
+    context = browser.new_context(viewport={"width": 1280, "height": 800})
+    tab, errors = new_tab(context, url)
     yield tab
     context.close()
     if errors:
