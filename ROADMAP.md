@@ -11,7 +11,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **The Library shows plugins and skills only:** the Instructions tab is gone and no note names
   an instruction file, while `kitden scan` still counts them and your agent can still ask Kitden
-  about one.
+  about one (#242).
 - **Calmer top bar and page changes:** the search box has room around its icon and "/", and
   going from one page to another no longer flashes the old page at a wrong size (#241).
 - **Safer changes:** moving a server into the gateway no longer replaces a different server of
