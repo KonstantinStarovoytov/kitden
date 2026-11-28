@@ -1413,7 +1413,9 @@ def test_library_columns_hide_with_a_quiet_minus_kept_in_this_browser():
     text, css = script("library.js"), (STATIC / "style.css").read_text()
     # The choice lives in this browser; every read and write is inside try/catch.
     assert 'const HIDDEN_KEY = "kitden-hidden-clients"' in text
-    store = text.split("export function hiddenClients")[1].split("// The tab shown")[0]
+    store = text.split("export function hiddenClients")[1].split("// The question for the server")[
+        0
+    ]
     assert store.count("localStorage.") == 2
     assert store.count("try {") == 2 and store.count("catch") == 2
     # A named button per column, not drawn when no other readable column would stay; the
